@@ -1,6 +1,6 @@
 ---
 description: "Use when adding, changing, debugging, or reviewing Vitest unit tests, Testing Library component tests, Playwright end-to-end tests, test fixtures, or test configuration."
-name: "Worthboard Testing"
+name: "Wealthboard Testing"
 applyTo: "tests/**/*.ts, tests/**/*.tsx, tests/**/*.mjs, vitest.config.ts, playwright.config.ts"
 ---
 

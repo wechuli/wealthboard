@@ -61,7 +61,11 @@ function NavLink({
       )}
     >
       <Icon size={19} aria-hidden />
-      {!collapsed ? <span>{label}</span> : <span className="sr-only">{label}</span>}
+      {!collapsed ? (
+        <span>{label}</span>
+      ) : (
+        <span className="sr-only">{label}</span>
+      )}
     </Link>
   );
 }
@@ -69,18 +73,42 @@ function NavLink({
 function QuickAdd() {
   const [open, setOpen] = useState(false);
   const actions = [
-    { href: "/transactions/new?type=deposit", label: "Add deposit", icon: ArrowDownToLine },
-    { href: "/transactions/new?type=withdrawal", label: "Add withdrawal", icon: ArrowUpFromLine },
-    { href: "/transactions/new?type=interest", label: "Add interest", icon: TrendingUp },
-    { href: "/accounts?action=value", label: "Update asset value", icon: Sparkles },
-    { href: "/transactions/new?type=transfer", label: "Transfer", icon: ArrowLeftRight },
+    {
+      href: "/transactions/new?type=deposit",
+      label: "Add deposit",
+      icon: ArrowDownToLine,
+    },
+    {
+      href: "/transactions/new?type=withdrawal",
+      label: "Add withdrawal",
+      icon: ArrowUpFromLine,
+    },
+    {
+      href: "/transactions/new?type=interest",
+      label: "Add interest",
+      icon: TrendingUp,
+    },
+    {
+      href: "/accounts?action=value",
+      label: "Update asset value",
+      icon: Sparkles,
+    },
+    {
+      href: "/transactions/new?type=transfer",
+      label: "Transfer",
+      icon: ArrowLeftRight,
+    },
     { href: "/accounts/new", label: "New account", icon: Landmark },
     { href: "/goals/new", label: "Create goal", icon: Goal },
   ];
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <Button size="icon" aria-label="Quick add" className="rounded-full shadow-lg shadow-emerald-950/50">
+        <Button
+          size="icon"
+          aria-label="Quick add"
+          className="rounded-full shadow-lg shadow-emerald-950/50"
+        >
           <Plus size={21} />
         </Button>
       </Dialog.Trigger>
@@ -89,13 +117,17 @@ function QuickAdd() {
         <Dialog.Content className="fixed inset-x-3 bottom-3 z-50 max-h-[85vh] rounded-3xl border border-white/10 bg-[#121918] p-5 shadow-2xl outline-none sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2">
           <div className="flex items-center justify-between">
             <div>
-              <Dialog.Title className="text-lg font-semibold">Quick add</Dialog.Title>
+              <Dialog.Title className="text-lg font-semibold">
+                Quick add
+              </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-slate-400">
                 Record a common action in a few taps.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <Button variant="ghost" size="icon" aria-label="Close quick add"><X size={19} /></Button>
+              <Button variant="ghost" size="icon" aria-label="Close quick add">
+                <X size={19} />
+              </Button>
             </Dialog.Close>
           </div>
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -105,7 +137,9 @@ function QuickAdd() {
                   href={href}
                   className="flex min-h-14 items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 text-sm font-medium text-slate-200 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                 >
-                  <span className="rounded-lg bg-emerald-400/10 p-2 text-emerald-300"><Icon size={17} /></span>
+                  <span className="rounded-lg bg-emerald-400/10 p-2 text-emerald-300">
+                    <Icon size={17} />
+                  </span>
                   {label}
                 </Link>
               </Dialog.Close>
@@ -131,7 +165,10 @@ function OfflineIndicator() {
   }, []);
   if (online) return null;
   return (
-    <div role="status" className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-lg items-center justify-center gap-2 rounded-xl border border-amber-400/20 bg-amber-950/95 px-4 py-3 text-sm text-amber-100 shadow-xl">
+    <div
+      role="status"
+      className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-lg items-center justify-center gap-2 rounded-xl border border-amber-400/20 bg-amber-950/95 px-4 py-3 text-sm text-amber-100 shadow-xl"
+    >
       <WifiOff size={17} />
       Offline — fresh data and financial changes are unavailable.
     </div>
@@ -154,13 +191,15 @@ export function AppShell({
       if (key.startsWith("wealthboard-")) localStorage.removeItem(key);
     }
     if ("caches" in window) {
-      void caches.keys().then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key.startsWith("wealthboard-"))
-            .map((key) => caches.delete(key)),
-        ),
-      );
+      void caches
+        .keys()
+        .then((keys) =>
+          Promise.all(
+            keys
+              .filter((key) => key.startsWith("wealthboard-"))
+              .map((key) => caches.delete(key)),
+          ),
+        );
     }
   };
   return (
@@ -173,19 +212,31 @@ export function AppShell({
             collapsed ? "w-20" : "w-64",
           )}
         >
-          <div className={cn("flex h-12 items-center gap-3 px-2", collapsed && "justify-center px-0")}>
+          <div
+            className={cn(
+              "flex h-12 items-center gap-3 px-2",
+              collapsed && "justify-center px-0",
+            )}
+          >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-400 text-emerald-950">
               <CircleDollarSign size={21} />
             </span>
             {!collapsed ? (
               <div className="min-w-0">
                 <p className="truncate font-semibold text-white">{appName}</p>
-                <p className="text-[11px] uppercase tracking-[0.15em] text-slate-500">Private wealth</p>
+                <p className="text-[11px] uppercase tracking-[0.15em] text-slate-500">
+                  Private wealth
+                </p>
               </div>
             ) : null}
           </div>
-          <nav aria-label="Primary navigation" className="mt-7 flex flex-1 flex-col gap-1">
-            {navigation.map((item) => <NavLink key={item.href} {...item} collapsed={collapsed} />)}
+          <nav
+            aria-label="Primary navigation"
+            className="mt-7 flex flex-1 flex-col gap-1"
+          >
+            {navigation.map((item) => (
+              <NavLink key={item.href} {...item} collapsed={collapsed} />
+            ))}
           </nav>
           <button
             type="button"
@@ -193,12 +244,20 @@ export function AppShell({
             onClick={() => setCollapsed((value) => !value)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <ChevronLeft size={16} className={cn("transition-transform", collapsed && "rotate-180")} />
+            <ChevronLeft
+              size={16}
+              className={cn("transition-transform", collapsed && "rotate-180")}
+            />
             {!collapsed ? "Collapse" : null}
           </button>
         </aside>
 
-        <div className={cn("transition-[padding] md:pl-64", collapsed && "md:pl-20")}>
+        <div
+          className={cn(
+            "transition-[padding] md:pl-64",
+            collapsed && "md:pl-20",
+          )}
+        >
           <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.06] bg-[#090d0d]/85 px-4 backdrop-blur-xl sm:px-6">
             <div className="flex items-center gap-3 md:hidden">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-emerald-950">
@@ -207,14 +266,27 @@ export function AppShell({
               <span className="font-semibold">{appName}</span>
             </div>
             <div className="hidden md:block">
-              <p className="text-sm font-medium text-slate-200">Welcome back, {displayName}</p>
-              <p className="text-xs text-slate-500">Your private financial overview</p>
+              <p className="text-sm font-medium text-slate-200">
+                Welcome back, {displayName}
+              </p>
+              <p className="text-xs text-slate-500">
+                Your private financial overview
+              </p>
             </div>
             <div className="flex items-center gap-1">
               <PrivacyToggle />
-              <div className="hidden sm:block"><QuickAdd /></div>
+              <div className="hidden sm:block">
+                <QuickAdd />
+              </div>
               <form action={logoutAction} onSubmit={clearUserState}>
-                <Button variant="ghost" size="icon" aria-label="Log out" title="Log out"><LogOut size={18} /></Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Log out"
+                  title="Log out"
+                >
+                  <LogOut size={18} />
+                </Button>
               </form>
             </div>
           </header>
@@ -223,10 +295,15 @@ export function AppShell({
           </main>
         </div>
 
-        <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4.5rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-white/10 bg-[#0d1312]/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+        <nav
+          aria-label="Mobile navigation"
+          className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4.5rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-white/10 bg-[#0d1312]/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+        >
           <MobileLink href="/" label="Home" icon={BarChart3} />
           <MobileLink href="/accounts" label="Accounts" icon={Landmark} />
-          <div className="flex items-center justify-center"><QuickAdd /></div>
+          <div className="flex items-center justify-center">
+            <QuickAdd />
+          </div>
           <MobileLink href="/goals" label="Goals" icon={Goal} />
           <MobileLink href="/settings" label="More" icon={MoreHorizontal} />
         </nav>

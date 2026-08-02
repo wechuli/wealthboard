@@ -1,4 +1,4 @@
-# Worthboard product specification
+# Wealthboard product specification
 
 ## Status and terminology
 
@@ -13,7 +13,7 @@ To avoid ambiguity:
 - **Financial account** means a bank account, investment, property, vehicle,
   liability, or other tracked holding owned by one application user.
 
-Worthboard is a polished, self-hosted, multi-user personal wealth and goals tracker.
+Wealthboard is a polished, self-hosted, multi-user personal wealth and goals tracker.
 
 The app should feel significantly simpler than Wealthfolio. It is not intended to be an accounting system, a trading platform, or a detailed budgeting app.
 
@@ -43,7 +43,7 @@ wealth over time. Users share the deployment but never share portfolio data.
 
 Use the temporary name:
 
-“Worthboard”
+“Wealthboard”
 
 Make it easy to rename later through a configuration file.
 
@@ -1088,7 +1088,7 @@ Create a detailed README with:
 - Docker deployment
 - Kubernetes deployment
 - Signup and first-user onboarding
-- Legacy single-user data claim during signup
+- Destructive singleton-to-multi-user upgrade behavior
 - Password reset by username
 - Per-user export and restore
 - Deployment-wide backup and offline restore

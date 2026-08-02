@@ -23,20 +23,35 @@ if (process.env.DEMO_DATA !== "true") {
 
 const targetUsername = process.env.TARGET_USERNAME?.trim().toLowerCase();
 if (!targetUsername) {
-  throw new Error("Set TARGET_USERNAME to the existing user who should receive demo data.");
+  throw new Error(
+    "Set TARGET_USERNAME to the existing user who should receive demo data.",
+  );
 }
 
-const databasePath = path.resolve(process.env.DATABASE_PATH ?? "./data/wealthboard.db");
+const databasePath = path.resolve(
+  process.env.DATABASE_PATH ?? "./data/wealthboard.db",
+);
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 const sqlite = new Database(databasePath);
 sqlite.pragma("foreign_keys = ON");
 const db = drizzle(sqlite);
 const timestamp = new Date().toISOString();
-const targetUser = db.select().from(users).where(eq(users.username, targetUsername)).get();
+const targetUser = db
+  .select()
+  .from(users)
+  .where(eq(users.username, targetUsername))
+  .get();
 if (!targetUser) throw new Error("The target user was not found.");
 const userId = targetUser.id;
 
-for (const [name, slug, icon, assetOrLiability, isLiquid, isInvestible] of CATEGORY_SEEDS) {
+for (const [
+  name,
+  slug,
+  icon,
+  assetOrLiability,
+  isLiquid,
+  isInvestible,
+] of CATEGORY_SEEDS) {
   db.insert(categories)
     .values({
       id: crypto.randomUUID(),
@@ -82,9 +97,21 @@ db.insert(exchangeRates)
 
 const demoAccounts = [
   ["Zimele Fixed Income Fund", "fixed-income", "KES", 457_691_800, "Zimele"],
-  ["Madison Money Market Fund", "money-market-fund", "KES", 139_600_000, "Madison"],
+  [
+    "Madison Money Market Fund",
+    "money-market-fund",
+    "KES",
+    139_600_000,
+    "Madison",
+  ],
   ["KCB Car Fund", "money-market-fund", "KES", 11_961_700, "KCB"],
-  ["Interactive Brokers VWRA", "securities", "USD", 411_100, "Interactive Brokers"],
+  [
+    "Interactive Brokers VWRA",
+    "securities",
+    "USD",
+    411_100,
+    "Interactive Brokers",
+  ],
   ["Southern Bypass Land", "land-real-estate", "KES", 500_000_000, null],
   ["Honda Fit", "vehicle", "KES", 75_000_000, null],
 ] as const;
@@ -104,7 +131,9 @@ for (const [name, categorySlug, currency, value, institution] of demoAccounts) {
   const category = db
     .select()
     .from(categories)
-    .where(and(eq(categories.userId, userId), eq(categories.slug, categorySlug)))
+    .where(
+      and(eq(categories.userId, userId), eq(categories.slug, categorySlug)),
+    )
     .get();
   if (!category) throw new Error(`Missing demo category ${categorySlug}.`);
   db.insert(accounts)

@@ -11,10 +11,14 @@ if (process.env.CONFIRM_OFFLINE_RESTORE !== "true") {
 }
 
 const sourceValue = process.env.RESTORE_FILE;
-if (!sourceValue) throw new Error("Set RESTORE_FILE to the SQLite backup to restore.");
+if (!sourceValue)
+  throw new Error("Set RESTORE_FILE to the SQLite backup to restore.");
 const source = path.resolve(sourceValue);
-const target = path.resolve(process.env.DATABASE_PATH ?? "./data/wealthboard.db");
-if (source === target) throw new Error("RESTORE_FILE must not be the active database.");
+const target = path.resolve(
+  process.env.DATABASE_PATH ?? "./data/wealthboard.db",
+);
+if (source === target)
+  throw new Error("RESTORE_FILE must not be the active database.");
 if (!fs.existsSync(source)) throw new Error(`Backup not found at ${source}.`);
 
 const candidate = new Database(source, { readonly: true, fileMustExist: true });
@@ -22,9 +26,7 @@ try {
   if (candidate.pragma("integrity_check", { simple: true }) !== "ok") {
     throw new Error("The backup failed its SQLite integrity check.");
   }
-  const users = candidate
-    .prepare("SELECT COUNT(*) AS total FROM users")
-    .get();
+  const users = candidate.prepare("SELECT COUNT(*) AS total FROM users").get();
   if (typeof users?.total !== "number") {
     throw new Error("The backup is not a compatible Wealthboard database.");
   }

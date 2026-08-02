@@ -24,7 +24,11 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       { name: "Add account", short_name: "Account", url: "/accounts/new" },
-      { name: "Record deposit", short_name: "Deposit", url: "/transactions/new?type=deposit" },
+      {
+        name: "Record deposit",
+        short_name: "Deposit",
+        url: "/transactions/new?type=deposit",
+      },
       { name: "Create goal", short_name: "Goal", url: "/goals/new" },
     ],
   };

@@ -1,6 +1,6 @@
 ---
 description: "Use when implementing or reviewing signup, login, logout, password changes, password reset, session cookies, route protection, authentication rate limiting, or the singleton-to-multi-user identity migration."
-name: "Worthboard Authentication"
+name: "Wealthboard Authentication"
 applyTo: "lib/auth/**/*.ts, app/login/**/*.ts, app/login/**/*.tsx, app/signup/**/*.ts, app/signup/**/*.tsx, proxy.ts, lib/bootstrap.ts, scripts/reset-password.mjs"
 ---
 

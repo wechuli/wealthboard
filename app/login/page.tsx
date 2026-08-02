@@ -22,7 +22,8 @@ export default async function LoginPage() {
           Your wealth, in focus.
         </h1>
         <p className="mt-3 text-sm leading-6 text-slate-400">
-          Sign in to your private financial dashboard. Your data stays on this server.
+          Sign in to your private financial dashboard. Your data stays on this
+          server.
         </p>
         <LoginForm />
         <div className="mt-7 flex items-center gap-2 border-t border-white/[0.07] pt-5 text-xs text-slate-500">

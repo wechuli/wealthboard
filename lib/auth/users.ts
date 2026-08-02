@@ -8,7 +8,10 @@ import { CATEGORY_SEEDS } from "@/lib/constants";
 import { nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync("wealthboard-login-placeholder", 12);
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
+  "wealthboard-login-placeholder",
+  12,
+);
 
 export class UsernameUnavailableError extends Error {
   constructor() {

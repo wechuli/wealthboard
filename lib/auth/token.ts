@@ -24,12 +24,15 @@ export async function signSession(payload: SessionPayload, expiresAt: Date) {
     .sign(sessionSecret());
 }
 
-export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
+export async function verifySessionToken(
+  token: string,
+): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, sessionSecret(), {
       algorithms: ["HS256"],
     });
-    if (typeof payload.sub !== "string" || typeof payload.version !== "number") return null;
+    if (typeof payload.sub !== "string" || typeof payload.version !== "number")
+      return null;
     return { sub: payload.sub, version: payload.version };
   } catch {
     return null;

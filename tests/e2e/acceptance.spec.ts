@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("complete Worthboard acceptance journey", async ({ page }) => {
+test("complete Wealthboard acceptance journey", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
   await page.getByLabel("Username").fill("unknown-user");
@@ -12,8 +12,8 @@ test("complete Worthboard acceptance journey", async ({ page }) => {
   await expect(page).toHaveURL(/\/signup/);
   await page.getByLabel("Username").fill("alice");
   await page.getByLabel("Display name").fill("Alice Example");
-  await page.getByLabel("Password", { exact: true }).fill("worthboard-e2e-password");
-  await page.getByLabel("Confirm password").fill("worthboard-e2e-password");
+  await page.getByLabel("Password", { exact: true }).fill("wealthboard-e2e-password");
+  await page.getByLabel("Confirm password").fill("wealthboard-e2e-password");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Add your first account" })).toBeVisible();
@@ -93,7 +93,7 @@ test("complete Worthboard acceptance journey", async ({ page }) => {
     headers: { Origin: "http://127.0.0.1:3100" },
     multipart: {
       file: {
-        name: "worthboard-user.json",
+        name: "wealthboard-user.json",
         mimeType: "application/json",
         buffer: userExport,
       },
@@ -119,7 +119,7 @@ test("complete Worthboard acceptance journey", async ({ page }) => {
 test("responsive layouts fit required viewports", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Username").fill("alice");
-  await page.getByLabel("Password").fill("worthboard-e2e-password");
+  await page.getByLabel("Password").fill("wealthboard-e2e-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 

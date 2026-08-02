@@ -15,7 +15,10 @@ export function LoginForm() {
       <div>
         <Label htmlFor="username">Username</Label>
         <div className="relative">
-          <UserRound className="pointer-events-none absolute left-3 top-3.5 text-slate-500" size={17} />
+          <UserRound
+            className="pointer-events-none absolute left-3 top-3.5 text-slate-500"
+            size={17}
+          />
           <Input
             id="username"
             name="username"
@@ -30,7 +33,10 @@ export function LoginForm() {
       <div>
         <Label htmlFor="password">Password</Label>
         <div className="relative">
-          <LockKeyhole className="pointer-events-none absolute left-3 top-3.5 text-slate-500" size={17} />
+          <LockKeyhole
+            className="pointer-events-none absolute left-3 top-3.5 text-slate-500"
+            size={17}
+          />
           <Input
             id="password"
             name="password"
@@ -43,18 +49,29 @@ export function LoginForm() {
         <FieldError>{state.fieldErrors?.password?.[0]}</FieldError>
       </div>
       {state.message ? (
-        <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">
+        <p
+          role="alert"
+          className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200"
+        >
           {state.message}
         </p>
       ) : null}
       <Button className="w-full" disabled={pending}>
-        {pending ? <LoaderCircle className="animate-spin motion-reduce:animate-none" size={17} /> : null}
+        {pending ? (
+          <LoaderCircle
+            className="animate-spin motion-reduce:animate-none"
+            size={17}
+          />
+        ) : null}
         Sign in
         {!pending ? <ArrowRight size={17} /> : null}
       </Button>
       <p className="text-center text-sm text-slate-400">
         New to Wealthboard?{" "}
-        <Link href="/signup" className="font-medium text-emerald-300 hover:text-emerald-200">
+        <Link
+          href="/signup"
+          className="font-medium text-emerald-300 hover:text-emerald-200"
+        >
           Create an account
         </Link>
       </p>

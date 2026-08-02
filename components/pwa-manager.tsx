@@ -12,31 +12,42 @@ interface InstallPromptEvent extends Event {
 }
 
 export function PwaManager() {
-  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(
+    null,
+  );
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js").then((registration) => {
-      if (registration.waiting) {
-        toast.info("A Wealthboard update is available.", {
-          action: {
-            label: "Reload",
-            onClick: () => window.location.reload(),
-          },
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        if (registration.waiting) {
+          toast.info("A Wealthboard update is available.", {
+            action: {
+              label: "Reload",
+              onClick: () => window.location.reload(),
+            },
+          });
+        }
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          worker?.addEventListener("statechange", () => {
+            if (
+              worker.state === "installed" &&
+              navigator.serviceWorker.controller
+            ) {
+              toast.info("A Wealthboard update is ready.", {
+                action: {
+                  label: "Reload",
+                  onClick: () => window.location.reload(),
+                },
+              });
+            }
+          });
         });
-      }
-      registration.addEventListener("updatefound", () => {
-        const worker = registration.installing;
-        worker?.addEventListener("statechange", () => {
-          if (worker.state === "installed" && navigator.serviceWorker.controller) {
-            toast.info("A Wealthboard update is ready.", {
-              action: { label: "Reload", onClick: () => window.location.reload() },
-            });
-          }
-        });
+      })
+      .catch(() => {
+        // The application remains fully usable without service-worker registration.
       });
-    }).catch(() => {
-      // The application remains fully usable without service-worker registration.
-    });
 
     const syncOnlineState = () => {
       document.documentElement.dataset.offline = String(!navigator.onLine);
@@ -77,7 +88,8 @@ export function PwaManager() {
         if (choice.outcome === "accepted") setInstallPrompt(null);
       }}
     >
-      <Download size={15} />Install app
+      <Download size={15} />
+      Install app
     </Button>
   );
 }

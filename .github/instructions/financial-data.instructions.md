@@ -1,6 +1,6 @@
 ---
 description: "Use when changing the Drizzle schema, migrations, services, server actions, route handlers, money calculations, balances, valuations, transfers, exchange rates, goals, imports, exports, backups, or restores."
-name: "Worthboard Financial Data"
+name: "Wealthboard Financial Data"
 applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance.ts, lib/dates.ts, lib/validation.ts, app/**/actions.ts, app/api/**/*.ts, scripts/**/*.ts, scripts/**/*.mjs"
 ---
 

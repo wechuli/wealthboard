@@ -1,6 +1,6 @@
 ---
-description: "Use when changing Worthboard pages, layouts, React components, forms, charts, responsive behavior, styling, accessibility, loading states, or privacy-sensitive financial displays."
-name: "Worthboard Frontend"
+description: "Use when changing Wealthboard pages, layouts, React components, forms, charts, responsive behavior, styling, accessibility, loading states, or privacy-sensitive financial displays."
+name: "Wealthboard Frontend"
 applyTo: "app/**/*.tsx, components/**/*.tsx, app/globals.css"
 ---
 

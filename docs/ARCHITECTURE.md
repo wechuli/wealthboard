@@ -1,10 +1,10 @@
-# Worthboard architecture
+# Wealthboard architecture
 
 > **Status:** This multi-user architecture is implemented. Upgrading an old
 > singleton database discards its credentials and unowned portfolio records;
 > all users complete ordinary signup and start with an empty portfolio.
 
-Worthboard remains a single-process Next.js application. Server Components read
+Wealthboard remains a single-process Next.js application. Server Components read
 SQLite through Drizzle ORM, Server Actions perform validated mutations, and
 Route Handlers provide user-scoped import/export and health checks. There is no
 separate API service and no external identity provider.
@@ -120,12 +120,12 @@ own authorization decisions.
 ## Migration from the singleton schema
 
 1. Take an operator-level SQLite backup if the old data may be needed outside
-   Worthboard, then preserve a passing test baseline.
+  Wealthboard, then preserve a passing test baseline.
 2. Add `users`; remove the password hash and session version from
    `user_settings`.
 3. Add nullable ownership columns and owner-first indexes.
 4. Delete every row whose ownership is null, delete the old singleton settings,
-   and drop obsolete claim storage. Worthboard provides no legacy recovery path.
+  and drop obsolete claim storage. Wealthboard provides no legacy recovery path.
 5. Enforce non-null foreign keys, same-owner relationships, and owner-scoped
    unique constraints.
 6. Thread session-derived ownership through every service and HTTP surface.

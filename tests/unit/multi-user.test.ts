@@ -47,7 +47,7 @@ import { recordTransfer } from "@/lib/services/transfers";
 
 const migrationsFolder = path.resolve("db/migrations");
 const workspace = fs.mkdtempSync(
-  path.join(os.tmpdir(), "worthboard-multi-user-"),
+  path.join(os.tmpdir(), "wealthboard-multi-user-"),
 );
 const freshDatabase = path.join(workspace, "fresh.db");
 const singletonDatabase = path.join(workspace, "singleton.db");

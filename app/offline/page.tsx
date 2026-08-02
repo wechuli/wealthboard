@@ -13,13 +13,20 @@ export default function OfflinePage() {
           <WifiOff size={23} />
         </span>
         <div className="mt-5 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-300">
-          <CircleDollarSign size={15} />Wealthboard
+          <CircleDollarSign size={15} />
+          Wealthboard
         </div>
         <h1 className="mt-3 text-2xl font-semibold">You’re offline</h1>
         <p className="mt-3 text-sm leading-6 text-slate-400">
-          The app shell is available, but fresh financial data and all changes require a secure connection to your server. Nothing will be queued.
+          The app shell is available, but fresh financial data and all changes
+          require a secure connection to your server. Nothing will be queued.
         </p>
-        <Button asChild className="mt-6"><Link href="/"><RefreshCw size={16} />Try again</Link></Button>
+        <Button asChild className="mt-6">
+          <Link href="/">
+            <RefreshCw size={16} />
+            Try again
+          </Link>
+        </Button>
       </section>
     </main>
   );

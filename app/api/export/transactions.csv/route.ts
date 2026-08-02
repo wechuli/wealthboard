@@ -3,7 +3,11 @@ import { transactionCsv } from "@/lib/services/portability";
 
 export async function GET() {
   const session = await getSession();
-  if (!session) return Response.json({ error: "Authentication required." }, { status: 401 });
+  if (!session)
+    return Response.json(
+      { error: "Authentication required." },
+      { status: 401 },
+    );
   return new Response(await transactionCsv(session.userId), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",

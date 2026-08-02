@@ -1,6 +1,6 @@
-# Worthboard
+# Wealthboard
 
-Worthboard is a self-hosted, multi-user wealth and goals tracker. Each user has
+Wealthboard is a self-hosted, multi-user wealth and goals tracker. Each user has
 an independent portfolio, settings, categories, exchange rates, reports, and
 portable exports. The Next.js application reads SQLite directly and requires no
 separate backend, cloud identity provider, or financial integration.
@@ -72,7 +72,7 @@ The command never creates an identity or seeds every user.
 
 | Variable         | Purpose                                                  |
 | ---------------- | -------------------------------------------------------- |
-| `DATABASE_PATH`  | Persistent SQLite file; default `./data/worthboard.db`   |
+| `DATABASE_PATH`  | Persistent SQLite file; default `./data/wealthboard.db`  |
 | `SESSION_SECRET` | HMAC session secret; at least 32 characters              |
 | `APP_URL`        | Canonical deployment URL used for origin validation      |
 | `TZ`             | Default timezone for new users; default `Africa/Nairobi` |
@@ -101,7 +101,7 @@ For Docker Compose:
 docker compose exec \
   -e TARGET_USERNAME=alice \
   -e NEW_USER_PASSWORD='a-new-password-with-12-characters' \
-  worthboard npm run password:reset
+  wealthboard npm run password:reset
 ```
 
 ## Database migrations
@@ -147,7 +147,7 @@ Edit the image, hostname, storage classes, and resource limits in
 `deploy/kubernetes.yaml`, then create the session secret separately:
 
 ```bash
-kubectl create secret generic worthboard-secrets \
+kubectl create secret generic wealthboard-secrets \
   --from-literal=session-secret="$(openssl rand -hex 32)"
 kubectl apply -f deploy/kubernetes.yaml
 ```
@@ -199,21 +199,21 @@ application first, then run:
 
 ```bash
 CONFIRM_OFFLINE_RESTORE=true \
-RESTORE_FILE=/backups/worthboard-2026-08-02T10-00-00Z.db \
+RESTORE_FILE=/backups/wealthboard-2026-08-02T10-00-00Z.db \
 npm run backup:restore
 ```
 
-Start Worthboard afterward so pending migrations run. Test backups regularly
+Start Wealthboard afterward so pending migrations run. Test backups regularly
 and retain an external copy before destructive maintenance.
 
 ## PWA and offline behavior
 
-Use the browser install action or Worthboard's **Install app** prompt. On iOS,
+Use the browser install action or Wealthboard's **Install app** prompt. On iOS,
 use **Share → Add to Home Screen**.
 
 The service worker caches only the offline shell and static assets. It does not
 cache authenticated financial responses or queue mutations. Financial submits
-are blocked while offline, and logout clears Worthboard client state before a
+are blocked while offline, and logout clears Wealthboard client state before a
 different user signs in on the same device.
 
 ## Verification
@@ -239,7 +239,7 @@ layouts at 360, 390, 768, 1024, and 1440 px.
 - Restrict filesystem access to SQLite databases, backups, and exports.
 - Never publish raw backups or user exports to public object storage.
 - Keep TLS, the host, Node.js, the base image, and dependencies updated.
-- Users are independent; Worthboard has no roles, organizations, invitations,
+- Users are independent; Wealthboard has no roles, organizations, invitations,
   shared portfolios, or cross-user transfers.
 - Database errors are logged by class or name without submitted secrets.
 

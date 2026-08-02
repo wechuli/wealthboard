@@ -37,22 +37,31 @@ const safeInteger = z
   .max(Number.MAX_SAFE_INTEGER);
 const nullableText = z.string().max(2000).nullable();
 const timestamp = z.string().datetime({ offset: true });
-const supportedCurrencies = z.string().max(1000).refine((value) => {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return (
-      Array.isArray(parsed) &&
-      parsed.length > 0 &&
-      parsed.every((currency) => typeof currency === "string" && /^[A-Z]{3}$/.test(currency))
-    );
-  } catch {
-    return false;
-  }
-}, "The supported currency list is invalid.");
+const supportedCurrencies = z
+  .string()
+  .max(1000)
+  .refine((value) => {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return (
+        Array.isArray(parsed) &&
+        parsed.length > 0 &&
+        parsed.every(
+          (currency) =>
+            typeof currency === "string" && /^[A-Z]{3}$/.test(currency),
+        )
+      );
+    } catch {
+      return false;
+    }
+  }, "The supported currency list is invalid.");
 const positiveDecimal = z
   .string()
   .regex(/^\d+(?:\.\d+)?$/)
-  .refine((value) => new Decimal(value).gt(0), "Exchange rates must be positive.");
+  .refine(
+    (value) => new Decimal(value).gt(0),
+    "Exchange rates must be positive.",
+  );
 
 const settingsArchiveSchema = z
   .object({
@@ -207,7 +216,9 @@ export function toCsv(rows: Array<Record<string, unknown>>) {
   const headers = Object.keys(rows[0]);
   return [
     headers.map(csvCell).join(","),
-    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(",")),
+    ...rows.map((row) =>
+      headers.map((header) => csvCell(row[header])).join(","),
+    ),
   ].join("\n");
 }
 
@@ -276,7 +287,8 @@ export async function exportData(userId: string) {
 function uniqueIdMap(rows: Array<{ id: string }>, label: string) {
   const result = new Map<string, string>();
   for (const row of rows) {
-    if (result.has(row.id)) throw new Error(`The archive contains duplicate ${label} IDs.`);
+    if (result.has(row.id))
+      throw new Error(`The archive contains duplicate ${label} IDs.`);
     result.set(row.id, crypto.randomUUID());
   }
   return result;
@@ -288,7 +300,10 @@ function requiredMappedId(
   relationship: string,
 ) {
   const id = mapping.get(sourceId);
-  if (!id) throw new Error(`The archive contains an invalid ${relationship} relationship.`);
+  if (!id)
+    throw new Error(
+      `The archive contains an invalid ${relationship} relationship.`,
+    );
   return id;
 }
 
@@ -300,11 +315,15 @@ export function restoreUserData(userId: string, input: unknown) {
   const valuationIds = uniqueIdMap(archive.valuations, "valuation");
   const rateIds = uniqueIdMap(archive.exchangeRates, "exchange-rate");
   const goalIds = uniqueIdMap(archive.goals, "goal");
-  const planIds = uniqueIdMap(archive.goalContributionPlans, "contribution-plan");
+  const planIds = uniqueIdMap(
+    archive.goalContributionPlans,
+    "contribution-plan",
+  );
 
   for (const account of archive.accounts) {
     requiredMappedId(categoryIds, account.categoryId, "account category");
-    if (account.goalId) requiredMappedId(goalIds, account.goalId, "account goal");
+    if (account.goalId)
+      requiredMappedId(goalIds, account.goalId, "account goal");
   }
   for (const transaction of archive.transactions) {
     requiredMappedId(accountIds, transaction.accountId, "transaction account");
@@ -317,7 +336,9 @@ export function restoreUserData(userId: string, input: unknown) {
     if (!goal.linkedAccountId) continue;
     requiredMappedId(accountIds, goal.linkedAccountId, "goal account");
     if (linkedAccounts.has(goal.linkedAccountId)) {
-      throw new Error("The archive links more than one goal to the same account.");
+      throw new Error(
+        "The archive links more than one goal to the same account.",
+      );
     }
     linkedAccounts.add(goal.linkedAccountId);
   }
@@ -328,7 +349,10 @@ export function restoreUserData(userId: string, input: unknown) {
   const db = getDatabase();
   db.transaction((tx) => {
     const existingSettings = tx.query.userSettings
-      .findFirst({ where: eq(userSettings.userId, userId), columns: { id: true } })
+      .findFirst({
+        where: eq(userSettings.userId, userId),
+        columns: { id: true },
+      })
       .sync();
     if (!existingSettings) throw new Error("User settings are unavailable.");
 
@@ -385,7 +409,11 @@ export function restoreUserData(userId: string, input: unknown) {
             id: requiredMappedId(goalIds, row.id, "goal"),
             userId,
             linkedAccountId: row.linkedAccountId
-              ? requiredMappedId(accountIds, row.linkedAccountId, "goal account")
+              ? requiredMappedId(
+                  accountIds,
+                  row.linkedAccountId,
+                  "goal account",
+                )
               : null,
           })),
         )
@@ -439,7 +467,11 @@ export function restoreUserData(userId: string, input: unknown) {
             ...row,
             id: requiredMappedId(planIds, row.id, "contribution plan"),
             userId,
-            goalId: requiredMappedId(goalIds, row.goalId, "contribution-plan goal"),
+            goalId: requiredMappedId(
+              goalIds,
+              row.goalId,
+              "contribution-plan goal",
+            ),
           })),
         )
         .run();
@@ -466,13 +498,15 @@ type CsvTransaction = {
 
 export function importTransactionsCsv(userId: string, content: string) {
   const parsed = parse(content, {
-    columns: (headers: string[]) => headers.map((header) => header.trim().toLowerCase()),
+    columns: (headers: string[]) =>
+      headers.map((header) => header.trim().toLowerCase()),
     skip_empty_lines: true,
     trim: true,
     bom: true,
   }) as CsvTransaction[];
   if (!parsed.length) throw new Error("The CSV contains no transaction rows.");
-  if (parsed.length > 10_000) throw new Error("Import is limited to 10,000 rows at a time.");
+  if (parsed.length > 10_000)
+    throw new Error("Import is limited to 10,000 rows at a time.");
 
   const db = getDatabase();
   const accountRows = db
@@ -481,8 +515,9 @@ export function importTransactionsCsv(userId: string, content: string) {
     .where(eq(accounts.userId, userId))
     .all();
   const timezone =
-    db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }).sync()
-      ?.timezone ??
+    db.query.userSettings
+      .findFirst({ where: eq(userSettings.userId, userId) })
+      .sync()?.timezone ??
     process.env.TZ ??
     "Africa/Nairobi";
   const prepared = parsed.map((row, index) => {
@@ -504,11 +539,15 @@ export function importTransactionsCsv(userId: string, content: string) {
       throw new Error(`Row ${index + 2}: unsupported transaction type.`);
     }
     if (row.type === "opening_balance" || row.type === "transfer") {
-      throw new Error(`Row ${index + 2}: opening balances and transfers cannot be imported.`);
+      throw new Error(
+        `Row ${index + 2}: opening balances and transfers cannot be imported.`,
+      );
     }
     if (!row.date) throw new Error(`Row ${index + 2}: date is required.`);
     if (row.date > dateInputForTimezone(timezone)) {
-      throw new Error(`Row ${index + 2}: financial activity cannot be future-dated.`);
+      throw new Error(
+        `Row ${index + 2}: financial activity cannot be future-dated.`,
+      );
     }
     const currency = (row.currency || account.currency).toUpperCase();
     if (currency !== account.currency) {
@@ -600,7 +639,10 @@ export async function accountCsv(userId: string) {
     .from(accounts)
     .innerJoin(
       categories,
-      and(eq(accounts.userId, categories.userId), eq(accounts.categoryId, categories.id)),
+      and(
+        eq(accounts.userId, categories.userId),
+        eq(accounts.categoryId, categories.id),
+      ),
     )
     .where(eq(accounts.userId, userId));
   return toCsv(rows);

@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -28,7 +34,11 @@ export function PrivacyProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("wealthboard-values-hidden", String(!current));
       return !current;
     });
-  return <PrivacyContext.Provider value={{ hidden, toggle }}>{children}</PrivacyContext.Provider>;
+  return (
+    <PrivacyContext.Provider value={{ hidden, toggle }}>
+      {children}
+    </PrivacyContext.Provider>
+  );
 }
 
 export function PrivacyToggle() {
@@ -60,7 +70,9 @@ export function MoneyValue({
 }) {
   const { hidden } = usePrivacy();
   return (
-    <span className={cn("tabular-nums", hidden && "tracking-[0.2em]", className)}>
+    <span
+      className={cn("tabular-nums", hidden && "tracking-[0.2em]", className)}
+    >
       {hidden ? "••••••" : formatMoney(amount, currency, { compact })}
     </span>
   );

@@ -23,7 +23,8 @@ export default async function SignupPage() {
           Create your private portfolio.
         </h1>
         <p className="mt-3 text-sm leading-6 text-slate-400">
-          Your accounts, categories, and reports stay independent from every other user.
+          Your accounts, categories, and reports stay independent from every
+          other user.
         </p>
         <SignupForm />
         <div className="mt-7 flex items-center gap-2 border-t border-white/[0.07] pt-5 text-xs text-slate-500">

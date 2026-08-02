@@ -19,8 +19,14 @@ export default function GlobalError({
         <p className="mt-2 text-sm text-slate-400">
           Wealthboard could not load this view. No financial changes were made.
         </p>
-        {error.digest ? <p className="mt-2 text-xs text-slate-600">Reference: {error.digest}</p> : null}
-        <Button className="mt-6" onClick={reset}>Try again</Button>
+        {error.digest ? (
+          <p className="mt-2 text-xs text-slate-600">
+            Reference: {error.digest}
+          </p>
+        ) : null}
+        <Button className="mt-6" onClick={reset}>
+          Try again
+        </Button>
       </div>
     </main>
   );

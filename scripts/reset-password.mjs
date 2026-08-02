@@ -37,4 +37,6 @@ sqlite.close();
 if (result.changes !== 1) {
   throw new Error("The target user was not found.");
 }
-console.log("Password reset. That user's existing sessions have been invalidated.");
+console.log(
+  "Password reset. That user's existing sessions have been invalidated.",
+);
