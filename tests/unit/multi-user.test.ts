@@ -13,10 +13,7 @@ import {
   accounts,
   categories,
   exchangeRates,
-  goals,
-  transactions,
   users,
-  userSettings,
 } from "@/db/schema";
 import {
   authenticateUser,
