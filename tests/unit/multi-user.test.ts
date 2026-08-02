@@ -9,12 +9,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import {
-  accounts,
-  categories,
-  exchangeRates,
-  users,
-} from "@/db/schema";
+import { accounts, categories, exchangeRates, users } from "@/db/schema";
 import {
   authenticateUser,
   changeUserPassword,
