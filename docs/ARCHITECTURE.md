@@ -120,12 +120,12 @@ own authorization decisions.
 ## Migration from the singleton schema
 
 1. Take an operator-level SQLite backup if the old data may be needed outside
-  Wealthboard, then preserve a passing test baseline.
+   Wealthboard, then preserve a passing test baseline.
 2. Add `users`; remove the password hash and session version from
    `user_settings`.
 3. Add nullable ownership columns and owner-first indexes.
 4. Delete every row whose ownership is null, delete the old singleton settings,
-  and drop obsolete claim storage. Wealthboard provides no legacy recovery path.
+   and drop obsolete claim storage. Wealthboard provides no legacy recovery path.
 5. Enforce non-null foreign keys, same-owner relationships, and owner-scoped
    unique constraints.
 6. Thread session-derived ownership through every service and HTTP surface.

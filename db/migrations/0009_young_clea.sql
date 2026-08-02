@@ -19,5 +19,6 @@ CREATE TABLE `__new_user_settings` (
 INSERT INTO `__new_user_settings`("id", "user_id", "display_name", "base_currency", "supported_currencies", "timezone", "preferred_date_format", "app_name", "default_dashboard_period", "session_timeout_minutes", "default_goal_return_bps", "created_at", "updated_at") SELECT "id", "user_id", "display_name", "base_currency", "supported_currencies", "timezone", "preferred_date_format", "app_name", "default_dashboard_period", "session_timeout_minutes", "default_goal_return_bps", "created_at", "updated_at" FROM `user_settings`;--> statement-breakpoint
 DROP TABLE `user_settings`;--> statement-breakpoint
 ALTER TABLE `__new_user_settings` RENAME TO `user_settings`;--> statement-breakpoint
+UPDATE `user_settings` SET `app_name` = 'Wealthboard' WHERE `app_name` = 'Worthboard';--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE UNIQUE INDEX `user_settings_user_unique` ON `user_settings` (`user_id`);
