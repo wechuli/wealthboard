@@ -3,8 +3,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
-import bcrypt from "bcryptjs";
 import Database from "better-sqlite3";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -15,12 +13,10 @@ import {
   accounts,
   categories,
   exchangeRates,
-  goalContributionPlans,
   goals,
   transactions,
   users,
   userSettings,
-  valuationSnapshots,
 } from "@/db/schema";
 import {
   authenticateUser,
@@ -50,7 +46,6 @@ const workspace = fs.mkdtempSync(
   path.join(os.tmpdir(), "wealthboard-multi-user-"),
 );
 const freshDatabase = path.join(workspace, "fresh.db");
-const singletonDatabase = path.join(workspace, "singleton.db");
 
 function migrateDatabase(databasePath: string) {
   const sqlite = new Database(databasePath);
@@ -64,145 +59,6 @@ function migrateDatabase(databasePath: string) {
 function useDatabase(databasePath: string) {
   closeDatabase();
   process.env.DATABASE_PATH = databasePath;
-}
-
-function createSingletonDatabase(databasePath: string) {
-  const migrationNames = [
-    ["0000_harsh_mother_askani.sql", 1785655073717],
-    ["0001_handy_dagger.sql", 1785655315110],
-    ["0002_fluffy_scalphunter.sql", 1785658123255],
-  ] as const;
-  const sqlite = new Database(databasePath);
-  sqlite.pragma("foreign_keys = ON");
-  for (const [name] of migrationNames) {
-    sqlite.exec(
-      fs
-        .readFileSync(path.join(migrationsFolder, name), "utf8")
-        .replaceAll("--> statement-breakpoint", ""),
-    );
-  }
-  sqlite.exec(
-    'CREATE TABLE "__drizzle_migrations" (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at numeric)',
-  );
-  for (const [name, createdAt] of migrationNames) {
-    const sql = fs.readFileSync(path.join(migrationsFolder, name), "utf8");
-    sqlite
-      .prepare(
-        "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
-      )
-      .run(createHash("sha256").update(sql).digest("hex"), createdAt);
-  }
-
-  const createdAt = "2025-01-01T00:00:00.000Z";
-  sqlite.pragma("foreign_keys = OFF");
-  sqlite
-    .prepare(
-      `INSERT INTO user_settings
-       (id, display_name, password_hash, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    )
-    .run(
-      "single-user",
-      "Old Owner",
-      bcrypt.hashSync("old-password-123", 12),
-      createdAt,
-      createdAt,
-    );
-  sqlite
-    .prepare(
-      `INSERT INTO transactions
-       (id, account_id, type, amount_minor, currency, transaction_date, description, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      "old-transaction",
-      "old-account",
-      "opening_balance",
-      123456,
-      "KES",
-      createdAt,
-      "Old opening balance",
-      createdAt,
-      createdAt,
-    );
-  sqlite
-    .prepare(
-      `INSERT INTO valuation_snapshots
-       (id, account_id, value_minor, currency, valuation_date, notes, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      "old-valuation",
-      "old-account",
-      130000,
-      "KES",
-      "2025-02-01T00:00:00.000Z",
-      "Old valuation",
-      "2025-02-01T00:00:00.000Z",
-    );
-  sqlite
-    .prepare(
-      `INSERT INTO goals
-       (id, name, target_amount_minor, currency, target_date, linked_account_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      "old-goal",
-      "Old Goal",
-      500000,
-      "KES",
-      "2028-01-01T00:00:00.000Z",
-      "old-account",
-      createdAt,
-      createdAt,
-    );
-  sqlite
-    .prepare(
-      `INSERT INTO goal_contribution_plans
-       (id, goal_id, planned_contribution_minor, frequency, start_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      "old-plan",
-      "old-goal",
-      10000,
-      "monthly",
-      createdAt,
-      createdAt,
-      createdAt,
-    );
-  sqlite
-    .prepare(
-      `INSERT INTO categories
-       (id, name, slug, icon, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      "old-category",
-      "Savings",
-      "savings",
-      "PiggyBank",
-      createdAt,
-      createdAt,
-    );
-  sqlite
-    .prepare(
-      `INSERT INTO accounts
-       (id, name, category_id, currency, current_value_minor, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      "old-account",
-      "Old Savings",
-      "old-category",
-      "KES",
-      123456,
-      createdAt,
-      createdAt,
-    );
-  sqlite.pragma("foreign_keys = ON");
-  expect(sqlite.pragma("foreign_key_check")).toHaveLength(0);
-  sqlite.close();
 }
 
 describe.sequential("multi-user persistence and isolation", () => {
@@ -466,52 +322,4 @@ describe.sequential("multi-user persistence and isolation", () => {
     ]);
   });
 
-  test("a singleton upgrade discards unowned data before normal signup", async () => {
-    closeDatabase();
-    createSingletonDatabase(singletonDatabase);
-    migrateDatabase(singletonDatabase);
-
-    const migrated = new Database(singletonDatabase);
-    expect(
-      migrated
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'legacy_claims'",
-        )
-        .get(),
-    ).toBeUndefined();
-    migrated.close();
-
-    useDatabase(singletonDatabase);
-
-    const db = getDatabase();
-    expect(db.select().from(users).all()).toHaveLength(0);
-    expect(db.select().from(userSettings).all()).toHaveLength(0);
-    expect(db.select().from(categories).all()).toHaveLength(0);
-    expect(db.select().from(accounts).all()).toHaveLength(0);
-    expect(db.select().from(transactions).all()).toHaveLength(0);
-    expect(db.select().from(valuationSnapshots).all()).toHaveLength(0);
-    expect(db.select().from(goals).all()).toHaveLength(0);
-    expect(db.select().from(goalContributionPlans).all()).toHaveLength(0);
-
-    const user = await registerUser({
-      username: "new-owner",
-      displayName: "New Owner",
-      password: "new-owner-password-123",
-    });
-    expect(
-      db
-        .select()
-        .from(userSettings)
-        .where(eq(userSettings.userId, user.userId))
-        .all(),
-    ).toHaveLength(1);
-    expect(
-      db
-        .select()
-        .from(categories)
-        .where(eq(categories.userId, user.userId))
-        .all(),
-    ).toHaveLength(11);
-    expect(db.select().from(accounts).all()).toHaveLength(0);
-  });
 });

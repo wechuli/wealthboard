@@ -50,14 +50,6 @@ subsequent user and is the only application-user creation path. It atomically
 creates the identity, settings, default categories, and initial exchange rate;
 it does not create financial accounts or sample data.
 
-### Upgrading an older single-user installation
-
-The multi-user migration does not recover or import the old singleton identity
-or portfolio. It deletes old credentials and records without an owner. Create an
-operator-level SQLite backup before upgrading if you need an external archive,
-then open `/signup` and create a fresh user. Signup has no legacy password or
-portfolio-claim option.
-
 ### Optional fictional demo data
 
 Demo data is never loaded by signup. Target one existing user explicitly:
@@ -106,17 +98,16 @@ docker compose exec \
 
 ## Database migrations
 
-`db/schema.ts` is the schema source of truth. Generated, forward-only
-migrations are committed under `db/migrations`.
+`db/schema.ts` is the schema source of truth. The generated baseline migration
+under `db/migrations` targets a fresh database.
 
 ```bash
 npm run db:generate
 npm run db:migrate
 ```
 
-Back up production before an upgrade. Never edit a migration that may already
-have run. The multi-user migration is tested against both an empty disposable
-database and a disposable copy of the singleton schema.
+During pre-release development, delete the database and regenerate the baseline
+when schema compatibility is not required.
 
 ## Docker deployment
 
@@ -227,8 +218,8 @@ npm run test:e2e
 npm run build
 ```
 
-Automated tests use disposable SQLite files, cover fresh and singleton
-migrations, exercise two-user isolation and portability attacks, and verify
+Automated tests use disposable SQLite files, exercise two-user isolation and
+portability attacks, and verify
 layouts at 360, 390, 768, 1024, and 1440 px.
 
 ## Security considerations

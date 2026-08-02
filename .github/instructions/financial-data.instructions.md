@@ -7,7 +7,7 @@ applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance
 # Financial data and mutations
 
 - Treat `db/schema.ts` as the schema source of truth and `lib/services` as the owner of financial behavior. UI components and route handlers should call those boundaries rather than reproduce calculations or SQL.
-- Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the target for the multi-user migration. Discard singleton credentials and unowned records instead of exposing a recovery or claim path. Do not deploy until cross-user isolation tests pass.
+- Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the current multi-user contract. Do not deploy authorization changes until cross-user isolation tests pass.
 - Derive `userId` only from `requireSession()` and pass it explicitly into services. Never accept a form, URL, header, import, or payload owner ID as authorization evidence.
 - Every private query and mutation must include the owner predicate. Fetch resources by `userId` and ID together, return not found for foreign resources, and include `userId` in private cache keys.
 - Validate same-owner relationships inside the transaction: category/account, transaction/account, valuation/account, goal/account, plan/goal, imported account references, and both sides of a transfer.
@@ -19,5 +19,5 @@ applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance
 - Every protected mutation must verify the session. Scope UUID idempotency keys to that user and perform multi-record financial changes atomically.
 - Keep authentication, database handles, password hashes, backup contents, and raw financial exports in server-only modules. Do not add secrets or sensitive values to logs.
 - User-facing exports, imports, and restores contain only the current user's data. Raw SQLite backup and restore are deployment-operator operations, not ordinary authenticated endpoints.
-- For schema changes, generate a new migration with `npm run db:generate`, inspect it, and test both a fresh database and a copy of the singleton schema. Never modify an existing applied migration.
+- For schema changes, regenerate the fresh baseline with `npm run db:generate`, inspect it, and test it against a disposable empty database.
 - Add focused tests for sign behavior, rounding, replay ordering, historical exchange rates, idempotency, rollback, and cross-user denial whenever the touched behavior could affect balances or ownership.

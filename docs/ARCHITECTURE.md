@@ -1,8 +1,7 @@
 # Wealthboard architecture
 
-> **Status:** This multi-user architecture is implemented. Upgrading an old
-> singleton database discards its credentials and unowned portfolio records;
-> all users complete ordinary signup and start with an empty portfolio.
+> **Status:** This multi-user architecture is implemented. The repository ships
+> one baseline schema for fresh Wealthboard databases.
 
 Wealthboard remains a single-process Next.js application. Server Components read
 SQLite through Drizzle ORM, Server Actions perform validated mutations, and
@@ -117,29 +116,12 @@ live in `components/charts`; validated financial operations live under `lib`.
 The protected layout may display the current user's identity, but it does not
 own authorization decisions.
 
-## Migration from the singleton schema
+## Database lifecycle
 
-1. Take an operator-level SQLite backup if the old data may be needed outside
-   Wealthboard, then preserve a passing test baseline.
-2. Add `users`; remove the password hash and session version from
-   `user_settings`.
-3. Add nullable ownership columns and owner-first indexes.
-4. Delete every row whose ownership is null, delete the old singleton settings,
-   and drop obsolete claim storage. Wealthboard provides no legacy recovery path.
-5. Enforce non-null foreign keys, same-owner relationships, and owner-scoped
-   unique constraints.
-6. Thread session-derived ownership through every service and HTTP surface.
-7. Keep ordinary signup always available and create no default or migrated user.
-8. Replace user-facing raw database portability with per-user export and restore;
-   retain full database operations only as operator commands.
-9. Add two-user isolation tests for direct reads, mutations, analytics, imports,
-   exports, caches, and relationship attacks. Do not deploy until they pass.
-10. Test a disposable singleton upgrade and assert that its old credentials,
-    unowned records, and obsolete claim table are gone before normal signup.
-
-The migration must be transactional where SQLite permits and fail closed. It is
-intentionally destructive for singleton application data. No old password,
-portfolio, or session is migrated into an application user.
+- `db/schema.ts` defines the current schema.
+- `db/migrations` contains one generated baseline for fresh databases.
+- Pre-release databases may be deleted and recreated when the schema changes.
+- No compatibility, ownership-claim, or account-bootstrap path is supported.
 
 ## Product boundaries
 
