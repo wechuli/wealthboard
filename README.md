@@ -88,14 +88,14 @@ the product specification.
 
 ## Environment variables
 
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_PATH` | Persistent SQLite file, default `./data/worthboard.db` |
-| `SESSION_SECRET` | HMAC session secret, at least 32 characters |
-| `INITIAL_ADMIN_PASSWORD` | First-launch password; never stored in plaintext |
-| `APP_URL` | Canonical deployment URL |
-| `TZ` | Server/default timezone, default `Africa/Nairobi` |
-| `BACKUP_PATH` | Persistent backup directory, default `./backups` |
+| Variable                 | Purpose                                                |
+| ------------------------ | ------------------------------------------------------ |
+| `DATABASE_PATH`          | Persistent SQLite file, default `./data/worthboard.db` |
+| `SESSION_SECRET`         | HMAC session secret, at least 32 characters            |
+| `INITIAL_ADMIN_PASSWORD` | First-launch password; never stored in plaintext       |
+| `APP_URL`                | Canonical deployment URL                               |
+| `TZ`                     | Server/default timezone, default `Africa/Nairobi`      |
+| `BACKUP_PATH`            | Persistent backup directory, default `./backups`       |
 
 The temporary product name is centralized in `lib/constants.ts`; the displayed
 application name can also be changed from Settings.

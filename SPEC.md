@@ -105,39 +105,39 @@ not require email delivery, OAuth, or another identity provider.
 Requirements:
 
 - Authenticate with a unique, case-insensitive username and password. Keep the
-   display name separate from the login identifier.
+  display name separate from the login identifier.
 - Normalize usernames to lowercase and restrict them to 3-32 characters using
-   letters, numbers, `.`, `_`, and `-`.
+  letters, numbers, `.`, `_`, and `-`.
 - Keep `/signup` publicly available at all times. Every application user,
-   including the first user, must create their identity through the signup form.
+  including the first user, must create their identity through the signup form.
 - Do not support environment-created users, default credentials, setup users,
-   invitation-only creation, or any other account bootstrap path.
+  invitation-only creation, or any other account bootstrap path.
 - Hash passwords with bcrypt using the existing work factor. Never store or log
-   plaintext passwords or sensitive form values.
+  plaintext passwords or sensitive form values.
 - Require a password of at least 12 characters and confirm it during signup.
 - Create each user, their settings, seeded categories, and initial exchange
-   rates atomically. A failed signup must not leave partial user data.
+  rates atomically. A failed signup must not leave partial user data.
 - Signup must not create financial accounts or sample portfolio data. Each user
-   adds their own financial accounts after authentication unless they explicitly
-   run the optional demo seed against their own identity.
+  adds their own financial accounts after authentication unless they explicitly
+  run the optional demo seed against their own identity.
 - After signup, create a session and redirect to the private dashboard.
 - Put the immutable user ID in the signed session token subject. Never accept a
-   user ID from form data, route parameters, headers, or query strings as proof
-   of ownership.
+  user ID from form data, route parameters, headers, or query strings as proof
+  of ownership.
 - Use secure, HTTP-only, SameSite=Strict cookies. Sessions expire after the
-   user's configured period and are rejected when the user is inactive or the
-   session version no longer matches.
+  user's configured period and are rejected when the user is inactive or the
+  session version no longer matches.
 - Allow password changes from Settings. A password change increments that
-   user's session version and invalidates their other sessions only.
+  user's session version and invalidates their other sessions only.
 - Include logout and clear user-specific client state when switching users.
 - Protect every application route except login, signup, health checks, and
-   public PWA assets.
+  public PWA assets.
 - Rate-limit login by normalized username and client address, and rate-limit
-   signup by client address. Login errors must not reveal whether a username
-   exists.
+  signup by client address. Login errors must not reveal whether a username
+  exists.
 - Do not implement email password reset. Provide a documented operator CLI that
-   resets one user by username, reads the new password from an environment
-   variable, and invalidates only that user's sessions.
+  resets one user by username, reads the new password from an environment
+  variable, and invalidates only that user's sessions.
 
 ## Core data model
 
@@ -178,22 +178,22 @@ Fields should include:
 ### Ownership and data isolation
 
 - Every user-owned table must have a non-null `userId` foreign key, including
-   categories, financial accounts, transactions, valuations, exchange rates,
-   goals, goal contribution plans, and idempotency keys.
+  categories, financial accounts, transactions, valuations, exchange rates,
+  goals, goal contribution plans, and idempotency keys.
 - Derive `userId` exclusively from the verified session. Service functions
-   should accept it explicitly as their first ownership argument.
+  should accept it explicitly as their first ownership argument.
 - Read, update, archive, and delete resources by both `userId` and resource ID.
-   A request for another user's resource should behave as not found and must not
-   disclose that the resource exists.
+  A request for another user's resource should behave as not found and must not
+  disclose that the resource exists.
 - Validate that every relationship stays within one owner. A goal cannot link
-   to another user's account, a transaction or valuation cannot target another
-   user's account, and a transfer cannot cross users.
+  to another user's account, a transaction or valuation cannot target another
+  user's account, and a transfer cannot cross users.
 - Scope unique constraints by user where appropriate, including category slugs,
-   linked goal accounts, transaction idempotency, and exchange-rate pair/date.
+  linked goal accounts, transaction idempotency, and exchange-rate pair/date.
 - Include `userId` in database indexes and any server cache key used for private
-   data. Do not use a process-global cache for user-specific settings or results.
+  data. Do not use a process-global cache for user-specific settings or results.
 - Seed default categories and default exchange rates separately for each new
-   user so one user's edits never change another user's portfolio.
+  user so one user's edits never change another user's portfolio.
 
 ### Asset categories
 
@@ -709,12 +709,12 @@ User-facing portability must be scoped to the authenticated user.
 Support:
 
 - Export the current user's complete portfolio as JSON without credentials,
-   session data, login attempts, or another user's records.
+  session data, login attempts, or another user's records.
 - Export the current user's transactions as CSV.
 - Export the current user's financial accounts as CSV.
 - Import transactions only into a financial account owned by the current user.
 - Restore a validated per-user JSON export by replacing only the current user's
-   portfolio in one transaction.
+  portfolio in one transaction.
 
 Before a per-user restore:
 
@@ -851,7 +851,7 @@ When offline:
 - Do not queue transactions unless a safe synchronization system is implemented
 - Do not cache authenticated financial responses in the service worker.
 - Clear user-specific in-memory state and caches on logout so a subsequent user
-   on the same device cannot see the previous user's data.
+  on the same device cannot see the previous user's data.
 
 The PWA should launch cleanly from an Android or iOS home screen.
 
@@ -1030,7 +1030,7 @@ Test at minimum:
 - Generic login failure without username enumeration
 - Password change and per-user session invalidation
 - Two simultaneous users with isolated categories, exchange rates, financial
-   accounts, transactions, goals, analytics, and settings
+  accounts, transactions, goals, analytics, and settings
 - Direct URL and mutation attempts against another user's resource
 - Rejection of cross-user transfers, goal links, imports, and idempotency keys
 - Per-user exports and restores that contain no other user's data
@@ -1177,21 +1177,21 @@ After each phase:
 The application is complete when:
 
 - An empty deployment presents signup and cannot create an application user by
-   environment variable, default credential, or any route other than signup.
+  environment variable, default credential, or any route other than signup.
 - The first and subsequent users can sign up and log in concurrently. Signup is
-   always available and has no enabled or disabled mode.
+  always available and has no enabled or disabled mode.
 - Signup creates settings, categories, and rates but no financial accounts or
-   sample portfolio data.
+  sample portfolio data.
 - Usernames are unique case-insensitively and login failures do not reveal
-   whether a username exists.
+  whether a username exists.
 - Each user can see and change only their own settings, categories, exchange
-   rates, financial accounts, transactions, valuations, goals, reports, imports,
-   exports, and idempotent operations.
+  rates, financial accounts, transactions, valuations, goals, reports, imports,
+  exports, and idempotent operations.
 - Guessing another user's URL or submitting another user's resource ID returns
-   not found or a generic authorization failure without leaking data.
+  not found or a generic authorization failure without leaking data.
 - The existing single-user owner can verify the previous password during
-   signup, choose a username, and retain all financial data without an
-   automatically created identity.
+  signup, choose a username, and retain all financial data without an
+  automatically created identity.
 - I can add Zimele, Madison, KCB, VWRA, land, a car, savings, and liabilities.
 - I can manually set or update each account’s value.
 - I can record deposits, withdrawals, interest, fees, and transfers.
@@ -1205,11 +1205,11 @@ The application is complete when:
 - I can use the application comfortably on a phone.
 - I can install it as a PWA.
 - Logging out and signing in as another user on the same device never reveals
-   cached data from the previous user.
+  cached data from the previous user.
 - My SQLite data persists across application upgrades.
 - I can export and restore my own portfolio without receiving another user's
-   records or credentials.
+  records or credentials.
 - A deployment operator can back up and restore the complete SQLite database
-   outside ordinary user routes.
+  outside ordinary user routes.
 - The dashboard looks like a premium financial application.
 - The interface remains simpler and easier to understand than Wealthfolio.

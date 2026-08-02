@@ -3,6 +3,7 @@ description: "Use when adding, changing, debugging, or reviewing Vitest unit tes
 name: "Worthboard Testing"
 applyTo: "tests/**/*.ts, tests/**/*.tsx, tests/**/*.mjs, vitest.config.ts, playwright.config.ts"
 ---
+
 # Testing strategy
 
 - Put deterministic money, date, forecasting, conversion, and transaction-effect rules in `tests/unit`. Assert exact integer minor-unit results and boundary rounding.

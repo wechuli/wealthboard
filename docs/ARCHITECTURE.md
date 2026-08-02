@@ -74,19 +74,19 @@ separate API service and no external identity provider.
 
 ## Database schema
 
-| Table | Purpose |
-| --- | --- |
-| `users` | Login identity, password hash, status, and session version |
-| `user_settings` | One user's locale, display, dashboard, and goal preferences |
-| `categories` | One user's seeded and custom classifications |
-| `accounts` | One user's holdings and liabilities with replayed values |
-| `transactions` | User-owned cash flows, returns, and paired transfers |
-| `valuation_snapshots` | User-owned absolute valuations, separate from cash flow |
-| `exchange_rates` | One user's effective-dated decimal exchange rates |
-| `goals` | One user's targets, links, status, priority, and return assumptions |
-| `goal_contribution_plans` | User-owned planned contribution amounts and frequency |
-| `login_attempts` | Bounded rate limiting by normalized username and client key |
-| `idempotency_keys` | User-scoped duplicate-submission protection |
+| Table                     | Purpose                                                             |
+| ------------------------- | ------------------------------------------------------------------- |
+| `users`                   | Login identity, password hash, status, and session version          |
+| `user_settings`           | One user's locale, display, dashboard, and goal preferences         |
+| `categories`              | One user's seeded and custom classifications                        |
+| `accounts`                | One user's holdings and liabilities with replayed values            |
+| `transactions`            | User-owned cash flows, returns, and paired transfers                |
+| `valuation_snapshots`     | User-owned absolute valuations, separate from cash flow             |
+| `exchange_rates`          | One user's effective-dated decimal exchange rates                   |
+| `goals`                   | One user's targets, links, status, priority, and return assumptions |
+| `goal_contribution_plans` | User-owned planned contribution amounts and frequency               |
+| `login_attempts`          | Bounded rate limiting by normalized username and client key         |
+| `idempotency_keys`        | User-scoped duplicate-submission protection                         |
 
 Every table except `login_attempts` is either the identity table or is owned by
 one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
@@ -121,24 +121,24 @@ own authorization decisions.
 
 1. Back up a representative database and preserve a passing baseline.
 2. Add `users`; move the password hash and session version out of
-  `user_settings` while retaining a temporary legacy claim during migration.
+   `user_settings` while retaining a temporary legacy claim during migration.
 3. Add nullable ownership columns and owner-first indexes.
 4. If singleton data exists, preserve its password hash and records as a
-  single-use, unclaimed migration state. Do not create a user or assign a
-  username automatically.
+   single-use, unclaimed migration state. Do not create a user or assign a
+   username automatically.
 5. Thread session-derived ownership through every service and HTTP surface.
 6. Keep signup always available. To claim singleton data, its owner verifies the
-  previous password during signup, chooses a username, and atomically receives
-  the legacy records. The claim is then deleted and cannot be reused.
+   previous password during signup, chooses a username, and atomically receives
+   the legacy records. The claim is then deleted and cannot be reused.
 7. After a legacy claim, verify that every owned row resolves to a user, then
-  enforce non-null foreign keys, same-owner relationships, and owner-scoped
-  unique constraints.
+   enforce non-null foreign keys, same-owner relationships, and owner-scoped
+   unique constraints.
 8. Replace user-facing raw database portability with per-user export and restore;
-  retain full database operations only as operator commands.
+   retain full database operations only as operator commands.
 9. Add two-user isolation tests for direct reads, mutations, analytics, imports,
-  exports, caches, and relationship attacks. Do not deploy until they pass.
+   exports, caches, and relationship attacks. Do not deploy until they pass.
 10. Remove singleton compatibility and temporary claim code after existing
-  credentials and data have passed signup migration tests.
+    credentials and data have passed signup migration tests.
 
 The migration must be transactional where SQLite permits and fail closed. It is
 acceptable to invalidate existing cookies during the release, but the existing

@@ -3,6 +3,7 @@ description: "Use when implementing or reviewing signup, login, logout, password
 name: "Worthboard Authentication"
 applyTo: "lib/auth/**/*.ts, app/login/**/*.ts, app/login/**/*.tsx, app/signup/**/*.ts, app/signup/**/*.tsx, proxy.ts, lib/bootstrap.ts, scripts/reset-password.mjs"
 ---
+
 # Identity and authentication
 
 - Application users are independent local identities; financial accounts are portfolio records. Do not introduce organizations, roles, invitations, shared portfolios, or cross-user sessions.

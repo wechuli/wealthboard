@@ -3,6 +3,7 @@ description: "Use when changing the Drizzle schema, migrations, services, server
 name: "Worthboard Financial Data"
 applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance.ts, lib/dates.ts, lib/validation.ts, app/**/actions.ts, app/api/**/*.ts, scripts/**/*.ts, scripts/**/*.mjs"
 ---
+
 # Financial data and mutations
 
 - Treat `db/schema.ts` as the schema source of truth and `lib/services` as the owner of financial behavior. UI components and route handlers should call those boundaries rather than reproduce calculations or SQL.

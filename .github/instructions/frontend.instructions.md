@@ -3,6 +3,7 @@ description: "Use when changing Worthboard pages, layouts, React components, for
 name: "Worthboard Frontend"
 applyTo: "app/**/*.tsx, components/**/*.tsx, app/globals.css"
 ---
+
 # Frontend implementation
 
 - Preserve the established compact, dark financial-dashboard language in `app/globals.css` and existing components. Build the working product interface, not a marketing page or explanatory landing page.

@@ -1,14 +1,11 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { userSettings } from "@/db/schema";
 import { createSession, destroySession } from "@/lib/auth/session";
 import { loginRateLimit, recordLoginAttempt } from "@/lib/auth/rate-limit";
-import { ensureBootstrap } from "@/lib/bootstrap";
-import { getDatabase } from "@/lib/db";
+import { authenticateUser } from "@/lib/auth/users";
 import {
   formDataObject,
   loginSchema,
@@ -24,33 +21,36 @@ export async function loginAction(
   if (!parsed.success) return zodActionError(parsed.error);
 
   try {
-    await ensureBootstrap();
     const requestHeaders = await headers();
-    const identity =
+    const address =
       requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       requestHeaders.get("x-real-ip") ||
       "local";
-    const rateLimit = loginRateLimit(identity);
+    const rateLimit = loginRateLimit(parsed.data.username, address);
     if (!rateLimit.allowed) {
       return {
         message: `Too many attempts. Try again in ${rateLimit.retryAfterMinutes} minutes.`,
       };
     }
 
-    const settings = await getDatabase().select().from(userSettings).limit(1);
-    const valid = settings[0]
-      ? await bcrypt.compare(parsed.data.password, settings[0].passwordHash)
-      : false;
-    recordLoginAttempt(rateLimit, valid);
-    if (!valid) return { message: "The password is incorrect." };
-    await createSession();
+    const authenticated = await authenticateUser(
+      parsed.data.username,
+      parsed.data.password,
+    );
+    recordLoginAttempt(rateLimit, Boolean(authenticated));
+    if (!authenticated) return { message: "Invalid username or password." };
+    await createSession(
+      authenticated.userId,
+      authenticated.sessionVersion,
+      authenticated.sessionTimeoutMinutes,
+    );
   } catch (error) {
     console.error("Login failed safely:", error instanceof Error ? error.name : "UnknownError");
     return {
       message:
         error instanceof Error && error.message.includes("SESSION_SECRET")
           ? error.message
-          : "Worthboard is not configured yet. Check the server environment.",
+          : "Sign in is temporarily unavailable.",
     };
   }
   redirect("/");
