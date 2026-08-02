@@ -1,0 +1,39 @@
+FROM node:24-bookworm-slim AS dependencies
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+FROM node:24-bookworm-slim AS builder
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+FROM node:24-bookworm-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    DATABASE_PATH=/data/worthboard.db \
+    BACKUP_PATH=/backups \
+    PORT=3000
+
+RUN groupadd --system --gid 1001 worthboard \
+    && useradd --system --uid 1001 --gid worthboard worthboard \
+    && mkdir -p /data /backups \
+    && chown -R worthboard:worthboard /data /backups
+
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=builder --chown=worthboard:worthboard /app/.next ./.next
+COPY --from=builder --chown=worthboard:worthboard /app/public ./public
+COPY --from=builder --chown=worthboard:worthboard /app/db/migrations ./db/migrations
+COPY --from=builder --chown=worthboard:worthboard /app/scripts/migrate.mjs ./scripts/migrate.mjs
+COPY --from=builder --chown=worthboard:worthboard /app/scripts/reset-password.mjs ./scripts/reset-password.mjs
+COPY --from=builder --chown=worthboard:worthboard /app/package.json ./
+
+USER worthboard
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["npm", "start"]

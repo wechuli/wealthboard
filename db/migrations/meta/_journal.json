@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1785655073717,
+      "tag": "0000_harsh_mother_askani",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785655315110,
+      "tag": "0001_handy_dagger",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785658123255,
+      "tag": "0002_fluffy_scalphunter",
+      "breakpoints": true
+    }
+  ]
+}

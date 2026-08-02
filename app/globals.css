@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --background: #090d0d;
+  --panel: #111716;
+  --panel-raised: #151d1b;
+  --muted: #8a9a96;
+  --positive: #50d890;
+  --negative: #fb7185;
+  --warning: #fbbf24;
+  --info: #67e8f9;
+  --chart-1: #50d890;
+  --chart-2: #67e8f9;
+  --chart-3: #fbbf24;
+  --chart-4: #a78bfa;
+  --chart-5: #fb7185;
+  --chart-6: #60a5fa;
+  --chart-7: #f472b6;
+  --chart-8: #94a3b8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 85% -10%, rgb(80 216 144 / 8%), transparent 28rem),
+    var(--background);
+  color: #e8efed;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: rgb(80 216 144 / 30%);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgb(148 163 184 / 25%);
+  background-clip: padding-box;
+}
+
+.financial-grid {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 2%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 2%) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+}
+
+:root[data-offline="true"] form button[type="submit"],
+:root[data-offline="true"] button[data-financial-mutation="true"] {
+  pointer-events: none;
+  cursor: not-allowed;
+  opacity: 0.45;
+}

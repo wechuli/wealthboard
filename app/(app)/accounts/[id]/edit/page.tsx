@@ -1,0 +1,40 @@
+import { notFound } from "next/navigation";
+
+import { updateAccountAction } from "@/app/(app)/actions";
+import { AccountForm } from "@/components/forms/account-form";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page";
+import { minorToDecimalString } from "@/lib/money";
+import { getAccount } from "@/lib/services/accounts";
+import { listCategories } from "@/lib/services/categories";
+
+export default async function EditAccountPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const [account, categories] = await Promise.all([getAccount(id), listCategories()]);
+  if (!account) notFound();
+  return (
+    <div className="mx-auto max-w-3xl">
+      <PageHeader title={`Edit ${account.name}`} description="Account history and currency remain unchanged." />
+      <Card>
+        <CardHeader><CardTitle>Account details</CardTitle></CardHeader>
+        <CardContent>
+          <AccountForm
+            categories={categories}
+            action={updateAccountAction.bind(null, id)}
+            initial={{
+              name: account.name,
+              description: account.description || "",
+              categoryId: account.categoryId,
+              institution: account.institution || "",
+              accountReference: account.accountReference || "",
+              currency: account.currency,
+              costBasis: account.costBasisMinor == null ? "" : minorToDecimalString(account.costBasisMinor, account.currency),
+              isIncludedInNetWorth: account.isIncludedInNetWorth,
+              notes: account.notes || "",
+            }}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

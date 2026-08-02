@@ -76,6 +76,8 @@ web_modules/
 
 # Next.js build output
 .next
+.next-e2e
+.next-verification
 out
 
 # Nuxt.js build / generate output
@@ -141,3 +143,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Worthboard runtime data
+/data/
+/backups/
+/playwright-report/
+/test-results/
+/.auth/
