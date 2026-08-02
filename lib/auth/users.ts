@@ -192,13 +192,19 @@ export async function registerUser(input: {
         .where(isNull(idempotencyKeys.userId))
         .run();
 
-      const categoryCount = tx
-        .select({ total: count() })
+      const existingSlugs = new Set(
+        tx
+          .select({ slug: categories.slug })
         .from(categories)
         .where(eq(categories.userId, userId))
-        .get()?.total;
-      if (!categoryCount) {
-        tx.insert(categories).values(defaultCategoryRows(userId, timestamp)).run();
+          .all()
+          .map((row) => row.slug),
+      );
+      const missingCategories = defaultCategoryRows(userId, timestamp).filter(
+        (row) => !existingSlugs.has(row.slug),
+      );
+      if (missingCategories.length) {
+        tx.insert(categories).values(missingCategories).run();
       }
       const rateCount = tx
         .select({ total: count() })

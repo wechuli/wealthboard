@@ -3,12 +3,20 @@ import { expect, test } from "@playwright/test";
 test("complete Worthboard acceptance journey", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
+  await page.getByLabel("Username").fill("unknown-user");
   await page.getByLabel("Password").fill("wrong-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("The password is incorrect.")).toBeVisible();
-  await page.getByLabel("Password").fill("worthboard-e2e-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText("Invalid username or password.")).toBeVisible();
+
+  await page.getByRole("link", { name: "Create an account" }).click();
+  await expect(page).toHaveURL(/\/signup/);
+  await page.getByLabel("Username").fill("alice");
+  await page.getByLabel("Display name").fill("Alice Example");
+  await page.getByLabel("Password", { exact: true }).fill("worthboard-e2e-password");
+  await page.getByLabel("Confirm password").fill("worthboard-e2e-password");
+  await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add your first account" })).toBeVisible();
 
   await page.getByRole("link", { name: "Accounts" }).first().click();
   await page.getByRole("link", { name: "Add account" }).click();
@@ -78,16 +86,16 @@ test("complete Worthboard acceptance journey", async ({ page }) => {
   await expect(page.getByText(/ahead|on track|behind/).first()).toBeVisible();
   await expect(page.getByText("KCB Car Fund")).toBeVisible();
 
-  const backupResponse = await page.request.get("/api/backup");
-  expect(backupResponse.ok()).toBeTruthy();
-  const backup = await backupResponse.body();
-  const restoreResponse = await page.request.post("/api/restore", {
+  const exportResponse = await page.request.get("/api/export/json");
+  expect(exportResponse.ok()).toBeTruthy();
+  const userExport = await exportResponse.body();
+  const restoreResponse = await page.request.post("/api/restore/user", {
     headers: { Origin: "http://127.0.0.1:3100" },
     multipart: {
-      database: {
-        name: "backup.db",
-        mimeType: "application/vnd.sqlite3",
-        buffer: backup,
+      file: {
+        name: "worthboard-user.json",
+        mimeType: "application/json",
+        buffer: userExport,
       },
     },
   });
@@ -110,6 +118,7 @@ test("complete Worthboard acceptance journey", async ({ page }) => {
 
 test("responsive layouts fit required viewports", async ({ page }) => {
   await page.goto("/login");
+  await page.getByLabel("Username").fill("alice");
   await page.getByLabel("Password").fill("worthboard-e2e-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();

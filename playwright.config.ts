@@ -5,7 +5,6 @@ const environment = {
   DATABASE_PATH: "./data/e2e.db",
   BACKUP_PATH: "./backups/e2e",
   SESSION_SECRET: "e2e-session-secret-that-is-longer-than-32-characters",
-  INITIAL_ADMIN_PASSWORD: "worthboard-e2e-password",
   APP_URL: "http://127.0.0.1:3100",
   TZ: "Africa/Nairobi",
   NEXT_DIST_DIR: ".next-e2e",
