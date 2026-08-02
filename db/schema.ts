@@ -1,4 +1,11 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  foreignKey,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const transactionTypes = [
   "opening_balance",
@@ -26,27 +33,56 @@ export const contributionFrequencies = [
   "custom",
 ] as const;
 
-export const userSettings = sqliteTable("user_settings", {
+export const userStatuses = ["active", "disabled"] as const;
+
+export const users = sqliteTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    username: text("username").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    status: text("status", { enum: userStatuses }).notNull().default("active"),
+    sessionVersion: integer("session_version").notNull().default(1),
+    lastLoginAt: text("last_login_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("users_username_unique").on(table.username)],
+);
+
+export const legacyClaims = sqliteTable("legacy_claims", {
   id: text("id").primaryKey(),
-  displayName: text("display_name").notNull(),
+  settingsId: text("settings_id").notNull(),
   passwordHash: text("password_hash").notNull(),
-  baseCurrency: text("base_currency").notNull().default("KES"),
-  supportedCurrencies: text("supported_currencies").notNull().default('["KES","USD"]'),
-  timezone: text("timezone").notNull().default("Africa/Nairobi"),
-  preferredDateFormat: text("preferred_date_format").notNull().default("dd MMM yyyy"),
-  appName: text("app_name").notNull().default("Worthboard"),
-  defaultDashboardPeriod: text("default_dashboard_period").notNull().default("1y"),
-  sessionTimeoutMinutes: integer("session_timeout_minutes").notNull().default(10080),
   sessionVersion: integer("session_version").notNull().default(1),
-  defaultGoalReturnBps: integer("default_goal_return_bps").notNull().default(800),
   createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
 });
+
+export const userSettings = sqliteTable(
+  "user_settings",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    baseCurrency: text("base_currency").notNull().default("KES"),
+    supportedCurrencies: text("supported_currencies").notNull().default('["KES","USD"]'),
+    timezone: text("timezone").notNull().default("Africa/Nairobi"),
+    preferredDateFormat: text("preferred_date_format").notNull().default("dd MMM yyyy"),
+    appName: text("app_name").notNull().default("Worthboard"),
+    defaultDashboardPeriod: text("default_dashboard_period").notNull().default("1y"),
+    sessionTimeoutMinutes: integer("session_timeout_minutes").notNull().default(10080),
+    defaultGoalReturnBps: integer("default_goal_return_bps").notNull().default(800),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("user_settings_user_unique").on(table.userId)],
+);
 
 export const categories = sqliteTable(
   "categories",
   {
     id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     icon: text("icon").notNull().default("CircleDollarSign"),
@@ -64,18 +100,20 @@ export const categories = sqliteTable(
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
-  (table) => [uniqueIndex("categories_slug_unique").on(table.slug)],
+  (table) => [
+    uniqueIndex("categories_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("categories_user_slug_unique").on(table.userId, table.slug),
+  ],
 );
 
 export const accounts = sqliteTable(
   "accounts",
   {
     id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
-    categoryId: text("category_id")
-      .notNull()
-      .references(() => categories.id, { onDelete: "restrict" }),
+    categoryId: text("category_id").notNull(),
     institution: text("institution"),
     accountReference: text("account_reference"),
     currency: text("currency").notNull(),
@@ -93,9 +131,14 @@ export const accounts = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    index("accounts_category_idx").on(table.categoryId),
-    index("accounts_goal_idx").on(table.goalId),
-    index("accounts_archived_idx").on(table.archivedAt),
+    uniqueIndex("accounts_user_id_unique").on(table.userId, table.id),
+    index("accounts_user_category_idx").on(table.userId, table.categoryId),
+    index("accounts_user_goal_idx").on(table.userId, table.goalId),
+    index("accounts_user_archived_idx").on(table.userId, table.archivedAt),
+    foreignKey({
+      columns: [table.userId, table.categoryId],
+      foreignColumns: [categories.userId, categories.id],
+    }).onDelete("restrict"),
   ],
 );
 
@@ -103,9 +146,8 @@ export const transactions = sqliteTable(
   "transactions",
   {
     id: text("id").primaryKey(),
-    accountId: text("account_id")
-      .notNull()
-      .references(() => accounts.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull(),
     type: text("type", { enum: transactionTypes }).notNull(),
     amountMinor: integer("amount_minor").notNull(),
     currency: text("currency").notNull(),
@@ -118,9 +160,20 @@ export const transactions = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    index("transactions_account_date_idx").on(table.accountId, table.transactionDate),
-    index("transactions_transfer_group_idx").on(table.transferGroupId),
-    uniqueIndex("transactions_idempotency_unique").on(table.idempotencyKey),
+    index("transactions_user_account_date_idx").on(
+      table.userId,
+      table.accountId,
+      table.transactionDate,
+    ),
+    index("transactions_user_transfer_group_idx").on(table.userId, table.transferGroupId),
+    uniqueIndex("transactions_user_idempotency_unique").on(
+      table.userId,
+      table.idempotencyKey,
+    ),
+    foreignKey({
+      columns: [table.userId, table.accountId],
+      foreignColumns: [accounts.userId, accounts.id],
+    }).onDelete("cascade"),
   ],
 );
 
@@ -128,9 +181,8 @@ export const valuationSnapshots = sqliteTable(
   "valuation_snapshots",
   {
     id: text("id").primaryKey(),
-    accountId: text("account_id")
-      .notNull()
-      .references(() => accounts.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull(),
     valueMinor: integer("value_minor").notNull(),
     currency: text("currency").notNull(),
     valuationDate: text("valuation_date").notNull(),
@@ -138,7 +190,15 @@ export const valuationSnapshots = sqliteTable(
     createdAt: text("created_at").notNull(),
   },
   (table) => [
-    index("valuations_account_date_idx").on(table.accountId, table.valuationDate),
+    index("valuations_user_account_date_idx").on(
+      table.userId,
+      table.accountId,
+      table.valuationDate,
+    ),
+    foreignKey({
+      columns: [table.userId, table.accountId],
+      foreignColumns: [accounts.userId, accounts.id],
+    }).onDelete("cascade"),
   ],
 );
 
@@ -146,6 +206,7 @@ export const exchangeRates = sqliteTable(
   "exchange_rates",
   {
     id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
     baseCurrency: text("base_currency").notNull(),
     quoteCurrency: text("quote_currency").notNull(),
     rate: text("rate").notNull(),
@@ -154,12 +215,14 @@ export const exchangeRates = sqliteTable(
     createdAt: text("created_at").notNull(),
   },
   (table) => [
-    uniqueIndex("exchange_rate_pair_date_unique").on(
+    uniqueIndex("exchange_rate_user_pair_date_unique").on(
+      table.userId,
       table.baseCurrency,
       table.quoteCurrency,
       table.effectiveDate,
     ),
-    index("exchange_rate_lookup_idx").on(
+    index("exchange_rate_user_lookup_idx").on(
+      table.userId,
       table.baseCurrency,
       table.quoteCurrency,
       table.effectiveDate,
@@ -171,15 +234,14 @@ export const goals = sqliteTable(
   "goals",
   {
     id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
     targetAmountMinor: integer("target_amount_minor").notNull(),
     currentAmountMinor: integer("current_amount_minor").notNull().default(0),
     currency: text("currency").notNull(),
     targetDate: text("target_date").notNull(),
-    linkedAccountId: text("linked_account_id").references(() => accounts.id, {
-      onDelete: "set null",
-    }),
+    linkedAccountId: text("linked_account_id"),
     icon: text("icon").notNull().default("Target"),
     status: text("status", { enum: goalStatuses }).notNull().default("active"),
     priority: integer("priority").notNull().default(0),
@@ -188,8 +250,13 @@ export const goals = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    index("goals_status_idx").on(table.status),
-    uniqueIndex("goals_account_unique").on(table.linkedAccountId),
+    uniqueIndex("goals_user_id_unique").on(table.userId, table.id),
+    index("goals_user_status_idx").on(table.userId, table.status),
+    uniqueIndex("goals_user_account_unique").on(table.userId, table.linkedAccountId),
+    foreignKey({
+      columns: [table.userId, table.linkedAccountId],
+      foreignColumns: [accounts.userId, accounts.id],
+    }).onDelete("set null"),
   ],
 );
 
@@ -197,9 +264,8 @@ export const goalContributionPlans = sqliteTable(
   "goal_contribution_plans",
   {
     id: text("id").primaryKey(),
-    goalId: text("goal_id")
-      .notNull()
-      .references(() => goals.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    goalId: text("goal_id").notNull(),
     plannedContributionMinor: integer("planned_contribution_minor").notNull(),
     frequency: text("frequency", { enum: contributionFrequencies }).notNull(),
     startDate: text("start_date").notNull(),
@@ -207,7 +273,13 @@ export const goalContributionPlans = sqliteTable(
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
-  (table) => [index("goal_plans_goal_idx").on(table.goalId)],
+  (table) => [
+    index("goal_plans_user_goal_idx").on(table.userId, table.goalId),
+    foreignKey({
+      columns: [table.userId, table.goalId],
+      foreignColumns: [goals.userId, goals.id],
+    }).onDelete("cascade"),
+  ],
 );
 
 export const loginAttempts = sqliteTable(
@@ -221,18 +293,27 @@ export const loginAttempts = sqliteTable(
   (table) => [index("login_attempt_client_time_idx").on(table.clientKey, table.attemptedAt)],
 );
 
-export const idempotencyKeys = sqliteTable("idempotency_keys", {
-  key: text("key").primaryKey(),
-  operation: text("operation").notNull(),
-  resultId: text("result_id"),
-  createdAt: text("created_at").notNull(),
-});
+export const idempotencyKeys = sqliteTable(
+  "idempotency_keys",
+  {
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    operation: text("operation").notNull(),
+    resultId: text("result_id"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idempotency_user_key_unique").on(table.userId, table.key),
+    index("idempotency_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
 
 export type Account = typeof accounts.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type ValuationSnapshot = typeof valuationSnapshots.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
+export type User = typeof users.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type TransactionType = (typeof transactionTypes)[number];
 export type GoalStatus = (typeof goalStatuses)[number];

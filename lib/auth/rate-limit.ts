@@ -9,7 +9,6 @@ import { getDatabase } from "@/lib/db";
 
 const WINDOW_MINUTES = 15;
 const MAX_FAILURES = 5;
-const GLOBAL_MAX_FAILURES = 20;
 
 function clientKey(value: string) {
   return createHash("sha256")
@@ -17,10 +16,9 @@ function clientKey(value: string) {
     .digest("hex");
 }
 
-export function loginRateLimit(identity: string) {
+function takeRateLimit(values: string[]) {
   const db = getDatabase();
-  const key = clientKey(identity);
-  const globalKey = clientKey("all-login-clients");
+  const keys = values.map(clientKey);
   const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString();
   return db.transaction((tx) => {
     const cutoff = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
@@ -37,14 +35,12 @@ export function loginRateLimit(identity: string) {
           ),
         )
         .get()?.total ?? 0;
-    const allowed =
-      countFailures(key) < MAX_FAILURES &&
-      countFailures(globalKey) < GLOBAL_MAX_FAILURES;
+    const allowed = keys.every((key) => countFailures(key) < MAX_FAILURES);
     if (allowed) {
       const timestamp = nowIso();
       tx.insert(loginAttempts)
         .values(
-          [key, globalKey].map((clientKeyValue) => ({
+          keys.map((clientKeyValue) => ({
             id: crypto.randomUUID(),
             clientKey: clientKeyValue,
             succeeded: false,
@@ -54,24 +50,33 @@ export function loginRateLimit(identity: string) {
         .run();
     }
     return {
-      key,
-      globalKey,
+      keys,
       allowed,
       retryAfterMinutes: WINDOW_MINUTES,
     };
   });
 }
 
+export function loginRateLimit(username: string, address: string) {
+  return takeRateLimit([
+    `login-user:${username}:${address}`,
+    `login-client:${address}`,
+  ]);
+}
+
+export function signupRateLimit(address: string) {
+  return takeRateLimit([`signup-client:${address}`]);
+}
+
 export function recordLoginAttempt(
-  keys: { key: string; globalKey: string },
+  rateLimit: { keys: string[] },
   succeeded: boolean,
 ) {
   const db = getDatabase();
   if (!succeeded) return;
   db.transaction((tx) => {
-    tx.delete(loginAttempts).where(eq(loginAttempts.clientKey, keys.key)).run();
-    tx.delete(loginAttempts)
-      .where(eq(loginAttempts.clientKey, keys.globalKey))
-      .run();
+    for (const key of rateLimit.keys) {
+      tx.delete(loginAttempts).where(eq(loginAttempts.clientKey, key)).run();
+    }
   });
 }

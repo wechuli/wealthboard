@@ -9,6 +9,15 @@ It is intentionally not a budgeting system, trading platform, bank integration,
 or multi-user product. The Next.js application reads one SQLite database
 directly; no separate backend or cloud service is required.
 
+> **Migration status:** The running application is still single-user. The
+> approved target for self-service signup and multiple isolated users is defined
+> in [SPEC.md](SPEC.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Do not
+> expose the current release as a multi-user service until that migration and
+> its cross-user isolation tests are complete. In the target architecture,
+> `/signup` is always available and is the only user-creation path; the
+> `INITIAL_ADMIN_PASSWORD` instructions below apply only to the current runtime
+> and will be removed with the migration.
+
 > **Screenshot placeholder:** add desktop dashboard, account detail, goal
 > projection, and 390 px mobile screenshots here after deployment branding is
 > finalized.

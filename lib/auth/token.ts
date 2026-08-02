@@ -11,7 +11,7 @@ function sessionSecret() {
 }
 
 export type SessionPayload = {
-  sub: "single-user";
+  sub: string;
   version: number;
 };
 
@@ -29,8 +29,8 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     const { payload } = await jwtVerify(token, sessionSecret(), {
       algorithms: ["HS256"],
     });
-    if (payload.sub !== "single-user" || typeof payload.version !== "number") return null;
-    return { sub: "single-user", version: payload.version };
+    if (typeof payload.sub !== "string" || typeof payload.version !== "number") return null;
+    return { sub: payload.sub, version: payload.version };
   } catch {
     return null;
   }

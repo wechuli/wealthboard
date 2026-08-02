@@ -14,8 +14,48 @@ const optionalText = z
   .transform((value) => value || undefined);
 
 export const loginSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9._-]{3,32}$/, "Enter a valid username."),
   password: z.string().min(1, "Enter your password.").max(256),
 });
+
+export const signupSchema = z
+  .object({
+    username: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(
+        /^[a-z0-9._-]{3,32}$/,
+        "Use 3-32 letters, numbers, dots, underscores, or hyphens.",
+      ),
+    displayName: z.string().trim().min(1, "Enter your display name.").max(80),
+    password: z.string().min(12, "Use at least 12 characters.").max(256),
+    confirmPassword: z.string().max(256),
+    legacyPassword: z
+      .string()
+      .max(256)
+      .optional()
+      .transform((value) => value || undefined),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
+export const passwordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password.").max(256),
+    newPassword: z.string().min(12, "Use at least 12 characters.").max(256),
+    confirmPassword: z.string().max(256),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
 
 export const accountSchema = z.object({
   idempotencyKey: z.string().uuid().optional(),

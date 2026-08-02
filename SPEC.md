@@ -1,41 +1,29 @@
-EXECUTION DIRECTIVE
+# Worthboard product specification
 
-You are operating as an autonomous implementation agent.
+## Status and terminology
 
-Do not merely provide architecture, plans, examples, or code snippets.
-Create and modify the files in this repository and implement the complete application.
+This document defines the target architecture for migrating the existing
+application from one application user to multiple independent users. The
+current implementation remains single-user until that migration is complete;
+do not represent the target behavior as shipped before the isolation and
+migration acceptance criteria pass.
 
-Do not stop after producing the architecture or implementation plan.
-Continue through every implementation phase until the acceptance criteria are satisfied.
+To avoid ambiguity:
 
-Do not ask the user questions.
-When something is ambiguous, make the most sensible pragmatic decision and document it.
+- **Application user** means a person who signs up and authenticates.
+- **Financial account** means a bank account, investment, property, vehicle,
+  liability, or other tracked holding owned by one application user.
 
-You must:
-
-1. Scaffold the application.
-2. Implement every required feature.
-3. Install dependencies.
-4. Create and run database migrations.
-5. Run linting, type checking, unit tests, end-to-end tests, and the production build.
-6. Fix all failures you encounter.
-7. Review the final application against every acceptance criterion.
-8. Continue working until the application is runnable and the verification commands pass.
-
-Do not wait for approval between phases.
-Do not mark the task complete while required functionality is missing.
-
-
-
-You are a senior full-stack engineer and product designer. Build a polished, self-hosted, single-user personal wealth and goals tracker.
+Worthboard is a polished, self-hosted, multi-user personal wealth and goals tracker.
 
 The app should feel significantly simpler than Wealthfolio. It is not intended to be an accounting system, a trading platform, or a detailed budgeting app.
 
 The main user workflow should be:
 
-1. Add an account or asset.
-2. Enter its current value.
-3. Categorize it, for example:
+1. Sign up or sign in to a private portfolio.
+2. Add a financial account or asset.
+3. Enter its current value.
+4. Categorize it, for example:
    - Securities
    - Money market funds
    - Fixed income
@@ -45,11 +33,12 @@ The main user workflow should be:
    - Vehicles
    - Other assets
    - Liabilities
-4. Periodically update the value or record a deposit, withdrawal, gain, or loss.
-5. View total net worth and portfolio allocation through useful dashboards.
-6. Create financial goals and track contributions toward them.
+5. Periodically update the value or record a deposit, withdrawal, gain, or loss.
+6. View total net worth and portfolio allocation through useful dashboards.
+7. Create financial goals and track contributions toward them.
 
-The product should be optimized for one person manually tracking their wealth over time.
+The product should be optimized for individuals manually tracking their own
+wealth over time. Users share the deployment but never share portfolio data.
 
 ## Product name
 
@@ -89,8 +78,12 @@ The application should be suitable for deployment to a home server or Kubernetes
 
 ## Important architectural principles
 
-- Single-user only
-- No organization, team, family, role, invitation, or multi-tenancy features
+- Support multiple independent application users in one deployment.
+- Enforce strict per-user data isolation in schema, services, actions, pages,
+  route handlers, exports, imports, analytics, caches, and tests.
+- Do not implement organizations, teams, households, roles, invitations,
+  shared portfolios, or cross-user financial accounts in the initial
+  multi-user release.
 - No dependency on cloud authentication providers
 - No mandatory external APIs
 - Manual data entry should work without external financial integrations
@@ -104,42 +97,103 @@ The application should be suitable for deployment to a home server or Kubernetes
 - Default timezone: Africa/Nairobi
 - Default base currency: KES
 
-## Authentication
+## Identity, signup, and authentication
 
-Implement a simple but secure single-user login.
+Implement simple local authentication for independent application users. Do
+not require email delivery, OAuth, or another identity provider.
 
 Requirements:
 
-- One user account
-- The initial password can be supplied through an environment variable
-- On first launch, store only the hashed password
-- Allow the password to be changed from Settings
-- Use secure, HTTP-only, same-site cookies
-- Sessions should expire after a configurable period
-- Include logout functionality
-- Protect every application route except the login page and PWA assets
-- Add basic login rate limiting
-- Do not implement password reset through email
-- Provide a documented CLI or environment-based password-reset method
-- Never log passwords or sensitive form values
+- Authenticate with a unique, case-insensitive username and password. Keep the
+   display name separate from the login identifier.
+- Normalize usernames to lowercase and restrict them to 3-32 characters using
+   letters, numbers, `.`, `_`, and `-`.
+- Keep `/signup` publicly available at all times. Every application user,
+   including the first user, must create their identity through the signup form.
+- Do not support environment-created users, default credentials, setup users,
+   invitation-only creation, or any other account bootstrap path.
+- Hash passwords with bcrypt using the existing work factor. Never store or log
+   plaintext passwords or sensitive form values.
+- Require a password of at least 12 characters and confirm it during signup.
+- Create each user, their settings, seeded categories, and initial exchange
+   rates atomically. A failed signup must not leave partial user data.
+- Signup must not create financial accounts or sample portfolio data. Each user
+   adds their own financial accounts after authentication unless they explicitly
+   run the optional demo seed against their own identity.
+- After signup, create a session and redirect to the private dashboard.
+- Put the immutable user ID in the signed session token subject. Never accept a
+   user ID from form data, route parameters, headers, or query strings as proof
+   of ownership.
+- Use secure, HTTP-only, SameSite=Strict cookies. Sessions expire after the
+   user's configured period and are rejected when the user is inactive or the
+   session version no longer matches.
+- Allow password changes from Settings. A password change increments that
+   user's session version and invalidates their other sessions only.
+- Include logout and clear user-specific client state when switching users.
+- Protect every application route except login, signup, health checks, and
+   public PWA assets.
+- Rate-limit login by normalized username and client address, and rate-limit
+   signup by client address. Login errors must not reveal whether a username
+   exists.
+- Do not implement email password reset. Provide a documented operator CLI that
+   resets one user by username, reads the new password from an environment
+   variable, and invalidates only that user's sessions.
 
 ## Core data model
 
 Design a clean SQLite schema using Drizzle.
 
+### Users
+
+Authentication identity and credentials belong in a dedicated `users` table.
+
+Fields should include:
+
+- id, generated UUID
+- username, normalized and unique case-insensitively
+- passwordHash
+- status: Active or Disabled
+- sessionVersion
+- lastLoginAt, optional
+- createdAt
+- updatedAt
+
 ### User settings
 
 Fields should include:
 
-- id
+- userId, unique foreign key to users
 - displayName
-- passwordHash
 - baseCurrency
+- supportedCurrencies
 - timezone
 - preferredDateFormat
 - appName
+- defaultDashboardPeriod
+- sessionTimeoutMinutes
+- defaultGoalReturnBps
 - createdAt
 - updatedAt
+
+### Ownership and data isolation
+
+- Every user-owned table must have a non-null `userId` foreign key, including
+   categories, financial accounts, transactions, valuations, exchange rates,
+   goals, goal contribution plans, and idempotency keys.
+- Derive `userId` exclusively from the verified session. Service functions
+   should accept it explicitly as their first ownership argument.
+- Read, update, archive, and delete resources by both `userId` and resource ID.
+   A request for another user's resource should behave as not found and must not
+   disclose that the resource exists.
+- Validate that every relationship stays within one owner. A goal cannot link
+   to another user's account, a transaction or valuation cannot target another
+   user's account, and a transfer cannot cross users.
+- Scope unique constraints by user where appropriate, including category slugs,
+   linked goal accounts, transaction idempotency, and exchange-rate pair/date.
+- Include `userId` in database indexes and any server cache key used for private
+   data. Do not use a process-global cache for user-specific settings or results.
+- Seed default categories and default exchange rates separately for each new
+   user so one user's edits never change another user's portfolio.
 
 ### Asset categories
 
@@ -160,6 +214,7 @@ Seed these categories:
 Each category should include:
 
 - id
+- userId
 - name
 - slug
 - icon
@@ -169,7 +224,8 @@ Each category should include:
 - createdAt
 - updatedAt
 
-Allow the user to create, rename, reorder, archive, and assign icons to custom categories.
+Allow each user to create, rename, reorder, archive, and assign icons to their
+own categories. Category slugs are unique only within one user.
 
 ### Accounts and assets
 
@@ -178,6 +234,7 @@ Treat bank accounts, investments, vehicles, and land as trackable holdings under
 Fields:
 
 - id
+- userId
 - name
 - description
 - categoryId
@@ -230,6 +287,7 @@ Supported transaction types:
 Fields:
 
 - id
+- userId
 - accountId
 - type
 - amountMinor
@@ -260,6 +318,7 @@ Some assets, such as land, vehicles, private investments, and manually tracked f
 Fields:
 
 - id
+- userId
 - accountId
 - valueMinor
 - currency
@@ -283,6 +342,7 @@ Support multiple currencies, especially KES and USD.
 Fields:
 
 - id
+- userId
 - baseCurrency
 - quoteCurrency
 - rate
@@ -290,7 +350,8 @@ Fields:
 - source
 - createdAt
 
-Initially, exchange rates can be entered manually.
+Initially, exchange rates can be entered manually. Rates are user-owned; an
+update must affect only the current user's calculations.
 
 Provide a settings area where the user can update the current USD/KES exchange rate.
 
@@ -303,6 +364,7 @@ Keep the design ready for an optional exchange-rate API later, but do not requir
 Fields:
 
 - id
+- userId
 - name
 - description
 - targetAmountMinor
@@ -343,6 +405,7 @@ Prefer linked-account tracking so balances are not duplicated.
 Fields:
 
 - id
+- userId
 - goalId
 - plannedContributionMinor
 - frequency
@@ -639,24 +702,34 @@ Show:
 
 Do not show misleading annualized performance for very short measurement periods without a warning.
 
-## Import and export
+## Import, export, and deployment backup
+
+User-facing portability must be scoped to the authenticated user.
 
 Support:
 
-- Export all data as JSON
-- Export transactions as CSV
-- Export accounts as CSV
-- Import transactions from CSV
-- Full SQLite database backup
-- Full database restore
+- Export the current user's complete portfolio as JSON without credentials,
+   session data, login attempts, or another user's records.
+- Export the current user's transactions as CSV.
+- Export the current user's financial accounts as CSV.
+- Import transactions only into a financial account owned by the current user.
+- Restore a validated per-user JSON export by replacing only the current user's
+   portfolio in one transaction.
 
-Before restoring a database:
+Before a per-user restore:
 
-- Validate the file
-- Warn the user that current data will be replaced
-- Automatically create a pre-restore backup
+- Validate the archive version and every record.
+- Reject foreign user IDs and remap imported record IDs to the current user.
+- Warn that only the current user's portfolio will be replaced.
+- Create a current-user export that can be downloaded before replacement.
+- Roll back the entire operation on any failure.
 
-Provide a documented backup directory for Docker deployments.
+A raw SQLite backup contains credentials and every user's financial data. Do
+not expose full-database backup or restore through an ordinary authenticated
+route or user settings. Deployment operators, who are outside the application
+role model, perform consistent full-database backup and offline restore through
+documented CLI or container operations. Document the persistent backup
+directory and require the app to be stopped for a raw-file restore.
 
 ## User interface and styling
 
@@ -776,6 +849,9 @@ When offline:
 - Clearly indicate that fresh account data requires a server connection
 - Disable financial mutations
 - Do not queue transactions unless a safe synchronization system is implemented
+- Do not cache authenticated financial responses in the service worker.
+- Clear user-specific in-memory state and caches on logout so a subsequent user
+   on the same device cannot see the previous user's data.
 
 The PWA should launch cleanly from an Android or iOS home screen.
 
@@ -886,6 +962,8 @@ Example goal:
 - Assumed annual return: 8%
 
 Do not expose these exact values unless demo mode is explicitly enabled.
+The seed command must require an explicit target username or user ID and must
+never add demo data to every user.
 
 ## Settings
 
@@ -902,8 +980,7 @@ Create settings for:
 - Default dashboard period
 - Password change
 - Session timeout
-- Backup and restore
-- Data export
+- Personal data export and restore
 - Category management
 - Asset classification
 - Default goal return assumption
@@ -946,7 +1023,17 @@ Use:
 
 Test at minimum:
 
+- Signup for the first and subsequent users
+- Rejection of access to the private application before signup or login
+- Confirmation that signup creates no financial accounts or demo data
 - Login and logout
+- Generic login failure without username enumeration
+- Password change and per-user session invalidation
+- Two simultaneous users with isolated categories, exchange rates, financial
+   accounts, transactions, goals, analytics, and settings
+- Direct URL and mutation attempts against another user's resource
+- Rejection of cross-user transfers, goal links, imports, and idempotency keys
+- Per-user exports and restores that contain no other user's data
 - Creating an account
 - Recording a deposit
 - Recording interest
@@ -986,7 +1073,6 @@ Required environment variables should include:
 
 - DATABASE_PATH
 - SESSION_SECRET
-- INITIAL_ADMIN_PASSWORD
 - APP_URL
 - TZ
 - BACKUP_PATH
@@ -1002,9 +1088,11 @@ Create a detailed README with:
 - Local development
 - Docker deployment
 - Kubernetes deployment
-- First login
-- Password reset
-- Backup and restore
+- Signup and first-user onboarding
+- Legacy single-user data claim during signup
+- Password reset by username
+- Per-user export and restore
+- Deployment-wide backup and offline restore
 - Database migrations
 - Updating the application
 - PWA installation
@@ -1023,7 +1111,12 @@ Do not implement these in version one:
 - Household budgeting
 - Expense categorization
 - Recurring bills
-- Multi-user support
+- Organizations, households, and teams
+- Roles and administrator UI
+- Invitations and shared portfolios
+- Cross-user financial accounts or transfers
+- Email verification and email password recovery
+- OAuth, SAML, and enterprise single sign-on
 - Social features
 - Public profiles
 - AI financial advice
@@ -1033,28 +1126,44 @@ Do not implement these in version one:
 
 Keep the first version focused on manually tracking net worth, account values, contributions, investment growth, and financial goals.
 
-## Required implementation approach
+## Required migration approach
 
-Do not attempt to generate the entire application as one unstructured code dump.
+Evolve the existing application incrementally; do not re-scaffold or rewrite
+unrelated features.
 
 Follow this sequence:
 
-1. Produce a concise architecture proposal.
-2. Produce the database schema.
-3. Produce the route and component structure.
-4. Produce the implementation plan in phases.
-5. Scaffold the application.
-6. Implement authentication.
-7. Implement accounts and categories.
-8. Implement transactions and valuations.
-9. Implement dashboard calculations.
-10. Implement goals.
-11. Implement reports.
-12. Implement import, export, and backups.
-13. Implement PWA support.
-14. Add tests.
-15. Add Docker and Kubernetes deployment files.
-16. Review the complete implementation for security, financial accuracy, responsive behavior, and unnecessary complexity.
+1. Back up a representative existing database and establish passing baseline
+   unit, component, end-to-end, and build checks.
+2. Add `users` and separate credentials from `user_settings` without removing
+   the existing singleton compatibility path.
+3. Add nullable `userId` columns and ownership indexes to every user-owned
+   table. Generate and review the Drizzle migration.
+4. If singleton data exists, preserve its password hash and records in a
+   temporary, single-use legacy claim state. Do not create an active user,
+   assign a default username, or make that data visible to another signup.
+5. Thread session-derived `userId` through services, analytics, server actions,
+   pages, route handlers, cache keys, imports, and exports. Query resources by
+   owner and ID in the database, not through a post-query UI check.
+6. Implement the always-available signup flow. When a legacy claim exists, the
+   existing owner must verify the previous password as part of signup; the same
+   transaction creates their chosen identity, assigns all legacy records to it,
+   and consumes the claim. All other users follow normal signup.
+7. Verify that no user-owned row has a null or unknown owner after any legacy
+   claim, then rebuild SQLite tables as needed to enforce non-null foreign keys
+   and owner-scoped uniqueness.
+8. Add login by username, atomic per-user defaults, password reset by username,
+   and per-user session invalidation.
+9. Replace user-facing raw database backup and restore with per-user JSON
+   portability. Move full SQLite backup and restore to operator-only commands
+   and documentation.
+10. Add two-user isolation fixtures and tests. Do not deploy the multi-user
+    release until the complete signup and isolation suite passes.
+11. Remove singleton compatibility and temporary claim code only after migration
+    tests prove existing data and credentials are preserved through signup.
+12. Review the complete migration for authorization, IDOR, cache isolation,
+    financial accuracy, rollback behavior, responsive signup/login flows, and
+    unnecessary complexity.
 
 After each phase:
 
@@ -1067,7 +1176,22 @@ After each phase:
 
 The application is complete when:
 
-- I can log in securely as the single user.
+- An empty deployment presents signup and cannot create an application user by
+   environment variable, default credential, or any route other than signup.
+- The first and subsequent users can sign up and log in concurrently. Signup is
+   always available and has no enabled or disabled mode.
+- Signup creates settings, categories, and rates but no financial accounts or
+   sample portfolio data.
+- Usernames are unique case-insensitively and login failures do not reveal
+   whether a username exists.
+- Each user can see and change only their own settings, categories, exchange
+   rates, financial accounts, transactions, valuations, goals, reports, imports,
+   exports, and idempotent operations.
+- Guessing another user's URL or submitting another user's resource ID returns
+   not found or a generic authorization failure without leaking data.
+- The existing single-user owner can verify the previous password during
+   signup, choose a username, and retain all financial data without an
+   automatically created identity.
 - I can add Zimele, Madison, KCB, VWRA, land, a car, savings, and liabilities.
 - I can manually set or update each account’s value.
 - I can record deposits, withdrawals, interest, fees, and transfers.
@@ -1080,7 +1204,12 @@ The application is complete when:
 - I can see whether the goal is ahead, on track, or behind.
 - I can use the application comfortably on a phone.
 - I can install it as a PWA.
+- Logging out and signing in as another user on the same device never reveals
+   cached data from the previous user.
 - My SQLite data persists across application upgrades.
-- I can back up and restore all data.
+- I can export and restore my own portfolio without receiving another user's
+   records or credentials.
+- A deployment operator can back up and restore the complete SQLite database
+   outside ordinary user routes.
 - The dashboard looks like a premium financial application.
 - The interface remains simpler and easier to understand than Wealthfolio.

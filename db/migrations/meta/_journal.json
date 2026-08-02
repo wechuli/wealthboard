@@ -22,6 +22,34 @@
       "when": 1785658123255,
       "tag": "0002_fluffy_scalphunter",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785669172089,
+      "tag": "0003_add_multi_user_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785669178722,
+      "tag": "0004_preserve_legacy_claim",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1785669262647,
+      "tag": "0005_scope_user_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785669274007,
+      "tag": "0006_enforce_same_owner_relations",
+      "breakpoints": true
     }
   ]
 }
