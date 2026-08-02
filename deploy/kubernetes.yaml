@@ -61,11 +61,6 @@ spec:
                 secretKeyRef:
                   name: worthboard-secrets
                   key: session-secret
-            - name: INITIAL_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: worthboard-secrets
-                  key: initial-admin-password
           volumeMounts:
             - name: data
               mountPath: /data
@@ -116,7 +111,7 @@ kind: Ingress
 metadata:
   name: worthboard
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: 101m
+    nginx.ingress.kubernetes.io/proxy-body-size: 26m
 spec:
   ingressClassName: nginx
   tls:

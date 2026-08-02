@@ -30,6 +30,8 @@ COPY --from=builder --chown=worthboard:worthboard /app/public ./public
 COPY --from=builder --chown=worthboard:worthboard /app/db/migrations ./db/migrations
 COPY --from=builder --chown=worthboard:worthboard /app/scripts/migrate.mjs ./scripts/migrate.mjs
 COPY --from=builder --chown=worthboard:worthboard /app/scripts/reset-password.mjs ./scripts/reset-password.mjs
+COPY --from=builder --chown=worthboard:worthboard /app/scripts/backup.mjs ./scripts/backup.mjs
+COPY --from=builder --chown=worthboard:worthboard /app/scripts/restore-backup.mjs ./scripts/restore-backup.mjs
 COPY --from=builder --chown=worthboard:worthboard /app/package.json ./
 
 USER worthboard

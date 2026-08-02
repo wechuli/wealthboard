@@ -1,233 +1,223 @@
 # Worthboard
 
-Worthboard is a polished, self-hosted personal wealth and goals tracker for one
-person. It keeps manual accounts, investments, property, vehicles, cash, and
-liabilities in one simple dashboard, separates contributions from investment
-growth, supports KES/USD conversion, and forecasts linked financial goals.
-
-It is intentionally not a budgeting system, trading platform, bank integration,
-or multi-user product. The Next.js application reads one SQLite database
-directly; no separate backend or cloud service is required.
-
-> **Migration status:** The running application is still single-user. The
-> approved target for self-service signup and multiple isolated users is defined
-> in [SPEC.md](SPEC.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Do not
-> expose the current release as a multi-user service until that migration and
-> its cross-user isolation tests are complete. In the target architecture,
-> `/signup` is always available and is the only user-creation path; the
-> `INITIAL_ADMIN_PASSWORD` instructions below apply only to the current runtime
-> and will be removed with the migration.
+Worthboard is a self-hosted, multi-user wealth and goals tracker. Each user has
+an independent portfolio, settings, categories, exchange rates, reports, and
+portable exports. The Next.js application reads SQLite directly and requires no
+separate backend, cloud identity provider, or financial integration.
 
 > **Screenshot placeholder:** add desktop dashboard, account detail, goal
-> projection, and 390 px mobile screenshots here after deployment branding is
-> finalized.
+> projection, signup, and 390 px mobile screenshots after deployment branding
+> is finalized.
 
 ## Features
 
-- Secure single-user login, expiring signed cookies, persistent rate limiting,
-  password rotation, and environment-based password recovery
-- Accounts and liabilities with custom categories, classifications, card/table
-  views, filters, sorting, archives, and base-currency values
-- Deposits, withdrawals, interest, dividends, fees, gains/losses, adjustments,
-  liability changes, and idempotent paired transfers
-- Absolute valuation snapshots that remain separate from cash contributions
-- Daily/monthly reconstructed net-worth history and rich Recharts analytics
-- Linked goals with required contributions, tracking status, and future-value
-  forecasts
-- JSON/CSV export, transaction CSV import, online SQLite backup, and validated
-  restore with an automatic pre-restore backup
-- Installable PWA shell with install/update prompts and explicit offline safety
+- Public self-service signup with local username/password authentication
+- Strict owner-scoped accounts, transactions, valuations, goals, analytics,
+  rates, imports, exports, restores, caches, and idempotency keys
+- Accounts and liabilities with custom categories, archives, filters, and
+  base-currency values
+- Deposits, withdrawals, income, fees, gains/losses, valuations, and atomic
+  paired transfers
+- Net-worth history, portfolio analytics, and linked-goal forecasting
+- Per-user JSON portability and account/transaction CSV export
+- Operator-only full SQLite backup and offline restore
+- Installable PWA shell with explicit offline safety
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
-Financial values are integer minor units. Exchange rates are stored as decimal
-strings, and calculations use `bigint` or Decimal.js rather than JavaScript
-floating-point arithmetic. See [the architecture notes](docs/ARCHITECTURE.md).
+Money is stored as integer minor units. Exchange rates are effective-dated
+decimal strings, and calculations use `bigint` or Decimal.js.
 
 ## Requirements
 
-- Node.js 22 or newer (Node.js 24 is used by the container)
+- Node.js 22 or newer
 - npm
 - A persistent local filesystem for SQLite
 
 ## Local development
 
-1. Install dependencies and create your environment file:
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
 
-   ```bash
-   npm install
-   cp .env.example .env
-   ```
+Set `SESSION_SECRET` to at least 32 random characters before starting. The
+development command applies pending migrations, then starts Next.js at
+<http://localhost:3000>.
 
-2. Set strong values in `.env`. `SESSION_SECRET` must contain at least 32
-   characters and `INITIAL_ADMIN_PASSWORD` must contain at least 10.
+Open `/signup` to create the first user. Signup remains available for every
+subsequent user and is the only application-user creation path. It atomically
+creates the identity, settings, default categories, and initial exchange rate;
+it does not create financial accounts or sample data.
 
-3. Start the application:
+### Upgrading an older single-user installation
 
-   ```bash
-   npm run dev
-   ```
+The migration preserves the old password hash, settings, and financial records
+without creating or naming a user. On `/signup`, expand **Claim an older
+Worthboard portfolio**, choose a username and new password, and enter the
+previous Worthboard password. A successful signup atomically assigns all legacy
+records to that user and consumes the one-time claim.
 
-   `dev` applies pending migrations before starting Next.js. Open
-   <http://localhost:3000>.
-
-The first request creates the one user and stores only a bcrypt hash of
-`INITIAL_ADMIN_PASSWORD`. Changing that environment variable later does not
-change an initialized account.
+Other users can complete normal signup while a legacy claim is pending. Do not
+delete the old database until the owner has confirmed their portfolio.
 
 ### Optional fictional demo data
 
-Demo values are never loaded by default. On a new migrated database, explicitly
-opt in:
+Demo data is never loaded by signup. Target one existing user explicitly:
 
 ```bash
-DEMO_DATA=true npm run db:seed:demo
+DEMO_DATA=true TARGET_USERNAME=alice npm run db:seed:demo
 ```
 
-The seed is idempotent and uses the fictional accounts and car goal described in
-the product specification.
+The command never creates an identity or seeds every user.
 
 ## Environment variables
 
-| Variable                 | Purpose                                                |
-| ------------------------ | ------------------------------------------------------ |
-| `DATABASE_PATH`          | Persistent SQLite file, default `./data/worthboard.db` |
-| `SESSION_SECRET`         | HMAC session secret, at least 32 characters            |
-| `INITIAL_ADMIN_PASSWORD` | First-launch password; never stored in plaintext       |
-| `APP_URL`                | Canonical deployment URL                               |
-| `TZ`                     | Server/default timezone, default `Africa/Nairobi`      |
-| `BACKUP_PATH`            | Persistent backup directory, default `./backups`       |
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_PATH` | Persistent SQLite file; default `./data/worthboard.db` |
+| `SESSION_SECRET` | HMAC session secret; at least 32 characters |
+| `APP_URL` | Canonical deployment URL used for origin validation |
+| `TZ` | Default timezone for new users; default `Africa/Nairobi` |
+| `BACKUP_PATH` | Operator backup directory; default `./backups` |
 
-The temporary product name is centralized in `lib/constants.ts`; the displayed
-application name can also be changed from Settings.
+There is no initial-user password or environment-created identity.
 
-## First login and password reset
+## Password changes and operator reset
 
-Sign in with `INITIAL_ADMIN_PASSWORD`, then change the password under
-**Settings → Password**. Password changes increment the session version and sign
-out other sessions.
+Users change their password under **Settings → Password**. This increments only
+that user's session version and invalidates their other sessions.
 
-If the password is lost, stop the app process and run this against the same
-database:
+There is no email reset flow. An operator can reset one user by normalized
+username; the password is read from the environment rather than command
+arguments:
 
 ```bash
-NEW_ADMIN_PASSWORD='a-new-strong-password' npm run password:reset
+TARGET_USERNAME=alice \
+NEW_USER_PASSWORD='a-new-password-with-12-characters' \
+npm run password:reset
 ```
 
-The command reads the password from the environment so it does not appear in
-source or command arguments. It writes a bcrypt hash and invalidates every
-existing session. There is no email reset flow.
-
-For Docker Compose, run the same utility inside the application container:
+For Docker Compose:
 
 ```bash
-docker compose exec -e NEW_ADMIN_PASSWORD='a-new-strong-password' \
+docker compose exec \
+  -e TARGET_USERNAME=alice \
+  -e NEW_USER_PASSWORD='a-new-password-with-12-characters' \
   worthboard npm run password:reset
 ```
 
 ## Database migrations
 
-Drizzle schema source is in `db/schema.ts`; generated migrations are committed
-under `db/migrations`.
+`db/schema.ts` is the schema source of truth. Generated, forward-only
+migrations are committed under `db/migrations`.
 
 ```bash
-npm run db:generate  # after intentionally changing the schema
-npm run db:migrate   # apply pending migrations
+npm run db:generate
+npm run db:migrate
 ```
 
-Back up production before applying an upgrade. Migrations are forward-only; do
-not edit a migration that has already run.
+Back up production before an upgrade. Never edit a migration that may already
+have run. The multi-user migration is tested against both an empty disposable
+database and a disposable copy of the singleton schema.
 
 ## Docker deployment
 
-Create `.env` with strong secrets, then:
+Create `.env` with `SESSION_SECRET` and `APP_URL`, then run:
 
 ```bash
 docker compose up -d --build
 docker compose ps
 ```
 
-Compose mounts named volumes at:
-
-- `/data` for `worthboard.db`
-- `/backups` for downloaded and pre-restore backups
-
-Both survive image replacement and application upgrades. The container runs as
-UID/GID 1001, drops privilege escalation, applies migrations on startup, and
-checks `/api/health`.
+Compose mounts `/data` for SQLite and `/backups` for operator backups. Both
+volumes survive image replacement. The container runs as UID/GID 1001, applies
+migrations on startup, and exposes `/api/health`.
 
 To update:
 
 ```bash
-docker compose pull
+npm run backup
 docker compose up -d --build
 ```
 
-Never place secrets in the image or Compose file. Put TLS in a trusted reverse
-proxy and expose Worthboard only over HTTPS outside a private network.
+Terminate TLS in a trusted reverse proxy and do not mount the SQLite volume
+read-write into multiple application replicas.
 
 ## Kubernetes deployment
 
-Edit the image, host, storage classes, and resource sizes in
-`deploy/kubernetes.yaml`. Create the required Secret separately:
+Edit the image, hostname, storage classes, and resource limits in
+`deploy/kubernetes.yaml`, then create the session secret separately:
 
 ```bash
 kubectl create secret generic worthboard-secrets \
-  --from-literal=session-secret="$(openssl rand -hex 32)" \
-  --from-literal=initial-admin-password='replace-with-a-strong-password'
+  --from-literal=session-secret="$(openssl rand -hex 32)"
 kubectl apply -f deploy/kubernetes.yaml
 ```
 
-The example includes a `Recreate` single-replica Deployment, Service, two
-PersistentVolumeClaims, Ingress, probes, resource bounds, and a non-root
-SecurityContext. SQLite must not be mounted read-write by multiple replicas.
+The example uses one replica with a `Recreate` strategy, ReadWriteOnce PVCs,
+probes, an Ingress, resource bounds, and a non-root security context.
 
-## Backup and restore
+## Per-user import, export, and restore
 
-**Settings → Backup, restore & export** can download a consistent SQLite backup.
-Server-side copies are also retained in `BACKUP_PATH`.
+Settings provides:
 
-Restore accepts only a SQLite file that:
+- A complete JSON export of the authenticated user's settings and portfolio
+- Account and transaction CSV exports
+- Transaction CSV import resolved only against that user's accounts
+- A validated JSON restore that replaces only the authenticated user's
+  portfolio in one transaction
 
-1. has a valid SQLite header,
-2. passes `PRAGMA integrity_check`,
-3. contains all required Worthboard tables, and
-4. contains the single-user settings row.
+Exports contain no credentials, login attempts, session data, idempotency
+records, or another user's rows. Restore downloads a pre-restore user export,
+validates the archive, rejects owner fields and invalid relationships, remaps
+record IDs, and rolls back completely on failure.
 
-Worthboard creates a `pre-restore-*.db` online backup before replacing current
-data. Restore is destructive and may invalidate the current session if the
-restored password/session version differs. Keep external, tested copies of the
-backup directory.
-
-## Import and export
-
-- JSON export contains application data but deliberately omits the password
-  hash and login-attempt records.
-- Account and transaction CSV exports preserve integer `*_minor` fields.
-- Full SQLite backup preserves every setting, including authentication state.
-
-Transaction import expects UTF-8 CSV with this header:
+Transaction CSV uses this header:
 
 ```csv
 account_id,account_name,type,amount,currency,date,description,notes
 ```
 
-Use either `account_id` or the exact `account_name`. `type` is one of:
+Use either `account_id` or an exact `account_name`. Supported types are
 `deposit`, `withdrawal`, `interest`, `dividend`, `capital_gain`,
 `capital_loss`, `fee`, `purchase`, `sale`, `manual_adjustment`,
-`liability_payment`, or `liability_increase`. Amount is a major-unit decimal,
-date is `YYYY-MM-DD`, and currency must match the account. Opening balances and
-transfers use their dedicated UI workflows. The entire file is validated before
-any rows are inserted.
+`liability_payment`, and `liability_increase`. Amount is a major-unit decimal,
+date is `YYYY-MM-DD`, and currency must match the owned account. Opening
+balances and transfers use their dedicated workflows.
 
-## PWA installation and offline behavior
+## Deployment-wide backup and offline restore
 
-Open Worthboard in a supported browser and use its install action, or the
-in-app **Install app** prompt. On iOS, use **Share → Add to Home Screen**.
+A raw SQLite file contains every user's password hash and financial records. It
+is never available through an authenticated HTTP route.
 
-The service worker caches the offline shell and versioned static assets. It does
-not cache authenticated financial pages or queue mutations. When disconnected,
-Worthboard clearly reports that fresh data requires the server and disables
-financial submit controls. Reconnect before recording any change.
+Create a consistent operator backup:
+
+```bash
+npm run backup
+```
+
+`BACKUP_PATH` must be persistent and access-restricted. To restore, stop the
+application first, then run:
+
+```bash
+CONFIRM_OFFLINE_RESTORE=true \
+RESTORE_FILE=/backups/worthboard-2026-08-02T10-00-00Z.db \
+npm run backup:restore
+```
+
+Start Worthboard afterward so pending migrations run. Test backups regularly
+and retain an external copy before destructive maintenance.
+
+## PWA and offline behavior
+
+Use the browser install action or Worthboard's **Install app** prompt. On iOS,
+use **Share → Add to Home Screen**.
+
+The service worker caches only the offline shell and static assets. It does not
+cache authenticated financial responses or queue mutations. Financial submits
+are blocked while offline, and logout clears Worthboard client state before a
+different user signs in on the same device.
 
 ## Verification
 
@@ -240,22 +230,21 @@ npm run test:e2e
 npm run build
 ```
 
-The Playwright suite creates and removes only `data/e2e.db`, exercises the full
-single-user workflow, and checks layouts at 360, 390, 768, 1024, and 1440 px.
+Automated tests use disposable SQLite files, cover fresh and singleton
+migrations, exercise two-user isolation and portability attacks, and verify
+layouts at 360, 390, 768, 1024, and 1440 px.
 
 ## Security considerations
 
-- Use a unique, high-entropy `SESSION_SECRET` and admin password.
-- Terminate TLS before Worthboard; production cookies are `Secure`, HTTP-only,
-  and SameSite=Strict.
-- Restrict filesystem access to the database and backups. A SQLite backup
-  contains the password hash and all financial data.
-- Do not publish exports or backups to public object storage.
-- Keep the host, Node.js runtime, base image, and dependencies updated.
-- The app is intentionally single-user. Do not expose it as a shared household
-  or team service.
-- Database errors are logged by class/name without passwords or submitted
-  sensitive values.
+- Use a unique, high-entropy `SESSION_SECRET` and strong user passwords.
+- Production cookies are Secure, HTTP-only, SameSite=Strict, and explicitly
+  expiring.
+- Restrict filesystem access to SQLite databases, backups, and exports.
+- Never publish raw backups or user exports to public object storage.
+- Keep TLS, the host, Node.js, the base image, and dependencies updated.
+- Users are independent; Worthboard has no roles, organizations, invitations,
+  shared portfolios, or cross-user transfers.
+- Database errors are logged by class or name without submitted secrets.
 
 ## License
 
