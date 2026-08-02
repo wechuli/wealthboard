@@ -3,7 +3,8 @@ import { importTransactionsCsv } from "@/lib/services/portability";
 import { requireTrustedOrigin } from "@/lib/auth/origin";
 
 export async function POST(request: Request) {
-  if (!(await getSession())) return Response.json({ error: "Authentication required." }, { status: 401 });
+  const session = await getSession();
+  if (!session) return Response.json({ error: "Authentication required." }, { status: 401 });
   try {
     requireTrustedOrigin(request);
   } catch {
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "CSV import is limited to 5 MB." }, { status: 413 });
   }
   try {
-    const count = importTransactionsCsv(await file.text());
+    const count = importTransactionsCsv(session.userId, await file.text());
     return Response.json({ message: `${count} transactions imported.`, count });
   } catch (error) {
     console.error("CSV import rejected:", error instanceof Error ? error.name : "UnknownError");

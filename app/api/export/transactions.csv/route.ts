@@ -2,8 +2,9 @@ import { getSession } from "@/lib/auth/session";
 import { transactionCsv } from "@/lib/services/portability";
 
 export async function GET() {
-  if (!(await getSession())) return Response.json({ error: "Authentication required." }, { status: 401 });
-  return new Response(await transactionCsv(), {
+  const session = await getSession();
+  if (!session) return Response.json({ error: "Authentication required." }, { status: 401 });
+  return new Response(await transactionCsv(session.userId), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="worthboard-transactions-${new Date().toISOString().slice(0, 10)}.csv"`,

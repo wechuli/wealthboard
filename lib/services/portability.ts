@@ -1,164 +1,179 @@
 import "server-only";
 
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { and, eq } from "drizzle-orm";
 import { parse } from "csv-parse/sync";
+import { z } from "zod";
 
 import {
   accounts,
   categories,
+  contributionFrequencies,
   exchangeRates,
   goalContributionPlans,
   goals,
+  goalStatuses,
+  idempotencyKeys,
   transactions,
+  transactionTypes,
   userSettings,
   valuationSnapshots,
-  transactionTypes,
   type TransactionType,
 } from "@/db/schema";
 import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
-import {
-  closeDatabase,
-  databasePath,
-  getDatabase,
-  getSqlite,
-} from "@/lib/db";
-import { clearBootstrapCache } from "@/lib/bootstrap";
+import { getDatabase } from "@/lib/db";
 import { parseMoney } from "@/lib/money";
 import { recalculateAccountBalance } from "@/lib/services/accounts";
 
-const REQUIRED_TABLES = [
-  "user_settings",
-  "categories",
-  "accounts",
-  "transactions",
-  "valuation_snapshots",
-  "exchange_rates",
-  "goals",
-  "goal_contribution_plans",
-  "login_attempts",
-  "idempotency_keys",
-];
+const safeInteger = z
+  .number()
+  .int()
+  .min(Number.MIN_SAFE_INTEGER)
+  .max(Number.MAX_SAFE_INTEGER);
+const nullableText = z.string().max(2000).nullable();
+const timestamp = z.string().datetime({ offset: true });
 
-const REQUIRED_COLUMNS: Record<string, string[]> = {
-  user_settings: ["password_hash", "session_version", "session_timeout_minutes"],
-  accounts: ["current_value_minor", "is_liability", "is_included_in_net_worth"],
-  transactions: ["amount_minor", "transaction_date", "idempotency_key"],
-  goals: ["target_amount_minor", "linked_account_id", "assumed_annual_return_bps"],
-  goal_contribution_plans: ["planned_contribution_minor", "frequency"],
-};
+const settingsArchiveSchema = z
+  .object({
+    displayName: z.string().min(1).max(80),
+    baseCurrency: z.string().regex(/^[A-Z]{3}$/),
+    supportedCurrencies: z.string().max(1000),
+    timezone: z.string().min(1).max(80),
+    preferredDateFormat: z.string().min(1).max(40),
+    appName: z.string().min(1).max(80),
+    defaultDashboardPeriod: z.string().min(1).max(20),
+    sessionTimeoutMinutes: z.number().int().min(15).max(525600),
+    defaultGoalReturnBps: z.number().int().min(0).max(10000),
+  })
+  .strict();
 
-function backupDirectory() {
-  const configured = process.env.BACKUP_PATH ?? "backups";
-  const directory = path.isAbsolute(configured)
-    ? configured
-    : path.join(/* turbopackIgnore: true */ process.cwd(), configured);
-  fs.mkdirSync(directory, { recursive: true });
-  return directory;
-}
+const categoryArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1).max(80),
+    slug: z.string().min(1).max(100),
+    icon: z.string().min(1).max(50),
+    displayOrder: z.number().int(),
+    assetOrLiability: z.enum(["asset", "liability"]),
+    description: nullableText,
+    isLiquid: z.boolean(),
+    isInvestible: z.boolean(),
+    isArchived: z.boolean(),
+    isSystem: z.boolean(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
 
-function timestampName() {
-  return new Date().toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
-}
+const accountArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1).max(100),
+    description: nullableText,
+    categoryId: z.string().min(1),
+    institution: z.string().max(100).nullable(),
+    accountReference: z.string().max(50).nullable(),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    currentValueMinor: safeInteger,
+    costBasisMinor: safeInteger.nullable(),
+    isLiability: z.boolean(),
+    isIncludedInNetWorth: z.boolean(),
+    goalId: z.string().nullable(),
+    notes: nullableText,
+    openedAt: timestamp.nullable(),
+    archivedAt: timestamp.nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
 
-export async function createDatabaseBackup(prefix = "worthboard") {
-  const destination = path.join(backupDirectory(), `${prefix}-${timestampName()}.db`);
-  await getSqlite().backup(destination);
-  return destination;
-}
+const transactionArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    accountId: z.string().min(1),
+    type: z.enum(transactionTypes),
+    amountMinor: safeInteger,
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    transactionDate: timestamp,
+    description: z.string().max(200).nullable(),
+    notes: nullableText,
+    transferGroupId: z.string().nullable(),
+    idempotencyKey: z.string().nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
 
-export function validateDatabaseFile(filePath: string) {
-  const header = Buffer.alloc(16);
-  const descriptor = fs.openSync(filePath, "r");
-  fs.readSync(descriptor, header, 0, 16, 0);
-  fs.closeSync(descriptor);
-  if (header.toString("utf8") !== "SQLite format 3\u0000") {
-    throw new Error("The uploaded file is not a SQLite database.");
-  }
+const valuationArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    accountId: z.string().min(1),
+    valueMinor: safeInteger,
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    valuationDate: timestamp,
+    notes: nullableText,
+    createdAt: timestamp,
+  })
+  .strict();
 
-  const candidate = new Database(filePath, { readonly: true, fileMustExist: true });
-  try {
-    const integrity = candidate.pragma("integrity_check", { simple: true });
-    if (integrity !== "ok") throw new Error("The uploaded database failed its integrity check.");
-    const tables = candidate
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-      .all() as Array<{ name: string }>;
-    const names = new Set(tables.map((table) => table.name));
-    const missing = REQUIRED_TABLES.filter((table) => !names.has(table));
-    if (missing.length) {
-      throw new Error(`The uploaded database is missing required tables: ${missing.join(", ")}.`);
-    }
-    for (const [table, requiredColumns] of Object.entries(REQUIRED_COLUMNS)) {
-      const columns = candidate
-        .prepare(`PRAGMA table_info("${table}")`)
-        .all() as Array<{ name: string }>;
-      const names = new Set(columns.map((column) => column.name));
-      const missingColumns = requiredColumns.filter((column) => !names.has(column));
-      if (missingColumns.length) {
-        throw new Error(
-          `The uploaded database has an incompatible ${table} table.`,
-        );
-      }
-    }
-    const users = candidate
-      .prepare("SELECT COUNT(*) AS total FROM user_settings WHERE id = 'single-user'")
-      .get() as { total: number };
-    if (users.total !== 1) throw new Error("The uploaded database has no valid single-user settings.");
-  } finally {
-    candidate.close();
-  }
-}
+const exchangeRateArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    baseCurrency: z.string().regex(/^[A-Z]{3}$/),
+    quoteCurrency: z.string().regex(/^[A-Z]{3}$/),
+    rate: z.string().regex(/^\d+(?:\.\d+)?$/),
+    effectiveDate: timestamp,
+    source: z.string().min(1).max(100),
+    createdAt: timestamp,
+  })
+  .strict();
 
-function migrateCandidateDatabase(filePath: string) {
-  const candidate = new Database(filePath);
-  try {
-    candidate.pragma("foreign_keys = ON");
-    const migrationsFolder = path.join(
-      /* turbopackIgnore: true */ process.cwd(),
-      "db/migrations",
-    );
-    migrate(drizzle(candidate), { migrationsFolder });
-  } finally {
-    candidate.close();
-  }
-}
+const goalArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1).max(100),
+    description: nullableText,
+    targetAmountMinor: safeInteger,
+    currentAmountMinor: safeInteger,
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    targetDate: timestamp,
+    linkedAccountId: z.string().nullable(),
+    icon: z.string().min(1).max(50),
+    status: z.enum(goalStatuses),
+    priority: z.number().int().min(0).max(100),
+    assumedAnnualReturnBps: z.number().int().min(0).max(10000),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
 
-export async function restoreDatabase(bytes: Uint8Array) {
-  const target = databasePath();
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  const temporary = path.join(
-    path.dirname(target),
-    `.restore-${crypto.randomUUID()}.db`,
-  );
-  fs.writeFileSync(temporary, bytes, { flag: "wx" });
-  let preRestore: string | undefined;
-  let replaced = false;
-  try {
-    migrateCandidateDatabase(temporary);
-    validateDatabaseFile(temporary);
-    preRestore = await createDatabaseBackup("pre-restore");
-    closeDatabase();
-    fs.rmSync(`${target}-wal`, { force: true });
-    fs.rmSync(`${target}-shm`, { force: true });
-    fs.renameSync(temporary, target);
-    replaced = true;
-    clearBootstrapCache();
-    getSqlite().pragma("integrity_check");
-    return preRestore;
-  } catch (error) {
-    if (fs.existsSync(temporary)) fs.rmSync(temporary, { force: true });
-    if (preRestore && replaced) {
-      closeDatabase();
-      fs.copyFileSync(preRestore, target);
-      clearBootstrapCache();
-    }
-    throw error;
-  }
-}
+const planArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    goalId: z.string().min(1),
+    plannedContributionMinor: safeInteger,
+    frequency: z.enum(contributionFrequencies),
+    startDate: timestamp,
+    endDate: timestamp.nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const userArchiveSchema = z
+  .object({
+    format: z.literal("worthboard-user-json"),
+    version: z.literal(2),
+    exportedAt: timestamp,
+    settings: settingsArchiveSchema,
+    categories: z.array(categoryArchiveSchema).min(1).max(1000),
+    accounts: z.array(accountArchiveSchema).max(10000),
+    transactions: z.array(transactionArchiveSchema).max(100000),
+    valuations: z.array(valuationArchiveSchema).max(100000),
+    exchangeRates: z.array(exchangeRateArchiveSchema).min(1).max(10000),
+    goals: z.array(goalArchiveSchema).max(10000),
+    goalContributionPlans: z.array(planArchiveSchema).max(10000),
+  })
+  .strict();
 
 function csvCell(value: unknown) {
   const text = value == null ? "" : String(value);
@@ -174,21 +189,239 @@ export function toCsv(rows: Array<Record<string, unknown>>) {
   ].join("\n");
 }
 
-export async function exportData() {
+export async function exportData(userId: string) {
   const db = getDatabase();
-  const settings = await db.select().from(userSettings);
+  const settings = await db.query.userSettings.findFirst({
+    where: eq(userSettings.userId, userId),
+  });
+  if (!settings) throw new Error("User settings are unavailable.");
+
+  const [
+    categoryRows,
+    accountRows,
+    transactionRows,
+    valuationRows,
+    rateRows,
+    goalRows,
+    planRows,
+  ] = await Promise.all([
+    db.select().from(categories).where(eq(categories.userId, userId)),
+    db.select().from(accounts).where(eq(accounts.userId, userId)),
+    db.select().from(transactions).where(eq(transactions.userId, userId)),
+    db
+      .select()
+      .from(valuationSnapshots)
+      .where(eq(valuationSnapshots.userId, userId)),
+    db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId)),
+    db.select().from(goals).where(eq(goals.userId, userId)),
+    db
+      .select()
+      .from(goalContributionPlans)
+      .where(eq(goalContributionPlans.userId, userId)),
+  ]);
+
   return {
-    format: "worthboard-json",
-    version: 1,
+    format: "worthboard-user-json" as const,
+    version: 2 as const,
     exportedAt: nowIso(),
-    settings: settings.map((setting) => ({ ...setting, passwordHash: undefined })),
-    categories: await db.select().from(categories),
-    accounts: await db.select().from(accounts),
-    transactions: await db.select().from(transactions),
-    valuations: await db.select().from(valuationSnapshots),
-    exchangeRates: await db.select().from(exchangeRates),
-    goals: await db.select().from(goals),
-    goalContributionPlans: await db.select().from(goalContributionPlans),
+    settings: {
+      displayName: settings.displayName,
+      baseCurrency: settings.baseCurrency,
+      supportedCurrencies: settings.supportedCurrencies,
+      timezone: settings.timezone,
+      preferredDateFormat: settings.preferredDateFormat,
+      appName: settings.appName,
+      defaultDashboardPeriod: settings.defaultDashboardPeriod,
+      sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
+      defaultGoalReturnBps: settings.defaultGoalReturnBps,
+    },
+    categories: categoryRows.map(({ userId: _owner, ...row }) => row),
+    accounts: accountRows.map(({ userId: _owner, ...row }) => row),
+    transactions: transactionRows.map(({ userId: _owner, ...row }) => row),
+    valuations: valuationRows.map(({ userId: _owner, ...row }) => row),
+    exchangeRates: rateRows.map(({ userId: _owner, ...row }) => row),
+    goals: goalRows.map(({ userId: _owner, ...row }) => row),
+    goalContributionPlans: planRows.map(({ userId: _owner, ...row }) => row),
+  };
+}
+
+function uniqueIdMap(rows: Array<{ id: string }>, label: string) {
+  const result = new Map<string, string>();
+  for (const row of rows) {
+    if (result.has(row.id)) throw new Error(`The archive contains duplicate ${label} IDs.`);
+    result.set(row.id, crypto.randomUUID());
+  }
+  return result;
+}
+
+function requiredMappedId(
+  mapping: Map<string, string>,
+  sourceId: string,
+  relationship: string,
+) {
+  const id = mapping.get(sourceId);
+  if (!id) throw new Error(`The archive contains an invalid ${relationship} relationship.`);
+  return id;
+}
+
+export function restoreUserData(userId: string, input: unknown) {
+  const archive = userArchiveSchema.parse(input);
+  const categoryIds = uniqueIdMap(archive.categories, "category");
+  const accountIds = uniqueIdMap(archive.accounts, "account");
+  const transactionIds = uniqueIdMap(archive.transactions, "transaction");
+  const valuationIds = uniqueIdMap(archive.valuations, "valuation");
+  const rateIds = uniqueIdMap(archive.exchangeRates, "exchange-rate");
+  const goalIds = uniqueIdMap(archive.goals, "goal");
+  const planIds = uniqueIdMap(archive.goalContributionPlans, "contribution-plan");
+
+  for (const account of archive.accounts) {
+    requiredMappedId(categoryIds, account.categoryId, "account category");
+    if (account.goalId) requiredMappedId(goalIds, account.goalId, "account goal");
+  }
+  for (const transaction of archive.transactions) {
+    requiredMappedId(accountIds, transaction.accountId, "transaction account");
+  }
+  for (const valuation of archive.valuations) {
+    requiredMappedId(accountIds, valuation.accountId, "valuation account");
+  }
+  const linkedAccounts = new Set<string>();
+  for (const goal of archive.goals) {
+    if (!goal.linkedAccountId) continue;
+    requiredMappedId(accountIds, goal.linkedAccountId, "goal account");
+    if (linkedAccounts.has(goal.linkedAccountId)) {
+      throw new Error("The archive links more than one goal to the same account.");
+    }
+    linkedAccounts.add(goal.linkedAccountId);
+  }
+  for (const plan of archive.goalContributionPlans) {
+    requiredMappedId(goalIds, plan.goalId, "contribution-plan goal");
+  }
+
+  const db = getDatabase();
+  db.transaction((tx) => {
+    const existingSettings = tx.query.userSettings
+      .findFirst({ where: eq(userSettings.userId, userId), columns: { id: true } })
+      .sync();
+    if (!existingSettings) throw new Error("User settings are unavailable.");
+
+    tx.delete(goalContributionPlans)
+      .where(eq(goalContributionPlans.userId, userId))
+      .run();
+    tx.delete(goals).where(eq(goals.userId, userId)).run();
+    tx.delete(transactions).where(eq(transactions.userId, userId)).run();
+    tx.delete(valuationSnapshots)
+      .where(eq(valuationSnapshots.userId, userId))
+      .run();
+    tx.delete(accounts).where(eq(accounts.userId, userId)).run();
+    tx.delete(categories).where(eq(categories.userId, userId)).run();
+    tx.delete(exchangeRates).where(eq(exchangeRates.userId, userId)).run();
+    tx.delete(idempotencyKeys).where(eq(idempotencyKeys.userId, userId)).run();
+
+    tx.update(userSettings)
+      .set({ ...archive.settings, updatedAt: nowIso() })
+      .where(eq(userSettings.userId, userId))
+      .run();
+    tx.insert(categories)
+      .values(
+        archive.categories.map((row) => ({
+          ...row,
+          id: requiredMappedId(categoryIds, row.id, "category"),
+          userId,
+        })),
+      )
+      .run();
+    if (archive.accounts.length) {
+      tx.insert(accounts)
+        .values(
+          archive.accounts.map((row) => ({
+            ...row,
+            id: requiredMappedId(accountIds, row.id, "account"),
+            userId,
+            categoryId: requiredMappedId(
+              categoryIds,
+              row.categoryId,
+              "account category",
+            ),
+            goalId: row.goalId
+              ? requiredMappedId(goalIds, row.goalId, "account goal")
+              : null,
+          })),
+        )
+        .run();
+    }
+    if (archive.goals.length) {
+      tx.insert(goals)
+        .values(
+          archive.goals.map((row) => ({
+            ...row,
+            id: requiredMappedId(goalIds, row.id, "goal"),
+            userId,
+            linkedAccountId: row.linkedAccountId
+              ? requiredMappedId(accountIds, row.linkedAccountId, "goal account")
+              : null,
+          })),
+        )
+        .run();
+    }
+    if (archive.transactions.length) {
+      tx.insert(transactions)
+        .values(
+          archive.transactions.map((row) => ({
+            ...row,
+            id: requiredMappedId(transactionIds, row.id, "transaction"),
+            userId,
+            accountId: requiredMappedId(
+              accountIds,
+              row.accountId,
+              "transaction account",
+            ),
+          })),
+        )
+        .run();
+    }
+    if (archive.valuations.length) {
+      tx.insert(valuationSnapshots)
+        .values(
+          archive.valuations.map((row) => ({
+            ...row,
+            id: requiredMappedId(valuationIds, row.id, "valuation"),
+            userId,
+            accountId: requiredMappedId(
+              accountIds,
+              row.accountId,
+              "valuation account",
+            ),
+          })),
+        )
+        .run();
+    }
+    tx.insert(exchangeRates)
+      .values(
+        archive.exchangeRates.map((row) => ({
+          ...row,
+          id: requiredMappedId(rateIds, row.id, "exchange rate"),
+          userId,
+        })),
+      )
+      .run();
+    if (archive.goalContributionPlans.length) {
+      tx.insert(goalContributionPlans)
+        .values(
+          archive.goalContributionPlans.map((row) => ({
+            ...row,
+            id: requiredMappedId(planIds, row.id, "contribution plan"),
+            userId,
+            goalId: requiredMappedId(goalIds, row.goalId, "contribution-plan goal"),
+          })),
+        )
+        .run();
+    }
+  });
+
+  return {
+    accounts: archive.accounts.length,
+    transactions: archive.transactions.length,
+    goals: archive.goals.length,
   };
 }
 
@@ -203,7 +436,7 @@ type CsvTransaction = {
   notes?: string;
 };
 
-export function importTransactionsCsv(content: string) {
+export function importTransactionsCsv(userId: string, content: string) {
   const parsed = parse(content, {
     columns: (headers: string[]) => headers.map((header) => header.trim().toLowerCase()),
     skip_empty_lines: true,
@@ -214,9 +447,14 @@ export function importTransactionsCsv(content: string) {
   if (parsed.length > 10_000) throw new Error("Import is limited to 10,000 rows at a time.");
 
   const db = getDatabase();
-  const accountRows = db.select().from(accounts).all();
+  const accountRows = db
+    .select()
+    .from(accounts)
+    .where(eq(accounts.userId, userId))
+    .all();
   const timezone =
-    db.query.userSettings.findFirst().sync()?.timezone ??
+    db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }).sync()
+      ?.timezone ??
     process.env.TZ ??
     "Africa/Nairobi";
   const prepared = parsed.map((row, index) => {
@@ -264,12 +502,13 @@ export function importTransactionsCsv(content: string) {
   });
 
   const affected = new Set(prepared.map((row) => row.account.id));
-  const timestamp = nowIso();
+  const createdAt = nowIso();
   db.transaction((tx) => {
     tx.insert(transactions)
       .values(
         prepared.map((row) => ({
           id: crypto.randomUUID(),
+          userId,
           accountId: row.account.id,
           type: row.type,
           amountMinor: row.amountMinor,
@@ -277,18 +516,20 @@ export function importTransactionsCsv(content: string) {
           transactionDate: row.transactionDate,
           description: row.description,
           notes: row.notes,
-          idempotencyKey: `csv-${crypto.randomUUID()}`,
-          createdAt: timestamp,
-          updatedAt: timestamp,
+          idempotencyKey: crypto.randomUUID(),
+          createdAt,
+          updatedAt: createdAt,
         })),
       )
       .run();
-    for (const accountId of affected) recalculateAccountBalance(tx, accountId);
+    for (const accountId of affected) {
+      recalculateAccountBalance(userId, tx, accountId);
+    }
   });
   return prepared.length;
 }
 
-export async function transactionCsv() {
+export async function transactionCsv(userId: string) {
   const rows = await getDatabase()
     .select({
       id: transactions.id,
@@ -303,11 +544,18 @@ export async function transactionCsv() {
       transfer_group_id: transactions.transferGroupId,
     })
     .from(transactions)
-    .innerJoin(accounts, eq(transactions.accountId, accounts.id));
+    .innerJoin(
+      accounts,
+      and(
+        eq(transactions.userId, accounts.userId),
+        eq(transactions.accountId, accounts.id),
+      ),
+    )
+    .where(eq(transactions.userId, userId));
   return toCsv(rows);
 }
 
-export async function accountCsv() {
+export async function accountCsv(userId: string) {
   const rows = await getDatabase()
     .select({
       id: accounts.id,
@@ -322,6 +570,10 @@ export async function accountCsv() {
       archived_at: accounts.archivedAt,
     })
     .from(accounts)
-    .innerJoin(categories, eq(accounts.categoryId, categories.id));
+    .innerJoin(
+      categories,
+      and(eq(accounts.userId, categories.userId), eq(accounts.categoryId, categories.id)),
+    )
+    .where(eq(accounts.userId, userId));
   return toCsv(rows);
 }

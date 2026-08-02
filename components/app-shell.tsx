@@ -148,6 +148,21 @@ export function AppShell({
   displayName: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const clearUserState = () => {
+    sessionStorage.clear();
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("worthboard-")) localStorage.removeItem(key);
+    }
+    if ("caches" in window) {
+      void caches.keys().then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith("worthboard-"))
+            .map((key) => caches.delete(key)),
+        ),
+      );
+    }
+  };
   return (
     <PrivacyProvider>
       <OfflineIndicator />
@@ -198,7 +213,7 @@ export function AppShell({
             <div className="flex items-center gap-1">
               <PrivacyToggle />
               <div className="hidden sm:block"><QuickAdd /></div>
-              <form action={logoutAction}>
+              <form action={logoutAction} onSubmit={clearUserState}>
                 <Button variant="ghost" size="icon" aria-label="Log out" title="Log out"><LogOut size={18} /></Button>
               </form>
             </div>

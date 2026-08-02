@@ -2,7 +2,6 @@
 
 import { useActionState, useRef, useState } from "react";
 import {
-  DatabaseBackup,
   Download,
   FileInput,
   KeyRound,
@@ -119,12 +118,30 @@ export function DataPortability() {
     const input = kind === "restore" ? restoreRef.current : importRef.current;
     const file = input?.files?.[0];
     if (!file) return toast.error("Choose a file first.");
-    if (kind === "restore" && !window.confirm("Restore this database? Current data will be replaced after a pre-restore backup is created.")) return;
+    if (
+      kind === "restore" &&
+      !window.confirm(
+        "Replace only your portfolio with this export? A copy of your current data will download first.",
+      )
+    ) return;
+    if (kind === "restore") {
+      const current = await fetch("/api/export/json", { cache: "no-store" });
+      if (!current.ok) return toast.error("Your pre-restore export could not be created.");
+      const url = URL.createObjectURL(await current.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `worthboard-before-restore-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
     const body = new FormData();
-    body.set(kind === "restore" ? "database" : "file", file);
+    body.set("file", file);
     setBusy(kind);
     try {
-      const response = await fetch(kind === "restore" ? "/api/restore" : "/api/import/transactions", { method: "POST", body });
+      const response = await fetch(
+        kind === "restore" ? "/api/restore/user" : "/api/import/transactions",
+        { method: "POST", body },
+      );
       const result = (await response.json()) as { message?: string; error?: string };
       if (!response.ok) throw new Error(result.error || "Upload failed.");
       toast.success(result.message);
@@ -139,13 +156,12 @@ export function DataPortability() {
 
   return (
     <Card>
-      <CardHeader><div><CardTitle>Backup, restore & export</CardTitle><p className="mt-1 text-xs text-slate-500">Own a complete, portable copy of your data.</p></div></CardHeader>
+      <CardHeader><div><CardTitle>Import, restore & export</CardTitle><p className="mt-1 text-xs text-slate-500">Portable files contain only your portfolio, never credentials or another user's records.</p></div></CardHeader>
       <CardContent className="space-y-5">
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary"><a href="/api/export/json"><Download size={16} />Export JSON</a></Button>
           <Button asChild variant="secondary"><a href="/api/export/transactions.csv"><Download size={16} />Transactions CSV</a></Button>
           <Button asChild variant="secondary"><a href="/api/export/accounts.csv"><Download size={16} />Accounts CSV</a></Button>
-          <Button asChild><a href="/api/backup"><DatabaseBackup size={16} />Download SQLite backup</a></Button>
         </div>
         <div className="grid gap-4 border-t border-white/[0.06] pt-5 md:grid-cols-2">
           <div className="rounded-xl bg-white/[0.025] p-4">
@@ -156,10 +172,10 @@ export function DataPortability() {
             </Button>
           </div>
           <div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-4">
-            <Label htmlFor="databaseRestore">Restore SQLite database</Label>
-            <Input ref={restoreRef} id="databaseRestore" type="file" accept=".db,application/vnd.sqlite3" />
+            <Label htmlFor="userRestore">Restore your JSON export</Label>
+            <Input ref={restoreRef} id="userRestore" type="file" accept=".json,application/json" />
             <Button type="button" variant="danger" className="mt-3" onClick={() => upload("restore")} disabled={busy !== null}>
-              {busy === "restore" ? <LoaderCircle className="animate-spin" size={16} /> : <Upload size={16} />}Validate and restore
+              {busy === "restore" ? <LoaderCircle className="animate-spin" size={16} /> : <Upload size={16} />}Replace my portfolio
             </Button>
           </div>
         </div>

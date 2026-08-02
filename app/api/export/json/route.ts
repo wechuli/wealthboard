@@ -2,8 +2,9 @@ import { getSession } from "@/lib/auth/session";
 import { exportData } from "@/lib/services/portability";
 
 export async function GET() {
-  if (!(await getSession())) return Response.json({ error: "Authentication required." }, { status: 401 });
-  const data = await exportData();
+  const session = await getSession();
+  if (!session) return Response.json({ error: "Authentication required." }, { status: 401 });
+  const data = await exportData(session.userId);
   return new Response(JSON.stringify(data, null, 2), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",

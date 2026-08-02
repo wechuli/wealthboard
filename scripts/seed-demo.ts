@@ -2,10 +2,9 @@ import "dotenv/config";
 
 import path from "node:path";
 import fs from "node:fs";
-import bcrypt from "bcryptjs";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   accounts,
@@ -14,7 +13,7 @@ import {
   goalContributionPlans,
   goals,
   transactions,
-  userSettings,
+  users,
 } from "../db/schema";
 import { CATEGORY_SEEDS } from "../lib/constants";
 
@@ -22,9 +21,9 @@ if (process.env.DEMO_DATA !== "true") {
   throw new Error("Demo seeding is disabled. Set DEMO_DATA=true to opt in.");
 }
 
-const password = process.env.INITIAL_ADMIN_PASSWORD;
-if (!password || password.length < 10) {
-  throw new Error("Set INITIAL_ADMIN_PASSWORD to at least 10 characters.");
+const targetUsername = process.env.TARGET_USERNAME?.trim().toLowerCase();
+if (!targetUsername) {
+  throw new Error("Set TARGET_USERNAME to the existing user who should receive demo data.");
 }
 
 const databasePath = path.resolve(process.env.DATABASE_PATH ?? "./data/worthboard.db");
@@ -33,32 +32,15 @@ const sqlite = new Database(databasePath);
 sqlite.pragma("foreign_keys = ON");
 const db = drizzle(sqlite);
 const timestamp = new Date().toISOString();
-
-if (!db.select().from(userSettings).limit(1).get()) {
-  db.insert(userSettings)
-    .values({
-      id: "single-user",
-      displayName: "Demo Owner",
-      passwordHash: await bcrypt.hash(password, 12),
-      baseCurrency: "KES",
-      supportedCurrencies: '["KES","USD"]',
-      timezone: process.env.TZ || "Africa/Nairobi",
-      preferredDateFormat: "dd MMM yyyy",
-      appName: "Worthboard",
-      defaultDashboardPeriod: "1y",
-      sessionTimeoutMinutes: 10080,
-      sessionVersion: 1,
-      defaultGoalReturnBps: 800,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    })
-    .run();
-}
+const targetUser = db.select().from(users).where(eq(users.username, targetUsername)).get();
+if (!targetUser) throw new Error("The target user was not found.");
+const userId = targetUser.id;
 
 for (const [name, slug, icon, assetOrLiability, isLiquid, isInvestible] of CATEGORY_SEEDS) {
   db.insert(categories)
     .values({
-      id: `category-${slug}`,
+      id: crypto.randomUUID(),
+      userId,
       name,
       slug,
       icon,
@@ -71,13 +53,16 @@ for (const [name, slug, icon, assetOrLiability, isLiquid, isInvestible] of CATEG
       createdAt: timestamp,
       updatedAt: timestamp,
     })
-    .onConflictDoNothing()
+    .onConflictDoNothing({
+      target: [categories.userId, categories.slug],
+    })
     .run();
 }
 
 db.insert(exchangeRates)
   .values({
     id: crypto.randomUUID(),
+    userId,
     baseCurrency: "USD",
     quoteCurrency: "KES",
     rate: "130",
@@ -85,7 +70,14 @@ db.insert(exchangeRates)
     source: "demo",
     createdAt: timestamp,
   })
-  .onConflictDoNothing()
+  .onConflictDoNothing({
+    target: [
+      exchangeRates.userId,
+      exchangeRates.baseCurrency,
+      exchangeRates.quoteCurrency,
+      exchangeRates.effectiveDate,
+    ],
+  })
   .run();
 
 const demoAccounts = [
@@ -99,7 +91,11 @@ const demoAccounts = [
 
 const accountIds = new Map<string, string>();
 for (const [name, categorySlug, currency, value, institution] of demoAccounts) {
-  const existing = db.select().from(accounts).where(eq(accounts.name, name)).get();
+  const existing = db
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), eq(accounts.name, name)))
+    .get();
   if (existing) {
     accountIds.set(name, existing.id);
     continue;
@@ -108,12 +104,13 @@ for (const [name, categorySlug, currency, value, institution] of demoAccounts) {
   const category = db
     .select()
     .from(categories)
-    .where(eq(categories.slug, categorySlug))
+    .where(and(eq(categories.userId, userId), eq(categories.slug, categorySlug)))
     .get();
   if (!category) throw new Error(`Missing demo category ${categorySlug}.`);
   db.insert(accounts)
     .values({
       id,
+      userId,
       name,
       categoryId: category.id,
       institution,
@@ -129,6 +126,7 @@ for (const [name, categorySlug, currency, value, institution] of demoAccounts) {
   db.insert(transactions)
     .values({
       id: crypto.randomUUID(),
+      userId,
       accountId: id,
       type: "opening_balance",
       amountMinor: value,
@@ -142,12 +140,19 @@ for (const [name, categorySlug, currency, value, institution] of demoAccounts) {
   accountIds.set(name, id);
 }
 
-if (!db.select().from(goals).where(eq(goals.name, "2028 Family Car")).get()) {
+if (
+  !db
+    .select()
+    .from(goals)
+    .where(and(eq(goals.userId, userId), eq(goals.name, "2028 Family Car")))
+    .get()
+) {
   const goalId = crypto.randomUUID();
   const carFund = accountIds.get("KCB Car Fund");
   db.insert(goals)
     .values({
       id: goalId,
+      userId,
       name: "2028 Family Car",
       description: "Fictional demonstration goal",
       targetAmountMinor: 325_000_000,
@@ -166,6 +171,7 @@ if (!db.select().from(goals).where(eq(goals.name, "2028 Family Car")).get()) {
   db.insert(goalContributionPlans)
     .values({
       id: crypto.randomUUID(),
+      userId,
       goalId,
       plannedContributionMinor: 12_000_000,
       frequency: "monthly",
@@ -178,10 +184,10 @@ if (!db.select().from(goals).where(eq(goals.name, "2028 Family Car")).get()) {
   if (carFund) {
     db.update(accounts)
       .set({ goalId, updatedAt: timestamp })
-      .where(eq(accounts.id, carFund))
+      .where(and(eq(accounts.userId, userId), eq(accounts.id, carFund)))
       .run();
   }
 }
 
 sqlite.close();
-console.log("Fictional Worthboard demo data seeded.");
+console.log(`Fictional Worthboard demo data seeded for ${targetUsername}.`);

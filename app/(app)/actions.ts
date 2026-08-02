@@ -9,6 +9,7 @@ import {
   categorySchema,
   formDataObject,
   goalSchema,
+  passwordChangeSchema,
   transactionSchema,
   transferSchema,
   valuationSchema,
@@ -372,23 +373,12 @@ export async function exchangeRateAction(
   return { ok: true, message: "Exchange rate saved." };
 }
 
-const passwordSchema = z
-  .object({
-    currentPassword: z.string().min(1),
-    newPassword: z.string().min(10, "Use at least 10 characters.").max(256),
-    confirmPassword: z.string(),
-  })
-  .refine((values) => values.newPassword === values.confirmPassword, {
-    path: ["confirmPassword"],
-    message: "The new passwords do not match.",
-  });
-
 export async function changePasswordAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const { userId } = await requireSession();
-  const parsed = passwordSchema.safeParse(formDataObject(formData));
+  const parsed = passwordChangeSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   const session = await changeUserPassword(
     userId,

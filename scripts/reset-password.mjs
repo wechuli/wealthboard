@@ -5,9 +5,13 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 import Database from "better-sqlite3";
 
-const password = process.env.NEW_ADMIN_PASSWORD;
-if (!password || password.length < 10) {
-  throw new Error("Set NEW_ADMIN_PASSWORD to at least 10 characters.");
+const username = process.env.TARGET_USERNAME?.trim().toLowerCase();
+if (!username || !/^[a-z0-9._-]{3,32}$/.test(username)) {
+  throw new Error("Set TARGET_USERNAME to a valid existing username.");
+}
+const password = process.env.NEW_USER_PASSWORD;
+if (!password || password.length < 12) {
+  throw new Error("Set NEW_USER_PASSWORD to at least 12 characters.");
 }
 
 const configured = process.env.DATABASE_PATH ?? "data/worthboard.db";
@@ -23,14 +27,14 @@ sqlite.pragma("busy_timeout = 5000");
 const hash = await bcrypt.hash(password, 12);
 const result = sqlite
   .prepare(
-    `UPDATE user_settings
+    `UPDATE users
      SET password_hash = ?, session_version = session_version + 1, updated_at = ?
-     WHERE id = 'single-user'`,
+     WHERE username = ?`,
   )
-  .run(hash, new Date().toISOString());
+  .run(hash, new Date().toISOString(), username);
 sqlite.close();
 
 if (result.changes !== 1) {
-  throw new Error("The single-user account has not been initialized.");
+  throw new Error("The target user was not found.");
 }
-console.log("Password reset. Existing sessions have been invalidated.");
+console.log("Password reset. That user's existing sessions have been invalidated.");
