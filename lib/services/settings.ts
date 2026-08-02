@@ -1,5 +1,6 @@
 import "server-only";
 
+import Decimal from "decimal.js";
 import { desc, eq } from "drizzle-orm";
 
 import { exchangeRates, userSettings } from "@/db/schema";
@@ -37,7 +38,7 @@ export function addExchangeRate(
   input: { baseCurrency: string; quoteCurrency: string; rate: string; effectiveDate: string },
 ) {
   if (input.baseCurrency === input.quoteCurrency) throw new Error("Choose two different currencies.");
-  if (!/^\d+(?:\.\d+)?$/.test(input.rate) || Number(input.rate) <= 0) {
+  if (!/^\d+(?:\.\d+)?$/.test(input.rate) || new Decimal(input.rate).lte(0)) {
     throw new Error("Enter a positive decimal exchange rate.");
   }
   const timestamp = nowIso();

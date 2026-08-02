@@ -1,8 +1,8 @@
 # Worthboard target architecture
 
-> **Status:** This is the target for the planned multi-user migration. The
-> current runtime remains single-user until the migration and isolation tests
-> described below are complete.
+> **Status:** This multi-user architecture is implemented. A temporary legacy
+> claim remains only on upgraded singleton databases until the existing owner
+> verifies the previous password through signup.
 
 Worthboard remains a single-process Next.js application. Server Components read
 SQLite through Drizzle ORM, Server Actions perform validated mutations, and

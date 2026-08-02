@@ -2,7 +2,7 @@
 
 ## Project context
 
-- Worthboard is a self-hosted wealth and goals tracker built with Next.js App Router, strict TypeScript, SQLite, and Drizzle ORM. The current runtime is single-user and is being migrated to multiple independent application users.
+- Worthboard is a self-hosted wealth and goals tracker built with Next.js App Router, strict TypeScript, SQLite, and Drizzle ORM. The runtime supports multiple independent application users and retains a signup-time legacy claim only for upgraded singleton databases.
 - Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the target contract for the multi-user migration. Do not claim target behavior is shipped before its migration and isolation acceptance criteria pass.
 - Use `docs/ARCHITECTURE.md` for system decisions and `README.md` for setup, operations, and verification. Inspect the owning implementation and nearby tests before changing behavior.
 - Keep the product local-first and deployable without cloud services or a separate backend. Users are independent: do not add organizations, roles, invitations, shared portfolios, or cross-user transfers.

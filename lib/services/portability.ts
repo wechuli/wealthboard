@@ -1,5 +1,6 @@
 import "server-only";
 
+import Decimal from "decimal.js";
 import { and, eq } from "drizzle-orm";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
@@ -19,7 +20,12 @@ import {
   valuationSnapshots,
   type TransactionType,
 } from "@/db/schema";
-import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
+import {
+  dateInputForTimezone,
+  dateInputToUtc,
+  isValidTimezone,
+  nowIso,
+} from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { parseMoney } from "@/lib/money";
 import { recalculateAccountBalance } from "@/lib/services/accounts";
@@ -31,16 +37,32 @@ const safeInteger = z
   .max(Number.MAX_SAFE_INTEGER);
 const nullableText = z.string().max(2000).nullable();
 const timestamp = z.string().datetime({ offset: true });
+const supportedCurrencies = z.string().max(1000).refine((value) => {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every((currency) => typeof currency === "string" && /^[A-Z]{3}$/.test(currency))
+    );
+  } catch {
+    return false;
+  }
+}, "The supported currency list is invalid.");
+const positiveDecimal = z
+  .string()
+  .regex(/^\d+(?:\.\d+)?$/)
+  .refine((value) => new Decimal(value).gt(0), "Exchange rates must be positive.");
 
 const settingsArchiveSchema = z
   .object({
     displayName: z.string().min(1).max(80),
     baseCurrency: z.string().regex(/^[A-Z]{3}$/),
-    supportedCurrencies: z.string().max(1000),
-    timezone: z.string().min(1).max(80),
+    supportedCurrencies,
+    timezone: z.string().min(1).max(80).refine(isValidTimezone),
     preferredDateFormat: z.string().min(1).max(40),
     appName: z.string().min(1).max(80),
-    defaultDashboardPeriod: z.string().min(1).max(20),
+    defaultDashboardPeriod: z.enum(["1m", "3m", "6m", "1y", "all"]),
     sessionTimeoutMinutes: z.number().int().min(15).max(525600),
     defaultGoalReturnBps: z.number().int().min(0).max(10000),
   })
@@ -120,7 +142,7 @@ const exchangeRateArchiveSchema = z
     id: z.string().min(1),
     baseCurrency: z.string().regex(/^[A-Z]{3}$/),
     quoteCurrency: z.string().regex(/^[A-Z]{3}$/),
-    rate: z.string().regex(/^\d+(?:\.\d+)?$/),
+    rate: positiveDecimal,
     effectiveDate: timestamp,
     source: z.string().min(1).max(100),
     createdAt: timestamp,

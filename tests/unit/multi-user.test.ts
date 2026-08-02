@@ -15,11 +15,19 @@ import {
   accounts,
   categories,
   exchangeRates,
+  goalContributionPlans,
+  goals,
   legacyClaims,
+  transactions,
   users,
   userSettings,
+  valuationSnapshots,
 } from "@/db/schema";
-import { authenticateUser, registerUser } from "@/lib/auth/users";
+import {
+  authenticateUser,
+  changeUserPassword,
+  registerUser,
+} from "@/lib/auth/users";
 import { getSettings } from "@/lib/bootstrap";
 import { closeDatabase, getDatabase } from "@/lib/db";
 import {
@@ -45,8 +53,10 @@ const legacyDatabase = path.join(workspace, "legacy.db");
 
 function migrateDatabase(databasePath: string) {
   const sqlite = new Database(databasePath);
-  sqlite.pragma("foreign_keys = ON");
+  sqlite.pragma("foreign_keys = OFF");
   migrate(drizzle(sqlite), { migrationsFolder });
+  sqlite.pragma("foreign_keys = ON");
+  expect(sqlite.pragma("foreign_key_check")).toHaveLength(0);
   sqlite.close();
 }
 
@@ -83,6 +93,7 @@ function createLegacyDatabase(databasePath: string) {
   }
 
   const createdAt = "2025-01-01T00:00:00.000Z";
+  sqlite.pragma("foreign_keys = OFF");
   sqlite
     .prepare(
       `INSERT INTO user_settings
@@ -93,6 +104,69 @@ function createLegacyDatabase(databasePath: string) {
       "single-user",
       "Legacy Owner",
       bcrypt.hashSync("legacy-password-123", 12),
+      createdAt,
+      createdAt,
+    );
+  sqlite
+    .prepare(
+      `INSERT INTO transactions
+       (id, account_id, type, amount_minor, currency, transaction_date, description, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      "legacy-transaction",
+      "legacy-account",
+      "opening_balance",
+      123456,
+      "KES",
+      createdAt,
+      "Legacy opening balance",
+      createdAt,
+      createdAt,
+    );
+  sqlite
+    .prepare(
+      `INSERT INTO valuation_snapshots
+       (id, account_id, value_minor, currency, valuation_date, notes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      "legacy-valuation",
+      "legacy-account",
+      130000,
+      "KES",
+      "2025-02-01T00:00:00.000Z",
+      "Legacy valuation",
+      "2025-02-01T00:00:00.000Z",
+    );
+  sqlite
+    .prepare(
+      `INSERT INTO goals
+       (id, name, target_amount_minor, currency, target_date, linked_account_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      "legacy-goal",
+      "Legacy Goal",
+      500000,
+      "KES",
+      "2028-01-01T00:00:00.000Z",
+      "legacy-account",
+      createdAt,
+      createdAt,
+    );
+  sqlite
+    .prepare(
+      `INSERT INTO goal_contribution_plans
+       (id, goal_id, planned_contribution_minor, frequency, start_date, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      "legacy-plan",
+      "legacy-goal",
+      10000,
+      "monthly",
+      createdAt,
       createdAt,
       createdAt,
     );
@@ -125,6 +199,8 @@ function createLegacyDatabase(databasePath: string) {
       createdAt,
       createdAt,
     );
+  sqlite.pragma("foreign_keys = ON");
+  expect(sqlite.pragma("foreign_key_check")).toHaveLength(0);
   sqlite.close();
 }
 
@@ -200,6 +276,34 @@ describe.sequential("multi-user persistence and isolation", () => {
     await expect(
       authenticateUser("alice", "alice-password-123"),
     ).resolves.toMatchObject({ userId: aliceId });
+
+    const db = getDatabase();
+    const aliceVersion = db
+      .select({ version: users.sessionVersion })
+      .from(users)
+      .where(eq(users.id, aliceId))
+      .get()!.version;
+    const bobVersion = db
+      .select({ version: users.sessionVersion })
+      .from(users)
+      .where(eq(users.id, bobId))
+      .get()!.version;
+    await expect(
+      changeUserPassword(bobId, "bob-password-12345", "bob-new-password-12345"),
+    ).resolves.toMatchObject({ sessionVersion: bobVersion + 1 });
+    expect(
+      db
+        .select({ version: users.sessionVersion })
+        .from(users)
+        .where(eq(users.id, aliceId))
+        .get()!.version,
+    ).toBe(aliceVersion);
+    await expect(
+      authenticateUser("bob", "bob-password-12345"),
+    ).resolves.toBeNull();
+    await expect(
+      authenticateUser("bob", "bob-new-password-12345"),
+    ).resolves.toMatchObject({ userId: bobId });
   });
 
   test("owner predicates, relationships, analytics, caches, and idempotency stay isolated", async () => {
@@ -364,6 +468,10 @@ describe.sequential("multi-user persistence and isolation", () => {
     expect(db.select().from(users).all()).toHaveLength(0);
     expect(db.select().from(legacyClaims).all()).toHaveLength(1);
     expect(db.select().from(accounts).where(isNull(accounts.userId)).all()).toHaveLength(1);
+    expect(db.select().from(transactions).all()).toHaveLength(1);
+    expect(db.select().from(valuationSnapshots).all()).toHaveLength(1);
+    expect(db.select().from(goals).get()?.linkedAccountId).toBe("legacy-account");
+    expect(db.select().from(goalContributionPlans).all()).toHaveLength(1);
 
     await expect(
       registerUser({
@@ -389,6 +497,27 @@ describe.sequential("multi-user persistence and isolation", () => {
         .get()?.name,
     ).toBe("Legacy Savings");
     expect(db.select().from(accounts).where(isNull(accounts.userId)).all()).toHaveLength(0);
+    expect(
+      db.select().from(transactions).where(eq(transactions.userId, owner.userId)).all(),
+    ).toHaveLength(1);
+    expect(
+      db
+        .select()
+        .from(valuationSnapshots)
+        .where(eq(valuationSnapshots.userId, owner.userId))
+        .all(),
+    ).toHaveLength(1);
+    expect(
+      db.select().from(goals).where(eq(goals.userId, owner.userId)).get()
+        ?.linkedAccountId,
+    ).toBe("legacy-account");
+    expect(
+      db
+        .select()
+        .from(goalContributionPlans)
+        .where(eq(goalContributionPlans.userId, owner.userId))
+        .all(),
+    ).toHaveLength(1);
     expect(
       db.select().from(userSettings).where(eq(userSettings.userId, owner.userId)).all(),
     ).toHaveLength(1);

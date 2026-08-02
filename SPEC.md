@@ -2,11 +2,10 @@
 
 ## Status and terminology
 
-This document defines the target architecture for migrating the existing
-application from one application user to multiple independent users. The
-current implementation remains single-user until that migration is complete;
-do not represent the target behavior as shipped before the isolation and
-migration acceptance criteria pass.
+This document defines the implemented architecture for multiple independent
+application users. Upgraded singleton databases retain a temporary, single-use
+legacy claim until the existing owner completes signup; new deployments and all
+claimed data use the multi-user ownership model.
 
 To avoid ambiguity:
 
