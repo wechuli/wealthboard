@@ -7,7 +7,7 @@ applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance
 # Financial data and mutations
 
 - Treat `db/schema.ts` as the schema source of truth and `lib/services` as the owner of financial behavior. UI components and route handlers should call those boundaries rather than reproduce calculations or SQL.
-- Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the target for the multi-user migration. Preserve existing singleton credentials and records through the mandatory signup claim while moving ownership incrementally. Do not deploy until cross-user isolation tests pass.
+- Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the target for the multi-user migration. Discard singleton credentials and unowned records instead of exposing a recovery or claim path. Do not deploy until cross-user isolation tests pass.
 - Derive `userId` only from `requireSession()` and pass it explicitly into services. Never accept a form, URL, header, import, or payload owner ID as authorization evidence.
 - Every private query and mutation must include the owner predicate. Fetch resources by `userId` and ID together, return not found for foreign resources, and include `userId` in private cache keys.
 - Validate same-owner relationships inside the transaction: category/account, transaction/account, valuation/account, goal/account, plan/goal, imported account references, and both sides of a transfer.

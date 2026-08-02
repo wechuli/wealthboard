@@ -6,7 +6,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import Database from "better-sqlite3";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -17,7 +17,6 @@ import {
   exchangeRates,
   goalContributionPlans,
   goals,
-  legacyClaims,
   transactions,
   users,
   userSettings,
@@ -49,7 +48,7 @@ import { recordTransfer } from "@/lib/services/transfers";
 const migrationsFolder = path.resolve("db/migrations");
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "worthboard-multi-user-"));
 const freshDatabase = path.join(workspace, "fresh.db");
-const legacyDatabase = path.join(workspace, "legacy.db");
+const singletonDatabase = path.join(workspace, "singleton.db");
 
 function migrateDatabase(databasePath: string) {
   const sqlite = new Database(databasePath);
@@ -65,7 +64,7 @@ function useDatabase(databasePath: string) {
   process.env.DATABASE_PATH = databasePath;
 }
 
-function createLegacyDatabase(databasePath: string) {
+function createSingletonDatabase(databasePath: string) {
   const migrationNames = [
     ["0000_harsh_mother_askani.sql", 1785655073717],
     ["0001_handy_dagger.sql", 1785655315110],
@@ -102,8 +101,8 @@ function createLegacyDatabase(databasePath: string) {
     )
     .run(
       "single-user",
-      "Legacy Owner",
-      bcrypt.hashSync("legacy-password-123", 12),
+      "Old Owner",
+      bcrypt.hashSync("old-password-123", 12),
       createdAt,
       createdAt,
     );
@@ -114,13 +113,13 @@ function createLegacyDatabase(databasePath: string) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      "legacy-transaction",
-      "legacy-account",
+      "old-transaction",
+      "old-account",
       "opening_balance",
       123456,
       "KES",
       createdAt,
-      "Legacy opening balance",
+      "Old opening balance",
       createdAt,
       createdAt,
     );
@@ -131,12 +130,12 @@ function createLegacyDatabase(databasePath: string) {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      "legacy-valuation",
-      "legacy-account",
+      "old-valuation",
+      "old-account",
       130000,
       "KES",
       "2025-02-01T00:00:00.000Z",
-      "Legacy valuation",
+      "Old valuation",
       "2025-02-01T00:00:00.000Z",
     );
   sqlite
@@ -146,12 +145,12 @@ function createLegacyDatabase(databasePath: string) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      "legacy-goal",
-      "Legacy Goal",
+      "old-goal",
+      "Old Goal",
       500000,
       "KES",
       "2028-01-01T00:00:00.000Z",
-      "legacy-account",
+      "old-account",
       createdAt,
       createdAt,
     );
@@ -162,8 +161,8 @@ function createLegacyDatabase(databasePath: string) {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      "legacy-plan",
-      "legacy-goal",
+      "old-plan",
+      "old-goal",
       10000,
       "monthly",
       createdAt,
@@ -177,7 +176,7 @@ function createLegacyDatabase(databasePath: string) {
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      "legacy-category",
+      "old-category",
       "Savings",
       "savings",
       "PiggyBank",
@@ -191,9 +190,9 @@ function createLegacyDatabase(databasePath: string) {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
-      "legacy-account",
-      "Legacy Savings",
-      "legacy-category",
+      "old-account",
+      "Old Savings",
+      "old-category",
       "KES",
       123456,
       createdAt,
@@ -458,78 +457,44 @@ describe.sequential("multi-user persistence and isolation", () => {
     ]);
   });
 
-  test("a disposable singleton database is preserved through one signup claim", async () => {
+  test("a singleton upgrade discards unowned data before normal signup", async () => {
     closeDatabase();
-    createLegacyDatabase(legacyDatabase);
-    migrateDatabase(legacyDatabase);
-    useDatabase(legacyDatabase);
+    createSingletonDatabase(singletonDatabase);
+    migrateDatabase(singletonDatabase);
+
+    const migrated = new Database(singletonDatabase);
+    expect(
+      migrated
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'legacy_claims'",
+        )
+        .get(),
+    ).toBeUndefined();
+    migrated.close();
+
+    useDatabase(singletonDatabase);
 
     const db = getDatabase();
     expect(db.select().from(users).all()).toHaveLength(0);
-    expect(db.select().from(legacyClaims).all()).toHaveLength(1);
-    expect(db.select().from(accounts).where(isNull(accounts.userId)).all()).toHaveLength(1);
-    expect(db.select().from(transactions).all()).toHaveLength(1);
-    expect(db.select().from(valuationSnapshots).all()).toHaveLength(1);
-    expect(db.select().from(goals).get()?.linkedAccountId).toBe("legacy-account");
-    expect(db.select().from(goalContributionPlans).all()).toHaveLength(1);
+    expect(db.select().from(userSettings).all()).toHaveLength(0);
+    expect(db.select().from(categories).all()).toHaveLength(0);
+    expect(db.select().from(accounts).all()).toHaveLength(0);
+    expect(db.select().from(transactions).all()).toHaveLength(0);
+    expect(db.select().from(valuationSnapshots).all()).toHaveLength(0);
+    expect(db.select().from(goals).all()).toHaveLength(0);
+    expect(db.select().from(goalContributionPlans).all()).toHaveLength(0);
 
-    await expect(
-      registerUser({
-        username: "legacy-owner",
-        displayName: "Legacy Owner",
-        password: "new-legacy-password-123",
-        legacyPassword: "wrong-legacy-password",
-      }),
-    ).rejects.toThrow("could not be verified");
-
-    const owner = await registerUser({
-      username: "legacy-owner",
-      displayName: "Legacy Owner",
-      password: "new-legacy-password-123",
-      legacyPassword: "legacy-password-123",
+    const user = await registerUser({
+      username: "new-owner",
+      displayName: "New Owner",
+      password: "new-owner-password-123",
     });
-    expect(db.select().from(legacyClaims).all()).toHaveLength(0);
     expect(
-      db
-        .select()
-        .from(accounts)
-        .where(eq(accounts.userId, owner.userId))
-        .get()?.name,
-    ).toBe("Legacy Savings");
-    expect(db.select().from(accounts).where(isNull(accounts.userId)).all()).toHaveLength(0);
-    expect(
-      db.select().from(transactions).where(eq(transactions.userId, owner.userId)).all(),
+      db.select().from(userSettings).where(eq(userSettings.userId, user.userId)).all(),
     ).toHaveLength(1);
     expect(
-      db
-        .select()
-        .from(valuationSnapshots)
-        .where(eq(valuationSnapshots.userId, owner.userId))
-        .all(),
-    ).toHaveLength(1);
-    expect(
-      db.select().from(goals).where(eq(goals.userId, owner.userId)).get()
-        ?.linkedAccountId,
-    ).toBe("legacy-account");
-    expect(
-      db
-        .select()
-        .from(goalContributionPlans)
-        .where(eq(goalContributionPlans.userId, owner.userId))
-        .all(),
-    ).toHaveLength(1);
-    expect(
-      db.select().from(userSettings).where(eq(userSettings.userId, owner.userId)).all(),
-    ).toHaveLength(1);
-    expect(
-      db.select().from(categories).where(eq(categories.userId, owner.userId)).all(),
+      db.select().from(categories).where(eq(categories.userId, user.userId)).all(),
     ).toHaveLength(11);
-
-    await registerUser({
-      username: "later-user",
-      displayName: "Later User",
-      password: "later-user-password-123",
-    });
-    expect(db.select().from(users).all()).toHaveLength(2);
+    expect(db.select().from(accounts).all()).toHaveLength(0);
   });
 });

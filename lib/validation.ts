@@ -35,11 +35,6 @@ export const signupSchema = z
     displayName: z.string().trim().min(1, "Enter your display name.").max(80),
     password: z.string().min(12, "Use at least 12 characters.").max(256),
     confirmPassword: z.string().max(256),
-    legacyPassword: z
-      .string()
-      .max(256)
-      .optional()
-      .transform((value) => value || undefined),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match.",

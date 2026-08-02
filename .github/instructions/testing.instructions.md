@@ -13,6 +13,7 @@ applyTo: "tests/**/*.ts, tests/**/*.tsx, tests/**/*.mjs, vitest.config.ts, playw
 - Authorization tests must create at least two users with visibly different fixtures. Assert both the positive owner path and the negative foreign-user path; a filtered list alone does not prove direct-resource isolation.
 - E2E setup owns the disposable `data/e2e.db`. Never point automated tests at the normal development or production database, and preserve cleanup even when a test fails.
 - Test signup for the first and subsequent users, verify no environment or default-credential path can create a user, and cover case-insensitive username uniqueness, generic login failures, concurrent sessions, and logout followed by another user on the same browser.
+- Test a disposable singleton-schema upgrade and assert its old credentials, unowned portfolio rows, and obsolete claim storage are removed before ordinary signup.
 - Test direct URLs, actions, transfers, goal links, CSV account resolution, analytics, exports, restores, rates, settings, idempotency, and cache behavior for cross-user denial and absence of data leakage.
 - Test both the successful path and the financial failure modes relevant to the change, such as duplicate submission, invalid amount, missing historical rate, atomic rollback, or unauthorized mutation.
 - Do not weaken assertions, add arbitrary sleeps, increase global timeouts, or disable tests to make a failure pass. Wait for user-visible state or a specific response.

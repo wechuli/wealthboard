@@ -2,7 +2,7 @@
 
 ## Project context
 
-- Worthboard is a self-hosted wealth and goals tracker built with Next.js App Router, strict TypeScript, SQLite, and Drizzle ORM. The runtime supports multiple independent application users and retains a signup-time legacy claim only for upgraded singleton databases.
+- Worthboard is a self-hosted wealth and goals tracker built with Next.js App Router, strict TypeScript, SQLite, and Drizzle ORM. The runtime supports multiple independent application users; singleton credentials and unowned records are discarded during upgrade.
 - Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the target contract for the multi-user migration. Do not claim target behavior is shipped before its migration and isolation acceptance criteria pass.
 - Use `docs/ARCHITECTURE.md` for system decisions and `README.md` for setup, operations, and verification. Inspect the owning implementation and nearby tests before changing behavior.
 - Keep the product local-first and deployable without cloud services or a separate backend. Users are independent: do not add organizations, roles, invitations, shared portfolios, or cross-user transfers.
@@ -28,7 +28,7 @@
 ## Database changes
 
 - Change `db/schema.ts`, then run `npm run db:generate` and review the generated migration. Never rewrite a migration that may already have run.
-- Follow the staged singleton-to-user migration in `docs/ARCHITECTURE.md`: preserve the existing password hash and financial data through a signup-time legacy claim, then enforce ownership constraints. Signup is always public; do not add a feature flag, environment-created identity, or default user.
+- Follow the staged singleton-to-user migration in `docs/ARCHITECTURE.md`: delete old singleton credentials and unowned records, then enforce ownership constraints. Signup is always public; do not add a legacy claim, feature flag, environment-created identity, or default user.
 - Keep foreign keys enabled and retain historical records through the established archive behavior.
 - Do not hand-edit generated or runtime artifacts such as `.next`, `next-env.d.ts`, `node_modules`, `data/*.db`, or files under `test-results`.
 

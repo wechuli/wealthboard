@@ -52,14 +52,11 @@ it does not create financial accounts or sample data.
 
 ### Upgrading an older single-user installation
 
-The migration preserves the old password hash, settings, and financial records
-without creating or naming a user. On `/signup`, expand **Claim an older
-Worthboard portfolio**, choose a username and new password, and enter the
-previous Worthboard password. A successful signup atomically assigns all legacy
-records to that user and consumes the one-time claim.
-
-Other users can complete normal signup while a legacy claim is pending. Do not
-delete the old database until the owner has confirmed their portfolio.
+The multi-user migration does not recover or import the old singleton identity
+or portfolio. It deletes old credentials and records without an owner. Create an
+operator-level SQLite backup before upgrading if you need an external archive,
+then open `/signup` and create a fresh user. Signup has no legacy password or
+portfolio-claim option.
 
 ### Optional fictional demo data
 

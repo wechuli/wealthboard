@@ -1,39 +1,24 @@
 import "server-only";
 
 import bcrypt from "bcryptjs";
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
-  accounts,
   categories,
   exchangeRates,
-  goalContributionPlans,
-  goals,
-  idempotencyKeys,
-  legacyClaims,
-  transactions,
   users,
   userSettings,
-  valuationSnapshots,
 } from "@/db/schema";
 import { CATEGORY_SEEDS } from "@/lib/constants";
 import { nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 
-const LEGACY_CLAIM_ID = "singleton";
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync("worthboard-login-placeholder", 12);
 
 export class UsernameUnavailableError extends Error {
   constructor() {
     super("That username is unavailable.");
     this.name = "UsernameUnavailableError";
-  }
-}
-
-export class LegacyClaimError extends Error {
-  constructor() {
-    super("The previous Worthboard password could not be verified.");
-    this.name = "LegacyClaimError";
   }
 }
 
@@ -75,51 +60,13 @@ function defaultRateRow(userId: string, timestamp: string) {
   };
 }
 
-function assertLegacyOwnershipComplete(
-  tx: Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0],
-) {
-  const ownedTables = [
-    userSettings,
-    categories,
-    accounts,
-    transactions,
-    valuationSnapshots,
-    exchangeRates,
-    goals,
-    goalContributionPlans,
-    idempotencyKeys,
-  ] as const;
-
-  for (const table of ownedTables) {
-    const unowned = tx
-      .select({ total: count() })
-      .from(table)
-      .where(isNull(table.userId))
-      .get()?.total;
-    if (unowned) throw new Error("Legacy ownership assignment was incomplete.");
-  }
-}
-
 export async function registerUser(input: {
   username: string;
   displayName: string;
   password: string;
-  legacyPassword?: string;
 }) {
   const db = getDatabase();
   const username = normalizeUsername(input.username);
-  const existingClaim = db.query.legacyClaims.findFirst({
-    where: eq(legacyClaims.id, LEGACY_CLAIM_ID),
-  }).sync();
-  const wantsLegacyClaim = input.legacyPassword !== undefined;
-
-  if (wantsLegacyClaim) {
-    const verified =
-      existingClaim &&
-      (await bcrypt.compare(input.legacyPassword ?? "", existingClaim.passwordHash));
-    if (!verified) throw new LegacyClaimError();
-  }
-
   const passwordHash = await bcrypt.hash(input.password, 12);
   const timestamp = nowIso();
   const userId = crypto.randomUUID();
@@ -133,19 +80,7 @@ export async function registerUser(input: {
       .sync();
     if (existingUser) throw new UsernameUnavailableError();
 
-    const claim = wantsLegacyClaim
-      ? tx.query.legacyClaims
-          .findFirst({ where: eq(legacyClaims.id, LEGACY_CLAIM_ID) })
-          .sync()
-      : undefined;
-    if (
-      wantsLegacyClaim &&
-      (!claim || !existingClaim || claim.passwordHash !== existingClaim.passwordHash)
-    ) {
-      throw new LegacyClaimError();
-    }
-
-    const sessionVersion = claim?.sessionVersion ?? 1;
+      const sessionVersion = 1;
     tx.insert(users)
       .values({
         id: userId,
@@ -159,85 +94,25 @@ export async function registerUser(input: {
       })
       .run();
 
-    if (claim) {
-      const legacySettings = tx.query.userSettings
-        .findFirst({
-          where: and(
-            eq(userSettings.id, claim.settingsId),
-            isNull(userSettings.userId),
-          ),
-        })
-        .sync();
-      if (!legacySettings) throw new LegacyClaimError();
-
-      tx.update(userSettings)
-        .set({ userId, displayName: input.displayName, updatedAt: timestamp })
-        .where(eq(userSettings.id, claim.settingsId))
-        .run();
-      tx.update(categories).set({ userId }).where(isNull(categories.userId)).run();
-      tx.update(accounts).set({ userId }).where(isNull(accounts.userId)).run();
-      tx.update(transactions).set({ userId }).where(isNull(transactions.userId)).run();
-      tx.update(valuationSnapshots)
-        .set({ userId })
-        .where(isNull(valuationSnapshots.userId))
-        .run();
-      tx.update(exchangeRates).set({ userId }).where(isNull(exchangeRates.userId)).run();
-      tx.update(goals).set({ userId }).where(isNull(goals.userId)).run();
-      tx.update(goalContributionPlans)
-        .set({ userId })
-        .where(isNull(goalContributionPlans.userId))
-        .run();
-      tx.update(idempotencyKeys)
-        .set({ userId })
-        .where(isNull(idempotencyKeys.userId))
-        .run();
-
-      const existingSlugs = new Set(
-        tx
-          .select({ slug: categories.slug })
-        .from(categories)
-        .where(eq(categories.userId, userId))
-          .all()
-          .map((row) => row.slug),
-      );
-      const missingCategories = defaultCategoryRows(userId, timestamp).filter(
-        (row) => !existingSlugs.has(row.slug),
-      );
-      if (missingCategories.length) {
-        tx.insert(categories).values(missingCategories).run();
-      }
-      const rateCount = tx
-        .select({ total: count() })
-        .from(exchangeRates)
-        .where(eq(exchangeRates.userId, userId))
-        .get()?.total;
-      if (!rateCount) {
-        tx.insert(exchangeRates).values(defaultRateRow(userId, timestamp)).run();
-      }
-
-      assertLegacyOwnershipComplete(tx);
-      tx.delete(legacyClaims).where(eq(legacyClaims.id, claim.id)).run();
-    } else {
-      tx.insert(userSettings)
-        .values({
-          id: crypto.randomUUID(),
-          userId,
-          displayName: input.displayName,
-          baseCurrency: "KES",
-          supportedCurrencies: '["KES","USD"]',
-          timezone: process.env.TZ || "Africa/Nairobi",
-          preferredDateFormat: "dd MMM yyyy",
-          appName: "Worthboard",
-          defaultDashboardPeriod: "1y",
-          sessionTimeoutMinutes: 10080,
-          defaultGoalReturnBps: 800,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })
-        .run();
-      tx.insert(categories).values(defaultCategoryRows(userId, timestamp)).run();
-      tx.insert(exchangeRates).values(defaultRateRow(userId, timestamp)).run();
-    }
+    tx.insert(userSettings)
+      .values({
+        id: crypto.randomUUID(),
+        userId,
+        displayName: input.displayName,
+        baseCurrency: "KES",
+        supportedCurrencies: '["KES","USD"]',
+        timezone: process.env.TZ || "Africa/Nairobi",
+        preferredDateFormat: "dd MMM yyyy",
+        appName: "Worthboard",
+        defaultDashboardPeriod: "1y",
+        sessionTimeoutMinutes: 10080,
+        defaultGoalReturnBps: 800,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+    tx.insert(categories).values(defaultCategoryRows(userId, timestamp)).run();
+    tx.insert(exchangeRates).values(defaultRateRow(userId, timestamp)).run();
 
     const settings = tx.query.userSettings
       .findFirst({

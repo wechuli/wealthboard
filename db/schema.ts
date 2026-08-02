@@ -50,19 +50,13 @@ export const users = sqliteTable(
   (table) => [uniqueIndex("users_username_unique").on(table.username)],
 );
 
-export const legacyClaims = sqliteTable("legacy_claims", {
-  id: text("id").primaryKey(),
-  settingsId: text("settings_id").notNull(),
-  passwordHash: text("password_hash").notNull(),
-  sessionVersion: integer("session_version").notNull().default(1),
-  createdAt: text("created_at").notNull(),
-});
-
 export const userSettings = sqliteTable(
   "user_settings",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
     baseCurrency: text("base_currency").notNull().default("KES"),
     supportedCurrencies: text("supported_currencies").notNull().default('["KES","USD"]'),
@@ -82,7 +76,9 @@ export const categories = sqliteTable(
   "categories",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     icon: text("icon").notNull().default("CircleDollarSign"),
@@ -110,7 +106,9 @@ export const accounts = sqliteTable(
   "accounts",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
     categoryId: text("category_id").notNull(),
@@ -146,7 +144,9 @@ export const transactions = sqliteTable(
   "transactions",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     accountId: text("account_id").notNull(),
     type: text("type", { enum: transactionTypes }).notNull(),
     amountMinor: integer("amount_minor").notNull(),
@@ -181,7 +181,9 @@ export const valuationSnapshots = sqliteTable(
   "valuation_snapshots",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     accountId: text("account_id").notNull(),
     valueMinor: integer("value_minor").notNull(),
     currency: text("currency").notNull(),
@@ -206,7 +208,9 @@ export const exchangeRates = sqliteTable(
   "exchange_rates",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     baseCurrency: text("base_currency").notNull(),
     quoteCurrency: text("quote_currency").notNull(),
     rate: text("rate").notNull(),
@@ -234,7 +238,9 @@ export const goals = sqliteTable(
   "goals",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
     targetAmountMinor: integer("target_amount_minor").notNull(),
@@ -264,7 +270,9 @@ export const goalContributionPlans = sqliteTable(
   "goal_contribution_plans",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     goalId: text("goal_id").notNull(),
     plannedContributionMinor: integer("planned_contribution_minor").notNull(),
     frequency: text("frequency", { enum: contributionFrequencies }).notNull(),
@@ -296,7 +304,9 @@ export const loginAttempts = sqliteTable(
 export const idempotencyKeys = sqliteTable(
   "idempotency_keys",
   {
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     key: text("key").notNull(),
     operation: text("operation").notNull(),
     resultId: text("result_id"),

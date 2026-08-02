@@ -1,8 +1,8 @@
-# Worthboard target architecture
+# Worthboard architecture
 
-> **Status:** This multi-user architecture is implemented. A temporary legacy
-> claim remains only on upgraded singleton databases until the existing owner
-> verifies the previous password through signup.
+> **Status:** This multi-user architecture is implemented. Upgrading an old
+> singleton database discards its credentials and unowned portfolio records;
+> all users complete ordinary signup and start with an empty portfolio.
 
 Worthboard remains a single-process Next.js application. Server Components read
 SQLite through Drizzle ORM, Server Actions perform validated mutations, and
@@ -119,30 +119,27 @@ own authorization decisions.
 
 ## Migration from the singleton schema
 
-1. Back up a representative database and preserve a passing baseline.
-2. Add `users`; move the password hash and session version out of
-   `user_settings` while retaining a temporary legacy claim during migration.
+1. Take an operator-level SQLite backup if the old data may be needed outside
+  Worthboard, then preserve a passing test baseline.
+2. Add `users`; remove the password hash and session version from
+  `user_settings`.
 3. Add nullable ownership columns and owner-first indexes.
-4. If singleton data exists, preserve its password hash and records as a
-   single-use, unclaimed migration state. Do not create a user or assign a
-   username automatically.
-5. Thread session-derived ownership through every service and HTTP surface.
-6. Keep signup always available. To claim singleton data, its owner verifies the
-   previous password during signup, chooses a username, and atomically receives
-   the legacy records. The claim is then deleted and cannot be reused.
-7. After a legacy claim, verify that every owned row resolves to a user, then
-   enforce non-null foreign keys, same-owner relationships, and owner-scoped
-   unique constraints.
+4. Delete every row whose ownership is null, delete the old singleton settings,
+  and drop obsolete claim storage. Worthboard provides no legacy recovery path.
+5. Enforce non-null foreign keys, same-owner relationships, and owner-scoped
+  unique constraints.
+6. Thread session-derived ownership through every service and HTTP surface.
+7. Keep ordinary signup always available and create no default or migrated user.
 8. Replace user-facing raw database portability with per-user export and restore;
    retain full database operations only as operator commands.
 9. Add two-user isolation tests for direct reads, mutations, analytics, imports,
    exports, caches, and relationship attacks. Do not deploy until they pass.
-10. Remove singleton compatibility and temporary claim code after existing
-    credentials and data have passed signup migration tests.
+10. Test a disposable singleton upgrade and assert that its old credentials,
+   unowned records, and obsolete claim table are gone before normal signup.
 
 The migration must be transactional where SQLite permits and fail closed. It is
-acceptable to invalidate existing cookies during the release, but the existing
-password hash and every financial record must be preserved.
+intentionally destructive for singleton application data. No old password,
+portfolio, or session is migrated into an application user.
 
 ## Product boundaries
 

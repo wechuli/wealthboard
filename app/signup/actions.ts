@@ -5,11 +5,7 @@ import { redirect } from "next/navigation";
 
 import { signupRateLimit, recordLoginAttempt } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
-import {
-  LegacyClaimError,
-  registerUser,
-  UsernameUnavailableError,
-} from "@/lib/auth/users";
+import { registerUser, UsernameUnavailableError } from "@/lib/auth/users";
 import {
   formDataObject,
   signupSchema,
@@ -45,7 +41,7 @@ export async function signupAction(
       registered.sessionTimeoutMinutes,
     );
   } catch (error) {
-    if (error instanceof UsernameUnavailableError || error instanceof LegacyClaimError) {
+    if (error instanceof UsernameUnavailableError) {
       return { message: error.message };
     }
     console.error(

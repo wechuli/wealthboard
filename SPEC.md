@@ -3,9 +3,9 @@
 ## Status and terminology
 
 This document defines the implemented architecture for multiple independent
-application users. Upgraded singleton databases retain a temporary, single-use
-legacy claim until the existing owner completes signup; new deployments and all
-claimed data use the multi-user ownership model.
+application users. Upgrading a singleton database discards its old credentials
+and unowned portfolio records; every application user signs up normally and
+starts with an empty portfolio.
 
 To avoid ambiguity:
 
@@ -1134,23 +1134,19 @@ Follow this sequence:
 
 1. Back up a representative existing database and establish passing baseline
    unit, component, end-to-end, and build checks.
-2. Add `users` and separate credentials from `user_settings` without removing
-   the existing singleton compatibility path.
+2. Add `users` and separate credentials from `user_settings`.
 3. Add nullable `userId` columns and ownership indexes to every user-owned
    table. Generate and review the Drizzle migration.
-4. If singleton data exists, preserve its password hash and records in a
-   temporary, single-use legacy claim state. Do not create an active user,
-   assign a default username, or make that data visible to another signup.
-5. Thread session-derived `userId` through services, analytics, server actions,
+4. Delete singleton credentials and every user-owned row without a `userId`.
+  Remove obsolete claim storage; do not expose any recovery or import path on
+  signup.
+5. Enforce non-null owner foreign keys and owner-scoped uniqueness after the
+  unowned rows are removed.
+6. Thread session-derived `userId` through services, analytics, server actions,
    pages, route handlers, cache keys, imports, and exports. Query resources by
    owner and ID in the database, not through a post-query UI check.
-6. Implement the always-available signup flow. When a legacy claim exists, the
-   existing owner must verify the previous password as part of signup; the same
-   transaction creates their chosen identity, assigns all legacy records to it,
-   and consumes the claim. All other users follow normal signup.
-7. Verify that no user-owned row has a null or unknown owner after any legacy
-   claim, then rebuild SQLite tables as needed to enforce non-null foreign keys
-   and owner-scoped uniqueness.
+7. Implement the always-available signup flow with no legacy password or
+  portfolio-claim option.
 8. Add login by username, atomic per-user defaults, password reset by username,
    and per-user session invalidation.
 9. Replace user-facing raw database backup and restore with per-user JSON
@@ -1158,8 +1154,8 @@ Follow this sequence:
    and documentation.
 10. Add two-user isolation fixtures and tests. Do not deploy the multi-user
     release until the complete signup and isolation suite passes.
-11. Remove singleton compatibility and temporary claim code only after migration
-    tests prove existing data and credentials are preserved through signup.
+11. Add a disposable singleton-schema migration test proving old credentials and
+  unowned data are deleted before normal signup.
 12. Review the complete migration for authorization, IDOR, cache isolation,
     financial accuracy, rollback behavior, responsive signup/login flows, and
     unnecessary complexity.
@@ -1188,9 +1184,8 @@ The application is complete when:
   exports, and idempotent operations.
 - Guessing another user's URL or submitting another user's resource ID returns
   not found or a generic authorization failure without leaking data.
-- The existing single-user owner can verify the previous password during
-  signup, choose a username, and retain all financial data without an
-  automatically created identity.
+- Upgrading an old singleton database removes the old identity and portfolio;
+  signup presents no recovery or claim option and creates a fresh empty user.
 - I can add Zimele, Madison, KCB, VWRA, land, a car, savings, and liabilities.
 - I can manually set or update each account’s value.
 - I can record deposits, withdrawals, interest, fees, and transfers.
