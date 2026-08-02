@@ -33,6 +33,7 @@ import {
   getNetWorthHistory,
 } from "@/lib/services/analytics";
 import { listGoals } from "@/lib/services/goals";
+import { requireSession } from "@/lib/auth/session";
 
 const allowedRanges = new Set(["1m", "3m", "6m", "1y", "all"]);
 
@@ -41,12 +42,13 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
+  const { userId } = await requireSession();
   const params = await searchParams;
   const range = allowedRanges.has(params.range || "") ? params.range! : "1y";
   const [data, fullHistory, goals] = await Promise.all([
-    getDashboardData(range as "1m" | "3m" | "6m" | "1y" | "all"),
-    getNetWorthHistory("all"),
-    listGoals(),
+    getDashboardData(userId, range as "1m" | "3m" | "6m" | "1y" | "all"),
+    getNetWorthHistory(userId, "all"),
+    listGoals(userId),
   ]);
   const currency = data.settings.baseCurrency;
   const current = data.totals.netWorth;
@@ -59,9 +61,9 @@ export default async function DashboardPage({
     return date;
   };
   const [oneMonth, threeMonths, oneYear] = await Promise.all([
-    getNetWorthAt(baselineDate(30)),
-    getNetWorthAt(baselineDate(90)),
-    getNetWorthAt(baselineDate(365)),
+    getNetWorthAt(userId, baselineDate(30)),
+    getNetWorthAt(userId, baselineDate(90)),
+    getNetWorthAt(userId, baselineDate(365)),
   ]);
   const changes = {
     "1 month": current - BigInt(Math.round(oneMonth.netWorth)),

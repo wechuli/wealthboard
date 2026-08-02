@@ -20,13 +20,15 @@ import { safeChartNumber } from "@/lib/money";
 import { getAccountActivity } from "@/lib/services/accounts";
 import { getSettings } from "@/lib/bootstrap";
 import { getGoal, goalProjectionPoints } from "@/lib/services/goals";
+import { requireSession } from "@/lib/auth/session";
 
 export default async function GoalDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await requireSession();
   const { id } = await params;
-  const [goal, settings] = await Promise.all([getGoal(id), getSettings()]);
+  const [goal, settings] = await Promise.all([getGoal(userId, id), getSettings(userId)]);
   if (!goal) notFound();
   const activity = goal.linkedAccountId
-    ? await getAccountActivity(goal.linkedAccountId)
+    ? await getAccountActivity(userId, goal.linkedAccountId)
     : { transactions: [], valuations: [] };
   const contributions = activity.transactions.filter((transaction) =>
     ["opening_balance", "deposit", "purchase"].includes(transaction.type),

@@ -16,31 +16,41 @@ function slugify(value: string) {
   return base || `category-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-export async function listCategories(includeArchived = false) {
+export async function listCategories(userId: string, includeArchived = false) {
   const rows = await getDatabase().query.categories.findMany({
+    where: eq(categories.userId, userId),
     orderBy: [asc(categories.displayOrder), asc(categories.name)],
   });
   return includeArchived ? rows : rows.filter((row) => !row.isArchived);
 }
 
-export function createCategory(input: {
+type CategoryInput = {
   name: string;
   icon: string;
   assetOrLiability: "asset" | "liability";
   description?: string;
   isLiquid: boolean;
   isInvestible: boolean;
-}) {
+};
+
+export function createCategory(userId: string, input: CategoryInput) {
   const db = getDatabase();
-  const highest = db.select({ value: max(categories.displayOrder) }).from(categories).get();
+  const highest = db
+    .select({ value: max(categories.displayOrder) })
+    .from(categories)
+    .where(eq(categories.userId, userId))
+    .get();
   const id = crypto.randomUUID();
   const timestamp = nowIso();
   let slug = slugify(input.name);
-  const existing = db.query.categories.findFirst({ where: eq(categories.slug, slug) }).sync();
+  const existing = db.query.categories
+    .findFirst({ where: and(eq(categories.userId, userId), eq(categories.slug, slug)) })
+    .sync();
   if (existing) slug = `${slug}-${id.slice(0, 6)}`;
   db.insert(categories)
     .values({
       id,
+      userId,
       ...input,
       slug,
       displayOrder: (highest?.value ?? -1) + 1,
@@ -53,17 +63,20 @@ export function createCategory(input: {
   return id;
 }
 
-export function updateCategory(
-  id: string,
-  input: Parameters<typeof createCategory>[0],
-) {
+export function updateCategory(userId: string, id: string, input: CategoryInput) {
   const db = getDatabase();
   db.transaction((tx) => {
     if (input.assetOrLiability === "liability") {
       const linkedAccount = tx
         .select({ id: accounts.id })
         .from(accounts)
-        .where(and(eq(accounts.categoryId, id), isNotNull(accounts.goalId)))
+        .where(
+          and(
+            eq(accounts.userId, userId),
+            eq(accounts.categoryId, id),
+            isNotNull(accounts.goalId),
+          ),
+        )
         .limit(1)
         .get();
       if (linkedAccount) {
@@ -75,7 +88,7 @@ export function updateCategory(
     const result = tx
       .update(categories)
       .set({ ...input, updatedAt: nowIso() })
-      .where(eq(categories.id, id))
+      .where(and(eq(categories.userId, userId), eq(categories.id, id)))
       .run();
     if (result.changes === 0) throw new Error("Category not found.");
     tx.update(accounts)
@@ -83,25 +96,26 @@ export function updateCategory(
         isLiability: input.assetOrLiability === "liability",
         updatedAt: nowIso(),
       })
-      .where(eq(accounts.categoryId, id))
+      .where(and(eq(accounts.userId, userId), eq(accounts.categoryId, id)))
       .run();
   });
 }
 
-export function archiveCategory(id: string, archived: boolean) {
+export function archiveCategory(userId: string, id: string, archived: boolean) {
   const result = getDatabase()
     .update(categories)
     .set({ isArchived: archived, updatedAt: nowIso() })
-    .where(eq(categories.id, id))
+    .where(and(eq(categories.userId, userId), eq(categories.id, id)))
     .run();
   if (result.changes === 0) throw new Error("Category not found.");
 }
 
-export function moveCategory(id: string, direction: "up" | "down") {
+export function moveCategory(userId: string, id: string, direction: "up" | "down") {
   const db = getDatabase();
   const rows = db
     .select()
     .from(categories)
+    .where(eq(categories.userId, userId))
     .orderBy(asc(categories.displayOrder), asc(categories.name))
     .all();
   const index = rows.findIndex((row) => row.id === id);
@@ -110,11 +124,11 @@ export function moveCategory(id: string, direction: "up" | "down") {
   db.transaction((tx) => {
     tx.update(categories)
       .set({ displayOrder: rows[swapIndex].displayOrder, updatedAt: nowIso() })
-      .where(eq(categories.id, rows[index].id))
+      .where(and(eq(categories.userId, userId), eq(categories.id, rows[index].id)))
       .run();
     tx.update(categories)
       .set({ displayOrder: rows[index].displayOrder, updatedAt: nowIso() })
-      .where(eq(categories.id, rows[swapIndex].id))
+      .where(and(eq(categories.userId, userId), eq(categories.id, rows[swapIndex].id)))
       .run();
   });
 }

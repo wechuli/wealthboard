@@ -14,13 +14,15 @@ import {
   getAccountComparisons,
   getDashboardData,
 } from "@/lib/services/analytics";
+import { requireSession } from "@/lib/auth/session";
 
 export const metadata = { title: "Reports" };
 
 export default async function ReportsPage() {
+  const { userId } = await requireSession();
   const [data, comparisons] = await Promise.all([
-    getDashboardData("all"),
-    getAccountComparisons(),
+    getDashboardData(userId, "all"),
+    getAccountComparisons(userId),
   ]);
   const currency = data.settings.baseCurrency;
   const highest = data.history.reduce(

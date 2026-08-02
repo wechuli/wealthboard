@@ -6,17 +6,20 @@ import { exchangeRates, userSettings } from "@/db/schema";
 import { dateInputToUtc, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 
-export function updateSettings(input: {
-  displayName: string;
-  appName: string;
-  baseCurrency: string;
-  supportedCurrencies: string[];
-  timezone: string;
-  preferredDateFormat: string;
-  defaultDashboardPeriod: string;
-  sessionTimeoutMinutes: number;
-  defaultGoalReturnBps: number;
-}) {
+export function updateSettings(
+  userId: string,
+  input: {
+    displayName: string;
+    appName: string;
+    baseCurrency: string;
+    supportedCurrencies: string[];
+    timezone: string;
+    preferredDateFormat: string;
+    defaultDashboardPeriod: string;
+    sessionTimeoutMinutes: number;
+    defaultGoalReturnBps: number;
+  },
+) {
   const result = getDatabase()
     .update(userSettings)
     .set({
@@ -24,28 +27,25 @@ export function updateSettings(input: {
       supportedCurrencies: JSON.stringify(input.supportedCurrencies),
       updatedAt: nowIso(),
     })
-    .where(eq(userSettings.id, "single-user"))
+    .where(eq(userSettings.userId, userId))
     .run();
   if (result.changes !== 1) throw new Error("Settings could not be updated.");
 }
 
-export function addExchangeRate(input: {
-  baseCurrency: string;
-  quoteCurrency: string;
-  rate: string;
-  effectiveDate: string;
-}) {
-  if (input.baseCurrency === input.quoteCurrency) {
-    throw new Error("Choose two different currencies.");
-  }
+export function addExchangeRate(
+  userId: string,
+  input: { baseCurrency: string; quoteCurrency: string; rate: string; effectiveDate: string },
+) {
+  if (input.baseCurrency === input.quoteCurrency) throw new Error("Choose two different currencies.");
   if (!/^\d+(?:\.\d+)?$/.test(input.rate) || Number(input.rate) <= 0) {
     throw new Error("Enter a positive decimal exchange rate.");
   }
-  const db = getDatabase();
   const timestamp = nowIso();
-  db.insert(exchangeRates)
+  getDatabase()
+    .insert(exchangeRates)
     .values({
       id: crypto.randomUUID(),
+      userId,
       baseCurrency: input.baseCurrency,
       quoteCurrency: input.quoteCurrency,
       rate: input.rate,
@@ -55,6 +55,7 @@ export function addExchangeRate(input: {
     })
     .onConflictDoUpdate({
       target: [
+        exchangeRates.userId,
         exchangeRates.baseCurrency,
         exchangeRates.quoteCurrency,
         exchangeRates.effectiveDate,
@@ -64,6 +65,10 @@ export function addExchangeRate(input: {
     .run();
 }
 
-export async function listExchangeRates() {
-  return getDatabase().select().from(exchangeRates).orderBy(desc(exchangeRates.effectiveDate));
+export async function listExchangeRates(userId: string) {
+  return getDatabase()
+    .select()
+    .from(exchangeRates)
+    .where(eq(exchangeRates.userId, userId))
+    .orderBy(desc(exchangeRates.effectiveDate));
 }

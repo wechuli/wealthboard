@@ -36,19 +36,21 @@ import {
 import { getAccountAnalytics } from "@/lib/services/analytics";
 import { getSettings } from "@/lib/bootstrap";
 import { listGoals } from "@/lib/services/goals";
+import { requireSession } from "@/lib/auth/session";
 
 export default async function AccountDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { userId } = await requireSession();
   const { id } = await params;
   const [account, activity, analytics, settings, allGoals] = await Promise.all([
-    getAccount(id),
-    getAccountActivity(id),
-    getAccountAnalytics(id),
-    getSettings(),
-    listGoals(),
+    getAccount(userId, id),
+    getAccountActivity(userId, id),
+    getAccountAnalytics(userId, id),
+    getSettings(userId),
+    listGoals(userId),
   ]);
   if (!account || !analytics) notFound();
   const linkedGoals = allGoals.filter((goal) => goal.linkedAccountId === id);

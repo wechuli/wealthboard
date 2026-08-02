@@ -34,12 +34,9 @@ import {
 import { createGoal, deleteGoal, setGoalStatus, updateGoal } from "@/lib/services/goals";
 import { recordTransfer } from "@/lib/services/transfers";
 import type { GoalStatus } from "@/db/schema";
-import { userSettings } from "@/db/schema";
-import { getDatabase } from "@/lib/db";
 import { addExchangeRate, updateSettings } from "@/lib/services/settings";
 import { createSession } from "@/lib/auth/session";
-import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { changeUserPassword } from "@/lib/auth/users";
 import { z } from "zod";
 import { isValidTimezone } from "@/lib/dates";
 
@@ -62,12 +59,12 @@ function accountInput(formData: FormData) {
 }
 
 export async function createAccountAction(formData: FormData): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = accountInput(formData);
   if (!parsed.success) return zodActionError(parsed.error);
   let id: string;
   try {
-    id = createAccount(parsed.data);
+    id = createAccount(userId, parsed.data);
   } catch (error) {
     return mutationError(error);
   }
@@ -80,11 +77,11 @@ export async function updateAccountAction(
   id: string,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = accountInput(formData);
   if (!parsed.success) return zodActionError(parsed.error);
   try {
-    updateAccount(id, parsed.data);
+    updateAccount(userId, id, parsed.data);
   } catch (error) {
     return mutationError(error);
   }
@@ -95,8 +92,8 @@ export async function updateAccountAction(
 }
 
 export async function archiveAccountAction(id: string, archived: boolean) {
-  await requireSession();
-  setAccountArchived(id, archived);
+  const { userId } = await requireSession();
+  setAccountArchived(userId, id, archived);
   revalidatePath("/");
   revalidatePath("/accounts");
   revalidatePath(`/accounts/${id}`);
@@ -104,7 +101,7 @@ export async function archiveAccountAction(id: string, archived: boolean) {
 }
 
 export async function transactionAction(formData: FormData): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const values = formDataObject(formData);
   if (values.type === "transfer") {
     const parsed = transferSchema.safeParse({
@@ -113,7 +110,7 @@ export async function transactionAction(formData: FormData): Promise<ActionState
     });
     if (!parsed.success) return zodActionError(parsed.error);
     try {
-      recordTransfer(parsed.data);
+      recordTransfer(userId, parsed.data);
     } catch (error) {
       return mutationError(error);
     }
@@ -126,7 +123,7 @@ export async function transactionAction(formData: FormData): Promise<ActionState
   const parsed = transactionSchema.safeParse(values);
   if (!parsed.success) return zodActionError(parsed.error);
   try {
-    recordTransaction(parsed.data);
+    recordTransaction(userId, parsed.data);
   } catch (error) {
     return mutationError(error);
   }
@@ -141,11 +138,11 @@ export async function updateTransactionAction(
   id: string,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = transactionSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   try {
-    updateTransaction(id, parsed.data);
+    updateTransaction(userId, id, parsed.data);
   } catch (error) {
     return mutationError(error);
   }
@@ -157,9 +154,9 @@ export async function updateTransactionAction(
 }
 
 export async function deleteTransactionAction(id: string) {
-  await requireSession();
+  const { userId } = await requireSession();
   try {
-    deleteTransaction(id);
+    deleteTransaction(userId, id);
   } catch (error) {
     return mutationError(error);
   }
@@ -169,11 +166,11 @@ export async function deleteTransactionAction(id: string) {
 }
 
 export async function valuationAction(formData: FormData): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = valuationSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   try {
-    recordValuation(parsed.data);
+    recordValuation(userId, parsed.data);
   } catch (error) {
     return mutationError(error);
   }
@@ -184,9 +181,9 @@ export async function valuationAction(formData: FormData): Promise<ActionState> 
 }
 
 export async function deleteValuationAction(id: string) {
-  await requireSession();
+  const { userId } = await requireSession();
   try {
-    deleteValuation(id);
+    deleteValuation(userId, id);
   } catch (error) {
     return mutationError(error);
   }
@@ -203,11 +200,11 @@ function categoryInput(formData: FormData) {
 }
 
 export async function createCategoryAction(formData: FormData): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = categoryInput(formData);
   if (!parsed.success) return zodActionError(parsed.error);
   try {
-    createCategory(parsed.data);
+    createCategory(userId, parsed.data);
   } catch (error) {
     return mutationError(error);
   }
@@ -220,11 +217,11 @@ export async function updateCategoryAction(
   id: string,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = categoryInput(formData);
   if (!parsed.success) return zodActionError(parsed.error);
   try {
-    updateCategory(id, parsed.data);
+    updateCategory(userId, id, parsed.data);
   } catch (error) {
     return mutationError(error);
   }
@@ -234,9 +231,9 @@ export async function updateCategoryAction(
 }
 
 export async function archiveCategoryAction(id: string, archived: boolean) {
-  await requireSession();
+  const { userId } = await requireSession();
   try {
-    archiveCategory(id, archived);
+    archiveCategory(userId, id, archived);
   } catch (error) {
     return mutationError(error);
   }
@@ -245,18 +242,21 @@ export async function archiveCategoryAction(id: string, archived: boolean) {
 }
 
 export async function moveCategoryAction(id: string, direction: "up" | "down") {
-  await requireSession();
-  moveCategory(id, direction);
+  const { userId } = await requireSession();
+  moveCategory(userId, id, direction);
   revalidatePath("/categories");
 }
 
 export async function createGoalAction(formData: FormData): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = goalSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   let id: string;
   try {
-    id = createGoal({ ...parsed.data, linkedAccountId: parsed.data.linkedAccountId || undefined });
+    id = createGoal(userId, {
+      ...parsed.data,
+      linkedAccountId: parsed.data.linkedAccountId || undefined,
+    });
   } catch (error) {
     return mutationError(error);
   }
@@ -270,11 +270,14 @@ export async function updateGoalAction(
   id: string,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = goalSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   try {
-    updateGoal(id, { ...parsed.data, linkedAccountId: parsed.data.linkedAccountId || undefined });
+    updateGoal(userId, id, {
+      ...parsed.data,
+      linkedAccountId: parsed.data.linkedAccountId || undefined,
+    });
   } catch (error) {
     return mutationError(error);
   }
@@ -286,16 +289,16 @@ export async function updateGoalAction(
 }
 
 export async function setGoalStatusAction(id: string, status: GoalStatus) {
-  await requireSession();
-  setGoalStatus(id, status);
+  const { userId } = await requireSession();
+  setGoalStatus(userId, id, status);
   revalidatePath("/");
   revalidatePath("/goals");
   revalidatePath(`/goals/${id}`);
 }
 
 export async function deleteGoalAction(id: string) {
-  await requireSession();
-  deleteGoal(id);
+  const { userId } = await requireSession();
+  deleteGoal(userId, id);
   revalidatePath("/");
   revalidatePath("/goals");
   revalidatePath("/accounts");
@@ -325,14 +328,14 @@ export async function updateSettingsAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = settingsSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   if (!parsed.data.supportedCurrencies.includes(parsed.data.baseCurrency)) {
     parsed.data.supportedCurrencies.unshift(parsed.data.baseCurrency);
   }
   try {
-    updateSettings({
+    updateSettings(userId, {
       ...parsed.data,
       defaultGoalReturnBps: Math.round(parsed.data.defaultGoalReturn * 100),
     });
@@ -354,11 +357,11 @@ export async function exchangeRateAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = exchangeRateSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   try {
-    addExchangeRate(parsed.data);
+    addExchangeRate(userId, parsed.data);
   } catch (error) {
     return mutationError(error);
   }
@@ -384,25 +387,17 @@ export async function changePasswordAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  await requireSession();
+  const { userId } = await requireSession();
   const parsed = passwordSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
-  const db = getDatabase();
-  const settings = db.query.userSettings
-    .findFirst({ where: eq(userSettings.id, "single-user") })
-    .sync();
-  if (!settings || !(await bcrypt.compare(parsed.data.currentPassword, settings.passwordHash))) {
+  const session = await changeUserPassword(
+    userId,
+    parsed.data.currentPassword,
+    parsed.data.newPassword,
+  );
+  if (!session) {
     return { message: "The current password is incorrect." };
   }
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
-  db.update(userSettings)
-    .set({
-      passwordHash,
-      sessionVersion: settings.sessionVersion + 1,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(userSettings.id, "single-user"))
-    .run();
-  await createSession();
+  await createSession(userId, session.sessionVersion, session.sessionTimeoutMinutes);
   return { ok: true, message: "Password changed. Other sessions were signed out." };
 }

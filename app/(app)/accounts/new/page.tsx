@@ -4,12 +4,17 @@ import { PageHeader } from "@/components/ui/page";
 import { createAccountAction } from "@/app/(app)/actions";
 import { listCategories } from "@/lib/services/categories";
 import { getSettings } from "@/lib/bootstrap";
+import { requireSession } from "@/lib/auth/session";
 import { dateInputForTimezone } from "@/lib/dates";
 
 export const metadata = { title: "Add account" };
 
 export default async function NewAccountPage() {
-  const [categories, settings] = await Promise.all([listCategories(), getSettings()]);
+  const { userId } = await requireSession();
+  const [categories, settings] = await Promise.all([
+    listCategories(userId),
+    getSettings(userId),
+  ]);
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="Add an account or asset" description="Start with its current value. You can add detailed history later." />

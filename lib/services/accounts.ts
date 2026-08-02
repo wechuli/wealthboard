@@ -7,20 +7,18 @@ import {
   categories,
   idempotencyKeys,
   transactions,
+  userSettings,
   valuationSnapshots,
   type TransactionType,
 } from "@/db/schema";
-import {
-  dateInputForTimezone,
-  dateInputToUtc,
-  nowIso,
-} from "@/lib/dates";
-import { replayBalance, type FinancialEvent } from "@/lib/finance";
+import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
+import { replayBalance, type FinancialEvent } from "@/lib/finance";
 import { parseMoney } from "@/lib/money";
 
 type DatabaseClient = ReturnType<typeof getDatabase>;
 type TransactionClient = Parameters<Parameters<DatabaseClient["transaction"]>[0]>[0];
+type Client = DatabaseClient | TransactionClient;
 
 function checkedNumber(value: bigint) {
   const number = Number(value);
@@ -30,9 +28,10 @@ function checkedNumber(value: bigint) {
   return number;
 }
 
-function assertNotFutureDate(value: string, client: DatabaseClient) {
+function assertNotFutureDate(userId: string, value: string, client: Client) {
   const timezone =
-    client.query.userSettings.findFirst().sync()?.timezone ??
+    client.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }).sync()
+      ?.timezone ??
     process.env.TZ ??
     "Africa/Nairobi";
   if (value > dateInputForTimezone(timezone)) {
@@ -40,7 +39,7 @@ function assertNotFutureDate(value: string, client: DatabaseClient) {
   }
 }
 
-function accountEvents(client: DatabaseClient | TransactionClient, accountId: string) {
+function accountEvents(client: Client, userId: string, accountId: string) {
   const transactionRows = client
     .select({
       type: transactions.type,
@@ -49,7 +48,7 @@ function accountEvents(client: DatabaseClient | TransactionClient, accountId: st
       createdAt: transactions.createdAt,
     })
     .from(transactions)
-    .where(eq(transactions.accountId, accountId))
+    .where(and(eq(transactions.userId, userId), eq(transactions.accountId, accountId)))
     .all();
   const valuationRows = client
     .select({
@@ -58,9 +57,10 @@ function accountEvents(client: DatabaseClient | TransactionClient, accountId: st
       createdAt: valuationSnapshots.createdAt,
     })
     .from(valuationSnapshots)
-    .where(eq(valuationSnapshots.accountId, accountId))
+    .where(
+      and(eq(valuationSnapshots.userId, userId), eq(valuationSnapshots.accountId, accountId)),
+    )
     .all();
-
   return [
     ...transactionRows.map(
       (row): FinancialEvent => ({
@@ -82,37 +82,20 @@ function accountEvents(client: DatabaseClient | TransactionClient, accountId: st
   ];
 }
 
-export function recalculateAccountBalance(
-  client: DatabaseClient | TransactionClient,
-  accountId: string,
-) {
-  const value = checkedNumber(replayBalance(accountEvents(client, accountId)));
+export function recalculateAccountBalance(userId: string, client: Client, accountId: string) {
+  const value = checkedNumber(replayBalance(accountEvents(client, userId, accountId)));
   client
     .update(accounts)
     .set({ currentValueMinor: value, updatedAt: nowIso() })
-    .where(eq(accounts.id, accountId))
+    .where(and(eq(accounts.userId, userId), eq(accounts.id, accountId)))
     .run();
   return value;
 }
 
-export async function listAccounts(options: { includeArchived?: boolean } = {}) {
-  const db = getDatabase();
-  return db
-    .select({
-      ...getTableColumns(accounts),
-      categoryName: categories.name,
-      categoryIcon: categories.icon,
-      categorySlug: categories.slug,
-      categoryIsLiquid: categories.isLiquid,
-      categoryIsInvestible: categories.isInvestible,
-    })
-    .from(accounts)
-    .innerJoin(categories, eq(accounts.categoryId, categories.id))
-    .where(options.includeArchived ? undefined : isNull(accounts.archivedAt))
-    .orderBy(desc(accounts.currentValueMinor), asc(accounts.name));
-}
-
-export async function getAccount(id: string) {
+export async function listAccounts(
+  userId: string,
+  options: { includeArchived?: boolean } = {},
+) {
   return getDatabase()
     .select({
       ...getTableColumns(accounts),
@@ -123,25 +106,56 @@ export async function getAccount(id: string) {
       categoryIsInvestible: categories.isInvestible,
     })
     .from(accounts)
-    .innerJoin(categories, eq(accounts.categoryId, categories.id))
-    .where(eq(accounts.id, id))
+    .innerJoin(
+      categories,
+      and(eq(accounts.categoryId, categories.id), eq(accounts.userId, categories.userId)),
+    )
+    .where(
+      options.includeArchived
+        ? eq(accounts.userId, userId)
+        : and(eq(accounts.userId, userId), isNull(accounts.archivedAt)),
+    )
+    .orderBy(desc(accounts.currentValueMinor), asc(accounts.name));
+}
+
+export async function getAccount(userId: string, id: string) {
+  return getDatabase()
+    .select({
+      ...getTableColumns(accounts),
+      categoryName: categories.name,
+      categoryIcon: categories.icon,
+      categorySlug: categories.slug,
+      categoryIsLiquid: categories.isLiquid,
+      categoryIsInvestible: categories.isInvestible,
+    })
+    .from(accounts)
+    .innerJoin(
+      categories,
+      and(eq(accounts.categoryId, categories.id), eq(accounts.userId, categories.userId)),
+    )
+    .where(and(eq(accounts.userId, userId), eq(accounts.id, id)))
     .get();
 }
 
-export async function getAccountActivity(accountId: string) {
+export async function getAccountActivity(userId: string, accountId: string) {
   const db = getDatabase();
-  const transactionRows = await db.query.transactions.findMany({
-    where: eq(transactions.accountId, accountId),
-    orderBy: [desc(transactions.transactionDate), desc(transactions.createdAt)],
-  });
-  const valuations = await db.query.valuationSnapshots.findMany({
-    where: eq(valuationSnapshots.accountId, accountId),
-    orderBy: [desc(valuationSnapshots.valuationDate), desc(valuationSnapshots.createdAt)],
-  });
+  const [transactionRows, valuations] = await Promise.all([
+    db.query.transactions.findMany({
+      where: and(eq(transactions.userId, userId), eq(transactions.accountId, accountId)),
+      orderBy: [desc(transactions.transactionDate), desc(transactions.createdAt)],
+    }),
+    db.query.valuationSnapshots.findMany({
+      where: and(
+        eq(valuationSnapshots.userId, userId),
+        eq(valuationSnapshots.accountId, accountId),
+      ),
+      orderBy: [desc(valuationSnapshots.valuationDate), desc(valuationSnapshots.createdAt)],
+    }),
+  ]);
   return { transactions: transactionRows, valuations };
 }
 
-export async function listTransactions() {
+export async function listTransactions(userId: string) {
   return getDatabase()
     .select({
       ...getTableColumns(transactions),
@@ -149,17 +163,21 @@ export async function listTransactions() {
       accountIsLiability: accounts.isLiability,
     })
     .from(transactions)
-    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+    .innerJoin(
+      accounts,
+      and(eq(transactions.accountId, accounts.id), eq(transactions.userId, accounts.userId)),
+    )
+    .where(eq(transactions.userId, userId))
     .orderBy(desc(transactions.transactionDate), desc(transactions.createdAt));
 }
 
-export async function getTransaction(id: string) {
+export async function getTransaction(userId: string, id: string) {
   return getDatabase().query.transactions.findFirst({
-    where: eq(transactions.id, id),
+    where: and(eq(transactions.userId, userId), eq(transactions.id, id)),
   });
 }
 
-export function createAccount(input: {
+type AccountInput = {
   idempotencyKey?: string;
   name: string;
   description?: string;
@@ -172,36 +190,43 @@ export function createAccount(input: {
   isIncludedInNetWorth: boolean;
   notes?: string;
   openedAt?: string;
-}) {
-  const db = getDatabase();
-  if (input.idempotencyKey) {
-    const duplicate = db.query.idempotencyKeys
-      .findFirst({ where: eq(idempotencyKeys.key, input.idempotencyKey) })
-      .sync();
-    if (duplicate?.operation === "create-account" && duplicate.resultId) {
-      return duplicate.resultId;
-    }
-    if (duplicate) throw new Error("This request key was already used.");
-  }
-  const category = db.query.categories.findFirst({
-    where: and(eq(categories.id, input.categoryId), eq(categories.isArchived, false)),
-  }).sync();
-  if (!category) throw new Error("The selected category is unavailable.");
+};
 
+export function createAccount(userId: string, input: AccountInput) {
+  const db = getDatabase();
+  if (input.openedAt) assertNotFutureDate(userId, input.openedAt, db);
   const id = crypto.randomUUID();
   const timestamp = nowIso();
   const openingValueMinor = parseMoney(input.openingValue, input.currency);
   if (openingValueMinor < 0) throw new Error("Opening value cannot be negative.");
-  const costBasisMinor = input.costBasis
-    ? parseMoney(input.costBasis, input.currency)
-    : undefined;
+  const costBasisMinor = input.costBasis ? parseMoney(input.costBasis, input.currency) : undefined;
   const transactionDate = input.openedAt ? dateInputToUtc(input.openedAt) : timestamp;
-  if (input.openedAt) assertNotFutureDate(input.openedAt, db);
 
-  db.transaction((tx) => {
+  return db.transaction((tx) => {
+    if (input.idempotencyKey) {
+      const duplicate = tx.query.idempotencyKeys
+        .findFirst({
+          where: and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.key, input.idempotencyKey)),
+        })
+        .sync();
+      if (duplicate?.operation === "create-account" && duplicate.resultId) return duplicate.resultId;
+      if (duplicate) throw new Error("This request key was already used.");
+    }
+    const category = tx.query.categories
+      .findFirst({
+        where: and(
+          eq(categories.userId, userId),
+          eq(categories.id, input.categoryId),
+          eq(categories.isArchived, false),
+        ),
+      })
+      .sync();
+    if (!category) throw new Error("The selected category is unavailable.");
+
     tx.insert(accounts)
       .values({
         id,
+        userId,
         name: input.name,
         description: input.description,
         categoryId: input.categoryId,
@@ -218,10 +243,10 @@ export function createAccount(input: {
         updatedAt: timestamp,
       })
       .run();
-
     tx.insert(transactions)
       .values({
         id: crypto.randomUUID(),
+        userId,
         accountId: id,
         type: "opening_balance",
         amountMinor: openingValueMinor,
@@ -235,6 +260,7 @@ export function createAccount(input: {
     if (input.idempotencyKey) {
       tx.insert(idempotencyKeys)
         .values({
+          userId,
           key: input.idempotencyKey,
           operation: "create-account",
           resultId: id,
@@ -242,57 +268,65 @@ export function createAccount(input: {
         })
         .run();
     }
+    return id;
   });
-  return id;
 }
 
 export function updateAccount(
+  userId: string,
   id: string,
-  input: Omit<Parameters<typeof createAccount>[0], "openingValue" | "openedAt">,
+  input: Omit<AccountInput, "openingValue" | "openedAt">,
 ) {
   const db = getDatabase();
-  const existing = db.query.accounts.findFirst({ where: eq(accounts.id, id) }).sync();
-  if (!existing) throw new Error("Account not found.");
-  const category = db.query.categories
-    .findFirst({ where: eq(categories.id, input.categoryId) })
-    .sync();
-  if (!category) throw new Error("The selected category is unavailable.");
-  if (existing.currency !== input.currency) {
-    throw new Error("Account currency cannot be changed after creation.");
-  }
-  if (category.assetOrLiability === "liability" && existing.goalId) {
-    throw new Error("Unlink this account from its goal before making it a liability.");
-  }
-
-  db.update(accounts)
-    .set({
-      name: input.name,
-      description: input.description,
-      categoryId: input.categoryId,
-      institution: input.institution || null,
-      accountReference: input.accountReference || null,
-      costBasisMinor: input.costBasis
-        ? parseMoney(input.costBasis, input.currency)
-        : null,
-      isLiability: category.assetOrLiability === "liability",
-      isIncludedInNetWorth: input.isIncludedInNetWorth,
-      notes: input.notes,
-      updatedAt: nowIso(),
-    })
-    .where(eq(accounts.id, id))
-    .run();
+  db.transaction((tx) => {
+    const existing = tx.query.accounts
+      .findFirst({ where: and(eq(accounts.userId, userId), eq(accounts.id, id)) })
+      .sync();
+    if (!existing) throw new Error("Account not found.");
+    const category = tx.query.categories
+      .findFirst({
+        where: and(
+          eq(categories.userId, userId),
+          eq(categories.id, input.categoryId),
+          eq(categories.isArchived, false),
+        ),
+      })
+      .sync();
+    if (!category) throw new Error("The selected category is unavailable.");
+    if (existing.currency !== input.currency) {
+      throw new Error("Account currency cannot be changed after creation.");
+    }
+    if (category.assetOrLiability === "liability" && existing.goalId) {
+      throw new Error("Unlink this account from its goal before making it a liability.");
+    }
+    tx.update(accounts)
+      .set({
+        name: input.name,
+        description: input.description,
+        categoryId: input.categoryId,
+        institution: input.institution || null,
+        accountReference: input.accountReference || null,
+        costBasisMinor: input.costBasis ? parseMoney(input.costBasis, input.currency) : null,
+        isLiability: category.assetOrLiability === "liability",
+        isIncludedInNetWorth: input.isIncludedInNetWorth,
+        notes: input.notes,
+        updatedAt: nowIso(),
+      })
+      .where(and(eq(accounts.userId, userId), eq(accounts.id, id)))
+      .run();
+  });
 }
 
-export function setAccountArchived(id: string, archived: boolean) {
+export function setAccountArchived(userId: string, id: string, archived: boolean) {
   const result = getDatabase()
     .update(accounts)
     .set({ archivedAt: archived ? nowIso() : null, updatedAt: nowIso() })
-    .where(eq(accounts.id, id))
+    .where(and(eq(accounts.userId, userId), eq(accounts.id, id)))
     .run();
   if (result.changes === 0) throw new Error("Account not found.");
 }
 
-export function recordTransaction(input: {
+type TransactionInput = {
   accountId: string;
   type: TransactionType;
   amount: string;
@@ -300,36 +334,41 @@ export function recordTransaction(input: {
   description?: string;
   notes?: string;
   idempotencyKey: string;
-}) {
+};
+
+export function recordTransaction(userId: string, input: TransactionInput) {
   const db = getDatabase();
-  assertNotFutureDate(input.transactionDate, db);
-  const account = db.query.accounts
-    .findFirst({ where: eq(accounts.id, input.accountId) })
-    .sync();
-  if (!account) throw new Error("Account not found.");
+  assertNotFutureDate(userId, input.transactionDate, db);
   if (input.type === "opening_balance" || input.type === "transfer") {
     throw new Error("Use the dedicated workflow for this transaction type.");
   }
-  const amountMinor = parseMoney(input.amount, account.currency);
-  if (input.type !== "manual_adjustment" && amountMinor <= 0) {
-    throw new Error("Amount must be greater than zero.");
-  }
-
-  const existing = db.query.transactions
-    .findFirst({ where: eq(transactions.idempotencyKey, input.idempotencyKey) })
-    .sync();
-  if (existing) return existing.id;
-
-  if (input.type === "manual_adjustment" && amountMinor === 0) {
-    throw new Error("Adjustment cannot be zero.");
-  }
-
   const id = crypto.randomUUID();
   const timestamp = nowIso();
-  db.transaction((tx) => {
+  return db.transaction((tx) => {
+    const existing = tx.query.transactions
+      .findFirst({
+        where: and(
+          eq(transactions.userId, userId),
+          eq(transactions.idempotencyKey, input.idempotencyKey),
+        ),
+      })
+      .sync();
+    if (existing) return existing.id;
+    const account = tx.query.accounts
+      .findFirst({ where: and(eq(accounts.userId, userId), eq(accounts.id, input.accountId)) })
+      .sync();
+    if (!account) throw new Error("Account not found.");
+    const amountMinor = parseMoney(input.amount, account.currency);
+    if (input.type !== "manual_adjustment" && amountMinor <= 0) {
+      throw new Error("Amount must be greater than zero.");
+    }
+    if (input.type === "manual_adjustment" && amountMinor === 0) {
+      throw new Error("Adjustment cannot be zero.");
+    }
     tx.insert(transactions)
       .values({
         id,
+        userId,
         accountId: account.id,
         type: input.type,
         amountMinor,
@@ -342,35 +381,36 @@ export function recordTransaction(input: {
         updatedAt: timestamp,
       })
       .run();
-    recalculateAccountBalance(tx, account.id);
+    recalculateAccountBalance(userId, tx, account.id);
+    return id;
   });
-  return id;
 }
 
 export function updateTransaction(
+  userId: string,
   id: string,
-  input: Pick<
-    Parameters<typeof recordTransaction>[0],
-    "type" | "amount" | "transactionDate" | "description" | "notes"
-  >,
+  input: Pick<TransactionInput, "type" | "amount" | "transactionDate" | "description" | "notes">,
 ) {
   const db = getDatabase();
-  assertNotFutureDate(input.transactionDate, db);
-  const existing = db.query.transactions.findFirst({ where: eq(transactions.id, id) }).sync();
-  if (!existing) throw new Error("Transaction not found.");
-  if (existing.type === "opening_balance" || existing.type === "transfer") {
-    throw new Error("Opening balances and transfers cannot be edited individually.");
-  }
-  const account = db.query.accounts
-    .findFirst({ where: eq(accounts.id, existing.accountId) })
-    .sync();
-  if (!account) throw new Error("Account not found.");
-  const amountMinor = parseMoney(input.amount, account.currency);
-  if (input.type !== "manual_adjustment" && amountMinor <= 0) {
-    throw new Error("Amount must be greater than zero.");
-  }
-
+  assertNotFutureDate(userId, input.transactionDate, db);
   db.transaction((tx) => {
+    const existing = tx.query.transactions
+      .findFirst({ where: and(eq(transactions.userId, userId), eq(transactions.id, id)) })
+      .sync();
+    if (!existing) throw new Error("Transaction not found.");
+    if (existing.type === "opening_balance" || existing.type === "transfer") {
+      throw new Error("Opening balances and transfers cannot be edited individually.");
+    }
+    const account = tx.query.accounts
+      .findFirst({
+        where: and(eq(accounts.userId, userId), eq(accounts.id, existing.accountId)),
+      })
+      .sync();
+    if (!account) throw new Error("Account not found.");
+    const amountMinor = parseMoney(input.amount, account.currency);
+    if (input.type !== "manual_adjustment" && amountMinor <= 0) {
+      throw new Error("Amount must be greater than zero.");
+    }
     tx.update(transactions)
       .set({
         type: input.type,
@@ -380,99 +420,118 @@ export function updateTransaction(
         notes: input.notes,
         updatedAt: nowIso(),
       })
-      .where(eq(transactions.id, id))
+      .where(and(eq(transactions.userId, userId), eq(transactions.id, id)))
       .run();
-    recalculateAccountBalance(tx, existing.accountId);
+    recalculateAccountBalance(userId, tx, existing.accountId);
   });
 }
 
-export function deleteTransaction(id: string) {
+export function deleteTransaction(userId: string, id: string) {
   const db = getDatabase();
-  const existing = db.query.transactions.findFirst({ where: eq(transactions.id, id) }).sync();
-  if (!existing) throw new Error("Transaction not found.");
-  if (existing.type === "opening_balance") {
-    throw new Error("The opening balance cannot be deleted.");
-  }
-
   db.transaction((tx) => {
+    const existing = tx.query.transactions
+      .findFirst({ where: and(eq(transactions.userId, userId), eq(transactions.id, id)) })
+      .sync();
+    if (!existing) throw new Error("Transaction not found.");
+    if (existing.type === "opening_balance") throw new Error("The opening balance cannot be deleted.");
     if (existing.transferGroupId) {
       const transferRows = tx
         .select({ accountId: transactions.accountId })
         .from(transactions)
-        .where(eq(transactions.transferGroupId, existing.transferGroupId))
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.transferGroupId, existing.transferGroupId),
+          ),
+        )
         .all();
       tx.delete(transactions)
-        .where(eq(transactions.transferGroupId, existing.transferGroupId))
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.transferGroupId, existing.transferGroupId),
+          ),
+        )
         .run();
-      for (const row of transferRows) recalculateAccountBalance(tx, row.accountId);
+      for (const row of transferRows) recalculateAccountBalance(userId, tx, row.accountId);
     } else {
-      tx.delete(transactions).where(eq(transactions.id, id)).run();
-      recalculateAccountBalance(tx, existing.accountId);
+      tx.delete(transactions)
+        .where(and(eq(transactions.userId, userId), eq(transactions.id, id)))
+        .run();
+      recalculateAccountBalance(userId, tx, existing.accountId);
     }
   });
 }
 
-export function recordValuation(input: {
+type ValuationInput = {
   idempotencyKey: string;
   accountId: string;
   value: string;
   valuationDate: string;
   notes?: string;
-}) {
-  const db = getDatabase();
-  assertNotFutureDate(input.valuationDate, db);
-  const duplicate = db.query.idempotencyKeys
-    .findFirst({ where: eq(idempotencyKeys.key, input.idempotencyKey) })
-    .sync();
-  if (duplicate?.operation === "valuation" && duplicate.resultId) {
-    return duplicate.resultId;
-  }
-  if (duplicate) throw new Error("This request key was already used.");
-  const account = db.query.accounts
-    .findFirst({ where: eq(accounts.id, input.accountId) })
-    .sync();
-  if (!account) throw new Error("Account not found.");
-  const valueMinor = parseMoney(input.value, account.currency);
-  if (valueMinor < 0) throw new Error("Valuation cannot be negative.");
-  const id = crypto.randomUUID();
+};
 
-  db.transaction((tx) => {
+export function recordValuation(userId: string, input: ValuationInput) {
+  const db = getDatabase();
+  assertNotFutureDate(userId, input.valuationDate, db);
+  const id = crypto.randomUUID();
+  return db.transaction((tx) => {
+    const duplicate = tx.query.idempotencyKeys
+      .findFirst({
+        where: and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.key, input.idempotencyKey)),
+      })
+      .sync();
+    if (duplicate?.operation === "valuation" && duplicate.resultId) return duplicate.resultId;
+    if (duplicate) throw new Error("This request key was already used.");
+    const account = tx.query.accounts
+      .findFirst({ where: and(eq(accounts.userId, userId), eq(accounts.id, input.accountId)) })
+      .sync();
+    if (!account) throw new Error("Account not found.");
+    const valueMinor = parseMoney(input.value, account.currency);
+    if (valueMinor < 0) throw new Error("Valuation cannot be negative.");
+    const timestamp = nowIso();
     tx.insert(valuationSnapshots)
       .values({
         id,
+        userId,
         accountId: account.id,
         valueMinor,
         currency: account.currency,
         valuationDate: dateInputToUtc(input.valuationDate),
         notes: input.notes,
-        createdAt: nowIso(),
+        createdAt: timestamp,
       })
       .run();
     tx.insert(idempotencyKeys)
       .values({
+        userId,
         key: input.idempotencyKey,
         operation: "valuation",
         resultId: id,
-        createdAt: nowIso(),
+        createdAt: timestamp,
       })
       .run();
-    recalculateAccountBalance(tx, account.id);
+    recalculateAccountBalance(userId, tx, account.id);
+    return id;
   });
-  return id;
 }
 
-export function deleteValuation(id: string) {
+export function deleteValuation(userId: string, id: string) {
   const db = getDatabase();
-  const existing = db.query.valuationSnapshots
-    .findFirst({ where: eq(valuationSnapshots.id, id) })
-    .sync();
-  if (!existing) throw new Error("Valuation not found.");
   db.transaction((tx) => {
-    tx.delete(valuationSnapshots).where(eq(valuationSnapshots.id, id)).run();
-    recalculateAccountBalance(tx, existing.accountId);
+    const existing = tx.query.valuationSnapshots
+      .findFirst({
+        where: and(eq(valuationSnapshots.userId, userId), eq(valuationSnapshots.id, id)),
+      })
+      .sync();
+    if (!existing) throw new Error("Valuation not found.");
+    tx.delete(valuationSnapshots)
+      .where(and(eq(valuationSnapshots.userId, userId), eq(valuationSnapshots.id, id)))
+      .run();
+    recalculateAccountBalance(userId, tx, existing.accountId);
   });
 }
 
-export function accountBalanceAt(accountId: string, throughDate: string) {
-  return replayBalance(accountEvents(getDatabase(), accountId), throughDate);
+export function accountBalanceAt(userId: string, accountId: string, throughDate: string) {
+  return replayBalance(accountEvents(getDatabase(), userId, accountId), throughDate);
 }

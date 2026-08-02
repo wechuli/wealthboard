@@ -8,10 +8,15 @@ import { minorToDecimalString } from "@/lib/money";
 import { getAccount } from "@/lib/services/accounts";
 import { getSettings } from "@/lib/bootstrap";
 import { dateInputForTimezone } from "@/lib/dates";
+import { requireSession } from "@/lib/auth/session";
 
 export default async function ValuationPage({ params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await requireSession();
   const { id } = await params;
-  const [account, settings] = await Promise.all([getAccount(id), getSettings()]);
+  const [account, settings] = await Promise.all([
+    getAccount(userId, id),
+    getSettings(userId),
+  ]);
   if (!account) notFound();
   return (
     <div className="mx-auto max-w-lg">

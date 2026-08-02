@@ -7,10 +7,15 @@ import { PageHeader } from "@/components/ui/page";
 import { minorToDecimalString } from "@/lib/money";
 import { getAccount } from "@/lib/services/accounts";
 import { listCategories } from "@/lib/services/categories";
+import { requireSession } from "@/lib/auth/session";
 
 export default async function EditAccountPage({ params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await requireSession();
   const { id } = await params;
-  const [account, categories] = await Promise.all([getAccount(id), listCategories()]);
+  const [account, categories] = await Promise.all([
+    getAccount(userId, id),
+    listCategories(userId),
+  ]);
   if (!account) notFound();
   return (
     <div className="mx-auto max-w-3xl">

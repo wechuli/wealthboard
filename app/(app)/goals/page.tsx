@@ -13,14 +13,17 @@ import { getSettings } from "@/lib/bootstrap";
 import { getDatabase } from "@/lib/db";
 import { convertMinor, MissingExchangeRateError } from "@/lib/money";
 import { listGoals } from "@/lib/services/goals";
+import { requireSession } from "@/lib/auth/session";
+import { eq } from "drizzle-orm";
 
 export const metadata = { title: "Goals" };
 
 export default async function GoalsPage() {
+  const { userId } = await requireSession();
   const [goalRows, settings, rates] = await Promise.all([
-    listGoals(),
-    getSettings(),
-    getDatabase().select().from(exchangeRates),
+    listGoals(userId),
+    getSettings(userId),
+    getDatabase().select().from(exchangeRates).where(eq(exchangeRates.userId, userId)),
   ]);
   const active = goalRows.filter((goal) => goal.status === "active");
   const safeTotal = (

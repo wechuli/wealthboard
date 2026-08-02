@@ -10,12 +10,8 @@ import {
   idempotencyKeys,
   type GoalStatus,
 } from "@/db/schema";
-import {
-  addUtcMonths,
-  endOfUtcDay,
-  dateInputToUtc,
-  nowIso,
-} from "@/lib/dates";
+import { addUtcMonths, endOfUtcDay, dateInputToUtc, nowIso } from "@/lib/dates";
+import { getDatabase } from "@/lib/db";
 import {
   forecastCompletionWithContributionWindow,
   futureValueWithContributionWindow,
@@ -23,7 +19,6 @@ import {
   monthlyPlanAmount,
   requiredMonthlyContribution,
 } from "@/lib/finance";
-import { getDatabase } from "@/lib/db";
 import {
   convertMinor,
   MissingExchangeRateError,
@@ -31,7 +26,26 @@ import {
   percentage,
 } from "@/lib/money";
 
-export async function listGoals() {
+type GoalInput = {
+  idempotencyKey?: string;
+  name: string;
+  description?: string;
+  targetAmount: string;
+  currentAmount?: string;
+  currency: string;
+  targetDate: string;
+  linkedAccountId?: string;
+  icon: string;
+  status: GoalStatus;
+  priority: number;
+  assumedAnnualReturn: number;
+  plannedContribution: string;
+  frequency: "weekly" | "monthly" | "quarterly" | "annually" | "custom";
+  planStartDate: string;
+  planEndDate?: string;
+};
+
+export async function listGoals(userId: string) {
   const db = getDatabase();
   const rows = await db
     .select({
@@ -46,10 +60,17 @@ export async function listGoals() {
       planEndDate: goalContributionPlans.endDate,
     })
     .from(goals)
-    .leftJoin(accounts, eq(goals.linkedAccountId, accounts.id))
-    .leftJoin(goalContributionPlans, eq(goals.id, goalContributionPlans.goalId))
+    .leftJoin(
+      accounts,
+      and(eq(goals.linkedAccountId, accounts.id), eq(goals.userId, accounts.userId)),
+    )
+    .leftJoin(
+      goalContributionPlans,
+      and(eq(goals.id, goalContributionPlans.goalId), eq(goals.userId, goalContributionPlans.userId)),
+    )
+    .where(eq(goals.userId, userId))
     .orderBy(asc(goals.priority), asc(goals.targetDate));
-  const rates = await db.select().from(exchangeRates);
+  const rates = await db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId));
 
   return rows.map((goal) => {
     let missingExchangeRate = false;
@@ -75,15 +96,10 @@ export async function listGoals() {
     const now = new Date();
     const planStart = goal.planStartDate ? new Date(goal.planStartDate) : undefined;
     const planEnd = goal.planEndDate ? new Date(goal.planEndDate) : null;
-    const planActive =
-      (!planStart || now >= planStart) && (!planEnd || now <= planEnd);
+    const planActive = (!planStart || now >= planStart) && (!planEnd || now <= planEnd);
     const currentPlannedMonthly = planActive ? plannedMonthly : 0n;
     const targetDate = new Date(goal.targetDate);
-    const requiredMonthly = requiredMonthlyContribution(
-      current,
-      goal.targetAmountMinor,
-      targetDate,
-    );
+    const requiredMonthly = requiredMonthlyContribution(current, goal.targetAmountMinor, targetDate);
     const forecast = forecastCompletionWithContributionWindow({
       currentMinor: current,
       targetMinor: goal.targetAmountMinor,
@@ -122,49 +138,32 @@ export async function listGoals() {
   });
 }
 
-export async function getGoal(id: string) {
-  const items = await listGoals();
+export async function getGoal(userId: string, id: string) {
+  const items = await listGoals(userId);
   return items.find((goal) => goal.id === id);
 }
 
-export function createGoal(input: {
-  idempotencyKey?: string;
-  name: string;
-  description?: string;
-  targetAmount: string;
-  currentAmount?: string;
-  currency: string;
-  targetDate: string;
-  linkedAccountId?: string;
-  icon: string;
-  status: GoalStatus;
-  priority: number;
-  assumedAnnualReturn: number;
-  plannedContribution: string;
-  frequency: "weekly" | "monthly" | "quarterly" | "annually" | "custom";
-  planStartDate: string;
-  planEndDate?: string;
-}) {
+export function createGoal(userId: string, input: GoalInput) {
   const db = getDatabase();
-  if (input.idempotencyKey) {
-    const duplicate = db.query.idempotencyKeys
-      .findFirst({ where: eq(idempotencyKeys.key, input.idempotencyKey) })
-      .sync();
-    if (duplicate?.operation === "create-goal" && duplicate.resultId) {
-      return duplicate.resultId;
-    }
-    if (duplicate) throw new Error("This request key was already used.");
-  }
   const { targetAmountMinor, currentAmountMinor, plannedContributionMinor } =
     validateGoalInput(input);
-  assertLinkedAccountAvailable(input.linkedAccountId);
-
   const id = crypto.randomUUID();
   const timestamp = nowIso();
-  db.transaction((tx) => {
+  return db.transaction((tx) => {
+    if (input.idempotencyKey) {
+      const duplicate = tx.query.idempotencyKeys
+        .findFirst({
+          where: and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.key, input.idempotencyKey)),
+        })
+        .sync();
+      if (duplicate?.operation === "create-goal" && duplicate.resultId) return duplicate.resultId;
+      if (duplicate) throw new Error("This request key was already used.");
+    }
+    assertLinkedAccountAvailable(tx, userId, input.linkedAccountId);
     tx.insert(goals)
       .values({
         id,
+        userId,
         name: input.name,
         description: input.description,
         targetAmountMinor,
@@ -183,6 +182,7 @@ export function createGoal(input: {
     tx.insert(goalContributionPlans)
       .values({
         id: crypto.randomUUID(),
+        userId,
         goalId: id,
         plannedContributionMinor,
         frequency: input.frequency,
@@ -195,12 +195,13 @@ export function createGoal(input: {
     if (input.linkedAccountId) {
       tx.update(accounts)
         .set({ goalId: id, updatedAt: timestamp })
-        .where(eq(accounts.id, input.linkedAccountId))
+        .where(and(eq(accounts.userId, userId), eq(accounts.id, input.linkedAccountId)))
         .run();
     }
     if (input.idempotencyKey) {
       tx.insert(idempotencyKeys)
         .values({
+          userId,
           key: input.idempotencyKey,
           operation: "create-goal",
           resultId: id,
@@ -208,20 +209,21 @@ export function createGoal(input: {
         })
         .run();
     }
+    return id;
   });
-  return id;
 }
 
-export function updateGoal(id: string, input: Parameters<typeof createGoal>[0]) {
+export function updateGoal(userId: string, id: string, input: GoalInput) {
   const db = getDatabase();
-  const existing = db.query.goals.findFirst({ where: eq(goals.id, id) }).sync();
-  if (!existing) throw new Error("Goal not found.");
   const { targetAmountMinor, currentAmountMinor, plannedContributionMinor } =
     validateGoalInput(input);
-  assertLinkedAccountAvailable(input.linkedAccountId, id);
   const timestamp = nowIso();
-
   db.transaction((tx) => {
+    const existing = tx.query.goals
+      .findFirst({ where: and(eq(goals.userId, userId), eq(goals.id, id)) })
+      .sync();
+    if (!existing) throw new Error("Goal not found.");
+    assertLinkedAccountAvailable(tx, userId, input.linkedAccountId, id);
     tx.update(goals)
       .set({
         name: input.name,
@@ -237,7 +239,7 @@ export function updateGoal(id: string, input: Parameters<typeof createGoal>[0]) 
         assumedAnnualReturnBps: Math.round(input.assumedAnnualReturn * 100),
         updatedAt: timestamp,
       })
-      .where(eq(goals.id, id))
+      .where(and(eq(goals.userId, userId), eq(goals.id, id)))
       .run();
     tx.update(goalContributionPlans)
       .set({
@@ -247,38 +249,41 @@ export function updateGoal(id: string, input: Parameters<typeof createGoal>[0]) 
         endDate: input.planEndDate ? dateInputToUtc(input.planEndDate) : null,
         updatedAt: timestamp,
       })
-      .where(eq(goalContributionPlans.goalId, id))
+      .where(and(eq(goalContributionPlans.userId, userId), eq(goalContributionPlans.goalId, id)))
       .run();
     tx.update(accounts)
       .set({ goalId: null, updatedAt: timestamp })
-      .where(eq(accounts.goalId, id))
+      .where(and(eq(accounts.userId, userId), eq(accounts.goalId, id)))
       .run();
     if (input.linkedAccountId) {
       tx.update(accounts)
         .set({ goalId: id, updatedAt: timestamp })
-        .where(eq(accounts.id, input.linkedAccountId))
+        .where(and(eq(accounts.userId, userId), eq(accounts.id, input.linkedAccountId)))
         .run();
     }
   });
 }
 
-export function setGoalStatus(id: string, status: GoalStatus) {
+export function setGoalStatus(userId: string, id: string, status: GoalStatus) {
   const result = getDatabase()
     .update(goals)
     .set({ status, updatedAt: nowIso() })
-    .where(eq(goals.id, id))
+    .where(and(eq(goals.userId, userId), eq(goals.id, id)))
     .run();
   if (result.changes === 0) throw new Error("Goal not found.");
 }
 
-export function deleteGoal(id: string) {
+export function deleteGoal(userId: string, id: string) {
   const db = getDatabase();
   db.transaction((tx) => {
     tx.update(accounts)
       .set({ goalId: null, updatedAt: nowIso() })
-      .where(eq(accounts.goalId, id))
+      .where(and(eq(accounts.userId, userId), eq(accounts.goalId, id)))
       .run();
-    const result = tx.delete(goals).where(eq(goals.id, id)).run();
+    const result = tx
+      .delete(goals)
+      .where(and(eq(goals.userId, userId), eq(goals.id, id)))
+      .run();
     if (result.changes === 0) throw new Error("Goal not found.");
   });
 }
@@ -321,18 +326,11 @@ export function goalProjectionPoints(input: {
   return points;
 }
 
-function validateGoalInput(input: Parameters<typeof createGoal>[0]) {
+function validateGoalInput(input: GoalInput) {
   const targetAmountMinor = parseMoney(input.targetAmount, input.currency);
-  const currentAmountMinor = input.currentAmount
-    ? parseMoney(input.currentAmount, input.currency)
-    : 0;
-  const plannedContributionMinor = parseMoney(
-    input.plannedContribution,
-    input.currency,
-  );
-  if (targetAmountMinor <= 0) {
-    throw new Error("Target amount must be greater than zero.");
-  }
+  const currentAmountMinor = input.currentAmount ? parseMoney(input.currentAmount, input.currency) : 0;
+  const plannedContributionMinor = parseMoney(input.plannedContribution, input.currency);
+  if (targetAmountMinor <= 0) throw new Error("Target amount must be greater than zero.");
   if (currentAmountMinor < 0 || plannedContributionMinor < 0) {
     throw new Error("Goal amounts cannot be negative.");
   }
@@ -345,23 +343,29 @@ function validateGoalInput(input: Parameters<typeof createGoal>[0]) {
   return { targetAmountMinor, currentAmountMinor, plannedContributionMinor };
 }
 
-function assertLinkedAccountAvailable(linkedAccountId?: string, goalId?: string) {
+function assertLinkedAccountAvailable(
+  tx: Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0],
+  userId: string,
+  linkedAccountId?: string,
+  goalId?: string,
+) {
   if (!linkedAccountId) return;
-  const db = getDatabase();
-  const account = db.query.accounts
-    .findFirst({ where: eq(accounts.id, linkedAccountId) })
+  const account = tx.query.accounts
+    .findFirst({ where: and(eq(accounts.userId, userId), eq(accounts.id, linkedAccountId)) })
     .sync();
   if (!account) throw new Error("Linked account not found.");
-  const linkedGoal = db.query.goals
+  const linkedGoal = tx.query.goals
     .findFirst({
       where: goalId
-        ? and(eq(goals.linkedAccountId, linkedAccountId), ne(goals.id, goalId))
-        : eq(goals.linkedAccountId, linkedAccountId),
+        ? and(
+            eq(goals.userId, userId),
+            eq(goals.linkedAccountId, linkedAccountId),
+            ne(goals.id, goalId),
+          )
+        : and(eq(goals.userId, userId), eq(goals.linkedAccountId, linkedAccountId)),
     })
     .sync();
-  if (linkedGoal) {
-    throw new Error(`This account is already linked to ${linkedGoal.name}.`);
-  }
+  if (linkedGoal) throw new Error(`This account is already linked to ${linkedGoal.name}.`);
 }
 
 function projectionContributions(

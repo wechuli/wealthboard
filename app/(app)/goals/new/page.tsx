@@ -3,13 +3,15 @@ import { GoalForm } from "@/components/forms/goal-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page";
 import { getSettings } from "@/lib/bootstrap";
+import { requireSession } from "@/lib/auth/session";
 import { listAccounts } from "@/lib/services/accounts";
 import { dateInputForTimezone } from "@/lib/dates";
 
 export const metadata = { title: "Create goal" };
 
 export default async function NewGoalPage() {
-  const [accounts, settings] = await Promise.all([listAccounts(), getSettings()]);
+  const { userId } = await requireSession();
+  const [accounts, settings] = await Promise.all([listAccounts(userId), getSettings(userId)]);
   const target = new Date();
   target.setUTCFullYear(target.getUTCFullYear() + 2);
   return (

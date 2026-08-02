@@ -12,11 +12,13 @@ import { TRANSACTION_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/dates";
 import { getSettings } from "@/lib/bootstrap";
 import { listTransactions } from "@/lib/services/accounts";
+import { requireSession } from "@/lib/auth/session";
 
 export const metadata = { title: "Transactions" };
 
 export default async function TransactionsPage() {
-  const [rows, settings] = await Promise.all([listTransactions(), getSettings()]);
+  const { userId } = await requireSession();
+  const [rows, settings] = await Promise.all([listTransactions(userId), getSettings(userId)]);
   return (
     <>
       <PageHeader

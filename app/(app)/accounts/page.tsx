@@ -14,15 +14,21 @@ import {
   safeChartNumber,
 } from "@/lib/money";
 import { accountBalanceAt, listAccounts } from "@/lib/services/accounts";
+import { requireSession } from "@/lib/auth/session";
+import { eq } from "drizzle-orm";
 
 export const metadata = { title: "Accounts" };
 
 export default async function AccountsPage() {
+  const { userId } = await requireSession();
   const [accountRows, settings, rates, goalRows] = await Promise.all([
-    listAccounts({ includeArchived: true }),
-    getSettings(),
-    getDatabase().select().from(exchangeRates),
-    getDatabase().select({ id: goals.id, name: goals.name }).from(goals),
+    listAccounts(userId, { includeArchived: true }),
+    getSettings(userId),
+    getDatabase().select().from(exchangeRates).where(eq(exchangeRates.userId, userId)),
+    getDatabase()
+      .select({ id: goals.id, name: goals.name })
+      .from(goals)
+      .where(eq(goals.userId, userId)),
   ]);
   const monthAgo = addUtcDays(new Date(), -30).toISOString();
   const currentAsOf = new Date();
@@ -40,7 +46,7 @@ export default async function AccountsPage() {
         currentAsOf.toISOString(),
       );
       const previous = convertMinor(
-        accountBalanceAt(account.id, monthAgo),
+        accountBalanceAt(userId, account.id, monthAgo),
         account.currency,
         settings.baseCurrency,
         rates,

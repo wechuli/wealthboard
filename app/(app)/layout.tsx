@@ -7,8 +7,8 @@ import { getSettings } from "@/lib/bootstrap";
 export const dynamic = "force-dynamic";
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
-  await requireSession();
-  const settings = await getSettings();
+  const { userId } = await requireSession();
+  const settings = await getSettings(userId);
   return (
     <AppShell appName={settings.appName} displayName={settings.displayName}>
       {children}

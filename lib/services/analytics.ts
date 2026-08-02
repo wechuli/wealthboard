@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, desc, eq, getTableColumns, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, isNull } from "drizzle-orm";
 
 import {
   accounts,
@@ -8,6 +8,7 @@ import {
   exchangeRates,
   goals,
   transactions,
+  userSettings,
   valuationSnapshots,
 } from "@/db/schema";
 import {
@@ -32,10 +33,18 @@ import Decimal from "decimal.js";
 
 type HistoryRange = "1m" | "3m" | "6m" | "1y" | "all";
 
-function eventMap() {
+function eventMap(userId: string) {
   const db = getDatabase();
-  const transactionRows = db.select().from(transactions).all();
-  const valuationRows = db.select().from(valuationSnapshots).all();
+  const transactionRows = db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.userId, userId))
+    .all();
+  const valuationRows = db
+    .select()
+    .from(valuationSnapshots)
+    .where(eq(valuationSnapshots.userId, userId))
+    .all();
   const map = new Map<string, FinancialEvent[]>();
   for (const row of transactionRows) {
     const list = map.get(row.accountId) ?? [];
@@ -67,17 +76,19 @@ function rangeStart(range: HistoryRange, earliest: Date, now: Date) {
   return addUtcDays(now, -days);
 }
 
-export async function getNetWorthHistory(range: HistoryRange = "1y") {
+export async function getNetWorthHistory(userId: string, range: HistoryRange = "1y") {
   const db = getDatabase();
   const accountRows = await db
     .select()
     .from(accounts)
-    .where(eq(accounts.isIncludedInNetWorth, true));
+    .where(and(eq(accounts.userId, userId), eq(accounts.isIncludedInNetWorth, true)));
   if (accountRows.length === 0) return [];
-  const rates = await db.select().from(exchangeRates);
-  const settings = await db.query.userSettings.findFirst();
+  const rates = await db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId));
+  const settings = await db.query.userSettings.findFirst({
+    where: eq(userSettings.userId, userId),
+  });
   if (!settings) throw new Error("Settings unavailable.");
-  const events = eventMap();
+  const events = eventMap(userId);
   const allDates = [...events.values()].flat().map((event) => new Date(event.date));
   const currentTime = new Date();
   const today = startOfUtcDay(currentTime);
@@ -152,29 +163,31 @@ function getHistoricalPoint(
   };
 }
 
-export async function getNetWorthAt(date: Date) {
+export async function getNetWorthAt(userId: string, date: Date) {
   const db = getDatabase();
   const accountRows = await db
     .select()
     .from(accounts)
-    .where(eq(accounts.isIncludedInNetWorth, true));
+    .where(and(eq(accounts.userId, userId), eq(accounts.isIncludedInNetWorth, true)));
   const [rates, settings] = await Promise.all([
-    db.select().from(exchangeRates),
-    db.query.userSettings.findFirst(),
+    db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId)),
+    db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }),
   ]);
   if (!settings) throw new Error("Settings unavailable.");
   return getHistoricalPoint(
     endOfUtcDay(date),
     accountRows,
-    eventMap(),
+    eventMap(userId),
     rates,
     settings.baseCurrency,
   );
 }
 
-export async function getDashboardData(range: HistoryRange = "1y") {
+export async function getDashboardData(userId: string, range: HistoryRange = "1y") {
   const db = getDatabase();
-  const settings = await db.query.userSettings.findFirst();
+  const settings = await db.query.userSettings.findFirst({
+    where: eq(userSettings.userId, userId),
+  });
   if (!settings) throw new Error("Settings unavailable.");
   const accountRows = await db
     .select({
@@ -184,9 +197,12 @@ export async function getDashboardData(range: HistoryRange = "1y") {
       categoryIsInvestible: categories.isInvestible,
     })
     .from(accounts)
-    .innerJoin(categories, eq(accounts.categoryId, categories.id))
-    .where(isNull(accounts.archivedAt));
-  const rateRows = await db.select().from(exchangeRates);
+    .innerJoin(
+      categories,
+      and(eq(accounts.categoryId, categories.id), eq(accounts.userId, categories.userId)),
+    )
+    .where(and(eq(accounts.userId, userId), isNull(accounts.archivedAt)));
+  const rateRows = await db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId));
   const transactionRows = await db
     .select({
       ...getTableColumns(transactions),
@@ -195,8 +211,11 @@ export async function getDashboardData(range: HistoryRange = "1y") {
       isIncludedInNetWorth: accounts.isIncludedInNetWorth,
     })
     .from(transactions)
-    .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-    .where(isNull(accounts.archivedAt))
+    .innerJoin(
+      accounts,
+      and(eq(transactions.accountId, accounts.id), eq(transactions.userId, accounts.userId)),
+    )
+    .where(and(eq(transactions.userId, userId), isNull(accounts.archivedAt)))
     .orderBy(desc(transactions.transactionDate), desc(transactions.createdAt));
   const valuationRows = await db
     .select({
@@ -204,8 +223,14 @@ export async function getDashboardData(range: HistoryRange = "1y") {
       accountName: accounts.name,
     })
     .from(valuationSnapshots)
-    .innerJoin(accounts, eq(valuationSnapshots.accountId, accounts.id))
-    .where(isNull(accounts.archivedAt))
+    .innerJoin(
+      accounts,
+      and(
+        eq(valuationSnapshots.accountId, accounts.id),
+        eq(valuationSnapshots.userId, accounts.userId),
+      ),
+    )
+    .where(and(eq(valuationSnapshots.userId, userId), isNull(accounts.archivedAt)))
     .orderBy(desc(valuationSnapshots.valuationDate), desc(valuationSnapshots.createdAt));
 
   let assetsTotal = 0n;
@@ -285,7 +310,7 @@ export async function getDashboardData(range: HistoryRange = "1y") {
 
   }
 
-  const events = eventMap();
+  const events = eventMap(userId);
   for (const account of accountRows) {
     if (account.isLiability || !account.isIncludedInNetWorth) continue;
     let balance = 0n;
@@ -342,8 +367,8 @@ export async function getDashboardData(range: HistoryRange = "1y") {
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 10);
 
-  const history = await getNetWorthHistory(range);
-  const goalsCount = await db.select().from(goals);
+  const history = await getNetWorthHistory(userId, range);
+  const goalsCount = await db.select().from(goals).where(eq(goals.userId, userId));
   const toAllocation = (map: Map<string, bigint>) =>
     [...map.entries()]
       .map(([name, value]) => ({ name, value: safeChartNumber(value) }))
@@ -375,18 +400,21 @@ export async function getDashboardData(range: HistoryRange = "1y") {
   };
 }
 
-export async function getAccountAnalytics(accountId: string) {
+export async function getAccountAnalytics(userId: string, accountId: string) {
   const db = getDatabase();
   const account = await db.query.accounts.findFirst({
-    where: eq(accounts.id, accountId),
+    where: and(eq(accounts.userId, userId), eq(accounts.id, accountId)),
   });
   if (!account) return null;
   const rows = await db.query.transactions.findMany({
-    where: eq(transactions.accountId, accountId),
+    where: and(eq(transactions.userId, userId), eq(transactions.accountId, accountId)),
     orderBy: [asc(transactions.transactionDate)],
   });
   const values = await db.query.valuationSnapshots.findMany({
-    where: eq(valuationSnapshots.accountId, accountId),
+    where: and(
+      eq(valuationSnapshots.userId, userId),
+      eq(valuationSnapshots.accountId, accountId),
+    ),
     orderBy: [asc(valuationSnapshots.valuationDate)],
   });
   const metrics = calculateFlowMetrics(rows);
@@ -440,17 +468,17 @@ export function valuationGrowthForEvents(events: FinancialEvent[]) {
   return growth;
 }
 
-export async function getAccountComparisons() {
+export async function getAccountComparisons(userId: string) {
   const db = getDatabase();
   const accountRows = await db
     .select()
     .from(accounts)
-    .where(isNull(accounts.archivedAt))
+    .where(and(eq(accounts.userId, userId), isNull(accounts.archivedAt)))
     .orderBy(asc(accounts.name));
   const output = [];
   for (const account of accountRows) {
     const rows = await db.query.transactions.findMany({
-      where: eq(transactions.accountId, account.id),
+      where: and(eq(transactions.userId, userId), eq(transactions.accountId, account.id)),
       orderBy: [asc(transactions.transactionDate)],
     });
     const metrics = calculateFlowMetrics(rows);

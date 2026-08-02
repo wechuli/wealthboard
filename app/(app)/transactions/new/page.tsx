@@ -7,6 +7,7 @@ import { TRANSACTION_LABELS } from "@/lib/constants";
 import type { TransactionType } from "@/db/schema";
 import { getSettings } from "@/lib/bootstrap";
 import { dateInputForTimezone } from "@/lib/dates";
+import { requireSession } from "@/lib/auth/session";
 
 export const metadata = { title: "Record activity" };
 
@@ -15,8 +16,12 @@ export default async function NewTransactionPage({
 }: {
   searchParams: Promise<{ type?: string; accountId?: string }>;
 }) {
+  const { userId } = await requireSession();
   const query = await searchParams;
-  const [accountRows, settings] = await Promise.all([listAccounts(), getSettings()]);
+  const [accountRows, settings] = await Promise.all([
+    listAccounts(userId),
+    getSettings(userId),
+  ]);
   const type =
     query.type && query.type in TRANSACTION_LABELS && query.type !== "opening_balance"
       ? (query.type as TransactionType)
