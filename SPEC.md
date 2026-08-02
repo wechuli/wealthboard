@@ -3,9 +3,8 @@
 ## Status and terminology
 
 This document defines the implemented architecture for multiple independent
-application users. Upgrading a singleton database discards its old credentials
-and unowned portfolio records; every application user signs up normally and
-starts with an empty portfolio.
+application users. The current schema is the only supported schema; pre-release
+databases may be deleted and recreated rather than migrated.
 
 To avoid ambiguity:
 
@@ -15,7 +14,8 @@ To avoid ambiguity:
 
 Wealthboard is a polished, self-hosted, multi-user personal wealth and goals tracker.
 
-The app should feel significantly simpler than Wealthfolio. It is not intended to be an accounting system, a trading platform, or a detailed budgeting app.
+The app should stay intentionally simpler than full accounting, trading, and
+portfolio-management platforms. It is not a detailed budgeting app.
 
 The main user workflow should be:
 
@@ -1088,7 +1088,7 @@ Create a detailed README with:
 - Docker deployment
 - Kubernetes deployment
 - Signup and first-user onboarding
-- Destructive singleton-to-multi-user upgrade behavior
+- Fresh database initialization
 - Password reset by username
 - Per-user export and restore
 - Deployment-wide backup and offline restore
@@ -1125,47 +1125,14 @@ Do not implement these in version one:
 
 Keep the first version focused on manually tracking net worth, account values, contributions, investment growth, and financial goals.
 
-## Required migration approach
+## Database lifecycle
 
-Evolve the existing application incrementally; do not re-scaffold or rewrite
-unrelated features.
-
-Follow this sequence:
-
-1. Back up a representative existing database and establish passing baseline
-   unit, component, end-to-end, and build checks.
-2. Add `users` and separate credentials from `user_settings`.
-3. Add nullable `userId` columns and ownership indexes to every user-owned
-   table. Generate and review the Drizzle migration.
-4. Delete singleton credentials and every user-owned row without a `userId`.
-   Remove obsolete claim storage; do not expose any recovery or import path on
-   signup.
-5. Enforce non-null owner foreign keys and owner-scoped uniqueness after the
-   unowned rows are removed.
-6. Thread session-derived `userId` through services, analytics, server actions,
-   pages, route handlers, cache keys, imports, and exports. Query resources by
-   owner and ID in the database, not through a post-query UI check.
-7. Implement the always-available signup flow with no legacy password or
-   portfolio-claim option.
-8. Add login by username, atomic per-user defaults, password reset by username,
-   and per-user session invalidation.
-9. Replace user-facing raw database backup and restore with per-user JSON
-   portability. Move full SQLite backup and restore to operator-only commands
-   and documentation.
-10. Add two-user isolation fixtures and tests. Do not deploy the multi-user
-    release until the complete signup and isolation suite passes.
-11. Add a disposable singleton-schema migration test proving old credentials and
-    unowned data are deleted before normal signup.
-12. Review the complete migration for authorization, IDOR, cache isolation,
-    financial accuracy, rollback behavior, responsive signup/login flows, and
-    unnecessary complexity.
-
-After each phase:
-
-- Run linting
-- Run type checking
-- Run relevant tests
-- Fix failures before continuing
+- `db/schema.ts` is the source of truth.
+- Generated migrations target fresh Wealthboard databases only.
+- Pre-release databases and backups may be deleted when the schema changes; no
+  compatibility or data-claim path is required.
+- Run linting, type checking, relevant tests, and a production build after
+  schema changes.
 
 ## Acceptance criteria
 
@@ -1184,8 +1151,6 @@ The application is complete when:
   exports, and idempotent operations.
 - Guessing another user's URL or submitting another user's resource ID returns
   not found or a generic authorization failure without leaking data.
-- Upgrading an old singleton database removes the old identity and portfolio;
-  signup presents no recovery or claim option and creates a fresh empty user.
 - I can add Zimele, Madison, KCB, VWRA, land, a car, savings, and liabilities.
 - I can manually set or update each account’s value.
 - I can record deposits, withdrawals, interest, fees, and transfers.
@@ -1206,4 +1171,4 @@ The application is complete when:
 - A deployment operator can back up and restore the complete SQLite database
   outside ordinary user routes.
 - The dashboard looks like a premium financial application.
-- The interface remains simpler and easier to understand than Wealthfolio.
+- The interface remains focused and easy to understand.

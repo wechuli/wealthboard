@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ac294a13-e868-4d1b-862d-123dff96e38c",
+  "id": "573c49e5-e9ae-4ffd-a650-6a943dc2a95e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "accounts": {
@@ -11,6 +11,13 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -131,37 +138,63 @@
         }
       },
       "indexes": {
-        "accounts_category_idx": {
-          "name": "accounts_category_idx",
+        "accounts_user_id_unique": {
+          "name": "accounts_user_id_unique",
           "columns": [
+            "user_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "accounts_user_category_idx": {
+          "name": "accounts_user_category_idx",
+          "columns": [
+            "user_id",
             "category_id"
           ],
           "isUnique": false
         },
-        "accounts_goal_idx": {
-          "name": "accounts_goal_idx",
+        "accounts_user_goal_idx": {
+          "name": "accounts_user_goal_idx",
           "columns": [
+            "user_id",
             "goal_id"
           ],
           "isUnique": false
         },
-        "accounts_archived_idx": {
-          "name": "accounts_archived_idx",
+        "accounts_user_archived_idx": {
+          "name": "accounts_user_archived_idx",
           "columns": [
+            "user_id",
             "archived_at"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "accounts_category_id_categories_id_fk": {
-          "name": "accounts_category_id_categories_id_fk",
+        "accounts_user_id_users_id_fk": {
+          "name": "accounts_user_id_users_id_fk",
+          "tableFrom": "accounts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "accounts_user_id_category_id_categories_user_id_id_fk": {
+          "name": "accounts_user_id_category_id_categories_user_id_id_fk",
           "tableFrom": "accounts",
           "tableTo": "categories",
           "columnsFrom": [
+            "user_id",
             "category_id"
           ],
           "columnsTo": [
+            "user_id",
             "id"
           ],
           "onDelete": "restrict",
@@ -179,6 +212,13 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -275,15 +315,38 @@
         }
       },
       "indexes": {
-        "categories_slug_unique": {
-          "name": "categories_slug_unique",
+        "categories_user_id_unique": {
+          "name": "categories_user_id_unique",
           "columns": [
+            "user_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "categories_user_slug_unique": {
+          "name": "categories_user_slug_unique",
+          "columns": [
+            "user_id",
             "slug"
           ],
           "isUnique": true
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "categories_user_id_users_id_fk": {
+          "name": "categories_user_id_users_id_fk",
+          "tableFrom": "categories",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -295,6 +358,13 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -343,18 +413,20 @@
         }
       },
       "indexes": {
-        "exchange_rate_pair_date_unique": {
-          "name": "exchange_rate_pair_date_unique",
+        "exchange_rate_user_pair_date_unique": {
+          "name": "exchange_rate_user_pair_date_unique",
           "columns": [
+            "user_id",
             "base_currency",
             "quote_currency",
             "effective_date"
           ],
           "isUnique": true
         },
-        "exchange_rate_lookup_idx": {
-          "name": "exchange_rate_lookup_idx",
+        "exchange_rate_user_lookup_idx": {
+          "name": "exchange_rate_user_lookup_idx",
           "columns": [
+            "user_id",
             "base_currency",
             "quote_currency",
             "effective_date"
@@ -362,7 +434,21 @@
           "isUnique": false
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "exchange_rates_user_id_users_id_fk": {
+          "name": "exchange_rates_user_id_users_id_fk",
+          "tableFrom": "exchange_rates",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -374,6 +460,13 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -428,23 +521,39 @@
         }
       },
       "indexes": {
-        "goal_plans_goal_idx": {
-          "name": "goal_plans_goal_idx",
+        "goal_plans_user_goal_idx": {
+          "name": "goal_plans_user_goal_idx",
           "columns": [
+            "user_id",
             "goal_id"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "goal_contribution_plans_goal_id_goals_id_fk": {
-          "name": "goal_contribution_plans_goal_id_goals_id_fk",
+        "goal_contribution_plans_user_id_users_id_fk": {
+          "name": "goal_contribution_plans_user_id_users_id_fk",
+          "tableFrom": "goal_contribution_plans",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "goal_contribution_plans_user_id_goal_id_goals_user_id_id_fk": {
+          "name": "goal_contribution_plans_user_id_goal_id_goals_user_id_id_fk",
           "tableFrom": "goal_contribution_plans",
           "tableTo": "goals",
           "columnsFrom": [
+            "user_id",
             "goal_id"
           ],
           "columnsTo": [
+            "user_id",
             "id"
           ],
           "onDelete": "cascade",
@@ -462,6 +571,13 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -563,30 +679,55 @@
         }
       },
       "indexes": {
-        "goals_status_idx": {
-          "name": "goals_status_idx",
+        "goals_user_id_unique": {
+          "name": "goals_user_id_unique",
           "columns": [
+            "user_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "goals_user_status_idx": {
+          "name": "goals_user_status_idx",
+          "columns": [
+            "user_id",
             "status"
           ],
           "isUnique": false
         },
-        "goals_account_idx": {
-          "name": "goals_account_idx",
+        "goals_user_account_unique": {
+          "name": "goals_user_account_unique",
           "columns": [
+            "user_id",
             "linked_account_id"
           ],
-          "isUnique": false
+          "isUnique": true
         }
       },
       "foreignKeys": {
-        "goals_linked_account_id_accounts_id_fk": {
-          "name": "goals_linked_account_id_accounts_id_fk",
+        "goals_user_id_users_id_fk": {
+          "name": "goals_user_id_users_id_fk",
+          "tableFrom": "goals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "goals_user_id_linked_account_id_accounts_user_id_id_fk": {
+          "name": "goals_user_id_linked_account_id_accounts_user_id_id_fk",
           "tableFrom": "goals",
           "tableTo": "accounts",
           "columnsFrom": [
+            "user_id",
             "linked_account_id"
           ],
           "columnsTo": [
+            "user_id",
             "id"
           ],
           "onDelete": "set null",
@@ -600,10 +741,17 @@
     "idempotency_keys": {
       "name": "idempotency_keys",
       "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "key": {
           "name": "key",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -629,8 +777,39 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "idempotency_user_key_unique": {
+          "name": "idempotency_user_key_unique",
+          "columns": [
+            "user_id",
+            "key"
+          ],
+          "isUnique": true
+        },
+        "idempotency_user_created_idx": {
+          "name": "idempotency_user_created_idx",
+          "columns": [
+            "user_id",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "idempotency_keys_user_id_users_id_fk": {
+          "name": "idempotency_keys_user_id_users_id_fk",
+          "tableFrom": "idempotency_keys",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -690,6 +869,13 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -772,38 +958,56 @@
         }
       },
       "indexes": {
-        "transactions_account_date_idx": {
-          "name": "transactions_account_date_idx",
+        "transactions_user_account_date_idx": {
+          "name": "transactions_user_account_date_idx",
           "columns": [
+            "user_id",
             "account_id",
             "transaction_date"
           ],
           "isUnique": false
         },
-        "transactions_transfer_group_idx": {
-          "name": "transactions_transfer_group_idx",
+        "transactions_user_transfer_group_idx": {
+          "name": "transactions_user_transfer_group_idx",
           "columns": [
+            "user_id",
             "transfer_group_id"
           ],
           "isUnique": false
         },
-        "transactions_idempotency_unique": {
-          "name": "transactions_idempotency_unique",
+        "transactions_user_idempotency_unique": {
+          "name": "transactions_user_idempotency_unique",
           "columns": [
+            "user_id",
             "idempotency_key"
           ],
           "isUnique": true
         }
       },
       "foreignKeys": {
-        "transactions_account_id_accounts_id_fk": {
-          "name": "transactions_account_id_accounts_id_fk",
+        "transactions_user_id_users_id_fk": {
+          "name": "transactions_user_id_users_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "transactions_user_id_account_id_accounts_user_id_id_fk": {
+          "name": "transactions_user_id_account_id_accounts_user_id_id_fk",
           "tableFrom": "transactions",
           "tableTo": "accounts",
           "columnsFrom": [
+            "user_id",
             "account_id"
           ],
           "columnsTo": [
+            "user_id",
             "id"
           ],
           "onDelete": "cascade",
@@ -824,15 +1028,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "display_name": {
-          "name": "display_name",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "password_hash": {
-          "name": "password_hash",
+        "display_name": {
+          "name": "display_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -876,7 +1080,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'Worthboard'"
+          "default": "'Wealthboard'"
         },
         "default_dashboard_period": {
           "name": "default_dashboard_period",
@@ -917,7 +1121,105 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "user_settings_user_unique": {
+          "name": "user_settings_user_unique",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "user_settings_user_id_users_id_fk": {
+          "name": "user_settings_user_id_users_id_fk",
+          "tableFrom": "user_settings",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "session_version": {
+          "name": "session_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "last_login_at": {
+          "name": "last_login_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "users_username_unique": {
+          "name": "users_username_unique",
+          "columns": [
+            "username"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -930,6 +1232,13 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -977,9 +1286,10 @@
         }
       },
       "indexes": {
-        "valuations_account_date_idx": {
-          "name": "valuations_account_date_idx",
+        "valuations_user_account_date_idx": {
+          "name": "valuations_user_account_date_idx",
           "columns": [
+            "user_id",
             "account_id",
             "valuation_date"
           ],
@@ -987,14 +1297,29 @@
         }
       },
       "foreignKeys": {
-        "valuation_snapshots_account_id_accounts_id_fk": {
-          "name": "valuation_snapshots_account_id_accounts_id_fk",
+        "valuation_snapshots_user_id_users_id_fk": {
+          "name": "valuation_snapshots_user_id_users_id_fk",
+          "tableFrom": "valuation_snapshots",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "valuation_snapshots_user_id_account_id_accounts_user_id_id_fk": {
+          "name": "valuation_snapshots_user_id_account_id_accounts_user_id_id_fk",
           "tableFrom": "valuation_snapshots",
           "tableTo": "accounts",
           "columnsFrom": [
+            "user_id",
             "account_id"
           ],
           "columnsTo": [
+            "user_id",
             "id"
           ],
           "onDelete": "cascade",
