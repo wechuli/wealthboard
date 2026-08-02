@@ -17,7 +17,7 @@ export function PwaManager() {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js").then((registration) => {
       if (registration.waiting) {
-        toast.info("A Worthboard update is available.", {
+        toast.info("A Wealthboard update is available.", {
           action: {
             label: "Reload",
             onClick: () => window.location.reload(),
@@ -28,7 +28,7 @@ export function PwaManager() {
         const worker = registration.installing;
         worker?.addEventListener("statechange", () => {
           if (worker.state === "installed" && navigator.serviceWorker.controller) {
-            toast.info("A Worthboard update is ready.", {
+            toast.info("A Wealthboard update is ready.", {
               action: { label: "Reload", onClick: () => window.location.reload() },
             });
           }

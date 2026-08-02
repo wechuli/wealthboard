@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: worthboard-data
+  name: wealthboard-data
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -11,7 +11,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: worthboard-backups
+  name: wealthboard-backups
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -21,18 +21,18 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: worthboard
+  name: wealthboard
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: worthboard
+      app: wealthboard
   template:
     metadata:
       labels:
-        app: worthboard
+        app: wealthboard
     spec:
       securityContext:
         runAsNonRoot: true
@@ -42,24 +42,24 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: worthboard
-          image: ghcr.io/your-user/worthboard:latest
+        - name: wealthboard
+          image: ghcr.io/wechuliprojects/wealthboard:latest
           ports:
             - name: http
               containerPort: 3000
           env:
             - name: DATABASE_PATH
-              value: /data/worthboard.db
+              value: /data/wealthboard.db
             - name: BACKUP_PATH
               value: /backups
             - name: APP_URL
-              value: https://worthboard.example.com
+              value: https://wealthboard.example.com
             - name: TZ
               value: Africa/Nairobi
             - name: SESSION_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: worthboard-secrets
+                  name: wealthboard-secrets
                   key: session-secret
           volumeMounts:
             - name: data
@@ -89,18 +89,18 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: worthboard-data
+            claimName: wealthboard-data
         - name: backups
           persistentVolumeClaim:
-            claimName: worthboard-backups
+            claimName: wealthboard-backups
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: worthboard
+  name: wealthboard
 spec:
   selector:
-    app: worthboard
+    app: wealthboard
   ports:
     - name: http
       port: 80
@@ -109,22 +109,22 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: worthboard
+  name: wealthboard
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: 26m
 spec:
   ingressClassName: nginx
   tls:
-    - hosts: [worthboard.example.com]
-      secretName: worthboard-tls
+    - hosts: [wealthboard.example.com]
+      secretName: wealthboard-tls
   rules:
-    - host: worthboard.example.com
+    - host: wealthboard.example.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: worthboard
+                name: wealthboard
                 port:
                   name: http

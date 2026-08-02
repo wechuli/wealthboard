@@ -26,7 +26,7 @@ if (!targetUsername) {
   throw new Error("Set TARGET_USERNAME to the existing user who should receive demo data.");
 }
 
-const databasePath = path.resolve(process.env.DATABASE_PATH ?? "./data/worthboard.db");
+const databasePath = path.resolve(process.env.DATABASE_PATH ?? "./data/wealthboard.db");
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 const sqlite = new Database(databasePath);
 sqlite.pragma("foreign_keys = ON");
@@ -190,4 +190,4 @@ if (
 }
 
 sqlite.close();
-console.log(`Fictional Worthboard demo data seeded for ${targetUsername}.`);
+console.log(`Fictional Wealthboard demo data seeded for ${targetUsername}.`);

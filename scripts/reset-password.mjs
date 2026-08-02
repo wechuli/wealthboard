@@ -14,7 +14,7 @@ if (!password || password.length < 12) {
   throw new Error("Set NEW_USER_PASSWORD to at least 12 characters.");
 }
 
-const configured = process.env.DATABASE_PATH ?? "data/worthboard.db";
+const configured = process.env.DATABASE_PATH ?? "data/wealthboard.db";
 const databasePath = path.isAbsolute(configured)
   ? configured
   : path.join(process.cwd(), configured);

@@ -17,7 +17,7 @@ export default function GlobalError({
         <AlertTriangle className="mx-auto text-amber-300" size={40} />
         <h1 className="mt-5 text-2xl font-semibold">Something went wrong</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Worthboard could not load this view. No financial changes were made.
+          Wealthboard could not load this view. No financial changes were made.
         </p>
         {error.digest ? <p className="mt-2 text-xs text-slate-600">Reference: {error.digest}</p> : null}
         <Button className="mt-6" onClick={reset}>Try again</Button>

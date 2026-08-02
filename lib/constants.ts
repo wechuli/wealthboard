@@ -1,6 +1,6 @@
 import type { TransactionType } from "@/db/schema";
 
-export const PRODUCT_NAME = "Worthboard";
+export const PRODUCT_NAME = "Wealthboard";
 export const DEFAULT_TIMEZONE = "Africa/Nairobi";
 export const DEFAULT_CURRENCY = "KES";
 

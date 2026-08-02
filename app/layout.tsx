@@ -7,16 +7,16 @@ import { PwaManager } from "@/components/pwa-manager";
 
 export const metadata: Metadata = {
   title: {
-    default: "Worthboard",
-    template: "%s · Worthboard",
+    default: "Wealthboard",
+    template: "%s · Wealthboard",
   },
   description: "Private, self-hosted wealth and goals tracking.",
-  applicationName: "Worthboard",
+  applicationName: "Wealthboard",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Worthboard",
+    title: "Wealthboard",
   },
   formatDetection: { telephone: false },
 };

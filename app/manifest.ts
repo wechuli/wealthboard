@@ -5,7 +5,7 @@ import { PRODUCT_NAME } from "@/lib/constants";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: PRODUCT_NAME,
-    short_name: "Worthboard",
+    short_name: "Wealthboard",
     description: "Private, self-hosted wealth and goals tracking.",
     start_url: "/",
     display: "standalone",

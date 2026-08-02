@@ -71,7 +71,7 @@ export const userSettings = sqliteTable(
     preferredDateFormat: text("preferred_date_format")
       .notNull()
       .default("dd MMM yyyy"),
-    appName: text("app_name").notNull().default("Worthboard"),
+    appName: text("app_name").notNull().default("Wealthboard"),
     defaultDashboardPeriod: text("default_dashboard_period")
       .notNull()
       .default("1y"),

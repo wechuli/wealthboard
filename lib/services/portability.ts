@@ -183,7 +183,7 @@ const planArchiveSchema = z
 
 const userArchiveSchema = z
   .object({
-    format: z.literal("worthboard-user-json"),
+    format: z.literal("wealthboard-user-json"),
     version: z.literal(2),
     exportedAt: timestamp,
     settings: settingsArchiveSchema,
@@ -249,7 +249,7 @@ export async function exportData(userId: string) {
   ]);
 
   return {
-    format: "worthboard-user-json" as const,
+    format: "wealthboard-user-json" as const,
     version: 2 as const,
     exportedAt: nowIso(),
     settings: {

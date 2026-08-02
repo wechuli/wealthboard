@@ -126,7 +126,7 @@ export default async function DashboardPage({
         <Card className="mt-5 p-10 text-center">
           <Landmark className="mx-auto text-slate-500" size={32} />
           <h2 className="mt-4 text-lg font-semibold">Add your first account</h2>
-          <p className="mt-2 text-sm text-slate-400">Start with a current balance. Worthboard will build history as you update it.</p>
+          <p className="mt-2 text-sm text-slate-400">Start with a current balance. Wealthboard will build history as you update it.</p>
           <Button asChild className="mt-5"><Link href="/accounts/new"><Plus size={17} />Add account</Link></Button>
         </Card>
       ) : (

@@ -1,4 +1,4 @@
-const CACHE_NAME = "worthboard-shell-v1";
+const CACHE_NAME = "wealthboard-shell-v1";
 const SHELL = [
   "/offline",
   "/shell",

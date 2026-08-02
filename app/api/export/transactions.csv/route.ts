@@ -7,7 +7,7 @@ export async function GET() {
   return new Response(await transactionCsv(session.userId), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="worthboard-transactions-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Disposition": `attachment; filename="wealthboard-transactions-${new Date().toISOString().slice(0, 10)}.csv"`,
       "Cache-Control": "no-store",
     },
   });

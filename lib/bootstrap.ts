@@ -9,6 +9,6 @@ export async function getSettings(userId: string) {
   const setting = await getDatabase().query.userSettings.findFirst({
     where: eq(userSettings.userId, userId),
   });
-  if (!setting) throw new Error("Worthboard settings are unavailable.");
+  if (!setting) throw new Error("Wealthboard settings are unavailable.");
   return setting;
 }

@@ -1,6 +1,6 @@
 import { jwtVerify, SignJWT } from "jose";
 
-export const SESSION_COOKIE = "worthboard_session";
+export const SESSION_COOKIE = "wealthboard_session";
 
 function sessionSecret() {
   const value = process.env.SESSION_SECRET;

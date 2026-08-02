@@ -5,6 +5,6 @@ export default defineConfig({
   schema: "./db/schema.ts",
   out: "./db/migrations",
   dbCredentials: {
-    url: process.env.DATABASE_PATH ?? "./data/worthboard.db",
+    url: process.env.DATABASE_PATH ?? "./data/wealthboard.db",
   },
 });

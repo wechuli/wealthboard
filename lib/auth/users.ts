@@ -8,7 +8,7 @@ import { CATEGORY_SEEDS } from "@/lib/constants";
 import { nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync("worthboard-login-placeholder", 12);
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("wealthboard-login-placeholder", 12);
 
 export class UsernameUnavailableError extends Error {
   constructor() {
@@ -101,7 +101,7 @@ export async function registerUser(input: {
         supportedCurrencies: '["KES","USD"]',
         timezone: process.env.TZ || "Africa/Nairobi",
         preferredDateFormat: "dd MMM yyyy",
-        appName: "Worthboard",
+        appName: "Wealthboard",
         defaultDashboardPeriod: "1y",
         sessionTimeoutMinutes: 10080,
         defaultGoalReturnBps: 800,

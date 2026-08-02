@@ -6,7 +6,7 @@ const items = [
   ["Goals", Goal],
 ] as const;
 
-export const metadata = { title: "Offline · Worthboard" };
+export const metadata = { title: "Offline · Wealthboard" };
 
 export default function OfflineShellPage() {
   return (
@@ -15,13 +15,13 @@ export default function OfflineShellPage() {
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-emerald-950">
           <BarChart3 size={18} />
         </span>
-        <span className="font-semibold">Worthboard</span>
+        <span className="font-semibold">Wealthboard</span>
       </header>
       <section className="mx-auto mt-10 max-w-lg rounded-3xl border border-white/10 bg-[#111716] p-7 text-center">
         <WifiOff className="mx-auto text-amber-300" size={30} />
         <h1 className="mt-4 text-2xl font-semibold">Your dashboard is offline</h1>
         <p className="mt-3 text-sm leading-6 text-slate-400">
-          This cached shell keeps Worthboard launchable. Reconnect to load current
+          This cached shell keeps Wealthboard launchable. Reconnect to load current
           balances, history, and goals. Financial changes are disabled and will
           not be queued.
         </p>

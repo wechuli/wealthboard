@@ -151,13 +151,13 @@ export function AppShell({
   const clearUserState = () => {
     sessionStorage.clear();
     for (const key of Object.keys(localStorage)) {
-      if (key.startsWith("worthboard-")) localStorage.removeItem(key);
+      if (key.startsWith("wealthboard-")) localStorage.removeItem(key);
     }
     if ("caches" in window) {
       void caches.keys().then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key.startsWith("worthboard-"))
+            .filter((key) => key.startsWith("wealthboard-"))
             .map((key) => caches.delete(key)),
         ),
       );

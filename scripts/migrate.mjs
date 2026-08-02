@@ -6,7 +6,7 @@ import Database from "better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 
-const databasePath = path.resolve(process.env.DATABASE_PATH ?? "./data/worthboard.db");
+const databasePath = path.resolve(process.env.DATABASE_PATH ?? "./data/wealthboard.db");
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 
 const sqlite = new Database(databasePath);

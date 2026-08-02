@@ -16,7 +16,7 @@ export default async function LoginPage() {
           <BarChart3 size={24} strokeWidth={2.4} />
         </div>
         <p className="mt-7 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">
-          Worthboard
+          Wealthboard
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
           Your wealth, in focus.

@@ -20,12 +20,12 @@ export function PrivacyProvider({ children }: { children: ReactNode }) {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
     queueMicrotask(() => {
-      setHidden(localStorage.getItem("worthboard-values-hidden") === "true");
+      setHidden(localStorage.getItem("wealthboard-values-hidden") === "true");
     });
   }, []);
   const toggle = () =>
     setHidden((current) => {
-      localStorage.setItem("worthboard-values-hidden", String(!current));
+      localStorage.setItem("wealthboard-values-hidden", String(!current));
       return !current;
     });
   return <PrivacyContext.Provider value={{ hidden, toggle }}>{children}</PrivacyContext.Provider>;

@@ -1,21 +1,21 @@
 services:
-  worthboard:
+  wealthboard:
     build: .
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      DATABASE_PATH: /data/worthboard.db
+      DATABASE_PATH: /data/wealthboard.db
       BACKUP_PATH: /backups
       SESSION_SECRET: ${SESSION_SECRET}
       APP_URL: ${APP_URL:-http://localhost:3000}
       TZ: ${TZ:-Africa/Nairobi}
     volumes:
-      - worthboard-data:/data
-      - worthboard-backups:/backups
+      - wealthboard-data:/data
+      - wealthboard-backups:/backups
     security_opt:
       - no-new-privileges:true
 
 volumes:
-  worthboard-data:
-  worthboard-backups:
+  wealthboard-data:
+  wealthboard-backups:

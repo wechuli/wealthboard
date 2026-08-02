@@ -25,7 +25,7 @@ export default async function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Personalize Worthboard, manage security, rates, classifications, and portable data."
+        description="Personalize Wealthboard, manage security, rates, classifications, and portable data."
         actions={<Button asChild variant="secondary"><Link href="/categories"><FolderCog size={16} />Manage categories</Link></Button>}
       />
       <div className="space-y-5">

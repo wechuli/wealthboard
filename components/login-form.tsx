@@ -53,7 +53,7 @@ export function LoginForm() {
         {!pending ? <ArrowRight size={17} /> : null}
       </Button>
       <p className="text-center text-sm text-slate-400">
-        New to Worthboard?{" "}
+        New to Wealthboard?{" "}
         <Link href="/signup" className="font-medium text-emerald-300 hover:text-emerald-200">
           Create an account
         </Link>

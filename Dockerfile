@@ -15,26 +15,26 @@ FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    DATABASE_PATH=/data/worthboard.db \
+    DATABASE_PATH=/data/wealthboard.db \
     BACKUP_PATH=/backups \
     PORT=3000
 
-RUN groupadd --system --gid 1001 worthboard \
-    && useradd --system --uid 1001 --gid worthboard worthboard \
+RUN groupadd --system --gid 1001 wealthboard \
+  && useradd --system --uid 1001 --gid wealthboard wealthboard \
     && mkdir -p /data /backups \
-    && chown -R worthboard:worthboard /data /backups
+  && chown -R wealthboard:wealthboard /data /backups
 
 COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=builder --chown=worthboard:worthboard /app/.next ./.next
-COPY --from=builder --chown=worthboard:worthboard /app/public ./public
-COPY --from=builder --chown=worthboard:worthboard /app/db/migrations ./db/migrations
-COPY --from=builder --chown=worthboard:worthboard /app/scripts/migrate.mjs ./scripts/migrate.mjs
-COPY --from=builder --chown=worthboard:worthboard /app/scripts/reset-password.mjs ./scripts/reset-password.mjs
-COPY --from=builder --chown=worthboard:worthboard /app/scripts/backup.mjs ./scripts/backup.mjs
-COPY --from=builder --chown=worthboard:worthboard /app/scripts/restore-backup.mjs ./scripts/restore-backup.mjs
-COPY --from=builder --chown=worthboard:worthboard /app/package.json ./
+COPY --from=builder --chown=wealthboard:wealthboard /app/.next ./.next
+COPY --from=builder --chown=wealthboard:wealthboard /app/public ./public
+COPY --from=builder --chown=wealthboard:wealthboard /app/db/migrations ./db/migrations
+COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/migrate.mjs ./scripts/migrate.mjs
+COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/reset-password.mjs ./scripts/reset-password.mjs
+COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/backup.mjs ./scripts/backup.mjs
+COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/restore-backup.mjs ./scripts/restore-backup.mjs
+COPY --from=builder --chown=wealthboard:wealthboard /app/package.json ./
 
-USER worthboard
+USER wealthboard
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"

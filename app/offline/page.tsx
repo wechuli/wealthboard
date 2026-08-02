@@ -3,7 +3,7 @@ import { CircleDollarSign, RefreshCw, WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-export const metadata = { title: "Offline · Worthboard" };
+export const metadata = { title: "Offline · Wealthboard" };
 
 export default function OfflinePage() {
   return (
@@ -13,7 +13,7 @@ export default function OfflinePage() {
           <WifiOff size={23} />
         </span>
         <div className="mt-5 flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-300">
-          <CircleDollarSign size={15} />Worthboard
+          <CircleDollarSign size={15} />Wealthboard
         </div>
         <h1 className="mt-3 text-2xl font-semibold">You’re offline</h1>
         <p className="mt-3 text-sm leading-6 text-slate-400">

@@ -6,14 +6,14 @@ import Database from "better-sqlite3";
 
 if (process.env.CONFIRM_OFFLINE_RESTORE !== "true") {
   throw new Error(
-    "Stop Worthboard, then set CONFIRM_OFFLINE_RESTORE=true to confirm an offline restore.",
+    "Stop Wealthboard, then set CONFIRM_OFFLINE_RESTORE=true to confirm an offline restore.",
   );
 }
 
 const sourceValue = process.env.RESTORE_FILE;
 if (!sourceValue) throw new Error("Set RESTORE_FILE to the SQLite backup to restore.");
 const source = path.resolve(sourceValue);
-const target = path.resolve(process.env.DATABASE_PATH ?? "./data/worthboard.db");
+const target = path.resolve(process.env.DATABASE_PATH ?? "./data/wealthboard.db");
 if (source === target) throw new Error("RESTORE_FILE must not be the active database.");
 if (!fs.existsSync(source)) throw new Error(`Backup not found at ${source}.`);
 
@@ -26,7 +26,7 @@ try {
     .prepare("SELECT COUNT(*) AS total FROM users")
     .get();
   if (typeof users?.total !== "number") {
-    throw new Error("The backup is not a compatible Worthboard database.");
+    throw new Error("The backup is not a compatible Wealthboard database.");
   }
 } finally {
   candidate.close();

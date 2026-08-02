@@ -9,7 +9,7 @@ export default function NotFound() {
       <div>
         <SearchX className="mx-auto text-slate-500" size={40} />
         <h1 className="mt-4 text-2xl font-semibold">Page not found</h1>
-        <p className="mt-2 text-sm text-slate-400">This Worthboard view does not exist.</p>
+        <p className="mt-2 text-sm text-slate-400">This Wealthboard view does not exist.</p>
         <Button asChild className="mt-6"><Link href="/">Return to dashboard</Link></Button>
       </div>
     </main>

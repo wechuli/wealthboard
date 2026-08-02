@@ -68,8 +68,8 @@ export function TransactionForm({
   useEffect(() => {
     if (initial) return;
     queueMicrotask(() => {
-      const recentAccount = localStorage.getItem("worthboard-recent-account");
-      const recentType = localStorage.getItem("worthboard-recent-transaction-type");
+      const recentAccount = localStorage.getItem("wealthboard-recent-account");
+      const recentType = localStorage.getItem("wealthboard-recent-transaction-type");
       if (recentAccount && accounts.some((account) => account.id === recentAccount)) {
         setValue("accountId", recentAccount);
       }
@@ -81,8 +81,8 @@ export function TransactionForm({
 
   const submit = handleSubmit((values, event) => {
     const formData = new FormData(event?.target as HTMLFormElement);
-    localStorage.setItem("worthboard-recent-account", values.accountId);
-    localStorage.setItem("worthboard-recent-transaction-type", values.type);
+    localStorage.setItem("wealthboard-recent-account", values.accountId);
+    localStorage.setItem("wealthboard-recent-transaction-type", values.type);
     startTransition(async () => setServerState(await action(formData)));
   });
   const progressiveAction = action as unknown as (formData: FormData) => void;

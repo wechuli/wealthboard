@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    return Response.json({ error: "Choose a Worthboard JSON export." }, { status: 400 });
+    return Response.json({ error: "Choose a Wealthboard JSON export." }, { status: 400 });
   }
   if (file.size > 25 * 1024 * 1024) {
     return Response.json({ error: "User restore is limited to 25 MB." }, { status: 413 });

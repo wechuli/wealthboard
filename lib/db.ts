@@ -13,11 +13,11 @@ type DatabaseState = {
 };
 
 const globalForDatabase = globalThis as unknown as {
-  worthboardDatabase?: DatabaseState;
+  wealthboardDatabase?: DatabaseState;
 };
 
 function resolvedDatabasePath() {
-  const configured = process.env.DATABASE_PATH ?? "data/worthboard.db";
+  const configured = process.env.DATABASE_PATH ?? "data/wealthboard.db";
   return path.isAbsolute(configured)
     ? configured
     : path.join(/* turbopackIgnore: true */ process.cwd(), configured);
@@ -39,20 +39,20 @@ function openDatabase(): DatabaseState {
 }
 
 export function getDatabase() {
-  globalForDatabase.worthboardDatabase ??= openDatabase();
-  return globalForDatabase.worthboardDatabase.orm;
+  globalForDatabase.wealthboardDatabase ??= openDatabase();
+  return globalForDatabase.wealthboardDatabase.orm;
 }
 
 export function getSqlite() {
-  globalForDatabase.worthboardDatabase ??= openDatabase();
-  return globalForDatabase.worthboardDatabase.sqlite;
+  globalForDatabase.wealthboardDatabase ??= openDatabase();
+  return globalForDatabase.wealthboardDatabase.sqlite;
 }
 
 export function closeDatabase() {
-  const state = globalForDatabase.worthboardDatabase;
+  const state = globalForDatabase.wealthboardDatabase;
   if (!state) return;
   state.sqlite.close();
-  globalForDatabase.worthboardDatabase = undefined;
+  globalForDatabase.wealthboardDatabase = undefined;
 }
 
 export function databasePath() {
