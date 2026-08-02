@@ -70,13 +70,13 @@ The command never creates an identity or seeds every user.
 
 ## Environment variables
 
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_PATH` | Persistent SQLite file; default `./data/worthboard.db` |
-| `SESSION_SECRET` | HMAC session secret; at least 32 characters |
-| `APP_URL` | Canonical deployment URL used for origin validation |
-| `TZ` | Default timezone for new users; default `Africa/Nairobi` |
-| `BACKUP_PATH` | Operator backup directory; default `./backups` |
+| Variable         | Purpose                                                  |
+| ---------------- | -------------------------------------------------------- |
+| `DATABASE_PATH`  | Persistent SQLite file; default `./data/worthboard.db`   |
+| `SESSION_SECRET` | HMAC session secret; at least 32 characters              |
+| `APP_URL`        | Canonical deployment URL used for origin validation      |
+| `TZ`             | Default timezone for new users; default `Africa/Nairobi` |
+| `BACKUP_PATH`    | Operator backup directory; default `./backups`           |
 
 There is no initial-user password or environment-created identity.
 

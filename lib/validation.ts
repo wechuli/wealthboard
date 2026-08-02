@@ -59,7 +59,11 @@ export const accountSchema = z.object({
   categoryId: z.string().min(1, "Choose a category."),
   institution: z.string().trim().max(100).optional(),
   accountReference: z.string().trim().max(50).optional(),
-  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+  currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/),
   openingValue: z.string().trim().min(1),
   costBasis: z.string().trim().optional(),
   isIncludedInNetWorth: z.boolean(),
@@ -106,7 +110,11 @@ export const goalSchema = z.object({
   description: optionalText,
   targetAmount: z.string().trim().min(1),
   currentAmount: z.string().trim().optional(),
-  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+  currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/),
   targetDate: z.string().date(),
   linkedAccountId: z.string().uuid().optional().or(z.literal("")),
   icon: z.string().trim().max(50).default("Target"),

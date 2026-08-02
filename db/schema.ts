@@ -24,7 +24,12 @@ export const transactionTypes = [
   "transfer",
 ] as const;
 
-export const goalStatuses = ["active", "paused", "completed", "cancelled"] as const;
+export const goalStatuses = [
+  "active",
+  "paused",
+  "completed",
+  "cancelled",
+] as const;
 export const contributionFrequencies = [
   "weekly",
   "monthly",
@@ -59,13 +64,23 @@ export const userSettings = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
     baseCurrency: text("base_currency").notNull().default("KES"),
-    supportedCurrencies: text("supported_currencies").notNull().default('["KES","USD"]'),
+    supportedCurrencies: text("supported_currencies")
+      .notNull()
+      .default('["KES","USD"]'),
     timezone: text("timezone").notNull().default("Africa/Nairobi"),
-    preferredDateFormat: text("preferred_date_format").notNull().default("dd MMM yyyy"),
+    preferredDateFormat: text("preferred_date_format")
+      .notNull()
+      .default("dd MMM yyyy"),
     appName: text("app_name").notNull().default("Worthboard"),
-    defaultDashboardPeriod: text("default_dashboard_period").notNull().default("1y"),
-    sessionTimeoutMinutes: integer("session_timeout_minutes").notNull().default(10080),
-    defaultGoalReturnBps: integer("default_goal_return_bps").notNull().default(800),
+    defaultDashboardPeriod: text("default_dashboard_period")
+      .notNull()
+      .default("1y"),
+    sessionTimeoutMinutes: integer("session_timeout_minutes")
+      .notNull()
+      .default(10080),
+    defaultGoalReturnBps: integer("default_goal_return_bps")
+      .notNull()
+      .default(800),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -89,10 +104,18 @@ export const categories = sqliteTable(
       .notNull()
       .default("asset"),
     description: text("description"),
-    isLiquid: integer("is_liquid", { mode: "boolean" }).notNull().default(false),
-    isInvestible: integer("is_investible", { mode: "boolean" }).notNull().default(true),
-    isArchived: integer("is_archived", { mode: "boolean" }).notNull().default(false),
-    isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
+    isLiquid: integer("is_liquid", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    isInvestible: integer("is_investible", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    isArchived: integer("is_archived", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    isSystem: integer("is_system", { mode: "boolean" })
+      .notNull()
+      .default(false),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -117,8 +140,12 @@ export const accounts = sqliteTable(
     currency: text("currency").notNull(),
     currentValueMinor: integer("current_value_minor").notNull().default(0),
     costBasisMinor: integer("cost_basis_minor"),
-    isLiability: integer("is_liability", { mode: "boolean" }).notNull().default(false),
-    isIncludedInNetWorth: integer("is_included_in_net_worth", { mode: "boolean" })
+    isLiability: integer("is_liability", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    isIncludedInNetWorth: integer("is_included_in_net_worth", {
+      mode: "boolean",
+    })
       .notNull()
       .default(true),
     goalId: text("goal_id"),
@@ -165,7 +192,10 @@ export const transactions = sqliteTable(
       table.accountId,
       table.transactionDate,
     ),
-    index("transactions_user_transfer_group_idx").on(table.userId, table.transferGroupId),
+    index("transactions_user_transfer_group_idx").on(
+      table.userId,
+      table.transferGroupId,
+    ),
     uniqueIndex("transactions_user_idempotency_unique").on(
       table.userId,
       table.idempotencyKey,
@@ -251,14 +281,19 @@ export const goals = sqliteTable(
     icon: text("icon").notNull().default("Target"),
     status: text("status", { enum: goalStatuses }).notNull().default("active"),
     priority: integer("priority").notNull().default(0),
-    assumedAnnualReturnBps: integer("assumed_annual_return_bps").notNull().default(800),
+    assumedAnnualReturnBps: integer("assumed_annual_return_bps")
+      .notNull()
+      .default(800),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
     uniqueIndex("goals_user_id_unique").on(table.userId, table.id),
     index("goals_user_status_idx").on(table.userId, table.status),
-    uniqueIndex("goals_user_account_unique").on(table.userId, table.linkedAccountId),
+    uniqueIndex("goals_user_account_unique").on(
+      table.userId,
+      table.linkedAccountId,
+    ),
     foreignKey({
       columns: [table.userId, table.linkedAccountId],
       foreignColumns: [accounts.userId, accounts.id],
@@ -295,10 +330,17 @@ export const loginAttempts = sqliteTable(
   {
     id: text("id").primaryKey(),
     clientKey: text("client_key").notNull(),
-    succeeded: integer("succeeded", { mode: "boolean" }).notNull().default(false),
+    succeeded: integer("succeeded", { mode: "boolean" })
+      .notNull()
+      .default(false),
     attemptedAt: text("attempted_at").notNull(),
   },
-  (table) => [index("login_attempt_client_time_idx").on(table.clientKey, table.attemptedAt)],
+  (table) => [
+    index("login_attempt_client_time_idx").on(
+      table.clientKey,
+      table.attemptedAt,
+    ),
+  ],
 );
 
 export const idempotencyKeys = sqliteTable(

@@ -3,12 +3,7 @@ import "server-only";
 import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 
-import {
-  categories,
-  exchangeRates,
-  users,
-  userSettings,
-} from "@/db/schema";
+import { categories, exchangeRates, users, userSettings } from "@/db/schema";
 import { CATEGORY_SEEDS } from "@/lib/constants";
 import { nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
@@ -28,7 +23,10 @@ export function normalizeUsername(username: string) {
 
 function defaultCategoryRows(userId: string, timestamp: string) {
   return CATEGORY_SEEDS.map(
-    ([name, slug, icon, assetOrLiability, isLiquid, isInvestible], displayOrder) => ({
+    (
+      [name, slug, icon, assetOrLiability, isLiquid, isInvestible],
+      displayOrder,
+    ) => ({
       id: crypto.randomUUID(),
       userId,
       name,
@@ -80,7 +78,7 @@ export async function registerUser(input: {
       .sync();
     if (existingUser) throw new UsernameUnavailableError();
 
-      const sessionVersion = 1;
+    const sessionVersion = 1;
     tx.insert(users)
       .values({
         id: userId,
@@ -130,7 +128,10 @@ export async function registerUser(input: {
   });
 }
 
-export async function authenticateUser(usernameInput: string, password: string) {
+export async function authenticateUser(
+  usernameInput: string,
+  password: string,
+) {
   const db = getDatabase();
   const username = normalizeUsername(usernameInput);
   const user = db.query.users
@@ -138,7 +139,10 @@ export async function authenticateUser(usernameInput: string, password: string) 
       where: eq(users.username, username),
     })
     .sync();
-  const validPassword = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  const validPassword = await bcrypt.compare(
+    password,
+    user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+  );
   if (!user || user.status !== "active" || !validPassword) return null;
 
   const settings = db.query.userSettings
@@ -178,7 +182,9 @@ export async function changeUserPassword(
   const sessionVersion = user.sessionVersion + 1;
   db.update(users)
     .set({ passwordHash, sessionVersion, updatedAt: timestamp })
-    .where(and(eq(users.id, userId), eq(users.sessionVersion, user.sessionVersion)))
+    .where(
+      and(eq(users.id, userId), eq(users.sessionVersion, user.sessionVersion)),
+    )
     .run();
 
   const settings = db.query.userSettings
@@ -188,5 +194,8 @@ export async function changeUserPassword(
     })
     .sync();
   if (!settings) throw new Error("User settings are unavailable.");
-  return { sessionVersion, sessionTimeoutMinutes: settings.sessionTimeoutMinutes };
+  return {
+    sessionVersion,
+    sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
+  };
 }

@@ -1138,15 +1138,15 @@ Follow this sequence:
 3. Add nullable `userId` columns and ownership indexes to every user-owned
    table. Generate and review the Drizzle migration.
 4. Delete singleton credentials and every user-owned row without a `userId`.
-  Remove obsolete claim storage; do not expose any recovery or import path on
-  signup.
+   Remove obsolete claim storage; do not expose any recovery or import path on
+   signup.
 5. Enforce non-null owner foreign keys and owner-scoped uniqueness after the
-  unowned rows are removed.
+   unowned rows are removed.
 6. Thread session-derived `userId` through services, analytics, server actions,
    pages, route handlers, cache keys, imports, and exports. Query resources by
    owner and ID in the database, not through a post-query UI check.
 7. Implement the always-available signup flow with no legacy password or
-  portfolio-claim option.
+   portfolio-claim option.
 8. Add login by username, atomic per-user defaults, password reset by username,
    and per-user session invalidation.
 9. Replace user-facing raw database backup and restore with per-user JSON
@@ -1155,7 +1155,7 @@ Follow this sequence:
 10. Add two-user isolation fixtures and tests. Do not deploy the multi-user
     release until the complete signup and isolation suite passes.
 11. Add a disposable singleton-schema migration test proving old credentials and
-  unowned data are deleted before normal signup.
+    unowned data are deleted before normal signup.
 12. Review the complete migration for authorization, IDOR, cache isolation,
     financial accuracy, rollback behavior, responsive signup/login flows, and
     unnecessary complexity.

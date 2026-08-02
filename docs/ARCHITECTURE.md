@@ -120,14 +120,14 @@ own authorization decisions.
 ## Migration from the singleton schema
 
 1. Take an operator-level SQLite backup if the old data may be needed outside
-  Worthboard, then preserve a passing test baseline.
+   Worthboard, then preserve a passing test baseline.
 2. Add `users`; remove the password hash and session version from
-  `user_settings`.
+   `user_settings`.
 3. Add nullable ownership columns and owner-first indexes.
 4. Delete every row whose ownership is null, delete the old singleton settings,
-  and drop obsolete claim storage. Worthboard provides no legacy recovery path.
+   and drop obsolete claim storage. Worthboard provides no legacy recovery path.
 5. Enforce non-null foreign keys, same-owner relationships, and owner-scoped
-  unique constraints.
+   unique constraints.
 6. Thread session-derived ownership through every service and HTTP surface.
 7. Keep ordinary signup always available and create no default or migrated user.
 8. Replace user-facing raw database portability with per-user export and restore;
@@ -135,7 +135,7 @@ own authorization decisions.
 9. Add two-user isolation tests for direct reads, mutations, analytics, imports,
    exports, caches, and relationship attacks. Do not deploy until they pass.
 10. Test a disposable singleton upgrade and assert that its old credentials,
-   unowned records, and obsolete claim table are gone before normal signup.
+    unowned records, and obsolete claim table are gone before normal signup.
 
 The migration must be transactional where SQLite permits and fail closed. It is
 intentionally destructive for singleton application data. No old password,

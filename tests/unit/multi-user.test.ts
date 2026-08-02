@@ -46,7 +46,9 @@ import { addExchangeRate, listExchangeRates } from "@/lib/services/settings";
 import { recordTransfer } from "@/lib/services/transfers";
 
 const migrationsFolder = path.resolve("db/migrations");
-const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "worthboard-multi-user-"));
+const workspace = fs.mkdtempSync(
+  path.join(os.tmpdir(), "worthboard-multi-user-"),
+);
 const freshDatabase = path.join(workspace, "fresh.db");
 const singletonDatabase = path.join(workspace, "singleton.db");
 
@@ -212,7 +214,8 @@ describe.sequential("multi-user persistence and isolation", () => {
   let bobAccountId = "";
 
   beforeAll(() => {
-    process.env.SESSION_SECRET = "unit-test-session-secret-longer-than-32-characters";
+    process.env.SESSION_SECRET =
+      "unit-test-session-secret-longer-than-32-characters";
     process.env.TZ = "Africa/Nairobi";
     process.env.INITIAL_ADMIN_PASSWORD = "must-not-create-a-user";
     migrateDatabase(freshDatabase);
@@ -270,8 +273,12 @@ describe.sequential("multi-user persistence and isolation", () => {
   });
 
   test("login failures do not distinguish unknown users from bad passwords", async () => {
-    await expect(authenticateUser("alice", "wrong-password")).resolves.toBeNull();
-    await expect(authenticateUser("unknown", "wrong-password")).resolves.toBeNull();
+    await expect(
+      authenticateUser("alice", "wrong-password"),
+    ).resolves.toBeNull();
+    await expect(
+      authenticateUser("unknown", "wrong-password"),
+    ).resolves.toBeNull();
     await expect(
       authenticateUser("alice", "alice-password-123"),
     ).resolves.toMatchObject({ userId: aliceId });
@@ -310,7 +317,9 @@ describe.sequential("multi-user persistence and isolation", () => {
     aliceCategoryId = db
       .select()
       .from(categories)
-      .where(and(eq(categories.userId, aliceId), eq(categories.slug, "savings")))
+      .where(
+        and(eq(categories.userId, aliceId), eq(categories.slug, "savings")),
+      )
       .get()!.id;
     bobCategoryId = db
       .select()
@@ -440,9 +449,9 @@ describe.sequential("multi-user persistence and isolation", () => {
     });
     expect(await listAccounts(aliceId)).toHaveLength(2);
     restoreUserData(aliceId, archive);
-    expect((await listAccounts(aliceId)).map((account) => account.name)).toEqual([
-      "Alice Savings",
-    ]);
+    expect(
+      (await listAccounts(aliceId)).map((account) => account.name),
+    ).toEqual(["Alice Savings"]);
     expect((await listAccounts(bobId)).map((account) => account.name)).toEqual([
       "Bob Savings",
     ]);
@@ -490,10 +499,18 @@ describe.sequential("multi-user persistence and isolation", () => {
       password: "new-owner-password-123",
     });
     expect(
-      db.select().from(userSettings).where(eq(userSettings.userId, user.userId)).all(),
+      db
+        .select()
+        .from(userSettings)
+        .where(eq(userSettings.userId, user.userId))
+        .all(),
     ).toHaveLength(1);
     expect(
-      db.select().from(categories).where(eq(categories.userId, user.userId)).all(),
+      db
+        .select()
+        .from(categories)
+        .where(eq(categories.userId, user.userId))
+        .all(),
     ).toHaveLength(11);
     expect(db.select().from(accounts).all()).toHaveLength(0);
   });
