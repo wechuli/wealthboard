@@ -321,5 +321,4 @@ describe.sequential("multi-user persistence and isolation", () => {
       "Bob Savings",
     ]);
   });
-
 });
