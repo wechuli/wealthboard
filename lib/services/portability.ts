@@ -189,6 +189,12 @@ export function toCsv(rows: Array<Record<string, unknown>>) {
   ].join("\n");
 }
 
+function stripOwner<T extends { userId: unknown }>(row: T): Omit<T, "userId"> {
+  const result: Partial<T> = { ...row };
+  delete result.userId;
+  return result as Omit<T, "userId">;
+}
+
 export async function exportData(userId: string) {
   const db = getDatabase();
   const settings = await db.query.userSettings.findFirst({
@@ -235,13 +241,13 @@ export async function exportData(userId: string) {
       sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
       defaultGoalReturnBps: settings.defaultGoalReturnBps,
     },
-    categories: categoryRows.map(({ userId: _owner, ...row }) => row),
-    accounts: accountRows.map(({ userId: _owner, ...row }) => row),
-    transactions: transactionRows.map(({ userId: _owner, ...row }) => row),
-    valuations: valuationRows.map(({ userId: _owner, ...row }) => row),
-    exchangeRates: rateRows.map(({ userId: _owner, ...row }) => row),
-    goals: goalRows.map(({ userId: _owner, ...row }) => row),
-    goalContributionPlans: planRows.map(({ userId: _owner, ...row }) => row),
+    categories: categoryRows.map(stripOwner),
+    accounts: accountRows.map(stripOwner),
+    transactions: transactionRows.map(stripOwner),
+    valuations: valuationRows.map(stripOwner),
+    exchangeRates: rateRows.map(stripOwner),
+    goals: goalRows.map(stripOwner),
+    goalContributionPlans: planRows.map(stripOwner),
   };
 }
 

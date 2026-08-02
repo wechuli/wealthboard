@@ -156,7 +156,7 @@ export function DataPortability() {
 
   return (
     <Card>
-      <CardHeader><div><CardTitle>Import, restore & export</CardTitle><p className="mt-1 text-xs text-slate-500">Portable files contain only your portfolio, never credentials or another user's records.</p></div></CardHeader>
+      <CardHeader><div><CardTitle>Import, restore & export</CardTitle><p className="mt-1 text-xs text-slate-500">Portable files contain only your portfolio, never credentials or another user&apos;s records.</p></div></CardHeader>
       <CardContent className="space-y-5">
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary"><a href="/api/export/json"><Download size={16} />Export JSON</a></Button>
