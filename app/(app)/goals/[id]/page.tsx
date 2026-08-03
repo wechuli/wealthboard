@@ -268,7 +268,7 @@ export default async function GoalDetailPage({
           targetDate: milestone.targetDate,
           status: milestone.status,
           progressPercent: milestone.progressPercent,
-          remainingMinor: milestone.remainingMinor.toString(),
+          remainingMinor: milestone.remainingMinor?.toString() ?? null,
         }))}
       />
 

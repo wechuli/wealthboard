@@ -21,9 +21,9 @@ export type GoalMilestoneItem = {
   name: string;
   targetAmountMinor: number;
   targetDate: string | null;
-  status: "reached" | "overdue" | "upcoming";
+  status: "reached" | "overdue" | "upcoming" | "rate_needed";
   progressPercent: string;
-  remainingMinor: string;
+  remainingMinor: string | null;
 };
 
 export function GoalMilestones({
@@ -138,7 +138,7 @@ export function GoalMilestones({
                         {milestone.name}
                       </p>
                       <Badge tone={milestoneTone(milestone.status)}>
-                        {milestone.status}
+                        {milestone.status.replace("_", " ")}
                       </Badge>
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
@@ -154,7 +154,7 @@ export function GoalMilestones({
                   <div>
                     <div className="flex justify-between gap-3 text-xs text-slate-500">
                       <span>{progress}% complete</span>
-                      {milestone.status !== "reached" ? (
+                      {milestone.remainingMinor !== null ? (
                         <span>
                           <MoneyValue
                             amount={BigInt(milestone.remainingMinor)}
@@ -201,5 +201,6 @@ export function GoalMilestones({
 function milestoneTone(status: GoalMilestoneItem["status"]) {
   if (status === "reached") return "positive" as const;
   if (status === "overdue") return "negative" as const;
+  if (status === "rate_needed") return "warning" as const;
   return "info" as const;
 }

@@ -207,8 +207,8 @@ export async function listGoalMilestones(
     const reached = current >= target;
     const overdue = Boolean(
       !reached &&
-        milestone.targetDate &&
-        milestone.targetDate.slice(0, 10) < today,
+      milestone.targetDate &&
+      milestone.targetDate.slice(0, 10) < today,
     );
     return {
       ...milestone,
