@@ -1,0 +1,592 @@
+# Project Improvement Backlog
+
+## Executive Summary
+
+Wealthboard is a strong late-stage MVP and an early production candidate. Its core workflow is complete: users can register, maintain isolated portfolios, record transactions and valuations, transfer funds atomically, track goals, review net worth and allocation, import and export data, install a PWA, and deploy the application with Docker or Kubernetes.
+
+The strongest areas are:
+
+- Financial amounts use integer minor units with `bigint` and Decimal.js in [lib/money.ts](lib/money.ts) and [lib/finance.ts](lib/finance.ts).
+- Multi-user ownership is explicit in [db/schema.ts](db/schema.ts), reinforced with composite foreign keys, and passed from verified sessions into services.
+- [tests/unit/multi-user.test.ts](tests/unit/multi-user.test.ts) and [tests/e2e/isolation.spec.ts](tests/e2e/isolation.spec.ts) directly cover dashboard, relationship, URL, transfer, exchange-rate, import, export, restore, and browser-switching isolation.
+- Transfers, financial edits, user restore, and signup defaults use database transactions.
+- The dashboard, accounts, goals, reports, privacy mode, responsive navigation, portability, and offline-safe shell are already substantial product features.
+
+The most important gaps are not broad feature absence. They are edge cases that can make apparently valid financial output incomplete or misleading, destructive restore behavior without a server-side rollback copy, transaction workflows that do not scale to long histories, and production operations that lack automated quality gates and observability.
+
+Supporting multiple users increases the blast radius of mistakes. No proven cross-user data leak was found, but every new query, aggregate, cache, import, background task, and AI tool must preserve the established session-derived `userId` boundary. Public signup also makes trusted proxy configuration, resource limits, dependency hygiene, and abuse monitoring more important than in the previous local-only model.
+
+The five highest-priority improvements are:
+
+1. Make exchange-rate provenance and historical completeness explicit so totals and charts never silently omit holdings.
+2. Close the reserved transaction-type update path and enforce financial mutation invariants at the service boundary.
+3. Make full-database restore fail-safe with an automatic pre-restore backup and tested rollback.
+4. Replace or remove cash-flow-naive annualized return figures.
+5. Gate container publication on tests and remediate the currently reported high-severity production dependency advisories.
+
+## Priority Definitions
+
+- **P0:** Critical issue involving security, data loss, incorrect financial data, or broken core functionality.
+- **P1:** High-value improvement that should be addressed soon.
+- **P2:** Useful medium-term improvement.
+- **P3:** Optional enhancement or future consideration.
+
+Effort estimates:
+
+- **Small:** Less than one day.
+- **Medium:** One to three days.
+- **Large:** More than three days.
+- **Epic:** Multiple phases or substantial architectural work.
+
+## Functionality Improvements
+
+### F1. Transaction Workbench with Search, Filters, and Pagination
+
+- **Priority:** P1
+- **Estimated effort:** Large
+- **Current gap:** The transaction page loads and renders the full user history as one chronological list. It has no search, account/type filter, date range, sort control, or pagination.
+- **Evidence from the repository:** `listTransactions()` in [lib/services/accounts.ts](lib/services/accounts.ts) returns every transaction for a user. [app/(app)/transactions/page.tsx](<app/(app)/transactions/page.tsx>) maps the complete result directly. Accounts already provide a good filtering pattern in [components/accounts-list.tsx](components/accounts-list.tsx).
+- **Proposed improvement:** Add owner-scoped cursor pagination and server-side filters for date, account, type, amount direction, and text. Preserve filter state in the URL and offer CSV export for the selected range.
+- **User value:** Users can audit years of activity, find fees or dividends, investigate a balance, and prepare records without downloading all data.
+- **Dependencies:** Supporting indexes and query APIs; URL-aware transaction list component; pagination tests.
+- **Risks or trade-offs:** Client-only filtering would still fetch unbounded histories. Text search should begin with indexed prefix/substring behavior before adding full-text infrastructure.
+- **Acceptance criteria:** A user can combine account, type, date, and text filters with AND semantics; keyset pagination uses the stable tuple `transactionDate DESC, createdAt DESC, id DESC`; the default page size is 100; no request returns another user's rows; filter state survives refresh; 10,000-transaction fixtures remain responsive.
+
+### F2. Reconciliation and Safe Correction Workflows
+
+- **Priority:** P1
+- **Estimated effort:** Large
+- **Current gap:** Opening balances cannot be edited or deleted, transfers can only be deleted as a pair and recreated, and valuations can only be deleted and re-entered. There is no statement balance reconciliation workflow.
+- **Evidence from the repository:** [lib/services/accounts.ts](lib/services/accounts.ts) rejects edits to existing opening balances and transfers. [app/(app)/accounts/[id]/page.tsx](<app/(app)/accounts/[id]/page.tsx>) offers valuation deletion but no edit. Balance replay is already centralized in `recalculateAccountBalance()`.
+- **Proposed improvement:** Add explicit correction operations: adjust an opening balance with full replay, edit both transfer legs atomically, edit a valuation, and reconcile an account to a statement balance as of a date with a previewed adjustment.
+- **User value:** Users can correct mistakes without deleting history or manually calculating compensating entries.
+- **Dependencies:** Architecture item A2; audit-event support is desirable; new forms and replay integration tests.
+- **Risks or trade-offs:** Rewriting historical events changes every later balance. The UI must preview affected balances and distinguish correction from new economic activity.
+- **Acceptance criteria:** Each correction shows old and new values, requires confirmation, updates all affected balances atomically, preserves transfer net worth, does not classify reconciliation adjustments as contributions, and is covered by replay tests.
+
+### F3. Import Preview, Duplicate Detection, and Account Bootstrap Import
+
+- **Priority:** P1
+- **Estimated effort:** Large
+- **Current gap:** Transaction CSV import has strong row validation but writes immediately after validation. Re-importing the same statement creates duplicates because new UUID idempotency keys are assigned. Accounts can be exported as CSV but not imported.
+- **Evidence from the repository:** `importTransactionsCsv()` in [lib/services/portability.ts](lib/services/portability.ts) validates up to 10,000 rows, then inserts every prepared row. [components/settings-forms.tsx](components/settings-forms.tsx) uploads directly without a preview. `accountCsv()` has no inverse route.
+- **Proposed improvement:** Split import into parse/preview/commit stages. Show mapped accounts, warnings, row errors, and duplicate candidates. Store a user-scoped SHA-256 of canonicalized headers and normalized rows for exact-file detection, plus row-level fingerprints for overlap detection. Allow a simple account bootstrap CSV before transaction import.
+- **User value:** Safer onboarding from spreadsheets and statements, fewer duplicate balances, and less cleanup after a bad import.
+- **Dependencies:** Temporary import model or signed preview token; transaction pagination; idempotency retention policy.
+- **Risks or trade-offs:** Fuzzy duplicate detection can hide legitimate repeated payments. Defaults should warn and let the user decide rather than silently drop rows.
+- **Acceptance criteria:** No rows are written during preview; an exact canonical fingerprint triggers an "already imported" warning; overlapping row fingerprints are marked individually rather than silently dropped; ambiguous account names are shown; users can exclude rows; commit is atomic and owner-scoped; a failed row leaves the portfolio unchanged.
+
+### F4. Account Data-Freshness Indicators
+
+- **Priority:** P2
+- **Estimated effort:** Medium
+- **Current gap:** Account cards show `updatedAt`, but the product does not classify stale accounts or explain whether the latest update was a transaction or valuation.
+- **Evidence from the repository:** [components/accounts-list.tsx](components/accounts-list.tsx) displays the update date and a 30-day change. Accounts and valuations already carry timestamps in [db/schema.ts](db/schema.ts).
+- **Proposed improvement:** Add per-user freshness thresholds, an "as of" date, stale badges, and filters for stale accounts. For manual assets, base freshness on the latest valuation rather than any metadata edit.
+- **User value:** Users know which land, vehicle, cash, or investment values need attention before trusting the dashboard.
+- **Dependencies:** A query that returns latest financial event metadata; settings field for freshness thresholds.
+- **Risks or trade-offs:** Different asset classes need different expectations. Avoid one universal threshold that marks illiquid assets incorrectly.
+- **Acceptance criteria:** Users can see and filter stale accounts; freshness uses financial activity rather than cosmetic edits; thresholds are configurable; the dashboard reports how much net worth is stale.
+
+### F5. Goal Scenario Comparison, Milestones, and Behind-Plan Alerts
+
+- **Priority:** P2
+- **Estimated effort:** Large
+- **Current gap:** Goals already show required contributions, forecast completion, progress, and ahead/on-track/behind status, but users cannot compare scenarios, create milestones, or receive proactive reminders.
+- **Evidence from the repository:** [lib/services/goals.ts](lib/services/goals.ts) and [app/(app)/goals/[id]/page.tsx](<app/(app)/goals/[id]/page.tsx>) implement one projection using one contribution plan and assumed return. No notification or milestone table exists in [db/schema.ts](db/schema.ts).
+- **Proposed improvement:** Add a non-persistent scenario comparison first, then optional milestones and on-login/in-app alerts for goals that crossed behind-plan thresholds. Add external notifications only after background processing is established.
+- **User value:** Users can answer "what if I add KES 20,000 per month?" and receive useful prompts before a target becomes unreachable.
+- **Dependencies:** Stable deterministic scenario functions; background jobs only for scheduled external notifications.
+- **Risks or trade-offs:** Forecasts are estimates, not promises. Avoid notification fatigue and clearly expose assumptions.
+- **Acceptance criteria:** Users can compare at least three contribution/return scenarios without altering the saved goal; milestone progress is deterministic; alerts are dismissible; every projection states its assumptions.
+
+### F6. Date-Scoped and Downloadable Reports with Movement Attribution
+
+- **Priority:** P2
+- **Estimated effort:** Large
+- **Current gap:** The reports page is all-time and fixed-layout. It cannot compare arbitrary periods, download a presentation-ready report, or explain the events behind an unusual movement.
+- **Evidence from the repository:** [app/(app)/reports/page.tsx](<app/(app)/reports/page.tsx>) always requests `getDashboardData(userId, "all")`. It renders net worth, allocation, income/returns, classification, and account comparison but has no date controls or report export.
+- **Proposed improvement:** Add URL-based date ranges and prior-period comparison, deterministic movement attribution by account/event, and downloadable CSV/PDF summaries generated from the same calculated report model.
+- **User value:** Better monthly and annual reviews, advisor sharing, and rapid understanding of major changes.
+- **Dependencies:** Architecture items A1, A3, and A14; report DTO separate from page rendering.
+- **Risks or trade-offs:** PDF generation increases bundle/runtime complexity. Start with print CSS and CSV before introducing a PDF dependency.
+- **Acceptance criteria:** Users can select and bookmark a range, compare it with the preceding range, see top positive/negative account drivers, and download a report whose totals match the UI exactly.
+
+### F7. User Account Deletion and Data-Retention Controls
+
+- **Priority:** P1
+- **Estimated effort:** Large
+- **Current gap:** Users can change passwords and export data but cannot delete or disable their own application account. There is no retention policy or export-before-delete flow.
+- **Evidence from the repository:** [app/(app)/settings/page.tsx](<app/(app)/settings/page.tsx>) exposes preferences, rates, password, and portability only. `users` has `active`/`disabled` status in [db/schema.ts](db/schema.ts), and owner foreign keys already cascade on user deletion.
+- **Proposed improvement:** Add password-confirmed account deletion with a required pre-delete export option, clear consequences, session invalidation, and either immediate hard deletion or a documented short recovery window.
+- **User value:** Users control their data lifecycle and can leave a multi-user deployment safely.
+- **Dependencies:** Audit events; a short architecture decision record choosing immediate hard deletion or a defined soft-delete retention and purge policy.
+- **Risks or trade-offs:** Soft deletion conflicts with a strict erasure promise; hard deletion is irreversible. Operator backups may retain data and must be covered by policy.
+- **Acceptance criteria:** A user can export and delete only their own identity and portfolio; all sessions are invalidated; other users are unaffected; backup-retention implications are disclosed; automated tests verify cascading isolation.
+
+### F8. Session and Login Activity Management
+
+- **Priority:** P2
+- **Estimated effort:** Large
+- **Current gap:** Sessions are stateless JWTs. Users can invalidate all other sessions by changing their password, but cannot view active sessions, revoke one device, or review meaningful login history.
+- **Evidence from the repository:** [lib/auth/session.ts](lib/auth/session.ts) validates JWT expiry and `sessionVersion`. `users.lastLoginAt` stores only one timestamp in [db/schema.ts](db/schema.ts); no session or auth-event table exists.
+- **Proposed improvement:** Add privacy-minimized session records with creation, last seen, coarse client label, and revocation. Keep "sign out all devices" separate from password changes.
+- **User value:** Better control after device loss and clearer security feedback.
+- **Dependencies:** Auth-event/audit model; cookie token identifier; cleanup job.
+- **Risks or trade-offs:** Device fingerprints can become invasive. Store minimal metadata and document retention.
+- **Acceptance criteria:** Users can list and revoke their sessions, revoke all except current, see recent successful/failed security events without raw IP retention, and verify revoked tokens fail immediately.
+
+### F9. Guided First-Run Onboarding
+
+- **Priority:** P2
+- **Estimated effort:** Medium
+- **Current gap:** Signup creates default categories and one exchange rate, then opens an empty dashboard. There is no guided confirmation of base currency, timezone, rate assumptions, or first account.
+- **Evidence from the repository:** `registerUser()` in [lib/auth/users.ts](lib/auth/users.ts) creates settings and defaults. [app/(app)/page.tsx](<app/(app)/page.tsx>) provides a good first-account empty state but no multi-step onboarding.
+- **Proposed improvement:** Add a dismissible onboarding checklist for locale/currency, exchange-rate setup, first account, first valuation/transaction, and optional first goal. Keep demo data opt-in and user-targeted.
+- **User value:** New users reach a trustworthy dashboard with fewer hidden defaults.
+- **Dependencies:** Architecture item A1; onboarding completion setting.
+- **Risks or trade-offs:** A forced wizard can slow experienced users. Make steps skippable and resumable.
+- **Acceptance criteria:** A new user can complete or dismiss onboarding, no financial account is created automatically, unsafe placeholder rates are not treated as authoritative, and progress survives refresh.
+
+### F10. Recurring Activity and Contribution Automation
+
+- **Priority:** P2
+- **Estimated effort:** Epic
+- **Current gap:** Goal plans describe expected contributions, but recurring transactions are not generated and users must enter every deposit, interest payment, fee, or liability payment manually.
+- **Evidence from the repository:** `goal_contribution_plans` exists in [db/schema.ts](db/schema.ts), while no recurring transaction schedule or job table exists. All mutations are request-driven.
+- **Proposed improvement:** Add recurring templates with previewed next occurrences, a database-backed scheduler, idempotent generation, pause/skip controls, and explicit distinction between planned and posted activity.
+- **User value:** Less repetitive entry and more accurate goal adherence.
+- **Dependencies:** Architecture item A15; notification design; timezone-safe scheduling.
+- **Risks or trade-offs:** Automatically posting guessed transactions can corrupt trust. Default to "due for review" until the user opts into automatic posting.
+- **Acceptance criteria:** Every occurrence is idempotent, user-scoped, timezone-correct, pausable, and auditable; missed runs recover safely; generated entries remain editable through supported correction workflows.
+
+### F11. Liability Payoff Planning
+
+- **Priority:** P3
+- **Estimated effort:** Large
+- **Current gap:** Liabilities affect net worth and support increase/payment transactions, but there is no interest model, amortization schedule, or payoff scenario.
+- **Evidence from the repository:** Liability categories and transaction effects exist in [db/schema.ts](db/schema.ts) and [lib/finance.ts](lib/finance.ts). Goal projections currently model savings targets, not debt schedules.
+- **Proposed improvement:** Add optional principal, interest rate, minimum payment, and extra-payment scenarios with a payoff chart. Keep manual balance valuations as the source of truth.
+- **User value:** Users can plan debt reduction alongside asset goals.
+- **Dependencies:** Deterministic amortization module; recurring activity.
+- **Risks or trade-offs:** Loan terms differ widely. Avoid implying lender-grade statements or automatically altering balances from projections.
+- **Acceptance criteria:** Scenarios reconcile mathematically, assumptions are explicit, projections do not mutate actual balances, and unsupported loan structures degrade to manual tracking.
+
+## AI-Assisted Functionality
+
+AI should remain optional and must never become the source of truth for balances, conversions, returns, or goal forecasts. The current deterministic services are a good foundation, but they should be narrowed into purpose-built read models before any model receives portfolio data.
+
+Mandatory constraints for every AI feature:
+
+- Core financial calculations stay in application code and are covered by deterministic tests.
+- The model explains supplied calculated results; it does not independently calculate authoritative balances.
+- AI tools accept a session-derived `userId` internally and expose only narrow validated operations, never raw SQL or unrestricted database access.
+- Models cannot execute investments, transfers, or financial mutations. Proposed changes require a preview and explicit user confirmation through normal validated actions.
+- Structured inputs and outputs are validated with Zod before use.
+- Sensitive values are minimized or redacted, API keys remain server-side, and no provider training/retention assumption is made without disclosure.
+- Users can disable AI and delete AI activity where retained.
+- AI requests record privacy-safe audit metadata, model, token usage, latency, and cost without logging prompts containing raw sensitive values by default.
+- UI copy states that output is explanatory and not regulated financial advice.
+- Per-user rate limits, token limits, monthly budgets, model allowlists, timeouts, and cancellation are required.
+
+AI1 is blocked on authoritative exchange-rate/performance inputs (A1 and A3) and privacy-safe audit telemetry (A12). Scheduled summaries and extraction jobs are additionally blocked on A15. F8 is useful for user security visibility but is not a prerequisite for read-only AI tools.
+
+### AI1. Deterministic Portfolio Review Tool Layer
+
+- **Priority:** P2
+- **Estimated effort:** Large
+- **Current gap:** No AI integration exists, and current services return broad application/domain objects rather than a minimized model-facing contract.
+- **Evidence from the repository:** Calculations live in [lib/services/analytics.ts](lib/services/analytics.ts), [lib/services/goals.ts](lib/services/goals.ts), and [lib/finance.ts](lib/finance.ts). There is no AI module, provider SDK, tool policy, consent setting, or AI audit table.
+- **Proposed improvement:** Create server-only, read-only tools such as `getPortfolioSummary`, `getAllocation`, `getGoalTrajectory`, `getAccountPerformance`, and `explainMovementInputs`. Return calculated, labeled, bounded JSON with completeness warnings.
+- **User value:** Establishes a safe base for portfolio explanations without exposing the whole database.
+- **Dependencies:** A1, A3, A12, and user opt-in settings.
+- **Risks or trade-offs:** A broad "portfolio dump" would increase privacy and prompt-injection risk. Tool outputs must be minimal and size-limited.
+- **Acceptance criteria:** Tools cannot query another user, cannot write data, expose completeness/provenance metadata, have strict schemas and row limits, and pass adversarial authorization and structured-output tests.
+
+### AI2. AI Portfolio Review and Monthly Wealth Summary
+
+- **Priority:** P2
+- **Estimated effort:** Epic
+- **Current gap:** The dashboard shows metrics but does not narrate why the portfolio changed, identify concentration, summarize goal trajectory, or highlight stale/inconsistent data in plain language.
+- **Evidence from the repository:** [app/(app)/page.tsx](<app/(app)/page.tsx>) already renders totals, allocation, history, growth, goals, and recent activity. No explanatory layer exists.
+- **Proposed improvement:** Generate an on-demand review from the deterministic tool layer covering net-worth movement, contributions versus returns, concentration, stale values, missing rates, account comparison, and goal status. Add an optional scheduled monthly summary only after background jobs exist.
+- **User value:** Makes the existing analytics understandable and actionable for non-specialists.
+- **Dependencies:** AI1, movement attribution in F6, background jobs for scheduled summaries, cost controls.
+- **Risks or trade-offs:** Models can overstate causality or give advice. Every claim should cite a supplied metric and use cautious explanatory language.
+- **Acceptance criteria:** Reviews cite as-of dates and calculation inputs, distinguish facts from suggestions, contain no invented amounts, respect opt-out, stay within a configured budget, and are clearly labeled as non-advisory.
+
+### AI3. Natural-Language Portfolio Questions and Scenario Planning
+
+- **Priority:** P3
+- **Estimated effort:** Large
+- **Current gap:** Users cannot ask questions such as excluding land/vehicles, isolating global equities, comparing contributions with returns, or changing a goal contribution scenario in natural language.
+- **Evidence from the repository:** Deterministic category flags, allocation maps, account comparisons, and goal projection functions already exist, but only fixed pages call them.
+- **Proposed improvement:** Map natural-language requests to a fixed allowlist of read-only tools and deterministic scenario functions. Show the interpreted filters and assumptions before the answer.
+- **User value:** Faster ad hoc analysis without adding dozens of report controls.
+- **Dependencies:** AI1; F5; F6; clear category taxonomy.
+- **Risks or trade-offs:** Ambiguous language can select the wrong assets. The interface must display and let users correct the interpreted scope.
+- **Acceptance criteria:** Questions are answered only from validated tool results; every answer shows scope/as-of date; scenarios never persist without confirmation; unsupported questions fail safely; no raw SQL or arbitrary code path exists.
+
+### AI4. Statement and Screenshot Extraction with Reconciliation Assistance
+
+- **Priority:** P3
+- **Estimated effort:** Epic
+- **Current gap:** CSV import is structured and safe, but PDF/image statements require manual transcription. There is no OCR or model-assisted categorization.
+- **Evidence from the repository:** [lib/services/portability.ts](lib/services/portability.ts) accepts CSV and validates every row. [components/settings-forms.tsx](components/settings-forms.tsx) has no statement preview/extraction path.
+- **Proposed improvement:** Extract candidate account names, dates, descriptions, amounts, currencies, and balances into the same import preview model proposed in F3. Use deterministic duplicate checks and require confirmation before commit.
+- **User value:** Faster statement entry and reconciliation while preserving control.
+- **Dependencies:** F2, F3, AI1 safety infrastructure, secure temporary-file handling.
+- **Risks or trade-offs:** OCR and models make transcription errors and statements contain highly sensitive information. Prefer local extraction where feasible, minimize retention, and never auto-post.
+- **Acceptance criteria:** Original files have explicit retention/deletion behavior; extracted rows show confidence and source location; low-confidence fields require review; structured output validates; no transaction is created before confirmation.
+
+### AI5. Anomaly Detection and Categorization Suggestions
+
+- **Priority:** P3
+- **Estimated effort:** Large
+- **Current gap:** Wealthboard does not flag unusual balance jumps, duplicate-looking activity, stale valuations, or inconsistent category choices beyond deterministic validation errors.
+- **Evidence from the repository:** Event history and category metadata are available, but no anomaly baseline or suggestion workflow exists.
+- **Proposed improvement:** Implement deterministic rules first, then optionally use AI to explain anomalies and suggest categories. Suggestions remain non-authoritative and user-confirmed.
+- **User value:** Earlier detection of entry mistakes and easier cleanup.
+- **Dependencies:** F2, F3, F4, AI1, audit events.
+- **Risks or trade-offs:** False positives can erode trust. Users need controls to dismiss, mute, and explain expected outliers.
+- **Acceptance criteria:** Deterministic rules are separately testable; AI never changes data; suggestions show evidence; dismissal feedback is user-scoped; costs and false-positive rates are measurable.
+
+## Architecture Improvements
+
+### A1. Make Exchange-Rate Provenance and History Completeness Authoritative
+
+- **Priority:** P0
+- **Estimated effort:** Medium
+- **Current architectural concern:** Signup seeds USD/KES `130` effective from 2000 as `initial-default`, which can appear authoritative indefinitely. Historical net-worth calculation catches `MissingExchangeRateError` and silently omits the affected account from that point.
+- **Evidence from the repository:** `defaultRateRow()` in [lib/auth/users.ts](lib/auth/users.ts) creates the rate. `getHistoricalPoint()` in [lib/services/analytics.ts](lib/services/analytics.ts) suppresses missing-rate errors without returning completeness metadata. Current dashboard warnings cover missing current conversions, not necessarily incomplete historical points.
+- **Proposed change:** Do not treat a placeholder rate as valid user data. Require confirmation during onboarding or begin with no cross-currency rate. Add rate provenance/freshness and return completeness metadata for every aggregate/history point. Refuse or clearly mark totals that omit holdings.
+- **Expected benefit:** Net worth, trends, goal progress, and reports cannot silently understate foreign-currency holdings.
+- **Migration considerations:** This repository uses a fresh baseline, so change signup defaults directly. For existing deployments, identify `source = "initial-default"` rows and require confirmation rather than silently deleting user-entered rates.
+- **Risks and trade-offs:** Removing the default creates an initial warning for USD users. That is preferable to a plausible but stale number. Automatic rates can remain optional later.
+- **Acceptance criteria:** No unconfirmed placeholder contributes to totals; every aggregate declares complete/incomplete status; affected currencies and date ranges are shown; historical missing-rate tests cannot produce an apparently complete numeric chart.
+
+### A2. Enforce Reserved Transaction-Type Invariants on Update
+
+- **Priority:** P0
+- **Estimated effort:** Small
+- **Current architectural concern:** Creation blocks `opening_balance` and `transfer`, but update validation accepts every `transactionType`. `updateTransaction()` checks the existing row's type, not the requested new type, so a crafted authenticated action can turn a normal row into an unpaired transfer or an extra opening balance.
+- **Evidence from the repository:** `transactionSchema` in [lib/validation.ts](lib/validation.ts) uses `z.enum(transactionTypes)`. `recordTransaction()` in [lib/services/accounts.ts](lib/services/accounts.ts) rejects reserved types; `updateTransaction()` does not reject `input.type`.
+- **Proposed change:** Define separate create/update schemas for ordinary activity and make reserved types impossible at the service boundary. Keep paired transfers in [lib/services/transfers.ts](lib/services/transfers.ts) and opening-balance corrections in the dedicated workflow proposed by F2.
+- **Expected benefit:** Preserves transfer pairing, contribution classification, and balance replay invariants even under crafted requests.
+- **Migration considerations:** Scan for existing `transfer` rows without a group and duplicate opening balances before enforcing constraints. Fresh databases need no data migration.
+- **Risks and trade-offs:** Users still need correction workflows; merely blocking edits without F2 preserves current friction.
+- **Acceptance criteria:** `updateTransaction()` rejects a requested `input.type` of `transfer` or `opening_balance` even when the existing row is ordinary; the failed request leaves type, amount, idempotency data, and balance unchanged; normal type changes still work; every transfer has exactly two same-user legs; each account has one opening balance; service and action integration tests submit crafted reserved-type payloads.
+
+### A3. Replace Cash-Flow-Naive Annualized Return Calculations
+
+- **Priority:** P0
+- **Estimated effort:** Large
+- **Current architectural concern:** Account comparison subtracts aggregate net flows from gain but annualizes against the opening balance without considering when deposits and withdrawals occurred. The displayed "effective annualized" value can therefore be materially misleading.
+- **Evidence from the repository:** `getAccountComparisons()` in [lib/services/analytics.ts](lib/services/analytics.ts) calculates `periodReturn = gain / start` and compounds by elapsed days. [app/(app)/reports/page.tsx](<app/(app)/reports/page.tsx>) presents the result as account performance with only a short-period badge.
+- **Proposed change:** Implement time-weighted return for investment performance and optionally XIRR/money-weighted return for investor experience. Define cash-flow classification and valuation boundaries explicitly. Until validated, remove or relabel the current figures as a non-performance estimate.
+- **Expected benefit:** Account comparison becomes financially meaningful under irregular contributions and withdrawals.
+- **Migration considerations:** No schema change is required initially. Reliable TWR may require valuation points at cash-flow boundaries or a documented approximation.
+- **Risks and trade-offs:** XIRR can have no solution or multiple solutions; TWR needs adequate valuations. The UI must show method, period, and data sufficiency.
+- **Acceptance criteria:** Golden tests cover deposits at beginning/middle/end, withdrawals, fees, transfers, missing valuations, and negative returns; reports show methodology and confidence; fixtures reconcile with an independent reference implementation.
+
+### A4. Make Offline Database Restore Fail-Safe
+
+- **Priority:** P0
+- **Estimated effort:** Medium
+- **Current architectural concern:** The restore script checks candidate integrity, then replaces the active database after deleting WAL/SHM files. It does not automatically create a pre-restore backup or restore the original on a failed swap/post-check.
+- **Evidence from the repository:** [scripts/restore-backup.mjs](scripts/restore-backup.mjs) copies the candidate to a temporary path and renames it over the target. [scripts/backup.mjs](scripts/backup.mjs) is separate and manual. No backup/restore tests exist.
+- **Proposed change:** Create and verify a timestamped pre-restore online/offline copy, fsync the staged file where supported, atomically swap, run post-restore integrity/schema checks, and automatically roll back if validation fails.
+- **Expected benefit:** A mistaken or logically incompatible restore does not destroy the last working database.
+- **Migration considerations:** Preserve current CLI flags but add free-space checks and clear paths for the recovery artifact.
+- **Risks and trade-offs:** Requires approximately twice the database size during restore. Explicitly fail before touching the target when space is insufficient.
+- **Acceptance criteria:** Automated tests cover valid restore, corrupt source, missing tables, interrupted swap simulation, insufficient space, and post-check failure; every failed case leaves the original byte-for-byte recoverable.
+
+### A5. Enforce Account State, Goal-Link, and Supported-Currency Rules in Services
+
+- **Priority:** P1
+- **Estimated effort:** Medium
+- **Current architectural concern:** UI forms filter archived/liability accounts, but transaction, valuation, and transfer services fetch accounts by owner and ID without consistently rejecting archived rows. Goal service validation verifies ownership but not archived/liability state. Currency inputs accept any three-letter code rather than the user's configured list.
+- **Evidence from the repository:** `recordTransaction()`, `recordValuation()`, and [lib/services/transfers.ts](lib/services/transfers.ts) do not filter `archivedAt`. `GoalForm` filters accounts client-side in [components/forms/goal-form.tsx](components/forms/goal-form.tsx), while `assertLinkedAccountAvailable()` in [lib/services/goals.ts](lib/services/goals.ts) does not enforce the same rules. [components/forms/account-form.tsx](components/forms/account-form.tsx) uses a free-text currency input.
+- **Proposed change:** Centralize `requireActiveOwnedAccount()` and currency-policy checks in the service layer. Block normal transactions, valuations, transfers, and goal links for archived accounts. Permit historical corrections only through the explicit correction workflow in F2, with a separate authorization/invariant path.
+- **Expected benefit:** Crafted or stale forms cannot mutate archived accounts, link liabilities to savings goals, or create unsupported currency states.
+- **Migration considerations:** Audit existing linked liabilities, archived-account activity after archive dates, and currencies outside settings before tightening validation.
+- **Risks and trade-offs:** Strict currency allowlists can frustrate users adding a new currency. Offer an inline settings path rather than silent acceptance.
+- **Acceptance criteria:** Service-level tests reject every normal mutation against archived accounts regardless of UI; only the dedicated correction command can alter historical archived activity; linked liabilities and unsupported currencies are rejected; account, goal, rate, import, and transfer validation use one policy.
+
+### A6. Introduce Typed Domain Errors and Safe Client Error Mapping
+
+- **Priority:** P1
+- **Estimated effort:** Medium
+- **Current architectural concern:** Server actions log only the error name but return arbitrary `Error.message` to the client. SQLite/Drizzle errors can leak internal constraint or schema details, while some API routes collapse useful row errors into generic messages.
+- **Evidence from the repository:** `mutationError()` in [app/(app)/actions.ts](<app/(app)/actions.ts>) returns `error.message`. Import and restore handlers in [app/api](app/api) use separate ad hoc policies.
+- **Proposed change:** Define domain error codes with safe user messages and internal causes. Map validation, not-found, conflict, rate, and invariant errors consistently; log unexpected errors with a request ID.
+- **Expected benefit:** Better UX without exposing database internals, plus logs that can correlate failures with user-visible support codes.
+- **Migration considerations:** Convert service errors incrementally, starting with financial mutations and portability.
+- **Risks and trade-offs:** Excessive error classes add ceremony. Keep a small discriminated union and one mapping layer.
+- **Acceptance criteria:** Unexpected database text never reaches clients; expected errors retain actionable messages and field context; every 5xx response includes a safe request ID; tests cover representative mappings.
+
+### A7. Harden Proxy Trust, CSRF Tests, and Browser Security Headers
+
+- **Priority:** P1
+- **Estimated effort:** Medium
+- **Current architectural concern:** Login/signup rate limiting trusts the leftmost `x-forwarded-for` value without an explicit trusted-proxy model. Import/restore routes validate `Origin`, while server actions rely on SameSite cookies and Next.js framework checks. No CSP, HSTS, frame, referrer, or permissions policy is configured.
+- **Evidence from the repository:** [app/login/actions.ts](app/login/actions.ts) and [app/signup/actions.ts](app/signup/actions.ts) split `x-forwarded-for` at the first value. [lib/auth/origin.ts](lib/auth/origin.ts) protects file mutations. [next.config.ts](next.config.ts) disables `X-Powered-By` but defines no security headers.
+- **Proposed change:** Document supported proxy topology, accept a sanitized client IP only from trusted ingress, normalize IPv4 and configurable IPv6 prefix identities for rate limiting, test spoofed headers, add cross-origin server-action tests, and configure a deployment-compatible CSP and standard security headers.
+- **Expected benefit:** Rate limiting cannot be trivially bypassed by spoofed headers, and browser defenses are explicit rather than implicit.
+- **Migration considerations:** CSP must account for Next.js scripts/styles and Recharts. Test in report-only mode before enforcement.
+- **Risks and trade-offs:** Incorrect proxy trust can rate-limit every user as one address or trust attacker input. Incorrect CSP can break the app.
+- **Acceptance criteria:** Direct clients cannot choose their rate-limit identity; documented ingress configuration produces the correct IPv4 address or configured IPv6 prefix; unsupported proxy topologies fail closed; cross-origin mutations fail; automated header tests cover CSP, frame denial, referrer, MIME sniffing, and production HSTS policy.
+
+### A8. Remediate Verified Production Dependency Advisories
+
+- **Priority:** P1
+- **Estimated effort:** Medium
+- **Current architectural concern:** A review-time `npm audit --omit=dev` reported three high-severity advisories through Next's bundled PostCSS and Sharp/libvips dependencies. The suggested forced fix is an invalid breaking downgrade and must not be applied blindly.
+- **Evidence from the repository:** [package.json](package.json) pins `next@16.2.12`. `npm ls` resolves Next's `postcss@8.4.31` and `sharp@0.34.5`; the audit reported PostCSS disclosure/XSS advisories and Sharp/libvips CVEs. Direct Tailwind/Vite PostCSS resolves to a newer version.
+- **Proposed change:** Identify the first supported Next release that includes fixed transitive versions, upgrade in a dedicated branch, and add lockfile audit plus container scanning to CI. If no supported fix exists, document exploitability and temporary mitigations.
+- **Expected benefit:** Removes known vulnerable production components and prevents silent recurrence.
+- **Migration considerations:** Re-run full Next.js build, image optimization, PWA, and E2E checks. Do not use `npm audit fix --force` when it proposes a major downgrade.
+- **Risks and trade-offs:** Framework upgrades may change Server Actions or build output. Pin reviewed action/dependency versions and stage the rollout.
+- **Acceptance criteria:** Production audit has no unaccepted high/critical findings; any exception has an owner, exploitability note, mitigation, and expiry; container scanning reports are retained in CI.
+
+### A9. Gate Container Publication on Quality and Supply-Chain Checks
+
+- **Priority:** P1
+- **Estimated effort:** Medium
+- **Current architectural concern:** The only GitHub Actions workflow builds and pushes on every commit without first running lint, typecheck, tests, or the production build as explicit gates. Actions use mutable major tags, and no SBOM, provenance, signature, or vulnerability scan is published.
+- **Evidence from the repository:** [.github/workflows/publish-container.yml](.github/workflows/publish-container.yml) contains checkout, Buildx, login, metadata, and push steps only.
+- **Proposed change:** Add a required validation job, publish only after it passes, use least-privilege permissions, and pin third-party actions to reviewed commit SHAs. Produce a CycloneDX JSON SBOM, SLSA provenance, a Sigstore/Cosign signature, and a Trivy image scan before tagging `latest` (equivalent standards may be substituted through an explicit architecture decision).
+- **Expected benefit:** Broken or vulnerable images are less likely to become the default deployment artifact.
+- **Migration considerations:** E2E adds several minutes and may be separated into required pull-request and push jobs. Keep BuildKit cache sharing explicit.
+- **Risks and trade-offs:** Longer CI and scanner false positives. Define severity policy and exception process.
+- **Acceptance criteria:** A failing lint/type/test/E2E/build or unaccepted high/critical Trivy finding blocks publication; branch and SHA tags remain traceable; image digest, CycloneDX SBOM, SLSA provenance, Cosign verification command, and scan result are available for each release.
+
+### A10. Bound Synchronous Import, Restore, and Analytics Workloads
+
+- **Priority:** P1
+- **Estimated effort:** Large
+- **Current architectural concern:** CSV parsing and up to 10,000 inserts, JSON restore arrays up to 100,000 records, and historical analytics all run synchronously in the web process. File-size limits exist, but there is no processing deadline, progress, cancellation, or event-loop isolation.
+- **Evidence from the repository:** [lib/services/portability.ts](lib/services/portability.ts) uses `csv-parse/sync` and synchronous better-sqlite3 transactions. Import/restore routes read full files into memory. [lib/services/analytics.ts](lib/services/analytics.ts) repeatedly replays event histories.
+- **Proposed change:** Establish measured workload budgets. Keep small operations synchronous; route large previews/restores/reports through bounded database-backed jobs with progress and cancellation. Add per-user concurrency limits.
+- **Expected benefit:** One user's large upload or report cannot make every user's requests unresponsive.
+- **Migration considerations:** Introduce jobs only after benchmarks show the synchronous threshold; do not add Redis by default.
+- **Risks and trade-offs:** Jobs add recovery and UX complexity. SQLite still serializes writes, so job concurrency must remain low.
+- **Acceptance criteria:** Benchmarks define supported sizes and latency; requests above the synchronous threshold become jobs or are rejected clearly; operations time out/cancel safely; concurrent users retain an agreed response-time budget.
+
+### A11. Automate Backups, Retention, and Restore Drills
+
+- **Priority:** P1
+- **Estimated effort:** Large
+- **Current architectural concern:** Backup is a manual script with no schedule, retention, integrity verification after creation, status reporting, encryption guidance, or automated restore drill.
+- **Evidence from the repository:** [scripts/backup.mjs](scripts/backup.mjs) creates timestamped files. Compose and Kubernetes mount backup storage, but [deploy/kubernetes.yaml](deploy/kubernetes.yaml) has no CronJob. README advises manual testing.
+- **Proposed change:** Add configurable scheduled backups, retention, post-backup integrity/hash checks, optional encrypted off-host copy, and a periodic disposable restore verification. Expose only non-sensitive status/age metrics.
+- **Expected benefit:** Recovery objectives are demonstrable rather than assumed.
+- **Migration considerations:** Work with A4 so pre-restore and scheduled backups share primitives. Keep operator control for secrets and external storage.
+- **Risks and trade-offs:** Local-only backups do not protect against host loss; off-host copies increase secret-management obligations.
+- **Acceptance criteria:** RPO/RTO and retention are documented; backup files use restrictive permissions; off-host backups are encrypted with operator-managed keys; failed or stale backups alert; a scheduled drill restores into a disposable path and runs integrity/schema checks; production data never appears in logs.
+
+### A12. Add Minimal Structured Observability and Audit Events
+
+- **Priority:** P2
+- **Estimated effort:** Large
+- **Current architectural concern:** Production behavior is visible mainly through `console.error`, a `SELECT 1` health check, and no request IDs, duration metrics, backup status, or privacy-safe audit trail.
+- **Evidence from the repository:** Console logging appears in actions and import/restore/login/signup handlers. [app/api/health/route.ts](app/api/health/route.ts) only checks database connectivity. No observability dependency or audit table exists.
+- **Proposed change:** Start with JSON logs, request IDs, operation durations, auth/security events, backup/job status, and optional error tracking. Add a minimal user-visible audit history for destructive or security-sensitive actions. Avoid a mandatory large monitoring stack.
+- **Expected benefit:** Operators can diagnose failures and users can understand sensitive changes without exposing financial payloads.
+- **Migration considerations:** Define a redaction policy and retention before logging. Metrics should be optional for self-hosted deployments.
+- **Risks and trade-offs:** Logs can become a second sensitive datastore. Never log amounts, notes, exports, passwords, tokens, or raw uploaded rows by default.
+- **Acceptance criteria:** Every error has a request ID; logs are machine-parseable and redacted; auth, restore, password, deletion, and backup events are auditable; health distinguishes liveness from readiness without leaking internals.
+
+### A13. Keep SQLite, but Define Its Operating Envelope
+
+- **Priority:** P2
+- **Estimated effort:** Medium
+- **Current architectural concern:** SQLite is appropriate for the current self-hosted single-process design, but multi-user growth, background jobs, reporting, and Kubernetes can increase write contention. No measured operating envelope or WAL maintenance runbook exists.
+- **Evidence from the repository:** [lib/db.ts](lib/db.ts) enables WAL, foreign keys, and a 5-second busy timeout. [deploy/kubernetes.yaml](deploy/kubernetes.yaml) correctly uses one replica, `Recreate`, and ReadWriteOnce storage. better-sqlite3 is synchronous and there is no connection pool.
+- **Proposed change:** Retain SQLite now. Add lock/busy metrics, WAL checkpoint policy, `quick_check`/`ANALYZE` maintenance, storage monitoring, concurrency benchmarks, and explicit single-writer/single-replica documentation.
+- **Expected benefit:** Preserves low operational complexity while making capacity limits observable.
+- **Migration considerations:** Begin this capacity work after A1-A3 establish trusted financial semantics. PostgreSQL is not justified solely by multi-user support. Reassess when sustained lock timeouts occur, more than one application replica is required, background write concurrency becomes material, datasets reach measured reporting limits, or online failover is required.
+- **Risks and trade-offs:** Staying too long can cause contention; moving early adds a database service, pooling, backup, migration, and deployment burden.
+- **Acceptance criteria:** Baseline tests record p95 read/write latency, lock failures, and WAL growth before tuning; supported transaction/user/concurrency ranges are documented; one-replica constraints are enforced; PostgreSQL review triggers are measurable.
+
+If those triggers are reached, use a phased PostgreSQL plan: introduce dialect-neutral service tests; create a PostgreSQL Drizzle schema and migrations; dual-run export/import validation on a production-like copy; compare row counts, balances, ownership, and reports; rehearse rollback; add pooled connections and backups; perform a low-downtime cutover with writes paused; retain the SQLite snapshot until validation completes.
+
+### A14. Optimize Historical Analytics and Account Comparison After Benchmarking
+
+- **Priority:** P2
+- **Estimated effort:** Large
+- **Current architectural concern:** Dashboard rendering loads and replays all user transactions/valuations multiple times. Account comparisons issue a transaction query per account. Complexity grows predictably with history length.
+- **Evidence from the repository:** [app/(app)/page.tsx](<app/(app)/page.tsx>) requests dashboard data, all-time history, and three separate historical points. Each path calls `eventMap()` in [lib/services/analytics.ts](lib/services/analytics.ts). `getAccountComparisons()` loops over accounts and queries transactions per account.
+- **Proposed change:** Benchmark first. Consolidate dashboard history into one event load/replay, batch account comparisons, add cursor pagination, and consider user-scoped daily/monthly snapshots only when replay exceeds the latency budget.
+- **Expected benefit:** Predictable dashboard/report latency for long-lived portfolios without premature caching complexity.
+- **Migration considerations:** Derived snapshots must be rebuildable and invalidated after backdated edits, deletes, or rate changes.
+- **Risks and trade-offs:** Cached financial aggregates can become stale and more dangerous than slow queries. Keep event history authoritative and add reconciliation tests.
+- **Acceptance criteria:** Benchmarks cover 10,000 and 100,000 events; query counts and p95 latency targets are recorded; backdated mutations produce identical cached and replayed results; no cache key omits `userId`.
+
+### A15. Add a Small Database-Backed Job Runner and Retention Policies
+
+- **Priority:** P2
+- **Estimated effort:** Large
+- **Current architectural concern:** Scheduled backups, recurring activity, notifications, large reports, and AI reviews need durable background execution. `idempotency_keys` has no expiry and grows indefinitely.
+- **Evidence from the repository:** There is no job table or worker. `login_attempts` is pruned in [lib/auth/rate-limit.ts](lib/auth/rate-limit.ts), while `idempotency_keys` in [db/schema.ts](db/schema.ts) has only a created-date index.
+- **Proposed change:** Add a minimal SQLite job table with lease, attempts, next-run time, owner context, and idempotency. Run one worker in the single application process or a controlled sidecar. Add explicit retention for completed jobs, idempotency keys, auth attempts, and AI audit metadata.
+- **Expected benefit:** Durable automation without introducing Redis or a separate queue prematurely.
+- **Migration considerations:** Jobs that touch private data must carry an immutable `userId` and re-check user status at execution time.
+- **Risks and trade-offs:** Multiple workers can contend on SQLite. Enforce one active worker and transactional leasing.
+- **Acceptance criteria:** Jobs are at-least-once and idempotent, preserve user isolation, recover after restart, expose failure status, and prune according to documented retention.
+
+### A16. Validate Production Configuration and Harden Deployment Probes
+
+- **Priority:** P2
+- **Estimated effort:** Medium
+- **Current architectural concern:** Required configuration is validated lazily. The health route only executes `SELECT 1`. Kubernetes uses the same shallow endpoint for readiness and liveness, has no startup probe, and defines no CPU limit.
+- **Evidence from the repository:** [lib/auth/token.ts](lib/auth/token.ts) validates `SESSION_SECRET` only when used; [lib/auth/origin.ts](lib/auth/origin.ts) validates `APP_URL` only for state-changing file routes. [app/api/health/route.ts](app/api/health/route.ts) checks connectivity. [deploy/kubernetes.yaml](deploy/kubernetes.yaml) runs migrations in `npm start` before Next starts.
+- **Proposed change:** Add startup configuration validation, separate liveness/readiness semantics, migration/schema readiness, storage writability/free-space checks, a startup probe, resource tuning, and documented graceful termination behavior.
+- **Expected benefit:** Misconfigured deployments fail before serving traffic and orchestration makes safer restart decisions.
+- **Migration considerations:** Keep health responses minimal and unauthenticated; detailed diagnostics belong in logs or an operator command.
+- **Risks and trade-offs:** A write-heavy health check can create load. Cache checks briefly and keep liveness independent of transient dependencies.
+- **Acceptance criteria:** Missing/invalid secrets, URL, timezone, or paths stop startup; readiness stays false during migrations; liveness does not restart a pod for a temporary lock; deployment manifests include startup behavior and measured resources.
+
+### A17. Expand Risk-Based Automated Tests and Coverage Gates
+
+- **Priority:** P1
+- **Estimated effort:** Large
+- **Current architectural concern:** Existing tests are high value but narrow: 32 named tests, two component tests, three Chromium E2E journeys, and coverage configured only for `lib/finance.ts` and `lib/money.ts` with no threshold.
+- **Evidence from the repository:** [vitest.config.ts](vitest.config.ts), [playwright.config.ts](playwright.config.ts), and [tests](tests) show strong core/isolation coverage but no backup/restore CLI tests, reserved-type attack test, historical incomplete-rate test, archived-account mutation test, form component coverage, accessibility scan, or concurrency/load fixture.
+- **Proposed change:** Build a risk matrix and add tests in priority order: A1-A5 and A4 restore cases; auth header/rate-limit behavior; import preview/deduplication; PWA offline/update; component form states; accessibility; performance fixtures. Add meaningful per-module coverage thresholds rather than a global vanity number.
+- **Expected benefit:** Protects the exact invariants most likely to cause financial or multi-user regressions.
+- **Migration considerations:** Keep deterministic clocks/timezones and disposable databases. Add Firefox/WebKit only for workflows with demonstrated browser risk.
+- **Risks and trade-offs:** Broad E2E suites become slow and flaky. Prefer service integration tests for financial/authorization matrices and reserve E2E for critical journeys.
+- **Acceptance criteria:** Every P0 has a regression test; CI enforces thresholds for finance, money, auth, services, and portability; accessibility tests cover key pages; performance fixtures report trends without brittle wall-clock assertions.
+
+### A18. Complete PWA and Accessibility Verification
+
+- **Priority:** P2
+- **Estimated effort:** Medium
+- **Current architectural concern:** The service worker correctly caches only shell/static assets, but tests only verify manifest/service-worker availability. There is no automated offline-navigation/update test or accessibility audit beyond two primitive component tests.
+- **Evidence from the repository:** [public/sw.js](public/sw.js) uses network-first navigation and static caching. [components/pwa-manager.tsx](components/pwa-manager.tsx) blocks offline submissions. [tests/component](tests/component) covers privacy and progress only.
+- **Proposed change:** Add Playwright offline/update lifecycle tests and axe-based checks for login, signup, dashboard, forms, dialogs, charts, and mobile navigation. Add accessible text summaries for all chart states where absent.
+- **Expected benefit:** The installed application remains safe and usable across connectivity and assistive-technology scenarios.
+- **Migration considerations:** Service-worker tests need isolated browser contexts and cache cleanup.
+- **Risks and trade-offs:** Automated accessibility tools do not replace keyboard and screen-reader review.
+- **Acceptance criteria:** Authenticated responses are never cached; offline mutations are blocked; update activation is tested; critical pages have no serious automated accessibility violations and pass documented keyboard checks.
+
+## Technical Debt
+
+### TD1. Split Large Service and UI Modules Along Existing Ownership Boundaries
+
+- **Priority:** P2
+- **Estimated effort:** Large
+- **Issue:** [lib/services/portability.ts](lib/services/portability.ts) is about 649 lines, accounts and analytics exceed 500 lines, settings forms approach 470 lines, and the central action module approaches 400 lines.
+- **Improvement:** Separate archive schema/export/restore/CSV concerns, account command/query/replay concerns, and settings preference/rate/security/portability panels. Keep domain APIs stable; do not introduce repository classes or generic service layers without a concrete need.
+- **Acceptance criteria:** Modules have focused responsibilities, no behavior changes, circular dependencies are absent, and existing tests remain green.
+
+### TD2. Unify Validation and Form Contracts
+
+- **Priority:** P2
+- **Estimated effort:** Medium
+- **Issue:** Shared Zod schemas exist in [lib/validation.ts](lib/validation.ts), while settings/rate schemas live in the action module and client forms sometimes use weaker parallel schemas or `action as unknown` casts.
+- **Improvement:** Define shared input contracts per domain, derive client types from them, and use typed adapters for progressive enhancement instead of unchecked action casts.
+- **Acceptance criteria:** Client and server reject the same invalid inputs; schemas remain in dependency-light validation modules that never import React components or services; settings/rates use reusable schemas; no form action requires an `unknown` cast; field errors retain current UX; no circular imports are introduced.
+
+### TD3. Centralize Product Defaults and Policy Values
+
+- **Priority:** P2
+- **Estimated effort:** Small
+- **Issue:** KES, Africa/Nairobi, session duration, goal return, upload limits, auth rate limits, and date-range values are spread across services, schemas, forms, routes, and deployment files.
+- **Improvement:** Separate product defaults from security/runtime policy and expose one server-only validated configuration module plus safe client constants where needed.
+- **Acceptance criteria:** Each policy has one source of truth, environment overrides validate at startup, and tests cover defaults and invalid values.
+
+### TD4. Version Portability Formats Explicitly
+
+- **Priority:** P2
+- **Estimated effort:** Medium
+- **Issue:** User restore accepts exactly `wealthboard-user-json` version 2 in [lib/services/portability.ts](lib/services/portability.ts), but there is no documented compatibility policy or converter registry.
+- **Improvement:** Document archive support windows, add version-dispatched parsers/converters, and keep exported calculation-independent source records forward portable.
+- **Acceptance criteria:** The archive version changes only when the serialized contract changes; each supported version has an isolated parser and converter; unsupported versions return a clear message; at least one fixture per supported version validates conversion and round-trip; removals follow the documented support window.
+
+### TD5. Document Financial Semantics as Executable Examples
+
+- **Priority:** P3
+- **Estimated effort:** Medium
+- **Issue:** Purchase/sale effects, valuation ordering, contribution classification, linked-goal semantics, and transfer currency behavior are implemented but spread across code and tests.
+- **Improvement:** Add a concise financial semantics document backed by golden test fixtures for each transaction type and same-date ordering rule.
+- **Acceptance criteria:** An engineer can predict balance, contribution, growth, and goal effects from the document; examples execute in tests; ambiguous same-date ordering is explicitly resolved.
+
+## Suggested Delivery Phases
+
+Phases describe dependency order for one delivery stream, not a ban on parallel work. Within a phase, independent items may run concurrently; A8 can proceed alongside A1-A7, A9 and A17 should be delivered together, and AI1/A12 can be designed together while scheduled AI remains blocked on A15. Item-level dependencies take precedence over phase placement.
+
+### Phase 1: Critical Correctness and Security
+
+- A1 exchange-rate provenance and completeness.
+- A2 reserved transaction-type invariants.
+- A3 cash-flow-aware return methodology.
+- A4 fail-safe restore.
+- A5 service-level account/currency/goal rules.
+- A7 proxy/origin/header hardening.
+- A8 dependency remediation.
+- A17 regression tests for every P0/P1 invariant.
+
+### Phase 2: Core Product Completeness
+
+- F1 transaction workbench.
+- F2 reconciliation and corrections.
+- F3 import preview and duplicate detection.
+- F4 freshness indicators.
+- F5 goal scenarios and milestones.
+- F6 date-scoped downloadable reports.
+- F7 account deletion and export-before-delete.
+- F9 onboarding.
+
+### Phase 3: Reliability and Operational Maturity
+
+- A9 CI/container quality gates.
+- A10 bounded heavy workloads.
+- A11 backup automation and restore drills.
+- A12 observability and audit events.
+- A13 SQLite operating envelope.
+- A14 analytics performance work based on benchmarks.
+- A15 database-backed jobs and retention.
+- A16 deployment validation and probes.
+- A18 PWA/accessibility verification.
+- F8 session management.
+- F10 recurring activity.
+
+### Phase 4: Intelligent Features
+
+- AI1 deterministic read-only tool layer.
+- AI2 AI Portfolio Review and monthly summary.
+- AI3 natural-language questions and goal scenarios.
+- AI4 statement extraction through import preview.
+- AI5 anomaly explanations and categorization suggestions.
+
+### Phase 5: Optional Expansion
+
+- F11 liability payoff planning.
+- Optional automatic market/exchange-rate providers with explicit provenance and manual fallback.
+- Advanced tax-oriented exports only after jurisdiction and methodology are defined.
+- Shared household views only if product direction changes; keep independent ownership as the default and do not retrofit organizations prematurely.
+
+## Quick Wins
+
+"Quick" describes implementation size and independence, not urgency. P0 quick wins remain release-blocking.
+
+- Block reserved `transfer` and `opening_balance` types in transaction updates (A2).
+- Reject archived accounts and invalid goal links at service boundaries (A5).
+- Stop treating the seeded USD/KES placeholder as authoritative (first part of A1).
+- Add a server-side pre-restore backup before replacing the SQLite file (first part of A4).
+- Add transaction type/account/date filters before full pagination (first slice of F1).
+- Add security headers in report-only/tested mode and trusted-proxy documentation (first slice of A7).
+- Add an npm audit and image scan job without automatic forced fixes (first slice of A8/A9).
+- Add stale-account badges using existing event timestamps (F4).
+- Add an account-deletion product decision and retention statement before implementation (F7).
+- Add coverage thresholds for finance, money, auth, portability, and owner-scoped services (A17).
+
+## Recommended Next Five Tasks
+
+1. **Fix exchange-rate trust and completeness.** Why next: a plausible placeholder and silent historical omission can make core net-worth output wrong without an obvious error. **Estimated effort:** Medium. **Dependencies:** None. **Expected outcome:** Every total and chart is either complete or visibly identifies missing/unconfirmed rates.
+2. **Close the reserved transaction update path and add invariant tests.** Why next: it is a small authenticated path to unpaired transfers or duplicate opening-balance semantics. **Estimated effort:** Small. **Dependencies:** None. **Expected outcome:** Reserved transaction types can only be created or corrected through dedicated atomic workflows.
+3. **Implement fail-safe database restore with automatic rollback.** Why next: the current operator restore can replace the last working database without creating a recovery copy. **Estimated effort:** Medium. **Dependencies:** Shared backup primitive. **Expected outcome:** Every restore either succeeds and validates or leaves the previous database recoverable.
+4. **Replace or temporarily remove the current annualized return figures.** Why next: cash-flow timing is ignored, so a prominent report can misstate performance. **Estimated effort:** Large. **Dependencies:** Agreed TWR/XIRR methodology and golden fixtures. **Expected outcome:** Performance comparisons are mathematically defensible and disclose method/data sufficiency.
+5. **Create a required CI quality and dependency-security gate before image publication.** Why next: verified high-severity transitive advisories are present and the publish workflow currently has no test or scan prerequisite. **Estimated effort:** Medium. **Dependencies:** Supported Next/Sharp remediation choice and stable E2E environment. **Expected outcome:** Only tested, audited, traceable container images can receive publish tags.
