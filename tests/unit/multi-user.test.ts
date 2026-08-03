@@ -375,15 +375,11 @@ describe.sequential("multi-user persistence and isolation", () => {
       ),
     );
 
-    const reachedMilestoneId = createGoalMilestone(
-      aliceId,
-      rateAwareGoalId,
-      {
-        name: "First checkpoint",
-        targetAmount: "500",
-        targetDate: planStartDate,
-      },
-    );
+    const reachedMilestoneId = createGoalMilestone(aliceId, rateAwareGoalId, {
+      name: "First checkpoint",
+      targetAmount: "500",
+      targetDate: planStartDate,
+    });
     createGoalMilestone(aliceId, rateAwareGoalId, {
       name: "Overdue checkpoint",
       targetAmount: "1500",
@@ -584,9 +580,9 @@ describe.sequential("multi-user persistence and isolation", () => {
       (goal) => goal.name === "Rate-aware goal",
     );
     expect(legacyRestoredGoal).toBeDefined();
-    expect(
-      await listGoalMilestones(aliceId, legacyRestoredGoal!.id),
-    ).toEqual([]);
+    expect(await listGoalMilestones(aliceId, legacyRestoredGoal!.id)).toEqual(
+      [],
+    );
 
     const malicious = structuredClone(archive) as typeof archive & {
       accounts: Array<(typeof archive.accounts)[number] & { userId?: string }>;

@@ -12,6 +12,7 @@ import {
 
 import { deleteGoalAction, setGoalStatusAction } from "@/app/(app)/actions";
 import { GoalProjectionChart } from "@/components/charts";
+import { GoalMilestones } from "@/components/goal-milestones";
 import { GoalScenarioComparison } from "@/components/goal-scenario-comparison";
 import { MoneyValue } from "@/components/privacy-provider";
 import { MutationButton } from "@/components/mutation-button";
@@ -21,11 +22,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/ui/page";
 import { TRANSACTION_LABELS } from "@/lib/constants";
-import { dateInputForTimezone, formatDate } from "@/lib/dates";
+import {
+  dateInputForTimezone,
+  formatDate,
+  utcToDateInput,
+} from "@/lib/dates";
 import { minorToDecimalString, safeChartNumber } from "@/lib/money";
 import { getAccountActivity } from "@/lib/services/accounts";
 import { getSettings } from "@/lib/bootstrap";
-import { getGoal, goalProjectionPoints } from "@/lib/services/goals";
+import {
+  getGoal,
+  goalProjectionPoints,
+  listGoalMilestones,
+} from "@/lib/services/goals";
 import { requireSession } from "@/lib/auth/session";
 
 export default async function GoalDetailPage({
@@ -40,9 +49,12 @@ export default async function GoalDetailPage({
     getSettings(userId),
   ]);
   if (!goal) notFound();
-  const activity = goal.linkedAccountId
-    ? await getAccountActivity(userId, goal.linkedAccountId)
-    : { transactions: [], valuations: [] };
+  const [activity, milestones] = await Promise.all([
+    goal.linkedAccountId
+      ? getAccountActivity(userId, goal.linkedAccountId)
+      : { transactions: [], valuations: [] },
+    listGoalMilestones(userId, id),
+  ]);
   const contributions = activity.transactions.filter((transaction) =>
     ["opening_balance", "deposit", "purchase"].includes(transaction.type),
   );
@@ -246,6 +258,23 @@ export default async function GoalDetailPage({
           timezone={settings.timezone}
         />
       ) : null}
+
+      <GoalMilestones
+        goalId={id}
+        currency={goal.currency}
+        goalTargetDate={utcToDateInput(goal.targetDate)}
+        timezone={settings.timezone}
+        dateFormat={settings.preferredDateFormat}
+        milestones={milestones.map((milestone) => ({
+          id: milestone.id,
+          name: milestone.name,
+          targetAmountMinor: milestone.targetAmountMinor,
+          targetDate: milestone.targetDate,
+          status: milestone.status,
+          progressPercent: milestone.progressPercent,
+          remainingMinor: milestone.remainingMinor.toString(),
+        }))}
+      />
 
       <Card className="mt-5">
         <CardHeader>

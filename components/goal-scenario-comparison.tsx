@@ -82,7 +82,8 @@ export function GoalScenarioComparison({
             Scenario comparison
           </CardTitle>
           <p className="mt-1 text-xs text-slate-500">
-            Comparison only. Your saved goal and contribution plan remain unchanged.
+            Comparison only. Your saved goal and contribution plan remain
+            unchanged.
           </p>
         </div>
       </CardHeader>
@@ -262,11 +263,7 @@ function ScenarioPanel({
                 value={
                   result.forecastDate ? (
                     <span>
-                      {formatDate(
-                        result.forecastDate,
-                        timezone,
-                        "MMM yyyy",
-                      )}
+                      {formatDate(result.forecastDate, timezone, "MMM yyyy")}
                     </span>
                   ) : (
                     <span>Not projected</span>

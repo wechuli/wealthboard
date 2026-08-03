@@ -56,7 +56,8 @@ function mutationError(error: unknown): ActionState {
     error instanceof Error ? error.name : "UnknownError",
   );
   return {
-    message: error instanceof Error ? error.message : "The change could not be saved.",
+    message:
+      error instanceof Error ? error.message : "The change could not be saved.",
   };
 }
 
@@ -68,7 +69,9 @@ function accountInput(formData: FormData) {
   });
 }
 
-export async function createAccountAction(formData: FormData): Promise<ActionState> {
+export async function createAccountAction(
+  formData: FormData,
+): Promise<ActionState> {
   const { userId } = await requireSession();
   const parsed = accountInput(formData);
   if (!parsed.success) return zodActionError(parsed.error);
@@ -110,7 +113,9 @@ export async function archiveAccountAction(id: string, archived: boolean) {
   redirect("/accounts");
 }
 
-export async function transactionAction(formData: FormData): Promise<ActionState> {
+export async function transactionAction(
+  formData: FormData,
+): Promise<ActionState> {
   const { userId } = await requireSession();
   const values = formDataObject(formData);
   if (values.type === "transfer") {
@@ -175,7 +180,9 @@ export async function deleteTransactionAction(id: string) {
   revalidatePath("/transactions");
 }
 
-export async function valuationAction(formData: FormData): Promise<ActionState> {
+export async function valuationAction(
+  formData: FormData,
+): Promise<ActionState> {
   const { userId } = await requireSession();
   const parsed = valuationSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
@@ -209,7 +216,9 @@ function categoryInput(formData: FormData) {
   });
 }
 
-export async function createCategoryAction(formData: FormData): Promise<ActionState> {
+export async function createCategoryAction(
+  formData: FormData,
+): Promise<ActionState> {
   const { userId } = await requireSession();
   const parsed = categoryInput(formData);
   if (!parsed.success) return zodActionError(parsed.error);
@@ -257,7 +266,9 @@ export async function moveCategoryAction(id: string, direction: "up" | "down") {
   revalidatePath("/categories");
 }
 
-export async function createGoalAction(formData: FormData): Promise<ActionState> {
+export async function createGoalAction(
+  formData: FormData,
+): Promise<ActionState> {
   const { userId } = await requireSession();
   const parsed = goalSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
@@ -368,10 +379,19 @@ export async function dismissGoalAlertAction(
 const settingsSchema = z.object({
   displayName: z.string().trim().min(1).max(80),
   appName: z.string().trim().min(1).max(80),
-  baseCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
-  supportedCurrencies: z.string().transform((value) =>
-    [...new Set(value.split(",").map((item) => item.trim().toUpperCase()).filter(Boolean))],
-  ),
+  baseCurrency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/),
+  supportedCurrencies: z.string().transform((value) => [
+    ...new Set(
+      value
+        .split(",")
+        .map((item) => item.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ]),
   timezone: z
     .string()
     .trim()
@@ -407,9 +427,20 @@ export async function updateSettingsAction(
 }
 
 const exchangeRateSchema = z.object({
-  baseCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
-  quoteCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
-  rate: z.string().trim().regex(/^\d+(?:\.\d+)?$/),
+  baseCurrency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/),
+  quoteCurrency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/),
+  rate: z
+    .string()
+    .trim()
+    .regex(/^\d+(?:\.\d+)?$/),
   effectiveDate: z.string().date(),
 });
 
@@ -447,6 +478,13 @@ export async function changePasswordAction(
   if (!session) {
     return { message: "The current password is incorrect." };
   }
-  await createSession(userId, session.sessionVersion, session.sessionTimeoutMinutes);
-  return { ok: true, message: "Password changed. Other sessions were signed out." };
+  await createSession(
+    userId,
+    session.sessionVersion,
+    session.sessionTimeoutMinutes,
+  );
+  return {
+    ok: true,
+    message: "Password changed. Other sessions were signed out.",
+  };
 }

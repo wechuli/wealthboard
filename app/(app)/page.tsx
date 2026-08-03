@@ -18,6 +18,7 @@ import {
   ContributionsGrowthChart,
   NetWorthChart,
 } from "@/components/charts";
+import { GoalAlerts } from "@/components/goal-alerts";
 import { MoneyValue } from "@/components/privacy-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ import {
   getNetWorthAt,
   getNetWorthHistory,
 } from "@/lib/services/analytics";
-import { listGoals } from "@/lib/services/goals";
+import { listGoalAlerts, listGoals } from "@/lib/services/goals";
 import { requireSession } from "@/lib/auth/session";
 
 const allowedRanges = new Set(["1m", "3m", "6m", "1y", "all"]);
@@ -45,10 +46,11 @@ export default async function DashboardPage({
   const { userId } = await requireSession();
   const params = await searchParams;
   const range = allowedRanges.has(params.range || "") ? params.range! : "1y";
-  const [data, fullHistory, goals] = await Promise.all([
+  const [data, fullHistory, goals, goalAlerts] = await Promise.all([
     getDashboardData(userId, range as "1m" | "3m" | "6m" | "1y" | "all"),
     getNetWorthHistory(userId, "all"),
     listGoals(userId),
+    listGoalAlerts(userId),
   ]);
   const currency = data.settings.baseCurrency;
   const current = data.totals.netWorth;
@@ -99,6 +101,19 @@ export default async function DashboardPage({
           affected holdings are excluded where conversion is unavailable.
         </div>
       ) : null}
+
+      <GoalAlerts
+        alerts={goalAlerts.map((alert) => ({
+          goalId: alert.goalId,
+          goalName: alert.goalName,
+          currency: alert.currency,
+          requiredMonthly: alert.requiredMonthly.toString(),
+          plannedMonthly: alert.plannedMonthly.toString(),
+          annualReturnBps: alert.annualReturnBps,
+          targetDate: alert.targetDate,
+        }))}
+        timezone={data.settings.timezone}
+      />
 
       <Card className="relative overflow-hidden border-emerald-400/15 bg-[#101a17]">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-emerald-400/[0.07] blur-3xl" />

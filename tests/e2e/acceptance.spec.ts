@@ -169,6 +169,43 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(page.getByText("Required monthly (8% return)")).toBeVisible();
   await expect(page.getByText(/ahead|on track|behind/).first()).toBeVisible();
   await expect(page.getByText("KCB Car Fund")).toBeVisible();
+  await expect(page.getByText("Saved plan", { exact: true })).toBeVisible();
+  await expect(page.getByText("Required pace", { exact: true })).toBeVisible();
+  await expect(page.getByText("Lower return", { exact: true })).toBeVisible();
+  await page.getByLabel("Lower return monthly contribution").fill("200000");
+  await page.getByLabel("Lower return annual return").fill("5");
+  await expect(page.getByLabel("Saved plan monthly contribution")).toHaveValue(
+    "120000.00",
+  );
+  await expect(page.getByLabel("Saved plan annual return")).toHaveValue("8");
+  await page.reload();
+  await expect(page.getByLabel("Lower return monthly contribution")).toHaveValue(
+    "120000.00",
+  );
+  await expect(page.getByLabel("Lower return annual return")).toHaveValue("6");
+
+  await page.getByLabel("Milestone name").fill("Halfway funded");
+  await page.getByLabel(/Target amount \(KES\)/).last().fill("1500000");
+  await page.getByLabel("Target date", { exact: true }).last().fill("2027-12-31");
+  await page.getByRole("button", { name: "Add milestone" }).click();
+  await expect(page.getByText("Milestone added.")).toBeVisible();
+  await expect(page.getByText("Halfway funded", { exact: true })).toBeVisible();
+  await expect(page.getByText("upcoming", { exact: true })).toBeVisible();
+
+  await page.goto("/");
+  await expect(
+    page.getByText("July 2028 Family Car needs attention"),
+  ).toBeVisible();
+  await page
+    .getByLabel("Dismiss July 2028 Family Car reminder for this month")
+    .click();
+  await expect(
+    page.getByText("July 2028 Family Car needs attention"),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByText("July 2028 Family Car needs attention"),
+  ).toHaveCount(0);
 
   await page.goto("/settings");
   await expect(
@@ -201,6 +238,16 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   const exportResponse = await page.request.get("/api/export/json");
   expect(exportResponse.ok()).toBeTruthy();
   const userExport = await exportResponse.body();
+  const exportedPortfolio = JSON.parse(userExport.toString()) as {
+    version: number;
+    goalMilestones: Array<{ name: string }>;
+    goalAlertDismissals: unknown[];
+  };
+  expect(exportedPortfolio.version).toBe(3);
+  expect(exportedPortfolio.goalMilestones).toContainEqual(
+    expect.objectContaining({ name: "Halfway funded" }),
+  );
+  expect(exportedPortfolio.goalAlertDismissals).toHaveLength(1);
   const restoreResponse = await page.request.post("/api/restore/user", {
     headers: { Origin: "http://127.0.0.1:3100" },
     multipart: {
@@ -225,6 +272,13 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   ).toHaveCount(1);
   await page.goto("/goals/new");
   await expect(page.getByLabel("Currency")).toHaveValue("USD");
+  await page.goto("/goals");
+  await page.getByText("July 2028 Family Car", { exact: true }).click();
+  await expect(page.getByText("Halfway funded", { exact: true })).toBeVisible();
+  await page.goto("/");
+  await expect(
+    page.getByText("July 2028 Family Car needs attention"),
+  ).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
@@ -250,6 +304,12 @@ test("responsive layouts fit required viewports", async ({ page }) => {
   await page.getByLabel("Password").fill("wealthboard-e2e-password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await page.goto("/goals");
+  const goalHref = await page
+    .locator('a[href^="/goals/"]')
+    .filter({ hasText: "July 2028 Family Car" })
+    .getAttribute("href");
+  expect(goalHref).toBeTruthy();
 
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: width < 768 ? 800 : 900 });
@@ -260,6 +320,7 @@ test("responsive layouts fit required viewports", async ({ page }) => {
       "/goals",
       "/reports",
       "/settings",
+      goalHref!,
     ]) {
       await page.goto(route);
       await expect(page.locator("main")).toBeVisible();

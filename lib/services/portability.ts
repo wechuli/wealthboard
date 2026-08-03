@@ -317,10 +317,7 @@ export async function exportData(userId: string) {
       .select()
       .from(goalContributionPlans)
       .where(eq(goalContributionPlans.userId, userId)),
-    db
-      .select()
-      .from(goalMilestones)
-      .where(eq(goalMilestones.userId, userId)),
+    db.select().from(goalMilestones).where(eq(goalMilestones.userId, userId)),
     db
       .select()
       .from(goalAlertDismissals)
@@ -457,9 +454,7 @@ export function restoreUserData(userId: string, input: unknown) {
     tx.delete(goalAlertDismissals)
       .where(eq(goalAlertDismissals.userId, userId))
       .run();
-    tx.delete(goalMilestones)
-      .where(eq(goalMilestones.userId, userId))
-      .run();
+    tx.delete(goalMilestones).where(eq(goalMilestones.userId, userId)).run();
     tx.delete(goalContributionPlans)
       .where(eq(goalContributionPlans.userId, userId))
       .run();

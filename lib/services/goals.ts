@@ -316,6 +316,7 @@ export async function listGoalAlerts(userId: string, now = new Date()) {
       currency: goal.currency,
       requiredMonthly: goal.requiredMonthly,
       plannedMonthly: goal.currentPlannedMonthly,
+      annualReturnBps: goal.assumedAnnualReturnBps,
       targetDate: goal.targetDate,
       alertKey,
     }));
