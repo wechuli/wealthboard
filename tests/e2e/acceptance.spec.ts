@@ -187,8 +187,8 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   ).toBeVisible();
 
   await page.goto("/settings");
-  await page.getByLabel("Base").selectOption("USD");
-  await page.getByLabel("Quote").selectOption("KES");
+  await page.getByLabel("Base", { exact: true }).selectOption("USD");
+  await page.getByLabel("Quote", { exact: true }).selectOption("KES");
   await page.getByLabel("Rate").fill("130");
   await page.getByLabel("Effective date").fill("2025-01-01");
   await page.getByRole("button", { name: "Save rate" }).click();
@@ -213,6 +213,18 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   });
 
   expect(restoreResponse.ok()).toBeTruthy();
+  await page.goto("/settings");
+  await expect(page.getByLabel("Base currency")).toHaveValue("USD");
+  await expect(
+    page.getByRole("checkbox", { name: /TZS.*Tanzanian Shilling/ }),
+  ).toBeChecked();
+  await page.goto("/accounts/new");
+  await expect(page.getByLabel("Currency")).toHaveValue("USD");
+  await expect(
+    page.getByLabel("Currency").getByRole("option", { name: /UGX/ }),
+  ).toHaveCount(1);
+  await page.goto("/goals/new");
+  await expect(page.getByLabel("Currency")).toHaveValue("USD");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");

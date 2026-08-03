@@ -150,6 +150,10 @@ describe.sequential("multi-user persistence and isolation", () => {
         .where(eq(exchangeRates.userId, aliceId))
         .all(),
     ).toHaveLength(0);
+      const regionalArchive = await exportData(regional.userId);
+      expect(regionalArchive.exchangeRates).toEqual([]);
+      restoreUserData(regional.userId, regionalArchive);
+      expect((await getSettings(regional.userId)).baseCurrency).toBe("TZS");
     const aliceSettings = await getSettings(aliceId);
     expect(aliceSettings.displayName).toBe("Alice Example");
     expect(aliceSettings.baseCurrency).toBe("KES");
@@ -235,6 +239,15 @@ describe.sequential("multi-user persistence and isolation", () => {
         isIncludedInNetWorth: true,
       }),
     ).toThrow("EUR is not enabled");
+    expect(() =>
+      createAccount(aliceId, {
+        name: "Invalid currency account",
+        categoryId: aliceCategoryId,
+        currency: "ZZZ",
+        openingValue: "1",
+        isIncludedInNetWorth: true,
+      }),
+    ).toThrow("valid currency");
     expect(() =>
       createGoal(aliceId, {
         name: "Disabled currency goal",
