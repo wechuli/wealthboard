@@ -1,8 +1,9 @@
 import type { TransactionType } from "@/db/schema";
+import { DEFAULT_BASE_CURRENCY } from "@/lib/currencies";
 
 export const PRODUCT_NAME = "Wealthboard";
 export const DEFAULT_TIMEZONE = "Africa/Nairobi";
-export const DEFAULT_CURRENCY = "KES";
+export const DEFAULT_CURRENCY = DEFAULT_BASE_CURRENCY;
 
 export const TRANSACTION_LABELS: Record<TransactionType, string> = {
   opening_balance: "Opening Balance",

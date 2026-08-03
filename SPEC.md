@@ -94,7 +94,7 @@ The application should be suitable for deployment to a home server or Kubernetes
 - Use transactions when updating balances and financial records
 - All dates should be stored in UTC and shown in the user’s configured timezone
 - Default timezone: Africa/Nairobi
-- Default base currency: KES
+- Each user chooses a base currency during signup; KES is the default selection
 
 ## Identity, signup, and authentication
 
@@ -191,8 +191,10 @@ Fields should include:
   linked goal accounts, transaction idempotency, and exchange-rate pair/date.
 - Include `userId` in database indexes and any server cache key used for private
   data. Do not use a process-global cache for user-specific settings or results.
-- Seed default categories and default exchange rates separately for each new
-  user so one user's edits never change another user's portfolio.
+- Seed default categories and currency settings separately for each new user so
+  one user's edits never change another user's portfolio. Do not seed a
+  plausible exchange rate; rates begin empty and remain user-entered until an
+  optional authoritative provider is implemented.
 
 ### Asset categories
 
@@ -336,7 +338,11 @@ The app must distinguish:
 
 ### Exchange rates
 
-Support multiple currencies, especially KES and USD.
+Support a centralized ISO 4217 currency catalog. It must include East African
+currencies such as KES, TZS, UGX, RWF, BIF, ETB, SSP, CDF, and SOS, plus common
+international currencies. Each user independently chooses a base currency and
+enabled set. The base currency is always enabled, and currencies referenced by
+source records cannot be disabled.
 
 Fields:
 
@@ -352,9 +358,13 @@ Fields:
 Initially, exchange rates can be entered manually. Rates are user-owned; an
 update must affect only the current user's calculations.
 
-Provide a settings area where the user can update the current USD/KES exchange rate.
+Provide a settings area where the user can manage effective-dated rates between
+any two enabled currencies.
 
 All dashboard totals should be converted into the configured base currency.
+Changing that base must not rewrite source amounts. Current and historical
+aggregates must declare when a rate is missing and identify affected currencies
+instead of silently presenting an incomplete total as authoritative.
 
 Keep the design ready for an optional exchange-rate API later, but do not require one.
 

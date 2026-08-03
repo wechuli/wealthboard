@@ -18,6 +18,10 @@ separate API service and no external identity provider.
 - **Persistence:** One WAL-mode SQLite database at `DATABASE_PATH`. Monetary
   amounts are integer minor units. Exchange rates are decimal strings and all
   financial arithmetic uses `bigint` or Decimal.js.
+- **Currencies:** A client-safe ISO 4217 catalog defines discoverable currency
+  metadata and fresh-user defaults. Each user's settings own the base and
+  enabled set. Services reject disabled currencies, while existing referenced
+  currencies are preserved during migration and restore.
 - **Identity:** A dedicated `users` table stores a UUID, normalized unique
   username, bcrypt password hash, status, and session version. `user_settings`
   stores one preferences row per user and contains no credentials.
@@ -39,7 +43,9 @@ separate API service and no external identity provider.
   unique transfer group and idempotency key in one SQLite transaction.
 - **History:** Daily/monthly account balances are reconstructed from opening
   balances, transactions, and valuations, then converted using the most recent
-  exchange rate owned by that user and effective on each date.
+  exchange rate owned by that user and effective on each date. Every point
+  carries completeness metadata and affected currency codes when conversion is
+  unavailable.
 - **Goals:** A linked account is the source of truth for goal progress. Unlinked
   goals retain a direct current amount. Forecasts use Decimal.js future-value
   calculations and a configurable annual return assumption.
@@ -91,10 +97,10 @@ Every table except `login_attempts` is either the identity table or is owned by
 one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
 operations retain history. All timestamps are UTC ISO-8601 strings.
 
-Creating a user is one transaction that inserts the identity, settings, a copy
-of the default categories, and default exchange rates. User defaults are copied,
-not shared mutable rows. Signup creates no financial accounts or sample
-portfolio data.
+Creating a user is one transaction that inserts the identity, base/enabled
+currency settings, and a copy of the default categories. User defaults are
+copied, not shared mutable rows. Signup creates no exchange rates, financial
+accounts, or sample portfolio data.
 
 ## Routes and components
 

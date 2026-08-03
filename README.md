@@ -16,6 +16,8 @@ separate backend, cloud identity provider, or financial integration.
   rates, imports, exports, restores, caches, and idempotency keys
 - Accounts and liabilities with custom categories, archives, filters, and
   base-currency values
+- Per-user base currency and enabled ISO currency catalog, including East
+  African and common international currencies
 - Deposits, withdrawals, income, fees, gains/losses, valuations, and atomic
   paired transfers
 - Net-worth history, portfolio analytics, and linked-goal forecasting
@@ -47,8 +49,9 @@ development command applies pending migrations, then starts Next.js at
 
 Open `/signup` to create the first user. Signup remains available for every
 subsequent user and is the only application-user creation path. It atomically
-creates the identity, settings, default categories, and initial exchange rate;
-it does not create financial accounts or sample data.
+creates the identity, selected base/enabled currency settings, and default
+categories; it does not create exchange rates, financial accounts, or sample
+data.
 
 ### Optional fictional demo data
 

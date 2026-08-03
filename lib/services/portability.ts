@@ -50,6 +50,8 @@ const nullableText = z.string().max(2000).nullable();
 const timestamp = z.string().datetime({ offset: true });
 const isoCurrency = z
   .string()
+  .trim()
+  .toUpperCase()
   .refine(isIsoCurrencyCode, "The currency code is invalid.");
 const supportedCurrencies = z
   .string()
