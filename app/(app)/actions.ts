@@ -8,6 +8,7 @@ import {
   accountSchema,
   categorySchema,
   formDataObject,
+  goalMilestoneSchema,
   goalSchema,
   passwordChangeSchema,
   transactionSchema,
@@ -32,7 +33,15 @@ import {
   moveCategory,
   updateCategory,
 } from "@/lib/services/categories";
-import { createGoal, deleteGoal, setGoalStatus, updateGoal } from "@/lib/services/goals";
+import {
+  createGoal,
+  createGoalMilestone,
+  deleteGoal,
+  deleteGoalMilestone,
+  dismissGoalAlert,
+  setGoalStatus,
+  updateGoal,
+} from "@/lib/services/goals";
 import { recordTransfer } from "@/lib/services/transfers";
 import type { GoalStatus } from "@/db/schema";
 import { addExchangeRate, updateSettings } from "@/lib/services/settings";
@@ -304,6 +313,56 @@ export async function deleteGoalAction(id: string) {
   revalidatePath("/goals");
   revalidatePath("/accounts");
   redirect("/goals");
+}
+
+export async function createGoalMilestoneAction(
+  goalId: string,
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = goalMilestoneSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    createGoalMilestone(userId, goalId, {
+      ...parsed.data,
+      targetDate: parsed.data.targetDate || undefined,
+    });
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath(`/goals/${goalId}`);
+  revalidatePath("/goals");
+  return { ok: true, message: "Milestone added." };
+}
+
+export async function deleteGoalMilestoneAction(
+  goalId: string,
+  milestoneId: string,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  try {
+    deleteGoalMilestone(userId, goalId, milestoneId);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath(`/goals/${goalId}`);
+  revalidatePath("/goals");
+  return { ok: true, message: "Milestone deleted." };
+}
+
+export async function dismissGoalAlertAction(
+  goalId: string,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  try {
+    dismissGoalAlert(userId, goalId);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/");
+  revalidatePath("/goals");
+  return { ok: true, message: "Goal reminder dismissed for this month." };
 }
 
 const settingsSchema = z.object({

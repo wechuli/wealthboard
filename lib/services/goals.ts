@@ -184,10 +184,7 @@ export async function listGoalMilestones(
     .select()
     .from(goalMilestones)
     .where(
-      and(
-        eq(goalMilestones.userId, userId),
-        eq(goalMilestones.goalId, goalId),
-      ),
+      and(eq(goalMilestones.userId, userId), eq(goalMilestones.goalId, goalId)),
     )
     .orderBy(
       asc(goalMilestones.targetAmountMinor),
@@ -199,11 +196,17 @@ export async function listGoalMilestones(
     const target = BigInt(milestone.targetAmountMinor);
     const reached = current >= target;
     const overdue = Boolean(
-      !reached && milestone.targetDate && milestone.targetDate < now.toISOString(),
+      !reached &&
+      milestone.targetDate &&
+      milestone.targetDate < now.toISOString(),
     );
     return {
       ...milestone,
-      status: reached ? "reached" as const : overdue ? "overdue" as const : "upcoming" as const,
+      status: reached
+        ? ("reached" as const)
+        : overdue
+          ? ("overdue" as const)
+          : ("upcoming" as const),
       progressPercent: percentage(current > target ? target : current, target),
       remainingMinor: current >= target ? 0n : target - current,
     };
@@ -273,8 +276,8 @@ export function deleteGoalMilestone(
 }
 
 function goalAlertKey(userId: string, now: Date) {
-  const settings = getDatabase().query.userSettings
-    .findFirst({
+  const settings = getDatabase()
+    .query.userSettings.findFirst({
       where: eq(userSettings.userId, userId),
       columns: { timezone: true },
     })

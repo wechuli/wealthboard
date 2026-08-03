@@ -29,7 +29,16 @@ import {
   recordTransaction,
 } from "@/lib/services/accounts";
 import { getDashboardData } from "@/lib/services/analytics";
-import { createGoal, getGoal } from "@/lib/services/goals";
+import {
+  createGoal,
+  createGoalMilestone,
+  deleteGoalMilestone,
+  dismissGoalAlert,
+  getGoal,
+  listGoalAlerts,
+  listGoalMilestones,
+  listGoals,
+} from "@/lib/services/goals";
 import {
   exportData,
   importTransactionsCsv,
@@ -366,6 +375,74 @@ describe.sequential("multi-user persistence and isolation", () => {
       ),
     );
 
+    const reachedMilestoneId = createGoalMilestone(
+      aliceId,
+      rateAwareGoalId,
+      {
+        name: "First checkpoint",
+        targetAmount: "500",
+        targetDate: planStartDate,
+      },
+    );
+    createGoalMilestone(aliceId, rateAwareGoalId, {
+      name: "Overdue checkpoint",
+      targetAmount: "1500",
+      targetDate: planStartDate,
+    });
+    createGoalMilestone(aliceId, rateAwareGoalId, {
+      name: "Final checkpoint",
+      targetAmount: "1800",
+      targetDate: target.toISOString().slice(0, 10),
+    });
+    expect(() =>
+      createGoalMilestone(bobId, rateAwareGoalId, {
+        name: "Foreign checkpoint",
+        targetAmount: "100",
+      }),
+    ).toThrow("Goal not found");
+    expect(await listGoalMilestones(bobId, rateAwareGoalId)).toEqual([]);
+
+    const milestoneNow = new Date(`${planStartDate}T23:59:59.999Z`);
+    const milestones = await listGoalMilestones(
+      aliceId,
+      rateAwareGoalId,
+      milestoneNow,
+    );
+    expect(
+      milestones.map((milestone) => ({
+        name: milestone.name,
+        status: milestone.status,
+        progress: milestone.progressPercent,
+      })),
+    ).toEqual([
+      { name: "First checkpoint", status: "reached", progress: "100" },
+      { name: "Overdue checkpoint", status: "overdue", progress: "66.7" },
+      { name: "Final checkpoint", status: "upcoming", progress: "55.6" },
+    ]);
+    expect(() =>
+      deleteGoalMilestone(bobId, rateAwareGoalId, reachedMilestoneId),
+    ).toThrow("Milestone not found");
+    deleteGoalMilestone(aliceId, rateAwareGoalId, reachedMilestoneId);
+    expect(
+      await listGoalMilestones(aliceId, rateAwareGoalId, milestoneNow),
+    ).toHaveLength(2);
+
+    const alertNow = new Date(`${planStartDate}T12:00:00.000Z`);
+    expect(
+      (await listGoalAlerts(aliceId, alertNow)).map((alert) => alert.goalId),
+    ).toContain(rateAwareGoalId);
+    expect(await listGoalAlerts(bobId, alertNow)).toEqual([]);
+    expect(() => dismissGoalAlert(bobId, rateAwareGoalId, alertNow)).toThrow(
+      "Goal not found",
+    );
+    dismissGoalAlert(aliceId, rateAwareGoalId, alertNow);
+    expect(await listGoalAlerts(aliceId, alertNow)).toEqual([]);
+    const nextMonth = new Date(alertNow);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    expect(
+      (await listGoalAlerts(aliceId, nextMonth)).map((alert) => alert.goalId),
+    ).toContain(rateAwareGoalId);
+
     expect(() =>
       importTransactionsCsv(
         bobId,
@@ -453,6 +530,9 @@ describe.sequential("multi-user persistence and isolation", () => {
 
   test("exports, restores, and imported owner fields cannot cross users", async () => {
     const archive = await exportData(aliceId);
+    expect(archive.version).toBe(3);
+    expect(archive.goalMilestones).toHaveLength(2);
+    expect(archive.goalAlertDismissals).toHaveLength(1);
     const serialized = JSON.stringify(archive);
     expect(serialized).toContain("Alice Savings");
     expect(serialized).not.toContain("Bob Savings");
@@ -479,6 +559,34 @@ describe.sequential("multi-user persistence and isolation", () => {
     expect((await listAccounts(bobId)).map((account) => account.name)).toEqual([
       "Bob Savings",
     ]);
+    const restoredGoal = (await listGoals(aliceId)).find(
+      (goal) => goal.name === "Rate-aware goal",
+    );
+    expect(restoredGoal).toBeDefined();
+    expect(
+      (await listGoalMilestones(aliceId, restoredGoal!.id)).map(
+        (milestone) => milestone.name,
+      ),
+    ).toEqual(["Overdue checkpoint", "Final checkpoint"]);
+    expect(
+      (await listGoalAlerts(aliceId)).map((alert) => alert.goalId),
+    ).not.toContain(restoredGoal!.id);
+
+    const versionTwoArchive = structuredClone(archive) as Record<
+      string,
+      unknown
+    >;
+    versionTwoArchive.version = 2;
+    delete versionTwoArchive.goalMilestones;
+    delete versionTwoArchive.goalAlertDismissals;
+    restoreUserData(aliceId, versionTwoArchive);
+    const legacyRestoredGoal = (await listGoals(aliceId)).find(
+      (goal) => goal.name === "Rate-aware goal",
+    );
+    expect(legacyRestoredGoal).toBeDefined();
+    expect(
+      await listGoalMilestones(aliceId, legacyRestoredGoal!.id),
+    ).toEqual([]);
 
     const malicious = structuredClone(archive) as typeof archive & {
       accounts: Array<(typeof archive.accounts)[number] & { userId?: string }>;

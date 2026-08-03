@@ -10,7 +10,9 @@ import {
   categories,
   contributionFrequencies,
   exchangeRates,
+  goalAlertDismissals,
   goalContributionPlans,
+  goalMilestones,
   goals,
   goalStatuses,
   idempotencyKeys,
@@ -206,7 +208,27 @@ const planArchiveSchema = z
   })
   .strict();
 
-const userArchiveSchema = z
+const milestoneArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    goalId: z.string().min(1),
+    name: z.string().min(1).max(100),
+    targetAmountMinor: safeInteger,
+    targetDate: timestamp.nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const alertDismissalArchiveSchema = z
+  .object({
+    goalId: z.string().min(1),
+    alertKey: z.string().min(1).max(50),
+    dismissedAt: timestamp,
+  })
+  .strict();
+
+const userArchiveV2Schema = z
   .object({
     format: z.literal("wealthboard-user-json"),
     version: z.literal(2),
@@ -221,6 +243,26 @@ const userArchiveSchema = z
     goalContributionPlans: z.array(planArchiveSchema).max(10000),
   })
   .strict();
+
+const userArchiveV3Schema = userArchiveV2Schema
+  .extend({
+    version: z.literal(3),
+    goalMilestones: z.array(milestoneArchiveSchema).max(10000),
+    goalAlertDismissals: z.array(alertDismissalArchiveSchema).max(10000),
+  })
+  .strict();
+
+const userArchiveSchema = z
+  .union([userArchiveV3Schema, userArchiveV2Schema])
+  .transform((archive) =>
+    archive.version === 3
+      ? archive
+      : {
+          ...archive,
+          goalMilestones: [],
+          goalAlertDismissals: [],
+        },
+  );
 
 function csvCell(value: unknown) {
   const text = value == null ? "" : String(value);
@@ -259,6 +301,8 @@ export async function exportData(userId: string) {
     rateRows,
     goalRows,
     planRows,
+    milestoneRows,
+    alertDismissalRows,
   ] = await Promise.all([
     db.select().from(categories).where(eq(categories.userId, userId)),
     db.select().from(accounts).where(eq(accounts.userId, userId)),
@@ -273,11 +317,19 @@ export async function exportData(userId: string) {
       .select()
       .from(goalContributionPlans)
       .where(eq(goalContributionPlans.userId, userId)),
+    db
+      .select()
+      .from(goalMilestones)
+      .where(eq(goalMilestones.userId, userId)),
+    db
+      .select()
+      .from(goalAlertDismissals)
+      .where(eq(goalAlertDismissals.userId, userId)),
   ]);
 
   return {
     format: "wealthboard-user-json" as const,
-    version: 2 as const,
+    version: 3 as const,
     exportedAt: nowIso(),
     settings: {
       displayName: settings.displayName,
@@ -297,6 +349,8 @@ export async function exportData(userId: string) {
     exchangeRates: rateRows.map(stripOwner),
     goals: goalRows.map(stripOwner),
     goalContributionPlans: planRows.map(stripOwner),
+    goalMilestones: milestoneRows.map(stripOwner),
+    goalAlertDismissals: alertDismissalRows.map(stripOwner),
   };
 }
 
@@ -356,6 +410,7 @@ export function restoreUserData(userId: string, input: unknown) {
     archive.goalContributionPlans,
     "contribution-plan",
   );
+  const milestoneIds = uniqueIdMap(archive.goalMilestones, "milestone");
 
   for (const account of archive.accounts) {
     requiredMappedId(categoryIds, account.categoryId, "account category");
@@ -382,6 +437,12 @@ export function restoreUserData(userId: string, input: unknown) {
   for (const plan of archive.goalContributionPlans) {
     requiredMappedId(goalIds, plan.goalId, "contribution-plan goal");
   }
+  for (const milestone of archive.goalMilestones) {
+    requiredMappedId(goalIds, milestone.goalId, "milestone goal");
+  }
+  for (const dismissal of archive.goalAlertDismissals) {
+    requiredMappedId(goalIds, dismissal.goalId, "alert-dismissal goal");
+  }
 
   const db = getDatabase();
   db.transaction((tx) => {
@@ -393,6 +454,12 @@ export function restoreUserData(userId: string, input: unknown) {
       .sync();
     if (!existingSettings) throw new Error("User settings are unavailable.");
 
+    tx.delete(goalAlertDismissals)
+      .where(eq(goalAlertDismissals.userId, userId))
+      .run();
+    tx.delete(goalMilestones)
+      .where(eq(goalMilestones.userId, userId))
+      .run();
     tx.delete(goalContributionPlans)
       .where(eq(goalContributionPlans.userId, userId))
       .run();
@@ -515,12 +582,40 @@ export function restoreUserData(userId: string, input: unknown) {
         )
         .run();
     }
+    if (archive.goalMilestones.length) {
+      tx.insert(goalMilestones)
+        .values(
+          archive.goalMilestones.map((row) => ({
+            ...row,
+            id: requiredMappedId(milestoneIds, row.id, "milestone"),
+            userId,
+            goalId: requiredMappedId(goalIds, row.goalId, "milestone goal"),
+          })),
+        )
+        .run();
+    }
+    if (archive.goalAlertDismissals.length) {
+      tx.insert(goalAlertDismissals)
+        .values(
+          archive.goalAlertDismissals.map((row) => ({
+            ...row,
+            userId,
+            goalId: requiredMappedId(
+              goalIds,
+              row.goalId,
+              "alert-dismissal goal",
+            ),
+          })),
+        )
+        .run();
+    }
   });
 
   return {
     accounts: archive.accounts.length,
     transactions: archive.transactions.length,
     goals: archive.goals.length,
+    milestones: archive.goalMilestones.length,
   };
 }
 

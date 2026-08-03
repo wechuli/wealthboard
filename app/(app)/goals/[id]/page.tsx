@@ -12,6 +12,7 @@ import {
 
 import { deleteGoalAction, setGoalStatusAction } from "@/app/(app)/actions";
 import { GoalProjectionChart } from "@/components/charts";
+import { GoalScenarioComparison } from "@/components/goal-scenario-comparison";
 import { MoneyValue } from "@/components/privacy-provider";
 import { MutationButton } from "@/components/mutation-button";
 import { Badge } from "@/components/ui/badge";
@@ -20,8 +21,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/ui/page";
 import { TRANSACTION_LABELS } from "@/lib/constants";
-import { formatDate } from "@/lib/dates";
-import { safeChartNumber } from "@/lib/money";
+import { dateInputForTimezone, formatDate } from "@/lib/dates";
+import { minorToDecimalString, safeChartNumber } from "@/lib/money";
 import { getAccountActivity } from "@/lib/services/accounts";
 import { getSettings } from "@/lib/bootstrap";
 import { getGoal, goalProjectionPoints } from "@/lib/services/goals";
@@ -225,6 +226,26 @@ export default async function GoalDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {!goal.missingExchangeRate ? (
+        <GoalScenarioComparison
+          currentMinor={goal.currentAmountCalculated.toString()}
+          targetMinor={goal.targetAmountMinor.toString()}
+          currency={goal.currency}
+          fromDate={dateInputForTimezone(settings.timezone)}
+          targetDate={goal.targetDate}
+          savedMonthlyContribution={minorToDecimalString(
+            goal.plannedMonthly,
+            goal.currency,
+          )}
+          requiredMonthlyContribution={minorToDecimalString(
+            goal.requiredMonthly,
+            goal.currency,
+          )}
+          savedAnnualReturn={goal.assumedAnnualReturnBps / 100}
+          timezone={settings.timezone}
+        />
+      ) : null}
 
       <Card className="mt-5">
         <CardHeader>
