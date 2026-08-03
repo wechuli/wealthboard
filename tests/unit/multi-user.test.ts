@@ -380,10 +380,12 @@ describe.sequential("multi-user persistence and isolation", () => {
       targetAmount: "500",
       targetDate: planStartDate,
     });
+    const overdueDate = new Date(`${planStartDate}T12:00:00.000Z`);
+    overdueDate.setUTCDate(overdueDate.getUTCDate() - 1);
     createGoalMilestone(aliceId, rateAwareGoalId, {
       name: "Overdue checkpoint",
       targetAmount: "1500",
-      targetDate: planStartDate,
+      targetDate: overdueDate.toISOString().slice(0, 10),
     });
     createGoalMilestone(aliceId, rateAwareGoalId, {
       name: "Final checkpoint",
