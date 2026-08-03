@@ -40,17 +40,17 @@ Effort estimates:
 
 ## Functionality Improvements
 
-### F1. Transaction Workbench with Search, Filters, and Pagination
+### F1. Transaction Workbench with Search, Filters, and Pagination (Implemented)
 
+- **Status:** Implemented on 2026-08-03.
 - **Priority:** P1
 - **Estimated effort:** Large
-- **Current gap:** The transaction page loads and renders the full user history as one chronological list. It has no search, account/type filter, date range, sort control, or pagination.
-- **Evidence from the repository:** `listTransactions()` in [lib/services/accounts.ts](lib/services/accounts.ts) returns every transaction for a user. [app/(app)/transactions/page.tsx](<app/(app)/transactions/page.tsx>) maps the complete result directly. Accounts already provide a good filtering pattern in [components/accounts-list.tsx](components/accounts-list.tsx).
-- **Proposed improvement:** Add owner-scoped cursor pagination and server-side filters for date, account, type, amount direction, and text. Preserve filter state in the URL and offer CSV export for the selected range.
+- **Previous gap:** The transaction page loaded and rendered the full user history as one chronological list, with no search, account/type filter, date range, sort control, or pagination.
+- **Implementation:** `listTransactionPage()` in [lib/services/accounts.ts](lib/services/accounts.ts) now applies owner-scoped account, type, date, amount-direction, and literal text filters with AND semantics. It uses bidirectional keyset pagination over `transactionDate`, `createdAt`, and `id`, with a default and maximum page size of 100. [app/(app)/transactions/page.tsx](<app/(app)/transactions/page.tsx>) exposes the filters and sort order as GET parameters, preserves them across pagination and refresh, and provides filtered CSV export through [app/api/export/transactions.csv/route.ts](app/api/export/transactions.csv/route.ts).
 - **User value:** Users can audit years of activity, find fees or dividends, investigate a balance, and prepare records without downloading all data.
-- **Dependencies:** Supporting indexes and query APIs; URL-aware transaction list component; pagination tests.
-- **Risks or trade-offs:** Client-only filtering would still fetch unbounded histories. Text search should begin with indexed prefix/substring behavior before adding full-text infrastructure.
-- **Acceptance criteria:** A user can combine account, type, date, and text filters with AND semantics; keyset pagination uses the stable tuple `transactionDate DESC, createdAt DESC, id DESC`; the default page size is 100; no request returns another user's rows; filter state survives refresh; 10,000-transaction fixtures remain responsive.
+- **Supporting work:** [db/schema.ts](db/schema.ts) defines owner-first composite indexes for the default, account, and type timelines. Filtered CSV uses the same service predicate as the page, so export and display cannot drift.
+- **Trade-offs:** Text matching is a case-insensitive literal substring search across description, notes, and account name. Full-text infrastructure remains deferred; the current implementation is covered by a 10,000-row fixture and bounded result tests.
+- **Acceptance criteria:** Met. [tests/unit/transaction-query.test.ts](tests/unit/transaction-query.test.ts) covers combined filters, both cursor directions, stable same-timestamp ordering, direct cross-user denial, filtered CSV, the 100-row default, a 10,000-row history, and index selection. [tests/e2e/acceptance.spec.ts](tests/e2e/acceptance.spec.ts) covers URL persistence, refresh, filtered CSV download, and responsive layout at the supported widths.
 
 ### F2. Reconciliation and Safe Correction Workflows
 
@@ -530,7 +530,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 
 ### Phase 2: Core Product Completeness
 
-- F1 transaction workbench.
+- F1 transaction workbench. **Implemented 2026-08-03.**
 - F2 reconciliation and corrections.
 - F3 import preview and duplicate detection.
 - F4 freshness indicators.
@@ -576,7 +576,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 - Reject archived accounts and invalid goal links at service boundaries (A5).
 - Stop treating the seeded USD/KES placeholder as authoritative (first part of A1).
 - Add a server-side pre-restore backup before replacing the SQLite file (first part of A4).
-- Add transaction type/account/date filters before full pagination (first slice of F1).
+- ~~Add transaction type/account/date filters before full pagination (first slice of F1).~~ Completed as the full F1 transaction workbench on 2026-08-03.
 - Add security headers in report-only/tested mode and trusted-proxy documentation (first slice of A7).
 - Add an npm audit and image scan job without automatic forced fixes (first slice of A8/A9).
 - Add stale-account badges using existing event timestamps (F4).

@@ -134,7 +134,9 @@ CREATE TABLE `transactions` (
 	FOREIGN KEY (`user_id`,`account_id`) REFERENCES `accounts`(`user_id`,`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `transactions_user_account_date_idx` ON `transactions` (`user_id`,`account_id`,`transaction_date`);--> statement-breakpoint
+CREATE INDEX `transactions_user_date_created_id_idx` ON `transactions` (`user_id`,`transaction_date`,`created_at`,`id`);--> statement-breakpoint
+CREATE INDEX `transactions_user_account_date_created_id_idx` ON `transactions` (`user_id`,`account_id`,`transaction_date`,`created_at`,`id`);--> statement-breakpoint
+CREATE INDEX `transactions_user_type_date_created_id_idx` ON `transactions` (`user_id`,`type`,`transaction_date`,`created_at`,`id`);--> statement-breakpoint
 CREATE INDEX `transactions_user_transfer_group_idx` ON `transactions` (`user_id`,`transfer_group_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `transactions_user_idempotency_unique` ON `transactions` (`user_id`,`idempotency_key`);--> statement-breakpoint
 CREATE TABLE `user_settings` (

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "573c49e5-e9ae-4ffd-a650-6a943dc2a95e",
+  "id": "4ae02aaa-c5cc-4779-b9e2-d6c84e410ef4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "accounts": {
@@ -958,12 +958,35 @@
         }
       },
       "indexes": {
-        "transactions_user_account_date_idx": {
-          "name": "transactions_user_account_date_idx",
+        "transactions_user_date_created_id_idx": {
+          "name": "transactions_user_date_created_id_idx",
+          "columns": [
+            "user_id",
+            "transaction_date",
+            "created_at",
+            "id"
+          ],
+          "isUnique": false
+        },
+        "transactions_user_account_date_created_id_idx": {
+          "name": "transactions_user_account_date_created_id_idx",
           "columns": [
             "user_id",
             "account_id",
-            "transaction_date"
+            "transaction_date",
+            "created_at",
+            "id"
+          ],
+          "isUnique": false
+        },
+        "transactions_user_type_date_created_id_idx": {
+          "name": "transactions_user_type_date_created_id_idx",
+          "columns": [
+            "user_id",
+            "type",
+            "transaction_date",
+            "created_at",
+            "id"
           ],
           "isUnique": false
         },

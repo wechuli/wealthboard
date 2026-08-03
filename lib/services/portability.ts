@@ -28,7 +28,11 @@ import {
 } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { parseMoney } from "@/lib/money";
-import { recalculateAccountBalance } from "@/lib/services/accounts";
+import {
+  listTransactionsForExport,
+  recalculateAccountBalance,
+  type TransactionFilters,
+} from "@/lib/services/accounts";
 
 const safeInteger = z
   .number()
@@ -596,29 +600,24 @@ export function importTransactionsCsv(userId: string, content: string) {
   return prepared.length;
 }
 
-export async function transactionCsv(userId: string) {
-  const rows = await getDatabase()
-    .select({
-      id: transactions.id,
-      account_id: transactions.accountId,
-      account_name: accounts.name,
-      type: transactions.type,
-      amount_minor: transactions.amountMinor,
-      currency: transactions.currency,
-      date: transactions.transactionDate,
-      description: transactions.description,
-      notes: transactions.notes,
-      transfer_group_id: transactions.transferGroupId,
-    })
-    .from(transactions)
-    .innerJoin(
-      accounts,
-      and(
-        eq(transactions.userId, accounts.userId),
-        eq(transactions.accountId, accounts.id),
-      ),
-    )
-    .where(eq(transactions.userId, userId));
+export async function transactionCsv(
+  userId: string,
+  filters: TransactionFilters = { sort: "newest" },
+) {
+  const rows = (await listTransactionsForExport(userId, filters)).map(
+    (row) => ({
+      id: row.id,
+      account_id: row.accountId,
+      account_name: row.accountName,
+      type: row.type,
+      amount_minor: row.amountMinor,
+      currency: row.currency,
+      date: row.transactionDate,
+      description: row.description,
+      notes: row.notes,
+      transfer_group_id: row.transferGroupId,
+    }),
+  );
   return toCsv(rows);
 }
 

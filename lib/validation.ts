@@ -81,6 +81,47 @@ export const transactionSchema = z.object({
   idempotencyKey: z.string().uuid(),
 });
 
+const optionalTransactionQueryText = z
+  .string()
+  .trim()
+  .max(100)
+  .optional()
+  .transform((value) => value || undefined)
+  .catch(undefined);
+
+export const transactionListQuerySchema = z.object({
+  q: optionalTransactionQueryText,
+  accountId: z.string().uuid().optional().catch(undefined),
+  type: z.enum(transactionTypes).optional().catch(undefined),
+  from: z.string().date().optional().catch(undefined),
+  to: z.string().date().optional().catch(undefined),
+  flow: z.enum(["inflow", "outflow"]).optional().catch(undefined),
+  sort: z.enum(["newest", "oldest"]).default("newest").catch("newest"),
+  cursor: z.string().max(1000).optional().catch(undefined),
+  page: z.enum(["next", "previous"]).default("next").catch("next"),
+});
+
+export const transactionCursorSchema = z.object({
+  transactionDate: z.string().datetime({ offset: true }),
+  createdAt: z.string().datetime({ offset: true }),
+  id: z.string().min(1).max(100),
+});
+
+export type TransactionListQuery = z.infer<typeof transactionListQuerySchema>;
+
+export function parseTransactionListQuery(
+  input: Record<string, string | string[] | undefined>,
+) {
+  return transactionListQuerySchema.parse(
+    Object.fromEntries(
+      Object.entries(input).map(([key, value]) => [
+        key,
+        Array.isArray(value) ? value[0] : value,
+      ]),
+    ),
+  );
+}
+
 export const valuationSchema = z.object({
   idempotencyKey: z.string().uuid(),
   accountId: z.string().uuid(),

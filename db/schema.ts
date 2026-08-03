@@ -187,10 +187,25 @@ export const transactions = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
-    index("transactions_user_account_date_idx").on(
+    index("transactions_user_date_created_id_idx").on(
+      table.userId,
+      table.transactionDate,
+      table.createdAt,
+      table.id,
+    ),
+    index("transactions_user_account_date_created_id_idx").on(
       table.userId,
       table.accountId,
       table.transactionDate,
+      table.createdAt,
+      table.id,
+    ),
+    index("transactions_user_type_date_created_id_idx").on(
+      table.userId,
+      table.type,
+      table.transactionDate,
+      table.createdAt,
+      table.id,
     ),
     index("transactions_user_transfer_group_idx").on(
       table.userId,

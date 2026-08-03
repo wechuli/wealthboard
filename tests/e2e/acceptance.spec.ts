@@ -37,6 +37,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
 
   await page.getByRole("link", { name: "Deposit" }).click();
   await page.getByLabel(/Amount/).fill("20000");
+  await page.getByLabel("Date").fill("2025-06-15");
   await page.getByRole("button", { name: "Record transaction" }).click();
   await expect(
     page.getByRole("heading", { name: "KCB Car Fund" }),
@@ -60,6 +61,41 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByLabel("Delete transaction").first().click();
   await expect(page.getByText("Transaction deleted.")).toBeVisible();
+
+  await page.getByLabel("Search transactions").fill("KCB");
+  await page
+    .getByLabel("Filter by account")
+    .selectOption({ label: "KCB Car Fund" });
+  await page.getByLabel("Filter by transaction type").selectOption("deposit");
+  await page.getByLabel("Filter by amount direction").selectOption("inflow");
+  await page.getByLabel("Sort transactions").selectOption("oldest");
+  await page.getByLabel("From date").fill("2025-06-15");
+  await page.getByLabel("To date").fill("2025-06-15");
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page).toHaveURL(/q=KCB/);
+  await expect(page).toHaveURL(/type=deposit/);
+  await expect(
+    page.locator("p").filter({ hasText: /^Deposit$/ }),
+  ).toBeVisible();
+  await expect(
+    page.locator("p").filter({ hasText: /^Opening balance$/ }),
+  ).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByLabel("Search transactions")).toHaveValue("KCB");
+  await expect(page.getByLabel("Filter by transaction type")).toHaveValue(
+    "deposit",
+  );
+  await expect(page.getByLabel("From date")).toHaveValue("2025-06-15");
+  const filteredQuery = new URL(page.url()).search;
+  const transactionExport = await page.request.get(
+    `/api/export/transactions.csv${filteredQuery}`,
+  );
+  expect(transactionExport.ok()).toBeTruthy();
+  const transactionCsv = await transactionExport.text();
+  expect(transactionCsv).toContain("KCB Car Fund");
+  expect(transactionCsv).toContain("deposit");
+  expect(transactionCsv).not.toContain("opening_balance");
 
   await page.goto("/accounts");
   await page.getByText("KCB Car Fund", { exact: true }).first().click();
@@ -89,7 +125,10 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await page.getByLabel(/Amount/).fill("10000");
   await page.getByRole("button", { name: "Transfer funds" }).click();
   await expect(
-    page.getByText("Transfer", { exact: true }).first(),
+    page
+      .locator("p")
+      .filter({ hasText: /^Transfer$/ })
+      .first(),
   ).toBeVisible();
 
   await page.goto("/accounts/new");
@@ -157,7 +196,13 @@ test("responsive layouts fit required viewports", async ({ page }) => {
 
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: width < 768 ? 800 : 900 });
-    for (const route of ["/", "/accounts", "/goals", "/reports"]) {
+    for (const route of [
+      "/",
+      "/accounts",
+      "/transactions",
+      "/goals",
+      "/reports",
+    ]) {
       await page.goto(route);
       await expect(page.locator("main")).toBeVisible();
       const dimensions = await page.evaluate(() => ({
