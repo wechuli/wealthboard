@@ -22,11 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/ui/page";
 import { TRANSACTION_LABELS } from "@/lib/constants";
-import {
-  dateInputForTimezone,
-  formatDate,
-  utcToDateInput,
-} from "@/lib/dates";
+import { dateInputForTimezone, formatDate, utcToDateInput } from "@/lib/dates";
 import { minorToDecimalString, safeChartNumber } from "@/lib/money";
 import { getAccountActivity } from "@/lib/services/accounts";
 import { getSettings } from "@/lib/bootstrap";

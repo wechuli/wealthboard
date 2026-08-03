@@ -191,14 +191,24 @@ export async function listGoalMilestones(
       asc(goalMilestones.targetDate),
     );
   const current = goal.currentAmountCalculated;
+  const timezone = getUserTimezone(userId);
+  const today = dateInputForTimezone(timezone, now);
 
   return rows.map((milestone) => {
     const target = BigInt(milestone.targetAmountMinor);
+    if (goal.missingExchangeRate) {
+      return {
+        ...milestone,
+        status: "rate_needed" as const,
+        progressPercent: "0",
+        remainingMinor: null,
+      };
+    }
     const reached = current >= target;
     const overdue = Boolean(
       !reached &&
-      milestone.targetDate &&
-      milestone.targetDate < now.toISOString(),
+        milestone.targetDate &&
+        milestone.targetDate.slice(0, 10) < today,
     );
     return {
       ...milestone,
@@ -275,7 +285,7 @@ export function deleteGoalMilestone(
   if (result.changes === 0) throw new Error("Milestone not found.");
 }
 
-function goalAlertKey(userId: string, now: Date) {
+function getUserTimezone(userId: string) {
   const settings = getDatabase()
     .query.userSettings.findFirst({
       where: eq(userSettings.userId, userId),
@@ -283,7 +293,11 @@ function goalAlertKey(userId: string, now: Date) {
     })
     .sync();
   if (!settings) throw new Error("User settings are unavailable.");
-  return `behind:${dateInputForTimezone(settings.timezone, now).slice(0, 7)}`;
+  return settings.timezone;
+}
+
+function goalAlertKey(userId: string, now: Date) {
+  return `behind:${dateInputForTimezone(getUserTimezone(userId), now).slice(0, 7)}`;
 }
 
 export async function listGoalAlerts(userId: string, now = new Date()) {

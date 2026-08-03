@@ -88,17 +88,17 @@ Effort estimates:
 - **Risks or trade-offs:** Different asset classes need different expectations. Avoid one universal threshold that marks illiquid assets incorrectly.
 - **Acceptance criteria:** Users can see and filter stale accounts; freshness uses financial activity rather than cosmetic edits; thresholds are configurable; the dashboard reports how much net worth is stale.
 
-### F5. Goal Scenario Comparison, Milestones, and Behind-Plan Alerts
+### F5. Goal Scenario Comparison, Milestones, and Behind-Plan Alerts (Implemented)
 
+- **Status:** Implemented on 2026-08-03. External notifications remain deferred to A15.
 - **Priority:** P2
 - **Estimated effort:** Large
-- **Current gap:** Goals already show required contributions, forecast completion, progress, and ahead/on-track/behind status, but users cannot compare scenarios, create milestones, or receive proactive reminders.
-- **Evidence from the repository:** [lib/services/goals.ts](lib/services/goals.ts) and [app/(app)/goals/[id]/page.tsx](<app/(app)/goals/[id]/page.tsx>) implement one projection using one contribution plan and assumed return. No notification or milestone table exists in [db/schema.ts](db/schema.ts).
-- **Proposed improvement:** Add a non-persistent scenario comparison first, then optional milestones and on-login/in-app alerts for goals that crossed behind-plan thresholds. Add external notifications only after background processing is established.
+- **Previous gap:** Goals showed one projection, but users could not compare scenarios, create milestones, or receive proactive reminders.
+- **Implementation:** [lib/finance.ts](lib/finance.ts) provides a pure scenario projection used by [components/goal-scenario-comparison.tsx](components/goal-scenario-comparison.tsx) for three independently editable, non-persistent cases. [db/schema.ts](db/schema.ts) adds owner-scoped milestones and monthly alert dismissals. [lib/services/goals.ts](lib/services/goals.ts) derives deterministic milestone status and reliable behind-plan reminders; the goal detail and authenticated dashboard expose the workflows.
 - **User value:** Users can answer "what if I add KES 20,000 per month?" and receive useful prompts before a target becomes unreachable.
-- **Dependencies:** Stable deterministic scenario functions; background jobs only for scheduled external notifications.
-- **Risks or trade-offs:** Forecasts are estimates, not promises. Avoid notification fatigue and clearly expose assumptions.
-- **Acceptance criteria:** Users can compare at least three contribution/return scenarios without altering the saved goal; milestone progress is deterministic; alerts are dismissible; every projection states its assumptions.
+- **Alert policy:** Active goals that are reliably calculated as behind plan appear on the post-login dashboard. A dismissal suppresses that goal through the current month in the user's timezone; it may return next month if still behind. No background worker or external notification channel was added.
+- **Trade-offs:** Forecasts remain estimates, not promises. Comparison copy exposes monthly compounding, contribution timing, fixed target/date, and excluded fees, taxes, inflation, and volatility. Monthly dismissal prevents repeated prompts while preserving a later reminder.
+- **Acceptance criteria:** Met. [tests/unit/finance.test.ts](tests/unit/finance.test.ts) covers immutable scenario math. [tests/unit/multi-user.test.ts](tests/unit/multi-user.test.ts) covers milestone status, cross-user denial, monthly dismissal recurrence, version 3 round-trip, and version 2 compatibility. [tests/e2e/acceptance.spec.ts](tests/e2e/acceptance.spec.ts) covers three scenario controls, reload non-persistence, milestone creation/restore, alert dismissal across refresh/restore, and responsive goal detail layouts.
 
 ### F6. Date-Scoped and Downloadable Reports with Movement Attribution
 
@@ -512,11 +512,11 @@ If those triggers are reached, use a phased PostgreSQL plan: introduce dialect-n
 - **Improvement:** Separate product defaults from security/runtime policy and expose one server-only validated configuration module plus safe client constants where needed.
 - **Acceptance criteria:** Each policy has one source of truth, environment overrides validate at startup, and tests cover defaults and invalid values.
 
-### TD4. Version Portability Formats Explicitly
+### TD4. Version Portability Formats Explicitly (Partially Implemented)
 
 - **Priority:** P2
 - **Estimated effort:** Medium
-- **Issue:** User restore accepts exactly `wealthboard-user-json` version 2 in [lib/services/portability.ts](lib/services/portability.ts), but there is no documented compatibility policy or converter registry.
+- **Issue:** User export now emits version 3 and restore explicitly normalizes version 2 archives for the new goal collections, but there is still no general converter registry or documented support window.
 - **Improvement:** Document archive support windows, add version-dispatched parsers/converters, and keep exported calculation-independent source records forward portable.
 - **Acceptance criteria:** The archive version changes only when the serialized contract changes; each supported version has an isolated parser and converter; unsupported versions return a clear message; at least one fixture per supported version validates conversion and round-trip; removals follow the documented support window.
 
@@ -549,7 +549,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 - F2 reconciliation and corrections.
 - F3 import preview and duplicate detection.
 - F4 freshness indicators.
-- F5 goal scenarios and milestones.
+- F5 goal scenarios, milestones, and in-app alerts. **Implemented 2026-08-03.**
 - F6 date-scoped downloadable reports.
 - F7 account deletion and export-before-delete.
 - F12 currency catalog and per-user base currency. **Implemented 2026-08-03.**

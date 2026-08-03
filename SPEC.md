@@ -651,6 +651,8 @@ Each goal detail page should contain:
 - Contribution history
 - Linked account history
 - Ability to pause or modify the goal
+- At least three editable, non-persistent contribution/return scenarios
+- Optional amount checkpoints with deterministic reached, upcoming, or overdue status
 
 Include a projection chart using a conservative linear or configurable annual-return assumption.
 
@@ -662,7 +664,15 @@ For example:
 - Target: KES 3,250,000
 - Target date: July 2028
 
-The projection should clearly state that it is an estimate.
+The projection and every comparison must state its compounding, contribution
+timing, fixed target/date, and excluded-cost assumptions. Scenario edits must
+never mutate the saved goal.
+
+An active goal that is behind plan should produce an in-app dashboard reminder
+when its progress can be calculated reliably. Users can dismiss that reminder
+for the current calendar month in their configured timezone; it may return in a
+later month if the goal remains behind. External notifications remain out of
+scope until durable background jobs exist.
 
 ## Reports and analytics
 

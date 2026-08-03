@@ -179,14 +179,20 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   );
   await expect(page.getByLabel("Saved plan annual return")).toHaveValue("8");
   await page.reload();
-  await expect(page.getByLabel("Lower return monthly contribution")).toHaveValue(
-    "120000.00",
-  );
+  await expect(
+    page.getByLabel("Lower return monthly contribution"),
+  ).toHaveValue("120000.00");
   await expect(page.getByLabel("Lower return annual return")).toHaveValue("6");
 
   await page.getByLabel("Milestone name").fill("Halfway funded");
-  await page.getByLabel(/Target amount \(KES\)/).last().fill("1500000");
-  await page.getByLabel("Target date", { exact: true }).last().fill("2027-12-31");
+  await page
+    .getByLabel(/Target amount \(KES\)/)
+    .last()
+    .fill("1500000");
+  await page
+    .getByLabel("Target date", { exact: true })
+    .last()
+    .fill("2027-12-31");
   await page.getByRole("button", { name: "Add milestone" }).click();
   await expect(page.getByText("Milestone added.")).toBeVisible();
   await expect(page.getByText("Halfway funded", { exact: true })).toBeVisible();

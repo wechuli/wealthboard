@@ -21,6 +21,8 @@ separate backend, cloud identity provider, or financial integration.
 - Deposits, withdrawals, income, fees, gains/losses, valuations, and atomic
   paired transfers
 - Net-worth history, portfolio analytics, and linked-goal forecasting
+- Non-persistent goal scenario comparisons, milestones, and dismissible
+  behind-plan dashboard reminders
 - Per-user JSON portability and account/transaction CSV export
 - Operator-only full SQLite backup and offline restore
 - Installable PWA shell with explicit offline safety
@@ -162,7 +164,9 @@ Settings provides:
 Exports contain no credentials, login attempts, session data, idempotency
 records, or another user's rows. Restore downloads a pre-restore user export,
 validates the archive, rejects owner fields and invalid relationships, remaps
-record IDs, and rolls back completely on failure.
+record IDs, and rolls back completely on failure. Current exports use version 3
+and include goal milestones and reminder dismissals; version 2 archives remain
+restorable.
 
 Transaction CSV uses this header:
 

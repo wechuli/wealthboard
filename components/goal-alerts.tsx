@@ -52,10 +52,11 @@ export function GoalAlerts({
               <MoneyValue
                 amount={BigInt(alert.requiredMonthly)}
                 currency={alert.currency}
-              />
-              {" "}for the {formatDate(alert.targetDate, timezone, "MMM yyyy")} target.
-              This estimate compounds the saved {alert.annualReturnBps / 100}% annual
-              return monthly; actual returns will vary.
+              />{" "}
+              for the {formatDate(alert.targetDate, timezone, "MMM yyyy")}{" "}
+              target. This estimate compounds the saved{" "}
+              {alert.annualReturnBps / 100}% annual return monthly; actual
+              returns will vary.
             </p>
           </div>
           <MutationButton

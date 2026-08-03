@@ -80,9 +80,7 @@ export function GoalMilestones({
             />
           </div>
           <div>
-            <Label htmlFor="milestone-amount">
-              Target amount ({currency})
-            </Label>
+            <Label htmlFor="milestone-amount">Target amount ({currency})</Label>
             <Input
               id="milestone-amount"
               name="targetAmount"

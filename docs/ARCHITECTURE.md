@@ -48,11 +48,17 @@ separate API service and no external identity provider.
   unavailable.
 - **Goals:** A linked account is the source of truth for goal progress. Unlinked
   goals retain a direct current amount. Forecasts use Decimal.js future-value
-  calculations and a configurable annual return assumption.
+  calculations and a configurable annual return assumption. Scenario
+  comparisons are pure client-side projections over immutable inputs.
+  Milestones are owner-scoped source records with status derived from current
+  progress and due date. Behind-plan reminders are computed on authenticated
+  reads; owner-scoped dismissals suppress one goal for one user-calendar month.
 - **Portability:** JSON and CSV routes operate only on the authenticated user's
   records. A per-user JSON restore replaces only that user's portfolio in one
-  transaction. Raw SQLite backup and offline restore are deployment-operator
-  commands, never ordinary authenticated routes.
+  transaction. Export version 3 includes milestones and alert dismissals;
+  version 2 remains restorable with empty values for those collections. Raw
+  SQLite backup and offline restore are deployment-operator commands, never
+  ordinary authenticated routes.
 - **Offline:** The service worker caches only the shell and static assets.
   Financial responses and mutations remain server-only. Logout clears
   user-specific client state before another user can sign in on the device.
@@ -70,7 +76,8 @@ separate API service and no external identity provider.
 - Same-owner relationships are enforced with composite foreign keys where
   practical and are always validated inside the mutation transaction. This
   applies to account/category, transaction/account, valuation/account,
-  goal/account, plan/goal, and both sides of a transfer.
+  goal/account, plan/goal, milestone/goal, alert-dismissal/goal, and both sides
+  of a transfer.
 - Owner-scoped uniqueness covers category slugs, exchange-rate pair/date,
   linked goal accounts, and idempotency keys. Private cache keys include
   `userId`; user-specific settings are not stored in a process-global singleton.
@@ -90,6 +97,8 @@ separate API service and no external identity provider.
 | `exchange_rates`          | One user's effective-dated decimal exchange rates                   |
 | `goals`                   | One user's targets, links, status, priority, and return assumptions |
 | `goal_contribution_plans` | User-owned planned contribution amounts and frequency               |
+| `goal_milestones`         | Optional owner-scoped amount and date checkpoints                   |
+| `goal_alert_dismissals`   | Monthly owner-scoped suppression of derived goal reminders          |
 | `login_attempts`          | Bounded rate limiting by normalized username and client key         |
 | `idempotency_keys`        | User-scoped duplicate-submission protection                         |
 
