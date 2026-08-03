@@ -30,6 +30,7 @@ import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { replayBalance, type FinancialEvent } from "@/lib/finance";
 import { parseMoney } from "@/lib/money";
+import { requireEnabledCurrency } from "@/lib/services/settings";
 import {
   transactionCursorSchema,
   type TransactionListQuery,
@@ -452,14 +453,15 @@ type AccountInput = {
 
 export function createAccount(userId: string, input: AccountInput) {
   const db = getDatabase();
+  const currency = requireEnabledCurrency(userId, input.currency, db);
   if (input.openedAt) assertNotFutureDate(userId, input.openedAt, db);
   const id = crypto.randomUUID();
   const timestamp = nowIso();
-  const openingValueMinor = parseMoney(input.openingValue, input.currency);
+  const openingValueMinor = parseMoney(input.openingValue, currency);
   if (openingValueMinor < 0)
     throw new Error("Opening value cannot be negative.");
   const costBasisMinor = input.costBasis
-    ? parseMoney(input.costBasis, input.currency)
+    ? parseMoney(input.costBasis, currency)
     : undefined;
   const transactionDate = input.openedAt
     ? dateInputToUtc(input.openedAt)
@@ -499,7 +501,7 @@ export function createAccount(userId: string, input: AccountInput) {
         categoryId: input.categoryId,
         institution: input.institution || null,
         accountReference: input.accountReference || null,
-        currency: input.currency,
+        currency,
         currentValueMinor: openingValueMinor,
         costBasisMinor,
         isLiability: category.assetOrLiability === "liability",
@@ -517,7 +519,7 @@ export function createAccount(userId: string, input: AccountInput) {
         accountId: id,
         type: "opening_balance",
         amountMinor: openingValueMinor,
-        currency: input.currency,
+        currency,
         transactionDate,
         description: "Opening balance",
         createdAt: timestamp,
@@ -545,6 +547,7 @@ export function updateAccount(
   input: Omit<AccountInput, "openingValue" | "openedAt">,
 ) {
   const db = getDatabase();
+  requireEnabledCurrency(userId, input.currency, db);
   db.transaction((tx) => {
     const existing = tx.query.accounts
       .findFirst({

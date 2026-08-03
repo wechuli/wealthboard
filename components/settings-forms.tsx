@@ -26,27 +26,64 @@ import {
   Select,
 } from "@/components/ui/form-controls";
 import type { UserSettings } from "@/db/schema";
+import {
+  currencyOptions,
+  normalizeEnabledCurrencies,
+  parseEnabledCurrencies,
+} from "@/lib/currencies";
 import { formatDate } from "@/lib/dates";
 
 function SubmitButton({
   pending,
   label,
   icon,
+  disabled = false,
 }: {
   pending: boolean;
   label: string;
   icon: React.ReactNode;
+  disabled?: boolean;
 }) {
   return (
-    <Button disabled={pending}>
+    <Button disabled={pending || disabled}>
       {pending ? <LoaderCircle className="animate-spin" size={16} /> : icon}
       {label}
     </Button>
   );
 }
 
-export function GeneralSettingsForm({ settings }: { settings: UserSettings }) {
+export function GeneralSettingsForm({
+  settings,
+  referencedCurrencies,
+}: {
+  settings: UserSettings;
+  referencedCurrencies: string[];
+}) {
   const [state, action, pending] = useActionState(updateSettingsAction, {});
+  const initialEnabled = normalizeEnabledCurrencies(
+    parseEnabledCurrencies(settings.supportedCurrencies),
+    [settings.baseCurrency, ...referencedCurrencies],
+  );
+  const [baseCurrency, setBaseCurrency] = useState(settings.baseCurrency);
+  const [enabledCurrencies, setEnabledCurrencies] = useState(initialEnabled);
+  const options = currencyOptions(initialEnabled);
+  const referenced = new Set(referencedCurrencies);
+
+  const selectBaseCurrency = (currency: string) => {
+    setBaseCurrency(currency);
+    setEnabledCurrencies((current) =>
+      normalizeEnabledCurrencies(current, [currency]),
+    );
+  };
+
+  const toggleCurrency = (currency: string, enabled: boolean) => {
+    setEnabledCurrencies((current) =>
+      enabled
+        ? normalizeEnabledCurrencies(current, [currency])
+        : current.filter((code) => code !== currency),
+    );
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -73,26 +110,67 @@ export function GeneralSettingsForm({ settings }: { settings: UserSettings }) {
           </div>
           <div>
             <Label htmlFor="baseCurrency">Base currency</Label>
-            <Input
+            <Select
               id="baseCurrency"
               name="baseCurrency"
-              maxLength={3}
-              defaultValue={settings.baseCurrency}
-            />
+              value={baseCurrency}
+              onChange={(event) => selectBaseCurrency(event.target.value)}
+            >
+              {options.map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code} - {currency.name}
+                </option>
+              ))}
+            </Select>
           </div>
-          <div>
-            <Label htmlFor="supportedCurrencies">Supported currencies</Label>
-            <Input
+          <fieldset className="sm:col-span-2">
+            <legend className="mb-2 text-sm font-medium text-slate-300">
+              Enabled currencies
+            </legend>
+            <div className="grid max-h-72 gap-2 overflow-y-auto rounded-xl border border-white/10 bg-black/15 p-2 sm:grid-cols-2 lg:grid-cols-3">
+              {options.map((currency) => {
+                const isBase = currency.code === baseCurrency;
+                const isReferenced = referenced.has(currency.code);
+                const locked = isBase || isReferenced;
+                return (
+                  <label
+                    key={currency.code}
+                    className="flex min-h-11 items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-slate-300 hover:bg-white/[0.04]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={enabledCurrencies.includes(currency.code)}
+                      disabled={locked}
+                      onChange={(event) =>
+                        toggleCurrency(currency.code, event.target.checked)
+                      }
+                      className="h-4 w-4 shrink-0 accent-emerald-400"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium text-slate-200">
+                        {currency.code}
+                      </span>
+                      <span className="ml-2 text-xs text-slate-500">
+                        {currency.name}
+                      </span>
+                    </span>
+                    {isBase ? (
+                      <span className="text-xs text-emerald-300">Base</span>
+                    ) : isReferenced ? (
+                      <span className="text-xs text-slate-500">In use</span>
+                    ) : null}
+                  </label>
+                );
+              })}
+            </div>
+            <input
               id="supportedCurrencies"
               name="supportedCurrencies"
-              defaultValue={(
-                JSON.parse(settings.supportedCurrencies) as string[]
-              ).join(", ")}
+              type="hidden"
+              value={enabledCurrencies.join(",")}
             />
-            <p className="mt-1 text-xs text-slate-500">
-              Comma-separated ISO codes
-            </p>
-          </div>
+            <FieldError>{state.fieldErrors?.supportedCurrencies?.[0]}</FieldError>
+          </fieldset>
           <div>
             <Label htmlFor="timezone">Timezone</Label>
             <Input
@@ -177,6 +255,8 @@ export function GeneralSettingsForm({ settings }: { settings: UserSettings }) {
 
 export function ExchangeRateForm({
   rates,
+  enabledCurrencies,
+  baseCurrency,
 }: {
   rates: Array<{
     id: string;
@@ -186,8 +266,17 @@ export function ExchangeRateForm({
     effectiveDate: string;
     source: string;
   }>;
+  enabledCurrencies: string[];
+  baseCurrency: string;
 }) {
   const [state, action, pending] = useActionState(exchangeRateAction, {});
+  const options = currencyOptions(enabledCurrencies).filter((currency) =>
+    enabledCurrencies.includes(currency.code),
+  );
+  const defaultRateBase =
+    options.find((currency) => currency.code !== baseCurrency)?.code ??
+    baseCurrency;
+  const canAddRate = options.length > 1;
   return (
     <Card>
       <CardHeader>
@@ -202,21 +291,33 @@ export function ExchangeRateForm({
         <form action={action} className="grid gap-3 sm:grid-cols-4">
           <div>
             <Label htmlFor="rateBase">Base</Label>
-            <Input
+            <Select
               id="rateBase"
               name="baseCurrency"
-              maxLength={3}
-              defaultValue="USD"
-            />
+              defaultValue={defaultRateBase}
+              disabled={!canAddRate}
+            >
+              {options.map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code} - {currency.name}
+                </option>
+              ))}
+            </Select>
           </div>
           <div>
             <Label htmlFor="rateQuote">Quote</Label>
-            <Input
+            <Select
               id="rateQuote"
               name="quoteCurrency"
-              maxLength={3}
-              defaultValue="KES"
-            />
+              defaultValue={baseCurrency}
+              disabled={!canAddRate}
+            >
+              {options.map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code} - {currency.name}
+                </option>
+              ))}
+            </Select>
           </div>
           <div>
             <Label htmlFor="rate">Rate</Label>
@@ -249,6 +350,7 @@ export function ExchangeRateForm({
               pending={pending}
               label="Save rate"
               icon={<RefreshCw size={16} />}
+              disabled={!canAddRate}
             />
           </div>
         </form>

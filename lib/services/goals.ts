@@ -25,6 +25,7 @@ import {
   parseMoney,
   percentage,
 } from "@/lib/money";
+import { requireEnabledCurrency } from "@/lib/services/settings";
 
 type GoalInput = {
   idempotencyKey?: string;
@@ -166,6 +167,7 @@ export async function getGoal(userId: string, id: string) {
 
 export function createGoal(userId: string, input: GoalInput) {
   const db = getDatabase();
+  requireEnabledCurrency(userId, input.currency, db);
   const { targetAmountMinor, currentAmountMinor, plannedContributionMinor } =
     validateGoalInput(input);
   const id = crypto.randomUUID();
@@ -245,6 +247,7 @@ export function createGoal(userId: string, input: GoalInput) {
 
 export function updateGoal(userId: string, id: string, input: GoalInput) {
   const db = getDatabase();
+  requireEnabledCurrency(userId, input.currency, db);
   const { targetAmountMinor, currentAmountMinor, plannedContributionMinor } =
     validateGoalInput(input);
   const timestamp = nowIso();

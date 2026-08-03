@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4ae02aaa-c5cc-4779-b9e2-d6c84e410ef4",
+  "id": "03766367-613b-4981-bc3d-77398e3f252d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "accounts": {
@@ -1079,7 +1079,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'[\"KES\",\"USD\"]'"
+          "default": "'[\"KES\",\"USD\",\"TZS\",\"UGX\"]'"
         },
         "timezone": {
           "name": "timezone",

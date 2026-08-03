@@ -144,7 +144,7 @@ CREATE TABLE `user_settings` (
 	`user_id` text NOT NULL,
 	`display_name` text NOT NULL,
 	`base_currency` text DEFAULT 'KES' NOT NULL,
-	`supported_currencies` text DEFAULT '["KES","USD"]' NOT NULL,
+	`supported_currencies` text DEFAULT '["KES","USD","TZS","UGX"]' NOT NULL,
 	`timezone` text DEFAULT 'Africa/Nairobi' NOT NULL,
 	`preferred_date_format` text DEFAULT 'dd MMM yyyy' NOT NULL,
 	`app_name` text DEFAULT 'Wealthboard' NOT NULL,

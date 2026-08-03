@@ -6,12 +6,17 @@ import { getSettings } from "@/lib/bootstrap";
 import { requireSession } from "@/lib/auth/session";
 import { listAccounts } from "@/lib/services/accounts";
 import { dateInputForTimezone } from "@/lib/dates";
+import { getCurrencyConfiguration } from "@/lib/services/settings";
 
 export const metadata = { title: "Create goal" };
 
 export default async function NewGoalPage() {
   const { userId } = await requireSession();
-  const [accounts, settings] = await Promise.all([listAccounts(userId), getSettings(userId)]);
+  const [accounts, settings, currencyConfiguration] = await Promise.all([
+    listAccounts(userId),
+    getSettings(userId),
+    getCurrencyConfiguration(userId),
+  ]);
   const target = new Date();
   target.setUTCFullYear(target.getUTCFullYear() + 2);
   return (
@@ -22,11 +27,12 @@ export default async function NewGoalPage() {
         <CardContent>
           <GoalForm
             accounts={accounts}
+            currencies={currencyConfiguration.enabledCurrencies}
             action={createGoalAction}
             idempotencyKey={crypto.randomUUID()}
             today={dateInputForTimezone(settings.timezone)}
             initial={{
-              currency: settings.baseCurrency,
+              currency: currencyConfiguration.baseCurrency,
               assumedAnnualReturn: settings.defaultGoalReturnBps / 100,
               targetDate: target.toISOString().slice(0, 10),
             }}

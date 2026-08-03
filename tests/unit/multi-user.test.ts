@@ -16,6 +16,10 @@ import {
   registerUser,
 } from "@/lib/auth/users";
 import { getSettings } from "@/lib/bootstrap";
+import {
+  DEFAULT_ENABLED_CURRENCIES,
+  parseEnabledCurrencies,
+} from "@/lib/currencies";
 import { closeDatabase, getDatabase } from "@/lib/db";
 import { requiredMonthlyContribution } from "@/lib/finance";
 import {
@@ -31,7 +35,11 @@ import {
   importTransactionsCsv,
   restoreUserData,
 } from "@/lib/services/portability";
-import { addExchangeRate, listExchangeRates } from "@/lib/services/settings";
+import {
+  addExchangeRate,
+  listExchangeRates,
+  updateSettings,
+} from "@/lib/services/settings";
 import { recordTransfer } from "@/lib/services/transfers";
 
 const migrationsFolder = path.resolve("db/migrations");
@@ -52,6 +60,25 @@ function migrateDatabase(databasePath: string) {
 function useDatabase(databasePath: string) {
   closeDatabase();
   process.env.DATABASE_PATH = databasePath;
+}
+
+async function setCurrencies(
+  userId: string,
+  baseCurrency: string,
+  supportedCurrencies: string[],
+) {
+  const settings = await getSettings(userId);
+  updateSettings(userId, {
+    displayName: settings.displayName,
+    appName: settings.appName,
+    baseCurrency,
+    supportedCurrencies,
+    timezone: settings.timezone,
+    preferredDateFormat: settings.preferredDateFormat,
+    defaultDashboardPeriod: settings.defaultDashboardPeriod,
+    sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
+    defaultGoalReturnBps: settings.defaultGoalReturnBps,
+  });
 }
 
 describe.sequential("multi-user persistence and isolation", () => {
@@ -91,6 +118,12 @@ describe.sequential("multi-user persistence and isolation", () => {
       displayName: "Bob Example",
       password: "bob-password-12345",
     });
+    const regional = await registerUser({
+      username: "regional-user",
+      displayName: "Regional Example",
+      password: "regional-password-12345",
+      baseCurrency: "TZS",
+    });
     aliceId = alice.userId;
     bobId = bob.userId;
 
@@ -116,9 +149,26 @@ describe.sequential("multi-user persistence and isolation", () => {
         .from(exchangeRates)
         .where(eq(exchangeRates.userId, aliceId))
         .all(),
-    ).toHaveLength(1);
-    expect((await getSettings(aliceId)).displayName).toBe("Alice Example");
+    ).toHaveLength(0);
+    const aliceSettings = await getSettings(aliceId);
+    expect(aliceSettings.displayName).toBe("Alice Example");
+    expect(aliceSettings.baseCurrency).toBe("KES");
+    expect(parseEnabledCurrencies(aliceSettings.supportedCurrencies)).toEqual(
+      DEFAULT_ENABLED_CURRENCIES,
+    );
     expect((await getSettings(bobId)).displayName).toBe("Bob Example");
+    const regionalSettings = await getSettings(regional.userId);
+    expect(regionalSettings.baseCurrency).toBe("TZS");
+    expect(
+      parseEnabledCurrencies(regionalSettings.supportedCurrencies),
+    ).toEqual(DEFAULT_ENABLED_CURRENCIES);
+    expect(
+      db
+        .select()
+        .from(exchangeRates)
+        .where(eq(exchangeRates.userId, regional.userId))
+        .all(),
+    ).toHaveLength(0);
   });
 
   test("login failures do not distinguish unknown users from bad passwords", async () => {
@@ -175,6 +225,39 @@ describe.sequential("multi-user persistence and isolation", () => {
       .from(categories)
       .where(and(eq(categories.userId, bobId), eq(categories.slug, "savings")))
       .get()!.id;
+
+    expect(() =>
+      createAccount(aliceId, {
+        name: "Disabled currency account",
+        categoryId: aliceCategoryId,
+        currency: "EUR",
+        openingValue: "1",
+        isIncludedInNetWorth: true,
+      }),
+    ).toThrow("EUR is not enabled");
+    expect(() =>
+      createGoal(aliceId, {
+        name: "Disabled currency goal",
+        targetAmount: "1000",
+        currency: "EUR",
+        targetDate: "2028-07-01",
+        icon: "Target",
+        status: "active",
+        priority: 1,
+        assumedAnnualReturn: 8,
+        plannedContribution: "10",
+        frequency: "monthly",
+        planStartDate: "2026-01-01",
+      }),
+    ).toThrow("EUR is not enabled");
+    expect(() =>
+      addExchangeRate(aliceId, {
+        baseCurrency: "EUR",
+        quoteCurrency: "KES",
+        rate: "150",
+        effectiveDate: "2025-01-01",
+      }),
+    ).toThrow("EUR is not enabled");
 
     const sharedIdempotencyKey = crypto.randomUUID();
     aliceAccountId = createAccount(aliceId, {
@@ -286,6 +369,16 @@ describe.sequential("multi-user persistence and isolation", () => {
     expect(aliceDashboard.accountCount).toBe(1);
     expect(bobDashboard.accountCount).toBe(1);
 
+    await setCurrencies(aliceId, "KES", [...DEFAULT_ENABLED_CURRENCIES, "EUR"]);
+    expect(() =>
+      addExchangeRate(bobId, {
+        baseCurrency: "EUR",
+        quoteCurrency: "KES",
+        rate: "160",
+        effectiveDate: "2025-01-01",
+      }),
+    ).toThrow("EUR is not enabled");
+    await setCurrencies(bobId, "KES", [...DEFAULT_ENABLED_CURRENCIES, "EUR"]);
     addExchangeRate(aliceId, {
       baseCurrency: "EUR",
       quoteCurrency: "KES",
@@ -308,6 +401,41 @@ describe.sequential("multi-user persistence and isolation", () => {
         (rate) => rate.baseCurrency === "EUR",
       )?.rate,
     ).toBe("160");
+
+    await setCurrencies(aliceId, "USD", ["KES", "EUR", "TZS", "UGX"]);
+    const updatedAliceSettings = await getSettings(aliceId);
+    expect(updatedAliceSettings.baseCurrency).toBe("USD");
+    expect(
+      parseEnabledCurrencies(updatedAliceSettings.supportedCurrencies),
+    ).toEqual(["KES", "EUR", "TZS", "UGX", "USD"]);
+    expect((await getSettings(bobId)).baseCurrency).toBe("KES");
+    await expect(
+      setCurrencies(aliceId, "USD", ["USD", "EUR", "TZS", "UGX"]),
+    ).rejects.toThrow("still in use: KES");
+
+    const incompleteDashboard = await getDashboardData(aliceId);
+    expect(incompleteDashboard.historyComplete).toBe(false);
+    expect(incompleteDashboard.historicalMissingRates).toContain("KES");
+    expect(incompleteDashboard.missingRates).toContain("KES");
+    expect(incompleteDashboard.totals.netWorth).toBe(0n);
+
+    addExchangeRate(aliceId, {
+      baseCurrency: "USD",
+      quoteCurrency: "KES",
+      rate: "130",
+      effectiveDate: "2025-01-01",
+    });
+
+    const aliceAccount = await getAccount(aliceId, aliceAccountId);
+    expect(aliceAccount).toMatchObject({
+      currency: "KES",
+      currentValueMinor: 10_000,
+    });
+    const completeDashboard = await getDashboardData(aliceId);
+    expect(completeDashboard.historyComplete).toBe(true);
+    expect(completeDashboard.historicalMissingRates).toEqual([]);
+    expect(completeDashboard.totals.netWorth).toBe(77n);
+    expect((await getDashboardData(bobId)).totals.netWorth).toBe(20_000n);
   });
 
   test("exports, restores, and imported owner fields cannot cross users", async () => {
@@ -327,6 +455,11 @@ describe.sequential("multi-user persistence and isolation", () => {
     });
     expect(await listAccounts(aliceId)).toHaveLength(2);
     restoreUserData(aliceId, archive);
+    const restoredSettings = await getSettings(aliceId);
+    expect(restoredSettings.baseCurrency).toBe("USD");
+    expect(
+      parseEnabledCurrencies(restoredSettings.supportedCurrencies),
+    ).toEqual(expect.arrayContaining(["USD", "KES", "TZS", "UGX", "EUR"]));
     expect(
       (await listAccounts(aliceId)).map((account) => account.name),
     ).toEqual(["Alice Savings"]);

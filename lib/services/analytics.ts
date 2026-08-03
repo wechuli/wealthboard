@@ -97,8 +97,14 @@ export async function getNetWorthHistory(userId: string, range: HistoryRange = "
     : today;
   let cursor = rangeStart(range, earliest, today);
   const step = range === "all" || range === "1y" || range === "6m" ? "month" : "day";
-  const points: Array<{ date: string; netWorth: number; assets: number; liabilities: number }> =
-    [];
+  const points: Array<{
+    date: string;
+    netWorth: number;
+    assets: number;
+    liabilities: number;
+    complete: boolean;
+    missingCurrencies: string[];
+  }> = [];
 
   while (cursor <= today) {
     const evaluationDate = endOfUtcDay(cursor);
@@ -137,9 +143,11 @@ function getHistoricalPoint(
 ) {
   let assetTotal = 0n;
   let liabilityTotal = 0n;
+  const missingCurrencies = new Set<string>();
   for (const account of accountRows) {
     if (account.archivedAt && account.archivedAt <= date.toISOString()) continue;
     const localValue = replayBalance(events.get(account.id) ?? [], date.toISOString());
+    if (localValue === 0n) continue;
     try {
       const converted = convertMinor(
         localValue,
@@ -152,6 +160,7 @@ function getHistoricalPoint(
       else assetTotal += converted;
     } catch (error) {
       if (!(error instanceof MissingExchangeRateError)) throw error;
+      missingCurrencies.add(account.currency);
     }
 
   }
@@ -160,6 +169,8 @@ function getHistoricalPoint(
     assets: safeChartNumber(assetTotal),
     liabilities: safeChartNumber(liabilityTotal),
     netWorth: safeChartNumber(assetTotal - liabilityTotal),
+    complete: missingCurrencies.size === 0,
+    missingCurrencies: [...missingCurrencies],
   };
 }
 
@@ -368,6 +379,10 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
     .slice(0, 10);
 
   const history = await getNetWorthHistory(userId, range);
+  const historicalMissingRates = [
+    ...new Set(history.flatMap((point) => point.missingCurrencies)),
+  ];
+  for (const currency of historicalMissingRates) missingRates.add(currency);
   const goalsCount = await db.select().from(goals).where(eq(goals.userId, userId));
   const toAllocation = (map: Map<string, bigint>) =>
     [...map.entries()]
@@ -393,6 +408,8 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
     institutionAllocation: toAllocation(institutionMap),
     currencyAllocation: toAllocation(currencyMap),
     history,
+    historyComplete: history.every((point) => point.complete),
+    historicalMissingRates,
     recentActivity,
     missingRates: [...missingRates],
     accountCount: accountRows.length,

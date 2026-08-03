@@ -94,8 +94,9 @@ export default async function DashboardPage({
 
       {data.missingRates.length ? (
         <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
-          Add exchange rates for {data.missingRates.join(", ")} in Settings to
-          include every account in base-currency totals.
+          Current or historical totals are incomplete. Add effective-dated
+          exchange rates for {data.missingRates.join(", ")} in Settings;
+          affected holdings are excluded where conversion is unavailable.
         </div>
       ) : null}
 
@@ -223,7 +224,9 @@ export default async function DashboardPage({
                 <div>
                   <CardTitle>Net-worth history</CardTitle>
                   <p className="mt-1 text-xs text-slate-500">
-                    Assets less liabilities over time
+                    {data.historyComplete
+                      ? "Assets less liabilities over time"
+                      : `Incomplete history: missing ${data.historicalMissingRates.join(", ")} rates`}
                   </p>
                 </div>
               </CardHeader>

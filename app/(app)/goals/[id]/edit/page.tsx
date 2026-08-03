@@ -9,11 +9,16 @@ import { minorToDecimalString } from "@/lib/money";
 import { listAccounts } from "@/lib/services/accounts";
 import { getGoal } from "@/lib/services/goals";
 import { requireSession } from "@/lib/auth/session";
+import { getCurrencyConfiguration } from "@/lib/services/settings";
 
 export default async function EditGoalPage({ params }: { params: Promise<{ id: string }> }) {
   const { userId } = await requireSession();
   const { id } = await params;
-  const [goal, accounts] = await Promise.all([getGoal(userId, id), listAccounts(userId)]);
+  const [goal, accounts, currencyConfiguration] = await Promise.all([
+    getGoal(userId, id),
+    listAccounts(userId),
+    getCurrencyConfiguration(userId),
+  ]);
   if (!goal) notFound();
   return (
     <div className="mx-auto max-w-3xl">
@@ -23,6 +28,7 @@ export default async function EditGoalPage({ params }: { params: Promise<{ id: s
         <CardContent>
           <GoalForm
             accounts={accounts}
+            currencies={currencyConfiguration.enabledCurrencies}
             action={updateGoalAction.bind(null, id)}
             initial={{
               name: goal.name,

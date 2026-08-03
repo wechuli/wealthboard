@@ -21,6 +21,12 @@ import {
   type TransactionType,
 } from "@/db/schema";
 import {
+  isIsoCurrencyCode,
+  normalizeCurrencyCode,
+  normalizeEnabledCurrencies,
+  parseEnabledCurrencies,
+} from "@/lib/currencies";
+import {
   dateInputForTimezone,
   dateInputToUtc,
   isValidTimezone,
@@ -33,6 +39,7 @@ import {
   recalculateAccountBalance,
   type TransactionFilters,
 } from "@/lib/services/accounts";
+import { requireEnabledCurrency } from "@/lib/services/settings";
 
 const safeInteger = z
   .number()
@@ -41,6 +48,9 @@ const safeInteger = z
   .max(Number.MAX_SAFE_INTEGER);
 const nullableText = z.string().max(2000).nullable();
 const timestamp = z.string().datetime({ offset: true });
+const isoCurrency = z
+  .string()
+  .refine(isIsoCurrencyCode, "The currency code is invalid.");
 const supportedCurrencies = z
   .string()
   .max(1000)
@@ -52,7 +62,7 @@ const supportedCurrencies = z
         parsed.length > 0 &&
         parsed.every(
           (currency) =>
-            typeof currency === "string" && /^[A-Z]{3}$/.test(currency),
+            typeof currency === "string" && isIsoCurrencyCode(currency),
         )
       );
     } catch {
@@ -70,7 +80,7 @@ const positiveDecimal = z
 const settingsArchiveSchema = z
   .object({
     displayName: z.string().min(1).max(80),
-    baseCurrency: z.string().regex(/^[A-Z]{3}$/),
+    baseCurrency: isoCurrency,
     supportedCurrencies,
     timezone: z.string().min(1).max(80).refine(isValidTimezone),
     preferredDateFormat: z.string().min(1).max(40),
@@ -107,7 +117,7 @@ const accountArchiveSchema = z
     categoryId: z.string().min(1),
     institution: z.string().max(100).nullable(),
     accountReference: z.string().max(50).nullable(),
-    currency: z.string().regex(/^[A-Z]{3}$/),
+    currency: isoCurrency,
     currentValueMinor: safeInteger,
     costBasisMinor: safeInteger.nullable(),
     isLiability: z.boolean(),
@@ -127,7 +137,7 @@ const transactionArchiveSchema = z
     accountId: z.string().min(1),
     type: z.enum(transactionTypes),
     amountMinor: safeInteger,
-    currency: z.string().regex(/^[A-Z]{3}$/),
+    currency: isoCurrency,
     transactionDate: timestamp,
     description: z.string().max(200).nullable(),
     notes: nullableText,
@@ -143,7 +153,7 @@ const valuationArchiveSchema = z
     id: z.string().min(1),
     accountId: z.string().min(1),
     valueMinor: safeInteger,
-    currency: z.string().regex(/^[A-Z]{3}$/),
+    currency: isoCurrency,
     valuationDate: timestamp,
     notes: nullableText,
     createdAt: timestamp,
@@ -153,8 +163,8 @@ const valuationArchiveSchema = z
 const exchangeRateArchiveSchema = z
   .object({
     id: z.string().min(1),
-    baseCurrency: z.string().regex(/^[A-Z]{3}$/),
-    quoteCurrency: z.string().regex(/^[A-Z]{3}$/),
+    baseCurrency: isoCurrency,
+    quoteCurrency: isoCurrency,
     rate: positiveDecimal,
     effectiveDate: timestamp,
     source: z.string().min(1).max(100),
@@ -169,7 +179,7 @@ const goalArchiveSchema = z
     description: nullableText,
     targetAmountMinor: safeInteger,
     currentAmountMinor: safeInteger,
-    currency: z.string().regex(/^[A-Z]{3}$/),
+    currency: isoCurrency,
     targetDate: timestamp,
     linkedAccountId: z.string().nullable(),
     icon: z.string().min(1).max(50),
@@ -204,7 +214,7 @@ const userArchiveSchema = z
     accounts: z.array(accountArchiveSchema).max(10000),
     transactions: z.array(transactionArchiveSchema).max(100000),
     valuations: z.array(valuationArchiveSchema).max(100000),
-    exchangeRates: z.array(exchangeRateArchiveSchema).min(1).max(10000),
+    exchangeRates: z.array(exchangeRateArchiveSchema).max(10000),
     goals: z.array(goalArchiveSchema).max(10000),
     goalContributionPlans: z.array(planArchiveSchema).max(10000),
   })
@@ -313,6 +323,27 @@ function requiredMappedId(
 
 export function restoreUserData(userId: string, input: unknown) {
   const archive = userArchiveSchema.parse(input);
+  const baseCurrency = normalizeCurrencyCode(archive.settings.baseCurrency);
+  const referencedCurrencies = normalizeEnabledCurrencies([
+    ...archive.accounts.map((row) => row.currency),
+    ...archive.transactions.map((row) => row.currency),
+    ...archive.valuations.map((row) => row.currency),
+    ...archive.exchangeRates.flatMap((row) => [
+      row.baseCurrency,
+      row.quoteCurrency,
+    ]),
+    ...archive.goals.map((row) => row.currency),
+  ]);
+  const restoredSettings = {
+    ...archive.settings,
+    baseCurrency,
+    supportedCurrencies: JSON.stringify(
+      normalizeEnabledCurrencies(
+        parseEnabledCurrencies(archive.settings.supportedCurrencies),
+        [baseCurrency, ...referencedCurrencies],
+      ),
+    ),
+  };
   const categoryIds = uniqueIdMap(archive.categories, "category");
   const accountIds = uniqueIdMap(archive.accounts, "account");
   const transactionIds = uniqueIdMap(archive.transactions, "transaction");
@@ -374,7 +405,7 @@ export function restoreUserData(userId: string, input: unknown) {
     tx.delete(idempotencyKeys).where(eq(idempotencyKeys.userId, userId)).run();
 
     tx.update(userSettings)
-      .set({ ...archive.settings, updatedAt: nowIso() })
+      .set({ ...restoredSettings, updatedAt: nowIso() })
       .where(eq(userSettings.userId, userId))
       .run();
     tx.insert(categories)
@@ -455,15 +486,17 @@ export function restoreUserData(userId: string, input: unknown) {
         )
         .run();
     }
-    tx.insert(exchangeRates)
-      .values(
-        archive.exchangeRates.map((row) => ({
-          ...row,
-          id: requiredMappedId(rateIds, row.id, "exchange rate"),
-          userId,
-        })),
-      )
-      .run();
+    if (archive.exchangeRates.length) {
+      tx.insert(exchangeRates)
+        .values(
+          archive.exchangeRates.map((row) => ({
+            ...row,
+            id: requiredMappedId(rateIds, row.id, "exchange rate"),
+            userId,
+          })),
+        )
+        .run();
+    }
     if (archive.goalContributionPlans.length) {
       tx.insert(goalContributionPlans)
         .values(
@@ -554,6 +587,7 @@ export function importTransactionsCsv(userId: string, content: string) {
       );
     }
     const currency = (row.currency || account.currency).toUpperCase();
+    requireEnabledCurrency(userId, currency, db);
     if (currency !== account.currency) {
       throw new Error(`Row ${index + 2}: currency must match ${account.name}.`);
     }

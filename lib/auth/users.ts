@@ -3,8 +3,15 @@ import "server-only";
 import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 
-import { categories, exchangeRates, users, userSettings } from "@/db/schema";
+import { categories, users, userSettings } from "@/db/schema";
 import { CATEGORY_SEEDS } from "@/lib/constants";
+import {
+  DEFAULT_BASE_CURRENCY,
+  DEFAULT_ENABLED_CURRENCIES,
+  isCatalogCurrencyCode,
+  normalizeCurrencyCode,
+  normalizeEnabledCurrencies,
+} from "@/lib/currencies";
 import { nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 
@@ -48,26 +55,24 @@ function defaultCategoryRows(userId: string, timestamp: string) {
   );
 }
 
-function defaultRateRow(userId: string, timestamp: string) {
-  return {
-    id: crypto.randomUUID(),
-    userId,
-    baseCurrency: "USD",
-    quoteCurrency: "KES",
-    rate: "130",
-    effectiveDate: "2000-01-01T00:00:00.000Z",
-    source: "initial-default",
-    createdAt: timestamp,
-  };
-}
-
 export async function registerUser(input: {
   username: string;
   displayName: string;
   password: string;
+  baseCurrency?: string;
 }) {
   const db = getDatabase();
   const username = normalizeUsername(input.username);
+  const baseCurrency = normalizeCurrencyCode(
+    input.baseCurrency ?? DEFAULT_BASE_CURRENCY,
+  );
+  if (!isCatalogCurrencyCode(baseCurrency)) {
+    throw new Error("Choose a currency from the catalog.");
+  }
+  const supportedCurrencies = normalizeEnabledCurrencies(
+    DEFAULT_ENABLED_CURRENCIES,
+    [baseCurrency],
+  );
   const passwordHash = await bcrypt.hash(input.password, 12);
   const timestamp = nowIso();
   const userId = crypto.randomUUID();
@@ -100,8 +105,8 @@ export async function registerUser(input: {
         id: crypto.randomUUID(),
         userId,
         displayName: input.displayName,
-        baseCurrency: "KES",
-        supportedCurrencies: '["KES","USD"]',
+        baseCurrency,
+        supportedCurrencies: JSON.stringify(supportedCurrencies),
         timezone: process.env.TZ || "Africa/Nairobi",
         preferredDateFormat: "dd MMM yyyy",
         appName: "Wealthboard",
@@ -113,7 +118,6 @@ export async function registerUser(input: {
       })
       .run();
     tx.insert(categories).values(defaultCategoryRows(userId, timestamp)).run();
-    tx.insert(exchangeRates).values(defaultRateRow(userId, timestamp)).run();
 
     const settings = tx.query.userSettings
       .findFirst({

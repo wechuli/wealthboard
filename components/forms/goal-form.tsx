@@ -7,6 +7,7 @@ import { LoaderCircle, Save } from "lucide-react";
 import type { Account, GoalStatus } from "@/db/schema";
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label, Select, Textarea } from "@/components/ui/form-controls";
+import { currencyOptions } from "@/lib/currencies";
 import type { ActionState } from "@/lib/validation";
 
 type GoalValues = {
@@ -33,12 +34,14 @@ export function GoalForm({
   initial,
   idempotencyKey,
   today,
+  currencies,
 }: {
   accounts: Account[];
   action: (formData: FormData) => Promise<ActionState>;
   initial?: Partial<GoalValues>;
   idempotencyKey?: string;
   today?: string;
+  currencies: string[];
 }) {
   const [state, setState] = useState<ActionState>({});
   const [pending, startTransition] = useTransition();
@@ -61,6 +64,9 @@ export function GoalForm({
     },
   });
   const currency = useWatch({ control, name: "currency" });
+  const availableCurrencies = currencyOptions(currencies).filter((option) =>
+    currencies.includes(option.code),
+  );
   const editing = Boolean(initial?.name);
   const progressiveAction = action as unknown as (formData: FormData) => void;
   return (
@@ -87,7 +93,14 @@ export function GoalForm({
         </div>
         <div>
           <Label htmlFor="currency">Currency</Label>
-          <Input id="currency" maxLength={3} defaultValue={initial?.currency ?? "KES"} {...register("currency")} />
+          <Select id="currency" {...register("currency")}>
+            {availableCurrencies.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.code} - {option.name}
+              </option>
+            ))}
+          </Select>
+          <FieldError>{state.fieldErrors?.currency?.[0]}</FieldError>
         </div>
         <div>
           <Label htmlFor="targetDate">Target date</Label>

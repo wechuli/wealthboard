@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/form-controls";
 import { accountSchema, type ActionState } from "@/lib/validation";
 import type { Category } from "@/db/schema";
+import { currencyOptions } from "@/lib/currencies";
 
 type AccountValues = {
   name: string;
@@ -37,12 +38,16 @@ export function AccountForm({
   initial,
   idempotencyKey,
   today,
+  currencies,
+  baseCurrency,
 }: {
   categories: Category[];
   action: (formData: FormData) => Promise<ActionState>;
   initial?: Partial<AccountValues>;
   idempotencyKey?: string;
   today?: string;
+  currencies: string[];
+  baseCurrency: string;
 }) {
   const [serverState, setServerState] = useState<ActionState>({});
   const [pending, startTransition] = useTransition();
@@ -53,13 +58,16 @@ export function AccountForm({
   } = useForm<AccountValues>({
     resolver: zodResolver(accountSchema),
     defaultValues: {
-      currency: "KES",
+      currency: baseCurrency,
       openingValue: "0.00",
       isIncludedInNetWorth: true,
       openedAt: today,
       ...initial,
     },
   });
+  const availableCurrencies = currencyOptions(currencies).filter((currency) =>
+    currencies.includes(currency.code),
+  );
 
   const submit = handleSubmit((_values, event) => {
     const formData = new FormData(event?.target as HTMLFormElement);
@@ -94,13 +102,25 @@ export function AccountForm({
           <Label htmlFor="currency">Currency</Label>
           {initial ? (
             <>
-              <Input id="currency" value={initial.currency} disabled />
+              <Select id="currency" value={initial.currency} disabled>
+                {availableCurrencies.map((currency) => (
+                  <option key={currency.code} value={currency.code}>
+                    {currency.code} - {currency.name}
+                  </option>
+                ))}
+              </Select>
               <input type="hidden" name="currency" value={initial.currency} />
             </>
           ) : (
-            <Input id="currency" maxLength={3} placeholder="KES" defaultValue="KES" {...register("currency")} />
+            <Select id="currency" {...register("currency")}>
+              {availableCurrencies.map((currency) => (
+                <option key={currency.code} value={currency.code}>
+                  {currency.code} - {currency.name}
+                </option>
+              ))}
+            </Select>
           )}
-          <FieldError>{errors.currency?.message}</FieldError>
+          <FieldError>{errors.currency?.message || serverState.fieldErrors?.currency?.[0]}</FieldError>
         </div>
         {!initial ? (
           <div>

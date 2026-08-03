@@ -44,6 +44,11 @@ export default async function ReportsPage() {
         title="Reports & analytics"
         description="Long-term trends, allocation, returns, and comparable account performance."
       />
+      {data.missingRates.length ? (
+        <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
+          This report is incomplete because effective-dated rates for {data.missingRates.join(", ")} are missing. Affected holdings are excluded where conversion is unavailable.
+        </div>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ReportStat label="Highest net worth" value={<MoneyValue amount={Math.round(highest)} currency={currency} />} icon={<Award size={17} />} />
         <ReportStat label="Change since tracking" value={<MoneyValue amount={Math.round(last - first)} currency={currency} />} icon={<TrendingUp size={17} />} />
@@ -52,7 +57,7 @@ export default async function ReportsPage() {
       </div>
 
       <Card className="mt-5">
-        <CardHeader><div><CardTitle>Net-worth history</CardTitle><p className="mt-1 text-xs text-slate-500">Monthly history across all tracked accounts</p></div></CardHeader>
+        <CardHeader><div><CardTitle>Net-worth history</CardTitle><p className="mt-1 text-xs text-slate-500">{data.historyComplete ? "Monthly history across all tracked accounts" : `Incomplete history: missing ${data.historicalMissingRates.join(", ")} rates`}</p></div></CardHeader>
         <CardContent><NetWorthChart data={data.history} currency={currency} range="all" /></CardContent>
       </Card>
 

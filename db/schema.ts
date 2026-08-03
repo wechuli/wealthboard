@@ -7,6 +7,11 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+import {
+  DEFAULT_BASE_CURRENCY,
+  DEFAULT_ENABLED_CURRENCIES,
+} from "../lib/currencies";
+
 export const transactionTypes = [
   "opening_balance",
   "deposit",
@@ -63,10 +68,12 @@ export const userSettings = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
-    baseCurrency: text("base_currency").notNull().default("KES"),
+    baseCurrency: text("base_currency")
+      .notNull()
+      .default(DEFAULT_BASE_CURRENCY),
     supportedCurrencies: text("supported_currencies")
       .notNull()
-      .default('["KES","USD"]'),
+      .default(JSON.stringify(DEFAULT_ENABLED_CURRENCIES)),
     timezone: text("timezone").notNull().default("Africa/Nairobi"),
     preferredDateFormat: text("preferred_date_format")
       .notNull()

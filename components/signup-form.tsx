@@ -6,13 +6,24 @@ import { ArrowRight, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 
 import { signupAction } from "@/app/signup/actions";
 import { Button } from "@/components/ui/button";
-import { FieldError, Input, Label } from "@/components/ui/form-controls";
+import { FieldError, Input, Label, Select } from "@/components/ui/form-controls";
+import {
+  CURRENCY_CATALOG,
+  DEFAULT_BASE_CURRENCY,
+} from "@/lib/currencies";
 
 export function SignupForm() {
   const [state, action, pending] = useActionState(signupAction, {});
-  const [values, setValues] = useState({
+  const [values, setValues] = useState<{
+    username: string;
+    displayName: string;
+    baseCurrency: string;
+    password: string;
+    confirmPassword: string;
+  }>({
     username: "",
     displayName: "",
+    baseCurrency: DEFAULT_BASE_CURRENCY,
     password: "",
     confirmPassword: "",
   });
@@ -57,6 +68,28 @@ export function SignupForm() {
           aria-invalid={Boolean(state.fieldErrors?.displayName)}
         />
         <FieldError>{state.fieldErrors?.displayName?.[0]}</FieldError>
+      </div>
+      <div>
+        <Label htmlFor="baseCurrency">Base currency</Label>
+        <Select
+          id="baseCurrency"
+          name="baseCurrency"
+          value={values.baseCurrency}
+          onChange={(event) =>
+            setValues((current) => ({
+              ...current,
+              baseCurrency: event.target.value,
+            }))
+          }
+          aria-invalid={Boolean(state.fieldErrors?.baseCurrency)}
+        >
+          {CURRENCY_CATALOG.map((currency) => (
+            <option key={currency.code} value={currency.code}>
+              {currency.code} - {currency.name}
+            </option>
+          ))}
+        </Select>
+        <FieldError>{state.fieldErrors?.baseCurrency?.[0]}</FieldError>
       </div>
       <div>
         <Label htmlFor="password">Password</Label>

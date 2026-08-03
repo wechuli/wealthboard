@@ -8,13 +8,15 @@ import { minorToDecimalString } from "@/lib/money";
 import { getAccount } from "@/lib/services/accounts";
 import { listCategories } from "@/lib/services/categories";
 import { requireSession } from "@/lib/auth/session";
+import { getCurrencyConfiguration } from "@/lib/services/settings";
 
 export default async function EditAccountPage({ params }: { params: Promise<{ id: string }> }) {
   const { userId } = await requireSession();
   const { id } = await params;
-  const [account, categories] = await Promise.all([
+  const [account, categories, currencyConfiguration] = await Promise.all([
     getAccount(userId, id),
     listCategories(userId),
+    getCurrencyConfiguration(userId),
   ]);
   if (!account) notFound();
   return (
@@ -25,6 +27,8 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
         <CardContent>
           <AccountForm
             categories={categories}
+            currencies={currencyConfiguration.enabledCurrencies}
+            baseCurrency={currencyConfiguration.baseCurrency}
             action={updateAccountAction.bind(null, id)}
             initial={{
               name: account.name,

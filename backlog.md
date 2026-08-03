@@ -144,7 +144,7 @@ Effort estimates:
 - **Evidence from the repository:** `registerUser()` in [lib/auth/users.ts](lib/auth/users.ts) creates settings and defaults. [app/(app)/page.tsx](<app/(app)/page.tsx>) provides a good first-account empty state but no multi-step onboarding.
 - **Proposed improvement:** Add a dismissible onboarding checklist for locale/currency, exchange-rate setup, first account, first valuation/transaction, and optional first goal. Keep demo data opt-in and user-targeted.
 - **User value:** New users reach a trustworthy dashboard with fewer hidden defaults.
-- **Dependencies:** Architecture item A1; onboarding completion setting.
+- **Dependencies:** Architecture item A1; F12 currency catalog and base-currency configuration; onboarding completion setting.
 - **Risks or trade-offs:** A forced wizard can slow experienced users. Make steps skippable and resumable.
 - **Acceptance criteria:** A new user can complete or dismiss onboarding, no financial account is created automatically, unsafe placeholder rates are not treated as authoritative, and progress survives refresh.
 
@@ -171,6 +171,19 @@ Effort estimates:
 - **Dependencies:** Deterministic amortization module; recurring activity.
 - **Risks or trade-offs:** Loan terms differ widely. Avoid implying lender-grade statements or automatically altering balances from projections.
 - **Acceptance criteria:** Scenarios reconcile mathematically, assumptions are explicit, projections do not mutate actual balances, and unsupported loan structures degrade to manual tracking.
+
+### F12. Curated Currency Catalog and Per-User Base Currency
+
+- **Priority:** P1
+- **Estimated effort:** Medium
+- **Current gap:** User settings store a per-user base currency and JSON list of supported currencies, but fresh users receive only KES and USD, currency settings are manually typed, and account and goal forms accept free-text three-letter codes. There is no curated, discoverable currency catalog or explicit policy for changing a user's base currency.
+- **Evidence from the repository:** [db/schema.ts](db/schema.ts) defaults `baseCurrency` to KES and `supportedCurrencies` to `["KES","USD"]`. [components/settings-forms.tsx](components/settings-forms.tsx) accepts typed base and comma-separated supported currencies, while [components/forms/account-form.tsx](components/forms/account-form.tsx) and [components/forms/goal-form.tsx](components/forms/goal-form.tsx) use free-text currency inputs. [lib/money.ts](lib/money.ts) already derives ISO-aware fraction digits and preserves integer minor units.
+- **Proposed improvement:** Define one centralized ISO 4217 currency catalog and let each user independently choose a base currency and enabled currency set in settings and onboarding. Include at minimum the regional currencies KES, TZS, UGX, RWF, BIF, ETB, SSP, CDF, and SOS, plus commonly used USD, EUR, GBP, ZAR, NGN, GHS, AED, CAD, AUD, JPY, CHF, CNY, and INR. Replace free-text currency entry with catalog-backed selectors while keeping service-level validation authoritative.
+- **User value:** East African and internationally diversified users can model their actual holdings, choose the reporting currency that makes sense to them, and discover supported currencies without memorizing ISO codes.
+- **Dependencies:** A1 exchange-rate provenance and completeness; A5 supported-currency service policy; TD3 centralized defaults. F9 onboarding should consume this catalog rather than define separate currency defaults.
+- **Migration considerations:** Preserve every currency already referenced by a user's accounts, goals, rates, imports, or settings, even if it is outside the initial curated catalog, and add it to that user's enabled set. Ensure the current base currency is enabled. Changing the base currency must not rewrite original account, transaction, valuation, goal, or exchange-rate amounts.
+- **Risks or trade-offs:** A base-currency change can make current and historical totals incomplete until the user supplies effective-dated rates. Never synthesize a plausible conversion rate. Currency symbols are ambiguous, and ISO currencies have different minor-unit precision, so interfaces must show codes and continue using the existing ISO-aware integer-minor-unit helpers.
+- **Acceptance criteria:** Each user can choose a base currency and independently enable or disable catalog currencies; the base currency is always enabled and cannot be removed until another base is selected; TZS and UGX are available by default in the catalog; account, goal, exchange-rate, import, and settings workflows use the same enabled-currency policy; disabled or invalid currencies are rejected in services; changing base currency recalculates displays and reports without mutating source records; missing current or historical rates are clearly identified; zero- and three-decimal currencies round and format correctly; export and restore preserve the user's base and enabled set; two-user tests prove that base currency, enabled currencies, and exchange rates remain isolated.
 
 ## AI-Assisted Functionality
 
@@ -537,6 +550,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 - F5 goal scenarios and milestones.
 - F6 date-scoped downloadable reports.
 - F7 account deletion and export-before-delete.
+- F12 currency catalog and per-user base currency.
 - F9 onboarding.
 
 ### Phase 3: Reliability and Operational Maturity

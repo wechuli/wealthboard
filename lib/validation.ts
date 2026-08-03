@@ -5,6 +5,17 @@ import {
   goalStatuses,
   transactionTypes,
 } from "@/db/schema";
+import {
+  DEFAULT_BASE_CURRENCY,
+  isCatalogCurrencyCode,
+  isIsoCurrencyCode,
+} from "@/lib/currencies";
+
+const currencyCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .refine(isIsoCurrencyCode, "Choose a valid currency.");
 
 const optionalText = z
   .string()
@@ -33,6 +44,12 @@ export const signupSchema = z
         "Use 3-32 letters, numbers, dots, underscores, or hyphens.",
       ),
     displayName: z.string().trim().min(1, "Enter your display name.").max(80),
+    baseCurrency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine(isCatalogCurrencyCode, "Choose a currency from the catalog.")
+      .default(DEFAULT_BASE_CURRENCY),
     password: z.string().min(12, "Use at least 12 characters.").max(256),
     confirmPassword: z.string().max(256),
   })
@@ -59,11 +76,7 @@ export const accountSchema = z.object({
   categoryId: z.string().min(1, "Choose a category."),
   institution: z.string().trim().max(100).optional(),
   accountReference: z.string().trim().max(50).optional(),
-  currency: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/),
+  currency: currencyCodeSchema,
   openingValue: z.string().trim().min(1),
   costBasis: z.string().trim().optional(),
   isIncludedInNetWorth: z.boolean(),
@@ -151,11 +164,7 @@ export const goalSchema = z.object({
   description: optionalText,
   targetAmount: z.string().trim().min(1),
   currentAmount: z.string().trim().optional(),
-  currency: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/),
+  currency: currencyCodeSchema,
   targetDate: z.string().date(),
   linkedAccountId: z.string().uuid().optional().or(z.literal("")),
   icon: z.string().trim().max(50).default("Target"),
