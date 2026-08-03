@@ -19,6 +19,7 @@ import {
   endOfUtcDay,
   dateInputToUtc,
   nowIso,
+  utcToDateInput,
 } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import {
@@ -57,6 +58,7 @@ type GoalInput = {
 
 export async function listGoals(userId: string, now = new Date()) {
   const db = getDatabase();
+  const today = dateInputForTimezone(getUserTimezone(userId), now);
   const rows = await db
     .select({
       ...getTableColumns(goals),
@@ -120,7 +122,8 @@ export async function listGoals(userId: string, now = new Date()) {
       : undefined;
     const planEnd = goal.planEndDate ? new Date(goal.planEndDate) : null;
     const planActive =
-      (!planStart || now >= planStart) && (!planEnd || now <= planEnd);
+      (!planStart || today >= utcToDateInput(planStart)) &&
+      (!planEnd || today <= utcToDateInput(planEnd));
     const currentPlannedMonthly = planActive ? plannedMonthly : 0n;
     const targetDate = new Date(goal.targetDate);
     const requiredMonthly = requiredMonthlyContribution(
@@ -145,11 +148,15 @@ export async function listGoals(userId: string, now = new Date()) {
       createdAt: new Date(goal.createdAt),
       targetDate,
       monthlyPlannedMinor: currentPlannedMonthly,
+      now,
     });
+    const forecastAfterTarget = Boolean(
+      forecast && utcToDateInput(forecast) > utcToDateInput(targetDate),
+    );
     const tracking =
       goal.status === "completed"
         ? "ahead"
-        : !forecast || forecast > targetDate
+        : !forecast || forecastAfterTarget
           ? "behind"
           : linearTracking === "ahead"
             ? "ahead"
@@ -637,9 +644,13 @@ function projectionContributions(
   let total = BigInt(input.currentMinor);
   for (let month = 1; month <= months; month += 1) {
     const date = addUtcMonths(startDate, month);
+    const dateKey = utcToDateInput(date);
     const afterStart =
-      !input.contributionStart || date >= input.contributionStart;
-    const beforeEnd = !input.contributionEnd || date <= input.contributionEnd;
+      !input.contributionStart ||
+      dateKey >= utcToDateInput(input.contributionStart);
+    const beforeEnd =
+      !input.contributionEnd ||
+      dateKey <= utcToDateInput(input.contributionEnd);
     if (afterStart && beforeEnd)
       total += BigInt(input.monthlyContributionMinor);
   }

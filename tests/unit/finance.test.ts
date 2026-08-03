@@ -223,6 +223,46 @@ describe("goal calculations", () => {
     ).toBe("2026-09");
   });
 
+  it("includes a final contribution on the plan-end calendar date", () => {
+    const fromDate = new Date("2026-08-03T20:00:00.000Z");
+    const targetDate = new Date("2028-08-03T12:00:00.000Z");
+    const required = requiredMonthlyContribution(
+      30_000_000,
+      400_000_000,
+      targetDate,
+      800,
+      fromDate,
+    );
+    const planned = 14_200_000;
+
+    expect(required).toBe(14_067_432n);
+    expect(BigInt(planned)).toBeGreaterThan(required);
+    expect(
+      futureValueWithContributionWindow({
+        currentMinor: 30_000_000,
+        monthlyContributionMinor: planned,
+        annualReturnBps: 800,
+        months: 24,
+        fromDate,
+        contributionStart: new Date("2026-08-03T12:00:00.000Z"),
+        contributionEnd: targetDate,
+      }),
+    ).toBeGreaterThanOrEqual(400_000_000n);
+    expect(
+      forecastCompletionWithContributionWindow({
+        currentMinor: 30_000_000,
+        targetMinor: 400_000_000,
+        monthlyContributionMinor: planned,
+        annualReturnBps: 800,
+        fromDate,
+        contributionStart: new Date("2026-08-03T12:00:00.000Z"),
+        contributionEnd: targetDate,
+      })
+        ?.toISOString()
+        .slice(0, 10),
+    ).toBe("2028-08-03");
+  });
+
   it("compares goal scenarios without changing their saved assumptions", () => {
     const saved = {
       currentMinor: 100_000,

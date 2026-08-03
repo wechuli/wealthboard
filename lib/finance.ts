@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 
 import type { TransactionType } from "@/db/schema";
-import { addUtcMonths, monthsBetween } from "@/lib/dates";
+import { addUtcMonths, monthsBetween, utcToDateInput } from "@/lib/dates";
 
 export type FinancialEvent =
   | {
@@ -249,10 +249,13 @@ export function futureValueWithContributionWindow(input: {
   for (let month = 1; month <= input.months; month += 1) {
     value = value.mul(monthlyRate.plus(1));
     const contributionDate = addUtcMonths(fromDate, month);
+    const contributionDay = utcToDateInput(contributionDate);
     const afterStart =
-      !input.contributionStart || contributionDate >= input.contributionStart;
+      !input.contributionStart ||
+      contributionDay >= utcToDateInput(input.contributionStart);
     const beforeEnd =
-      !input.contributionEnd || contributionDate <= input.contributionEnd;
+      !input.contributionEnd ||
+      contributionDay <= utcToDateInput(input.contributionEnd);
     if (afterStart && beforeEnd) value = value.plus(contribution);
   }
   return decimalToBigInt(value);

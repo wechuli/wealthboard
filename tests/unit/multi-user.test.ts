@@ -375,6 +375,38 @@ describe.sequential("multi-user persistence and isolation", () => {
       ),
     );
 
+    const alertRegressionNow = new Date("2026-08-03T20:00:00.000Z");
+    const alertRegressionGoalId = createGoal(aliceId, {
+      name: "Interest-aware alert regression",
+      targetAmount: "4000000",
+      currentAmount: "300000",
+      currency: "KES",
+      targetDate: "2028-08-03",
+      icon: "Target",
+      status: "active",
+      priority: 1,
+      assumedAnnualReturn: 8,
+      plannedContribution: "142000",
+      frequency: "monthly",
+      planStartDate: "2026-08-03",
+      planEndDate: "2028-08-03",
+    });
+    const alertRegressionGoal = await getGoal(
+      aliceId,
+      alertRegressionGoalId,
+      alertRegressionNow,
+    );
+    expect(alertRegressionGoal).toMatchObject({
+      requiredMonthly: 14_067_432n,
+      currentPlannedMonthly: 14_200_000n,
+    });
+    expect(alertRegressionGoal!.tracking).not.toBe("behind");
+    expect(
+      (await listGoalAlerts(aliceId, alertRegressionNow)).map(
+        (alert) => alert.goalId,
+      ),
+    ).not.toContain(alertRegressionGoalId);
+
     const reachedMilestoneId = createGoalMilestone(aliceId, rateAwareGoalId, {
       name: "First checkpoint",
       targetAmount: "500",
