@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarClock, Edit3, Link2, Pause, Play, Trash2, TrendingUp } from "lucide-react";
-
 import {
-  deleteGoalAction,
-  setGoalStatusAction,
-} from "@/app/(app)/actions";
+  CalendarClock,
+  Edit3,
+  Link2,
+  Pause,
+  Play,
+  Trash2,
+  TrendingUp,
+} from "lucide-react";
+
+import { deleteGoalAction, setGoalStatusAction } from "@/app/(app)/actions";
 import { GoalProjectionChart } from "@/components/charts";
 import { MoneyValue } from "@/components/privacy-provider";
 import { MutationButton } from "@/components/mutation-button";
@@ -22,10 +27,17 @@ import { getSettings } from "@/lib/bootstrap";
 import { getGoal, goalProjectionPoints } from "@/lib/services/goals";
 import { requireSession } from "@/lib/auth/session";
 
-export default async function GoalDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function GoalDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { userId } = await requireSession();
   const { id } = await params;
-  const [goal, settings] = await Promise.all([getGoal(userId, id), getSettings(userId)]);
+  const [goal, settings] = await Promise.all([
+    getGoal(userId, id),
+    getSettings(userId),
+  ]);
   if (!goal) notFound();
   const activity = goal.linkedAccountId
     ? await getAccountActivity(userId, goal.linkedAccountId)
@@ -56,34 +68,106 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
         description={goal.description || "Goal progress and forecast"}
         actions={
           <>
-            <Button asChild variant="secondary"><Link href={`/goals/${id}/edit`}><Edit3 size={16} />Edit goal</Link></Button>
+            <Button asChild variant="secondary">
+              <Link href={`/goals/${id}/edit`}>
+                <Edit3 size={16} />
+                Edit goal
+              </Link>
+            </Button>
             <MutationButton
-              action={setGoalStatusAction.bind(null, id, goal.status === "paused" ? "active" : "paused")}
-              successMessage={goal.status === "paused" ? "Goal resumed." : "Goal paused."}
+              action={setGoalStatusAction.bind(
+                null,
+                id,
+                goal.status === "paused" ? "active" : "paused",
+              )}
+              successMessage={
+                goal.status === "paused" ? "Goal resumed." : "Goal paused."
+              }
               variant="secondary"
-            >{goal.status === "paused" ? <Play size={16} /> : <Pause size={16} />}{goal.status === "paused" ? "Resume" : "Pause"}</MutationButton>
+            >
+              {goal.status === "paused" ? (
+                <Play size={16} />
+              ) : (
+                <Pause size={16} />
+              )}
+              {goal.status === "paused" ? "Resume" : "Pause"}
+            </MutationButton>
           </>
         }
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Current progress" value={<MoneyValue amount={goal.currentAmountCalculated} currency={goal.currency} />} icon={<TrendingUp size={17} />} />
-        <Stat label="Target" value={<MoneyValue amount={goal.targetAmountMinor} currency={goal.currency} />} icon={<CalendarClock size={17} />} />
-        <Stat label="Required monthly" value={<MoneyValue amount={goal.requiredMonthly} currency={goal.currency} />} icon={<CalendarClock size={17} />} />
-        <Stat label="Current monthly plan" value={<MoneyValue amount={goal.currentPlannedMonthly} currency={goal.currency} />} icon={<TrendingUp size={17} />} />
+        <Stat
+          label="Current progress"
+          value={
+            <MoneyValue
+              amount={goal.currentAmountCalculated}
+              currency={goal.currency}
+            />
+          }
+          icon={<TrendingUp size={17} />}
+        />
+        <Stat
+          label="Target"
+          value={
+            <MoneyValue
+              amount={goal.targetAmountMinor}
+              currency={goal.currency}
+            />
+          }
+          icon={<CalendarClock size={17} />}
+        />
+        <Stat
+          label={`Required monthly (${goal.assumedAnnualReturnBps / 100}% return)`}
+          value={
+            <MoneyValue
+              amount={goal.requiredMonthly}
+              currency={goal.currency}
+            />
+          }
+          icon={<CalendarClock size={17} />}
+        />
+        <Stat
+          label="Current monthly plan"
+          value={
+            <MoneyValue
+              amount={goal.currentPlannedMonthly}
+              currency={goal.currency}
+            />
+          }
+          icon={<TrendingUp size={17} />}
+        />
       </div>
       {goal.missingExchangeRate ? (
         <div className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
-          Configure an exchange rate between the linked account and goal currencies before relying on progress or forecasts.
+          Configure an exchange rate between the linked account and goal
+          currencies before relying on progress or forecasts.
         </div>
       ) : null}
 
       <Card className="mt-5">
         <CardContent className="p-5">
           <div className="flex items-center justify-between gap-3">
-            <div><p className="text-sm font-medium">Overall progress</p><p className="mt-1 text-xs text-slate-500">Target {formatDate(goal.targetDate, settings.timezone, "dd MMM yyyy")}</p></div>
-            <div className="text-right"><Badge tone={goal.tracking === "behind" ? "warning" : "positive"}>{goal.tracking.replace("_", " ")}</Badge><p className="mt-2 text-lg font-semibold">{goal.progressPercent}%</p></div>
+            <div>
+              <p className="text-sm font-medium">Overall progress</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Target{" "}
+                {formatDate(goal.targetDate, settings.timezone, "dd MMM yyyy")}
+              </p>
+            </div>
+            <div className="text-right">
+              <Badge tone={goal.tracking === "behind" ? "warning" : "positive"}>
+                {goal.tracking.replace("_", " ")}
+              </Badge>
+              <p className="mt-2 text-lg font-semibold">
+                {goal.progressPercent}%
+              </p>
+            </div>
           </div>
-          <Progress value={Number(goal.progressPercent)} label={`${goal.name} progress`} className="mt-4 h-3" />
+          <Progress
+            value={Number(goal.progressPercent)}
+            label={`${goal.name} progress`}
+            className="mt-4 h-3"
+          />
         </CardContent>
       </Card>
 
@@ -93,23 +177,49 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
             <div>
               <CardTitle>Projection</CardTitle>
               <p className="mt-1 text-xs text-slate-500">
-                Estimate assumes {goal.assumedAnnualReturnBps / 100}% annual return and current planned contributions. Actual returns will vary.
+                Estimate assumes {goal.assumedAnnualReturnBps / 100}% annual
+                return and current planned contributions. Actual returns will
+                vary.
               </p>
             </div>
           </CardHeader>
-          <CardContent><GoalProjectionChart data={projection} currency={goal.currency} /></CardContent>
+          <CardContent>
+            <GoalProjectionChart data={projection} currency={goal.currency} />
+          </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Forecast details</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Forecast details</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            <Row label="Tracking status" value={goal.tracking.replace("_", " ")} />
-            <Row label="Estimated completion" value={goal.forecastDate ? formatDate(goal.forecastDate, settings.timezone, "MMM yyyy") : "Not projected"} />
-            <Row label="Target date" value={formatDate(goal.targetDate, settings.timezone, "MMM yyyy")} />
-            <Row label="Contribution frequency" value={goal.frequency || "Not set"} />
+            <Row
+              label="Tracking status"
+              value={goal.tracking.replace("_", " ")}
+            />
+            <Row
+              label="Estimated completion"
+              value={
+                goal.forecastDate
+                  ? formatDate(goal.forecastDate, settings.timezone, "MMM yyyy")
+                  : "Not projected"
+              }
+            />
+            <Row
+              label="Target date"
+              value={formatDate(goal.targetDate, settings.timezone, "MMM yyyy")}
+            />
+            <Row
+              label="Contribution frequency"
+              value={goal.frequency || "Not set"}
+            />
             <Row label="Status" value={goal.status} />
             {goal.linkedAccountId ? (
-              <Link href={`/accounts/${goal.linkedAccountId}`} className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-400/10 px-3 text-emerald-300 hover:bg-emerald-400/15">
-                <Link2 size={16} />{goal.accountName}
+              <Link
+                href={`/accounts/${goal.linkedAccountId}`}
+                className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-400/10 px-3 text-emerald-300 hover:bg-emerald-400/15"
+              >
+                <Link2 size={16} />
+                {goal.accountName}
               </Link>
             ) : null}
           </CardContent>
@@ -117,18 +227,40 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       <Card className="mt-5">
-        <CardHeader><CardTitle>Contribution history</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Contribution history</CardTitle>
+        </CardHeader>
         <CardContent>
           {contributions.length === 0 ? (
             <p className="py-10 text-center text-sm text-slate-500">
-              {goal.linkedAccountId ? "No linked-account contributions yet." : "Link an account to show contribution history."}
+              {goal.linkedAccountId
+                ? "No linked-account contributions yet."
+                : "Link an account to show contribution history."}
             </p>
           ) : (
             <div className="divide-y divide-white/[0.06]">
               {contributions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between py-3 text-sm">
-                  <div><p className="font-medium">{TRANSACTION_LABELS[transaction.type]}</p><p className="text-xs text-slate-500">{formatDate(transaction.transactionDate, settings.timezone, settings.preferredDateFormat)}</p></div>
-                  <MoneyValue amount={transaction.amountMinor} currency={transaction.currency} className="text-emerald-300" />
+                <div
+                  key={transaction.id}
+                  className="flex items-center justify-between py-3 text-sm"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {TRANSACTION_LABELS[transaction.type]}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatDate(
+                        transaction.transactionDate,
+                        settings.timezone,
+                        settings.preferredDateFormat,
+                      )}
+                    </p>
+                  </div>
+                  <MoneyValue
+                    amount={transaction.amountMinor}
+                    currency={transaction.currency}
+                    className="text-emerald-300"
+                  />
                 </div>
               ))}
             </div>
@@ -141,16 +273,40 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
           action={deleteGoalAction.bind(null, id)}
           confirm="Delete this goal? Linked account history will not be deleted."
           variant="danger"
-        ><Trash2 size={16} />Delete goal</MutationButton>
+        >
+          <Trash2 size={16} />
+          Delete goal
+        </MutationButton>
       </div>
     </>
   );
 }
 
-function Stat({ label, value, icon }: { label: string; value: React.ReactNode; icon: React.ReactNode }) {
-  return <Card className="p-5"><div className="flex items-center justify-between text-slate-500"><p className="text-xs font-medium uppercase tracking-wide">{label}</p>{icon}</div><p className="mt-3 text-xl font-semibold">{value}</p></Card>;
+function Stat({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: React.ReactNode;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between text-slate-500">
+        <p className="text-xs font-medium uppercase tracking-wide">{label}</p>
+        {icon}
+      </div>
+      <p className="mt-3 text-xl font-semibold">{value}</p>
+    </Card>
+  );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
-  return <div className="flex justify-between gap-4 border-b border-white/[0.05] pb-3 last:border-0"><span className="text-slate-500">{label}</span><span className="text-right capitalize text-slate-200">{value}</span></div>;
+  return (
+    <div className="flex justify-between gap-4 border-b border-white/[0.05] pb-3 last:border-0">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right capitalize text-slate-200">{value}</span>
+    </div>
+  );
 }

@@ -17,6 +17,7 @@ import {
 } from "@/lib/auth/users";
 import { getSettings } from "@/lib/bootstrap";
 import { closeDatabase, getDatabase } from "@/lib/db";
+import { requiredMonthlyContribution } from "@/lib/finance";
 import {
   createAccount,
   getAccount,
@@ -24,7 +25,7 @@ import {
   recordTransaction,
 } from "@/lib/services/accounts";
 import { getDashboardData } from "@/lib/services/analytics";
-import { createGoal } from "@/lib/services/goals";
+import { createGoal, getGoal } from "@/lib/services/goals";
 import {
   exportData,
   importTransactionsCsv,
@@ -239,6 +240,35 @@ describe.sequential("multi-user persistence and isolation", () => {
         planStartDate: "2026-01-01",
       }),
     ).toThrow("Linked account not found");
+
+    const planStartDate = new Date().toISOString().slice(0, 10);
+    const target = new Date(`${planStartDate}T12:00:00.000Z`);
+    target.setUTCFullYear(target.getUTCFullYear() + 1);
+    const rateAwareGoalId = createGoal(aliceId, {
+      name: "Rate-aware goal",
+      targetAmount: "2200",
+      currentAmount: "1000",
+      currency: "KES",
+      targetDate: target.toISOString().slice(0, 10),
+      icon: "Target",
+      status: "active",
+      priority: 1,
+      assumedAnnualReturn: 12,
+      plannedContribution: "0",
+      frequency: "monthly",
+      planStartDate,
+    });
+    const rateAwareGoal = await getGoal(aliceId, rateAwareGoalId);
+    expect(rateAwareGoal).toBeDefined();
+    expect(await getGoal(bobId, rateAwareGoalId)).toBeUndefined();
+    expect(rateAwareGoal!.requiredMonthly).toBeLessThan(
+      requiredMonthlyContribution(
+        rateAwareGoal!.currentAmountCalculated,
+        rateAwareGoal!.targetAmountMinor,
+        new Date(rateAwareGoal!.targetDate),
+        0,
+      ),
+    );
 
     expect(() =>
       importTransactionsCsv(

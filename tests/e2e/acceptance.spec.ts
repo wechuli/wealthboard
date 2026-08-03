@@ -15,6 +15,17 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await page
     .getByLabel("Password", { exact: true })
     .fill("wealthboard-e2e-password");
+  await page.getByLabel("Confirm password").fill("different-e2e-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByText("Passwords do not match.")).toBeVisible();
+  await expect(page.getByLabel("Username")).toHaveValue("alice");
+  await expect(page.getByLabel("Display name")).toHaveValue("Alice Example");
+  await expect(page.getByLabel("Password", { exact: true })).toHaveValue(
+    "wealthboard-e2e-password",
+  );
+  await expect(page.getByLabel("Confirm password")).toHaveValue(
+    "different-e2e-password",
+  );
   await page.getByLabel("Confirm password").fill("wealthboard-e2e-password");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
@@ -150,6 +161,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "July 2028 Family Car" }),
   ).toBeVisible();
+  await expect(page.getByText("Required monthly (8% return)")).toBeVisible();
   await expect(page.getByText(/ahead|on track|behind/).first()).toBeVisible();
   await expect(page.getByText("KCB Car Fund")).toBeVisible();
 

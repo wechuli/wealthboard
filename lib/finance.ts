@@ -36,7 +36,10 @@ const NEGATIVE_TYPES = new Set<TransactionType>([
   "liability_payment",
 ]);
 
-export function transactionEffect(type: TransactionType, amountMinor: number): bigint {
+export function transactionEffect(
+  type: TransactionType,
+  amountMinor: number,
+): bigint {
   const amount = BigInt(amountMinor);
   if (type === "manual_adjustment" || type === "transfer") return amount;
   if (POSITIVE_TYPES.has(type)) return amount < 0n ? -amount : amount;
@@ -44,7 +47,10 @@ export function transactionEffect(type: TransactionType, amountMinor: number): b
   return 0n;
 }
 
-export function replayBalance(events: FinancialEvent[], throughDate?: string): bigint {
+export function replayBalance(
+  events: FinancialEvent[],
+  throughDate?: string,
+): bigint {
   const ordered = [...events]
     .filter((event) => !throughDate || event.date <= throughDate)
     .sort(
@@ -125,7 +131,6 @@ export function calculateFlowMetrics(
       default:
         break;
     }
-
   }
   return metrics;
 }
@@ -152,20 +157,37 @@ export function requiredMonthlyContribution(
   currentMinor: number | bigint,
   targetMinor: number | bigint,
   targetDate: Date,
+  annualReturnBps = 0,
   fromDate = new Date(),
 ): bigint {
-  const remaining = BigInt(targetMinor) - BigInt(currentMinor);
-  if (remaining <= 0n) return 0n;
+  const current = new Decimal(currentMinor.toString());
+  const target = new Decimal(targetMinor.toString());
+  if (current.greaterThanOrEqualTo(target)) return 0n;
   const months = Math.max(1, monthsBetween(fromDate, targetDate));
-  return BigInt(
-    new Decimal(remaining.toString())
-      .div(months)
-      .toDecimalPlaces(0, Decimal.ROUND_CEIL)
-      .toFixed(0),
+  const monthlyRate = new Decimal(annualReturnBps).div(10000).div(12);
+
+  if (monthlyRate.isZero()) {
+    return decimalToBigInt(
+      target.minus(current).div(months),
+      Decimal.ROUND_CEIL,
+    );
+  }
+
+  const growthFactor = monthlyRate.plus(1).pow(months);
+  const remainingAfterPrincipalGrowth = target.minus(current.mul(growthFactor));
+  if (remainingAfterPrincipalGrowth.lessThanOrEqualTo(0)) return 0n;
+
+  const contributionGrowthFactor = growthFactor.minus(1).div(monthlyRate);
+  return decimalToBigInt(
+    remainingAfterPrincipalGrowth.div(contributionGrowthFactor),
+    Decimal.ROUND_CEIL,
   );
 }
 
-function decimalToBigInt(value: Decimal, rounding = Decimal.ROUND_HALF_UP) {
+function decimalToBigInt(
+  value: Decimal,
+  rounding: Decimal.Rounding = Decimal.ROUND_HALF_UP,
+) {
   return BigInt(value.toDecimalPlaces(0, rounding).toFixed(0));
 }
 
@@ -204,7 +226,9 @@ export function futureValueMinor(
 
   const growthFactor = monthlyRate.plus(1).pow(months);
   const principalGrowth = current.mul(growthFactor);
-  const contributionGrowth = contribution.mul(growthFactor.minus(1)).div(monthlyRate);
+  const contributionGrowth = contribution
+    .mul(growthFactor.minus(1))
+    .div(monthlyRate);
   return decimalToBigInt(principalGrowth.plus(contributionGrowth));
 }
 
@@ -248,8 +272,11 @@ export function forecastCompletionWithContributionWindow(input: {
 
   for (let month = 1; month <= 1200; month += 1) {
     if (
-      futureValueWithContributionWindow({ ...input, months: month, fromDate }) >=
-      BigInt(input.targetMinor)
+      futureValueWithContributionWindow({
+        ...input,
+        months: month,
+        fromDate,
+      }) >= BigInt(input.targetMinor)
     ) {
       return addUtcMonths(fromDate, month);
     }
@@ -265,12 +292,17 @@ export function forecastCompletionDate(
   fromDate = new Date(),
 ): Date | null {
   if (BigInt(currentMinor) >= BigInt(targetMinor)) return fromDate;
-  if (BigInt(monthlyContributionMinor) <= 0n && annualReturnBps <= 0) return null;
+  if (BigInt(monthlyContributionMinor) <= 0n && annualReturnBps <= 0)
+    return null;
 
   for (let month = 1; month <= 1200; month += 1) {
     if (
-      futureValueMinor(currentMinor, monthlyContributionMinor, annualReturnBps, month) >=
-      BigInt(targetMinor)
+      futureValueMinor(
+        currentMinor,
+        monthlyContributionMinor,
+        annualReturnBps,
+        month,
+      ) >= BigInt(targetMinor)
     ) {
       return addUtcMonths(fromDate, month);
     }
@@ -289,14 +321,23 @@ export function goalTrackingStatus(input: {
   const now = input.now ?? new Date();
   if (BigInt(input.currentMinor) >= BigInt(input.targetMinor)) return "ahead";
 
-  const totalMonths = Math.max(1, monthsBetween(input.createdAt, input.targetDate));
-  const elapsedMonths = Math.min(totalMonths, monthsBetween(input.createdAt, now));
-  const expected = new Decimal(input.targetMinor.toString()).mul(elapsedMonths).div(totalMonths);
+  const totalMonths = Math.max(
+    1,
+    monthsBetween(input.createdAt, input.targetDate),
+  );
+  const elapsedMonths = Math.min(
+    totalMonths,
+    monthsBetween(input.createdAt, now),
+  );
+  const expected = new Decimal(input.targetMinor.toString())
+    .mul(elapsedMonths)
+    .div(totalMonths);
   const current = new Decimal(input.currentMinor.toString());
   const required = requiredMonthlyContribution(
     input.currentMinor,
     input.targetMinor,
     input.targetDate,
+    0,
     now,
   );
 

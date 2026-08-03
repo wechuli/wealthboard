@@ -62,15 +62,24 @@ export async function listGoals(userId: string) {
     .from(goals)
     .leftJoin(
       accounts,
-      and(eq(goals.linkedAccountId, accounts.id), eq(goals.userId, accounts.userId)),
+      and(
+        eq(goals.linkedAccountId, accounts.id),
+        eq(goals.userId, accounts.userId),
+      ),
     )
     .leftJoin(
       goalContributionPlans,
-      and(eq(goals.id, goalContributionPlans.goalId), eq(goals.userId, goalContributionPlans.userId)),
+      and(
+        eq(goals.id, goalContributionPlans.goalId),
+        eq(goals.userId, goalContributionPlans.userId),
+      ),
     )
     .where(eq(goals.userId, userId))
     .orderBy(asc(goals.priority), asc(goals.targetDate));
-  const rates = await db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId));
+  const rates = await db
+    .select()
+    .from(exchangeRates)
+    .where(eq(exchangeRates.userId, userId));
 
   return rows.map((goal) => {
     let missingExchangeRate = false;
@@ -91,15 +100,27 @@ export async function listGoals(userId: string) {
       }
     }
     const plannedMonthly = goal.plannedContributionMinor
-      ? monthlyPlanAmount(goal.plannedContributionMinor, goal.frequency ?? "monthly")
+      ? monthlyPlanAmount(
+          goal.plannedContributionMinor,
+          goal.frequency ?? "monthly",
+        )
       : 0n;
     const now = new Date();
-    const planStart = goal.planStartDate ? new Date(goal.planStartDate) : undefined;
+    const planStart = goal.planStartDate
+      ? new Date(goal.planStartDate)
+      : undefined;
     const planEnd = goal.planEndDate ? new Date(goal.planEndDate) : null;
-    const planActive = (!planStart || now >= planStart) && (!planEnd || now <= planEnd);
+    const planActive =
+      (!planStart || now >= planStart) && (!planEnd || now <= planEnd);
     const currentPlannedMonthly = planActive ? plannedMonthly : 0n;
     const targetDate = new Date(goal.targetDate);
-    const requiredMonthly = requiredMonthlyContribution(current, goal.targetAmountMinor, targetDate);
+    const requiredMonthly = requiredMonthlyContribution(
+      current,
+      goal.targetAmountMinor,
+      targetDate,
+      goal.assumedAnnualReturnBps,
+      now,
+    );
     const forecast = forecastCompletionWithContributionWindow({
       currentMinor: current,
       targetMinor: goal.targetAmountMinor,
@@ -153,10 +174,14 @@ export function createGoal(userId: string, input: GoalInput) {
     if (input.idempotencyKey) {
       const duplicate = tx.query.idempotencyKeys
         .findFirst({
-          where: and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.key, input.idempotencyKey)),
+          where: and(
+            eq(idempotencyKeys.userId, userId),
+            eq(idempotencyKeys.key, input.idempotencyKey),
+          ),
         })
         .sync();
-      if (duplicate?.operation === "create-goal" && duplicate.resultId) return duplicate.resultId;
+      if (duplicate?.operation === "create-goal" && duplicate.resultId)
+        return duplicate.resultId;
       if (duplicate) throw new Error("This request key was already used.");
     }
     assertLinkedAccountAvailable(tx, userId, input.linkedAccountId);
@@ -195,7 +220,12 @@ export function createGoal(userId: string, input: GoalInput) {
     if (input.linkedAccountId) {
       tx.update(accounts)
         .set({ goalId: id, updatedAt: timestamp })
-        .where(and(eq(accounts.userId, userId), eq(accounts.id, input.linkedAccountId)))
+        .where(
+          and(
+            eq(accounts.userId, userId),
+            eq(accounts.id, input.linkedAccountId),
+          ),
+        )
         .run();
     }
     if (input.idempotencyKey) {
@@ -249,7 +279,12 @@ export function updateGoal(userId: string, id: string, input: GoalInput) {
         endDate: input.planEndDate ? dateInputToUtc(input.planEndDate) : null,
         updatedAt: timestamp,
       })
-      .where(and(eq(goalContributionPlans.userId, userId), eq(goalContributionPlans.goalId, id)))
+      .where(
+        and(
+          eq(goalContributionPlans.userId, userId),
+          eq(goalContributionPlans.goalId, id),
+        ),
+      )
       .run();
     tx.update(accounts)
       .set({ goalId: null, updatedAt: timestamp })
@@ -258,7 +293,12 @@ export function updateGoal(userId: string, id: string, input: GoalInput) {
     if (input.linkedAccountId) {
       tx.update(accounts)
         .set({ goalId: id, updatedAt: timestamp })
-        .where(and(eq(accounts.userId, userId), eq(accounts.id, input.linkedAccountId)))
+        .where(
+          and(
+            eq(accounts.userId, userId),
+            eq(accounts.id, input.linkedAccountId),
+          ),
+        )
         .run();
     }
   });
@@ -306,7 +346,11 @@ export function goalProjectionPoints(input: {
       startDate.getUTCMonth(),
   );
   const points = [];
-  for (let month = 0; month <= months; month += Math.max(1, Math.ceil(months / 24))) {
+  for (
+    let month = 0;
+    month <= months;
+    month += Math.max(1, Math.ceil(months / 24))
+  ) {
     const date = addUtcMonths(startDate, month);
     points.push({
       date: date.toISOString(),
@@ -328,30 +372,43 @@ export function goalProjectionPoints(input: {
 
 function validateGoalInput(input: GoalInput) {
   const targetAmountMinor = parseMoney(input.targetAmount, input.currency);
-  const currentAmountMinor = input.currentAmount ? parseMoney(input.currentAmount, input.currency) : 0;
-  const plannedContributionMinor = parseMoney(input.plannedContribution, input.currency);
-  if (targetAmountMinor <= 0) throw new Error("Target amount must be greater than zero.");
+  const currentAmountMinor = input.currentAmount
+    ? parseMoney(input.currentAmount, input.currency)
+    : 0;
+  const plannedContributionMinor = parseMoney(
+    input.plannedContribution,
+    input.currency,
+  );
+  if (targetAmountMinor <= 0)
+    throw new Error("Target amount must be greater than zero.");
   if (currentAmountMinor < 0 || plannedContributionMinor < 0) {
     throw new Error("Goal amounts cannot be negative.");
   }
   if (new Date(input.targetDate) <= new Date(input.planStartDate)) {
     throw new Error("Target date must be after the contribution start date.");
   }
-  if (input.planEndDate && new Date(input.planEndDate) < new Date(input.planStartDate)) {
+  if (
+    input.planEndDate &&
+    new Date(input.planEndDate) < new Date(input.planStartDate)
+  ) {
     throw new Error("Contribution plan end date must be after its start date.");
   }
   return { targetAmountMinor, currentAmountMinor, plannedContributionMinor };
 }
 
 function assertLinkedAccountAvailable(
-  tx: Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0],
+  tx: Parameters<
+    Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]
+  >[0],
   userId: string,
   linkedAccountId?: string,
   goalId?: string,
 ) {
   if (!linkedAccountId) return;
   const account = tx.query.accounts
-    .findFirst({ where: and(eq(accounts.userId, userId), eq(accounts.id, linkedAccountId)) })
+    .findFirst({
+      where: and(eq(accounts.userId, userId), eq(accounts.id, linkedAccountId)),
+    })
     .sync();
   if (!account) throw new Error("Linked account not found.");
   const linkedGoal = tx.query.goals
@@ -362,10 +419,14 @@ function assertLinkedAccountAvailable(
             eq(goals.linkedAccountId, linkedAccountId),
             ne(goals.id, goalId),
           )
-        : and(eq(goals.userId, userId), eq(goals.linkedAccountId, linkedAccountId)),
+        : and(
+            eq(goals.userId, userId),
+            eq(goals.linkedAccountId, linkedAccountId),
+          ),
     })
     .sync();
-  if (linkedGoal) throw new Error(`This account is already linked to ${linkedGoal.name}.`);
+  if (linkedGoal)
+    throw new Error(`This account is already linked to ${linkedGoal.name}.`);
 }
 
 function projectionContributions(
@@ -376,9 +437,11 @@ function projectionContributions(
   let total = BigInt(input.currentMinor);
   for (let month = 1; month <= months; month += 1) {
     const date = addUtcMonths(startDate, month);
-    const afterStart = !input.contributionStart || date >= input.contributionStart;
+    const afterStart =
+      !input.contributionStart || date >= input.contributionStart;
     const beforeEnd = !input.contributionEnd || date <= input.contributionEnd;
-    if (afterStart && beforeEnd) total += BigInt(input.monthlyContributionMinor);
+    if (afterStart && beforeEnd)
+      total += BigInt(input.monthlyContributionMinor);
   }
   return total;
 }

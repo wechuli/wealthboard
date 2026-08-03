@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState, type ChangeEvent } from "react";
 import { ArrowRight, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 
 import { signupAction } from "@/app/signup/actions";
@@ -10,6 +10,19 @@ import { FieldError, Input, Label } from "@/components/ui/form-controls";
 
 export function SignupForm() {
   const [state, action, pending] = useActionState(signupAction, {});
+  const [values, setValues] = useState({
+    username: "",
+    displayName: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const updateValue = (event: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.currentTarget;
+    setValues((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  };
 
   return (
     <form action={action} className="mt-8 space-y-5" noValidate>
@@ -26,6 +39,8 @@ export function SignupForm() {
             autoComplete="username"
             className="pl-10"
             autoFocus
+            value={values.username}
+            onChange={updateValue}
             aria-invalid={Boolean(state.fieldErrors?.username)}
           />
         </div>
@@ -37,6 +52,8 @@ export function SignupForm() {
           id="displayName"
           name="displayName"
           autoComplete="name"
+          value={values.displayName}
+          onChange={updateValue}
           aria-invalid={Boolean(state.fieldErrors?.displayName)}
         />
         <FieldError>{state.fieldErrors?.displayName?.[0]}</FieldError>
@@ -54,6 +71,8 @@ export function SignupForm() {
             type="password"
             autoComplete="new-password"
             className="pl-10"
+            value={values.password}
+            onChange={updateValue}
             aria-invalid={Boolean(state.fieldErrors?.password)}
           />
         </div>
@@ -66,6 +85,8 @@ export function SignupForm() {
           name="confirmPassword"
           type="password"
           autoComplete="new-password"
+          value={values.confirmPassword}
+          onChange={updateValue}
           aria-invalid={Boolean(state.fieldErrors?.confirmPassword)}
         />
         <FieldError>{state.fieldErrors?.confirmPassword?.[0]}</FieldError>

@@ -902,8 +902,15 @@ Net worth = total assets minus total liabilities
 
 Goal required monthly contribution:
 
-Required monthly contribution =
-remaining target amount divided by remaining contribution periods
+At a zero assumed annual return:
+
+Required monthly contribution = remaining target amount divided by remaining contribution periods
+
+When a goal has an assumed annual return, derive the required monthly
+contribution by inverting the same monthly-compounded future-value calculation
+used by its forecast. Include growth of both the current balance and subsequent
+end-of-month contributions, and round the required contribution up to whole
+minor units.
 
 For projections with investment returns, use a proper future-value calculation.
 
