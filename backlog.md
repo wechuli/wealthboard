@@ -140,11 +140,11 @@ Effort estimates:
 
 - **Priority:** P2
 - **Estimated effort:** Medium
-- **Current gap:** Signup creates default categories and one exchange rate, then opens an empty dashboard. There is no guided confirmation of base currency, timezone, rate assumptions, or first account.
+- **Current gap:** Signup now lets users choose a catalog-backed base currency and creates no exchange rate, then opens an empty dashboard. There is still no guided confirmation of enabled currencies, timezone, rate assumptions, or first account.
 - **Evidence from the repository:** `registerUser()` in [lib/auth/users.ts](lib/auth/users.ts) creates settings and defaults. [app/(app)/page.tsx](<app/(app)/page.tsx>) provides a good first-account empty state but no multi-step onboarding.
 - **Proposed improvement:** Add a dismissible onboarding checklist for locale/currency, exchange-rate setup, first account, first valuation/transaction, and optional first goal. Keep demo data opt-in and user-targeted.
 - **User value:** New users reach a trustworthy dashboard with fewer hidden defaults.
-- **Dependencies:** Architecture item A1; F12 currency catalog and base-currency configuration; onboarding completion setting.
+- **Dependencies:** Remaining architecture item A1 provenance work; implemented F12 currency catalog and base-currency configuration; onboarding completion setting.
 - **Risks or trade-offs:** A forced wizard can slow experienced users. Make steps skippable and resumable.
 - **Acceptance criteria:** A new user can complete or dismiss onboarding, no financial account is created automatically, unsafe placeholder rates are not treated as authoritative, and progress survives refresh.
 
@@ -172,18 +172,18 @@ Effort estimates:
 - **Risks or trade-offs:** Loan terms differ widely. Avoid implying lender-grade statements or automatically altering balances from projections.
 - **Acceptance criteria:** Scenarios reconcile mathematically, assumptions are explicit, projections do not mutate actual balances, and unsupported loan structures degrade to manual tracking.
 
-### F12. Curated Currency Catalog and Per-User Base Currency
+### F12. Curated Currency Catalog and Per-User Base Currency (Implemented)
 
+- **Status:** Implemented on 2026-08-03.
 - **Priority:** P1
 - **Estimated effort:** Medium
-- **Current gap:** User settings store a per-user base currency and JSON list of supported currencies, but fresh users receive only KES and USD, currency settings are manually typed, and account and goal forms accept free-text three-letter codes. There is no curated, discoverable currency catalog or explicit policy for changing a user's base currency.
-- **Evidence from the repository:** [db/schema.ts](db/schema.ts) defaults `baseCurrency` to KES and `supportedCurrencies` to `["KES","USD"]`. [components/settings-forms.tsx](components/settings-forms.tsx) accepts typed base and comma-separated supported currencies, while [components/forms/account-form.tsx](components/forms/account-form.tsx) and [components/forms/goal-form.tsx](components/forms/goal-form.tsx) use free-text currency inputs. [lib/money.ts](lib/money.ts) already derives ISO-aware fraction digits and preserves integer minor units.
-- **Proposed improvement:** Define one centralized ISO 4217 currency catalog and let each user independently choose a base currency and enabled currency set in settings and onboarding. Include at minimum the regional currencies KES, TZS, UGX, RWF, BIF, ETB, SSP, CDF, and SOS, plus commonly used USD, EUR, GBP, ZAR, NGN, GHS, AED, CAD, AUD, JPY, CHF, CNY, and INR. Replace free-text currency entry with catalog-backed selectors while keeping service-level validation authoritative.
+- **Previous gap:** User settings stored a per-user base currency and JSON list of supported currencies, but fresh users received only KES and USD, currency settings were manually typed, and account and goal forms accepted free-text three-letter codes. There was no curated, discoverable currency catalog or explicit policy for changing a user's base currency.
+- **Previous evidence:** [db/schema.ts](db/schema.ts) defaulted `supportedCurrencies` to only KES and USD; settings, account, and goal forms accepted typed codes. [lib/money.ts](lib/money.ts) already provided the ISO-aware integer-minor-unit foundation retained by the implementation.
+- **Implementation:** [lib/currencies.ts](lib/currencies.ts) defines the centralized ISO-backed catalog, labels, defaults, normalization, and legacy-option handling. Signup and Settings provide catalog-backed base selection; Settings manages each user's enabled set and locks base/in-use currencies. Account, goal, and exchange-rate forms use enabled-only selectors. [lib/services/settings.ts](lib/services/settings.ts) owns authoritative enablement and reference policies used by account, goal, rate, and CSV import services.
 - **User value:** East African and internationally diversified users can model their actual holdings, choose the reporting currency that makes sense to them, and discover supported currencies without memorizing ISO codes.
-- **Dependencies:** A1 exchange-rate provenance and completeness; A5 supported-currency service policy; TD3 centralized defaults. F9 onboarding should consume this catalog rather than define separate currency defaults.
-- **Migration considerations:** Preserve every currency already referenced by a user's accounts, goals, rates, imports, or settings, even if it is outside the initial curated catalog, and add it to that user's enabled set. Ensure the current base currency is enabled. Changing the base currency must not rewrite original account, transaction, valuation, goal, or exchange-rate amounts.
-- **Risks or trade-offs:** A base-currency change can make current and historical totals incomplete until the user supplies effective-dated rates. Never synthesize a plausible conversion rate. Currency symbols are ambiguous, and ISO currencies have different minor-unit precision, so interfaces must show codes and continue using the existing ISO-aware integer-minor-unit helpers.
-- **Acceptance criteria:** Each user can choose a base currency and independently enable or disable catalog currencies; the base currency is always enabled and cannot be removed until another base is selected; TZS and UGX are available by default in the catalog; account, goal, exchange-rate, import, and settings workflows use the same enabled-currency policy; disabled or invalid currencies are rejected in services; changing base currency recalculates displays and reports without mutating source records; missing current or historical rates are clearly identified; zero- and three-decimal currencies round and format correctly; export and restore preserve the user's base and enabled set; two-user tests prove that base currency, enabled currencies, and exchange rates remain isolated.
+- **Supporting work:** Fresh users enable KES, USD, TZS, and UGX and receive no fabricated rate. Restore normalizes its enabled set from every source record and supports zero-rate archives. Historical net-worth points carry completeness metadata, and dashboard/report warnings identify currencies excluded for missing effective-dated rates.
+- **Trade-offs:** The curated list is intentionally smaller than all ISO 4217 codes, while valid previously configured currencies remain available as legacy options. Base-currency changes can leave totals incomplete until the user supplies rates; original source amounts are never rewritten.
+- **Acceptance criteria:** Met. [tests/unit/money.test.ts](tests/unit/money.test.ts) covers catalog defaults plus JPY/KWD precision. [tests/unit/multi-user.test.ts](tests/unit/multi-user.test.ts) covers disabled and invalid service inputs, base auto-inclusion, in-use protection, source immutability, historical completeness, zero-rate portability, and two-user base/rate isolation. [tests/e2e/acceptance.spec.ts](tests/e2e/acceptance.spec.ts) covers signup choice, TZS/UGX discovery, settings, missing-rate resolution, restore persistence, enabled account/goal selectors, and supported responsive widths.
 
 ## AI-Assisted Functionality
 
@@ -266,17 +266,18 @@ AI1 is blocked on authoritative exchange-rate/performance inputs (A1 and A3) and
 
 ## Architecture Improvements
 
-### A1. Make Exchange-Rate Provenance and History Completeness Authoritative
+### A1. Make Exchange-Rate Provenance and History Completeness Authoritative (Partially Implemented)
 
+- **Status:** Placeholder removal and aggregate/history completeness implemented on 2026-08-03; provenance/freshness remains.
 - **Priority:** P0
 - **Estimated effort:** Medium
-- **Current architectural concern:** Signup seeds USD/KES `130` effective from 2000 as `initial-default`, which can appear authoritative indefinitely. Historical net-worth calculation catches `MissingExchangeRateError` and silently omits the affected account from that point.
-- **Evidence from the repository:** `defaultRateRow()` in [lib/auth/users.ts](lib/auth/users.ts) creates the rate. `getHistoricalPoint()` in [lib/services/analytics.ts](lib/services/analytics.ts) suppresses missing-rate errors without returning completeness metadata. Current dashboard warnings cover missing current conversions, not necessarily incomplete historical points.
-- **Proposed change:** Do not treat a placeholder rate as valid user data. Require confirmation during onboarding or begin with no cross-currency rate. Add rate provenance/freshness and return completeness metadata for every aggregate/history point. Refuse or clearly mark totals that omit holdings.
+- **Previous architectural concern:** Signup seeded USD/KES `130` effective from 2000 as `initial-default`, and historical net-worth calculation silently omitted holdings when a rate was missing.
+- **Implemented foundation:** [lib/auth/users.ts](lib/auth/users.ts) creates no exchange rate. `getHistoricalPoint()` in [lib/services/analytics.ts](lib/services/analytics.ts) returns completeness and missing-currency metadata, while dashboard and reports visibly mark incomplete totals and history.
+- **Remaining change:** Add richer rate provenance/freshness and expose affected historical date ranges. Keep optional automatic providers explicit and user-controlled.
 - **Expected benefit:** Net worth, trends, goal progress, and reports cannot silently understate foreign-currency holdings.
-- **Migration considerations:** This repository uses a fresh baseline, so change signup defaults directly. For existing deployments, identify `source = "initial-default"` rows and require confirmation rather than silently deleting user-entered rates.
-- **Risks and trade-offs:** Removing the default creates an initial warning for USD users. That is preferable to a plausible but stale number. Automatic rates can remain optional later.
-- **Acceptance criteria:** No unconfirmed placeholder contributes to totals; every aggregate declares complete/incomplete status; affected currencies and date ranges are shown; historical missing-rate tests cannot produce an apparently complete numeric chart.
+- **Migration considerations:** The fresh baseline contains no placeholder. A pre-change deployment should identify `source = "initial-default"` rows and require user confirmation instead of treating them as authoritative or silently deleting other user-entered rates.
+- **Risks and trade-offs:** Users with cross-currency holdings now see an initial missing-rate warning until they enter a rate. That is preferable to a plausible but stale number. Automatic rates can remain optional later.
+- **Acceptance criteria:** Placeholder removal, aggregate/history completeness flags, affected currency codes, and historical missing-rate regression tests are complete. Rate provenance/freshness and explicit affected date ranges remain.
 
 ### A2. Enforce Reserved Transaction-Type Invariants on Update
 
@@ -314,13 +315,14 @@ AI1 is blocked on authoritative exchange-rate/performance inputs (A1 and A3) and
 - **Risks and trade-offs:** Requires approximately twice the database size during restore. Explicitly fail before touching the target when space is insufficient.
 - **Acceptance criteria:** Automated tests cover valid restore, corrupt source, missing tables, interrupted swap simulation, insufficient space, and post-check failure; every failed case leaves the original byte-for-byte recoverable.
 
-### A5. Enforce Account State, Goal-Link, and Supported-Currency Rules in Services
+### A5. Enforce Account State, Goal-Link, and Supported-Currency Rules in Services (Partially Implemented)
 
+- **Status:** Supported-currency service policy implemented on 2026-08-03; archived-account and goal-link state rules remain.
 - **Priority:** P1
 - **Estimated effort:** Medium
-- **Current architectural concern:** UI forms filter archived/liability accounts, but transaction, valuation, and transfer services fetch accounts by owner and ID without consistently rejecting archived rows. Goal service validation verifies ownership but not archived/liability state. Currency inputs accept any three-letter code rather than the user's configured list.
-- **Evidence from the repository:** `recordTransaction()`, `recordValuation()`, and [lib/services/transfers.ts](lib/services/transfers.ts) do not filter `archivedAt`. `GoalForm` filters accounts client-side in [components/forms/goal-form.tsx](components/forms/goal-form.tsx), while `assertLinkedAccountAvailable()` in [lib/services/goals.ts](lib/services/goals.ts) does not enforce the same rules. [components/forms/account-form.tsx](components/forms/account-form.tsx) uses a free-text currency input.
-- **Proposed change:** Centralize `requireActiveOwnedAccount()` and currency-policy checks in the service layer. Block normal transactions, valuations, transfers, and goal links for archived accounts. Permit historical corrections only through the explicit correction workflow in F2, with a separate authorization/invariant path.
+- **Current architectural concern:** UI forms filter archived/liability accounts, but transaction, valuation, and transfer services fetch accounts by owner and ID without consistently rejecting archived rows. Goal service validation verifies ownership but not archived/liability state.
+- **Evidence from the repository:** `recordTransaction()`, `recordValuation()`, and [lib/services/transfers.ts](lib/services/transfers.ts) do not filter `archivedAt`. `GoalForm` filters accounts client-side in [components/forms/goal-form.tsx](components/forms/goal-form.tsx), while `assertLinkedAccountAvailable()` in [lib/services/goals.ts](lib/services/goals.ts) does not enforce the same state rules. Currency selectors and service enforcement are complete through F12.
+- **Remaining change:** Centralize `requireActiveOwnedAccount()` in the service layer. Block normal transactions, valuations, transfers, and goal links for archived accounts. Permit historical corrections only through the explicit correction workflow in F2, with a separate authorization/invariant path.
 - **Expected benefit:** Crafted or stale forms cannot mutate archived accounts, link liabilities to savings goals, or create unsupported currency states.
 - **Migration considerations:** Audit existing linked liabilities, archived-account activity after archive dates, and currencies outside settings before tightening validation.
 - **Risks and trade-offs:** Strict currency allowlists can frustrate users adding a new currency. Offer an inline settings path rather than silent acceptance.
@@ -502,11 +504,11 @@ If those triggers are reached, use a phased PostgreSQL plan: introduce dialect-n
 - **Improvement:** Define shared input contracts per domain, derive client types from them, and use typed adapters for progressive enhancement instead of unchecked action casts.
 - **Acceptance criteria:** Client and server reject the same invalid inputs; schemas remain in dependency-light validation modules that never import React components or services; settings/rates use reusable schemas; no form action requires an `unknown` cast; field errors retain current UX; no circular imports are introduced.
 
-### TD3. Centralize Product Defaults and Policy Values
+### TD3. Centralize Product Defaults and Policy Values (Partially Implemented)
 
 - **Priority:** P2
 - **Estimated effort:** Small
-- **Issue:** KES, Africa/Nairobi, session duration, goal return, upload limits, auth rate limits, and date-range values are spread across services, schemas, forms, routes, and deployment files.
+- **Issue:** Currency catalog/defaults are now centralized in [lib/currencies.ts](lib/currencies.ts), but Africa/Nairobi, session duration, goal return, upload limits, auth rate limits, and date-range values remain spread across services, schemas, forms, routes, and deployment files.
 - **Improvement:** Separate product defaults from security/runtime policy and expose one server-only validated configuration module plus safe client constants where needed.
 - **Acceptance criteria:** Each policy has one source of truth, environment overrides validate at startup, and tests cover defaults and invalid values.
 
@@ -550,7 +552,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 - F5 goal scenarios and milestones.
 - F6 date-scoped downloadable reports.
 - F7 account deletion and export-before-delete.
-- F12 currency catalog and per-user base currency.
+- F12 currency catalog and per-user base currency. **Implemented 2026-08-03.**
 - F9 onboarding.
 
 ### Phase 3: Reliability and Operational Maturity
@@ -588,7 +590,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 
 - Block reserved `transfer` and `opening_balance` types in transaction updates (A2).
 - Reject archived accounts and invalid goal links at service boundaries (A5).
-- Stop treating the seeded USD/KES placeholder as authoritative (first part of A1).
+- ~~Stop treating the seeded USD/KES placeholder as authoritative (first part of A1).~~ Completed on 2026-08-03.
 - Add a server-side pre-restore backup before replacing the SQLite file (first part of A4).
 - ~~Add transaction type/account/date filters before full pagination (first slice of F1).~~ Completed as the full F1 transaction workbench on 2026-08-03.
 - Add security headers in report-only/tested mode and trusted-proxy documentation (first slice of A7).
@@ -599,7 +601,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 
 ## Recommended Next Five Tasks
 
-1. **Fix exchange-rate trust and completeness.** Why next: a plausible placeholder and silent historical omission can make core net-worth output wrong without an obvious error. **Estimated effort:** Medium. **Dependencies:** None. **Expected outcome:** Every total and chart is either complete or visibly identifies missing/unconfirmed rates.
+1. **Complete exchange-rate provenance and freshness.** Why next: placeholder removal and missing-rate completeness are implemented, but users still need richer source/freshness metadata and affected historical date ranges. **Estimated effort:** Medium. **Dependencies:** F12 implemented foundation. **Expected outcome:** Every configured rate has clear provenance/freshness and incomplete periods identify their affected ranges.
 2. **Close the reserved transaction update path and add invariant tests.** Why next: it is a small authenticated path to unpaired transfers or duplicate opening-balance semantics. **Estimated effort:** Small. **Dependencies:** None. **Expected outcome:** Reserved transaction types can only be created or corrected through dedicated atomic workflows.
 3. **Implement fail-safe database restore with automatic rollback.** Why next: the current operator restore can replace the last working database without creating a recovery copy. **Estimated effort:** Medium. **Dependencies:** Shared backup primitive. **Expected outcome:** Every restore either succeeds and validates or leaves the previous database recoverable.
 4. **Replace or temporarily remove the current annualized return figures.** Why next: cash-flow timing is ignored, so a prominent report can misstate performance. **Estimated effort:** Large. **Dependencies:** Agreed TWR/XIRR methodology and golden fixtures. **Expected outcome:** Performance comparisons are mathematically defensible and disclose method/data sufficiency.
