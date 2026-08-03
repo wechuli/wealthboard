@@ -10,7 +10,11 @@ import { listCategories } from "@/lib/services/categories";
 import { requireSession } from "@/lib/auth/session";
 import { getCurrencyConfiguration } from "@/lib/services/settings";
 
-export default async function EditAccountPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditAccountPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { userId } = await requireSession();
   const { id } = await params;
   const [account, categories, currencyConfiguration] = await Promise.all([
@@ -21,9 +25,14 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
   if (!account) notFound();
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title={`Edit ${account.name}`} description="Account history and currency remain unchanged." />
+      <PageHeader
+        title={`Edit ${account.name}`}
+        description="Account history and currency remain unchanged."
+      />
       <Card>
-        <CardHeader><CardTitle>Account details</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Account details</CardTitle>
+        </CardHeader>
         <CardContent>
           <AccountForm
             categories={categories}
@@ -37,7 +46,13 @@ export default async function EditAccountPage({ params }: { params: Promise<{ id
               institution: account.institution || "",
               accountReference: account.accountReference || "",
               currency: account.currency,
-              costBasis: account.costBasisMinor == null ? "" : minorToDecimalString(account.costBasisMinor, account.currency),
+              costBasis:
+                account.costBasisMinor == null
+                  ? ""
+                  : minorToDecimalString(
+                      account.costBasisMinor,
+                      account.currency,
+                    ),
               isIncludedInNetWorth: account.isIncludedInNetWorth,
               notes: account.notes || "",
             }}

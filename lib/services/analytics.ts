@@ -76,27 +76,40 @@ function rangeStart(range: HistoryRange, earliest: Date, now: Date) {
   return addUtcDays(now, -days);
 }
 
-export async function getNetWorthHistory(userId: string, range: HistoryRange = "1y") {
+export async function getNetWorthHistory(
+  userId: string,
+  range: HistoryRange = "1y",
+) {
   const db = getDatabase();
   const accountRows = await db
     .select()
     .from(accounts)
-    .where(and(eq(accounts.userId, userId), eq(accounts.isIncludedInNetWorth, true)));
+    .where(
+      and(eq(accounts.userId, userId), eq(accounts.isIncludedInNetWorth, true)),
+    );
   if (accountRows.length === 0) return [];
-  const rates = await db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId));
+  const rates = await db
+    .select()
+    .from(exchangeRates)
+    .where(eq(exchangeRates.userId, userId));
   const settings = await db.query.userSettings.findFirst({
     where: eq(userSettings.userId, userId),
   });
   if (!settings) throw new Error("Settings unavailable.");
   const events = eventMap(userId);
-  const allDates = [...events.values()].flat().map((event) => new Date(event.date));
+  const allDates = [...events.values()]
+    .flat()
+    .map((event) => new Date(event.date));
   const currentTime = new Date();
   const today = startOfUtcDay(currentTime);
   const earliest = allDates.length
-    ? startOfUtcDay(new Date(Math.min(...allDates.map((date) => date.getTime()))))
+    ? startOfUtcDay(
+        new Date(Math.min(...allDates.map((date) => date.getTime()))),
+      )
     : today;
   let cursor = rangeStart(range, earliest, today);
-  const step = range === "all" || range === "1y" || range === "6m" ? "month" : "day";
+  const step =
+    range === "all" || range === "1y" || range === "6m" ? "month" : "day";
   const points: Array<{
     date: string;
     netWorth: number;
@@ -120,7 +133,10 @@ export async function getNetWorthHistory(userId: string, range: HistoryRange = "
     cursor = step === "month" ? addUtcMonths(cursor, 1) : addUtcDays(cursor, 1);
   }
   const lastPoint = points.at(-1);
-  if (!lastPoint || lastPoint.date.slice(0, 10) !== currentTime.toISOString().slice(0, 10)) {
+  if (
+    !lastPoint ||
+    lastPoint.date.slice(0, 10) !== currentTime.toISOString().slice(0, 10)
+  ) {
     points.push(
       getHistoricalPoint(
         endOfUtcDay(currentTime),
@@ -145,8 +161,12 @@ function getHistoricalPoint(
   let liabilityTotal = 0n;
   const missingCurrencies = new Set<string>();
   for (const account of accountRows) {
-    if (account.archivedAt && account.archivedAt <= date.toISOString()) continue;
-    const localValue = replayBalance(events.get(account.id) ?? [], date.toISOString());
+    if (account.archivedAt && account.archivedAt <= date.toISOString())
+      continue;
+    const localValue = replayBalance(
+      events.get(account.id) ?? [],
+      date.toISOString(),
+    );
     if (localValue === 0n) continue;
     try {
       const converted = convertMinor(
@@ -162,7 +182,6 @@ function getHistoricalPoint(
       if (!(error instanceof MissingExchangeRateError)) throw error;
       missingCurrencies.add(account.currency);
     }
-
   }
   return {
     date: date.toISOString(),
@@ -179,7 +198,9 @@ export async function getNetWorthAt(userId: string, date: Date) {
   const accountRows = await db
     .select()
     .from(accounts)
-    .where(and(eq(accounts.userId, userId), eq(accounts.isIncludedInNetWorth, true)));
+    .where(
+      and(eq(accounts.userId, userId), eq(accounts.isIncludedInNetWorth, true)),
+    );
   const [rates, settings] = await Promise.all([
     db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId)),
     db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }),
@@ -194,7 +215,10 @@ export async function getNetWorthAt(userId: string, date: Date) {
   );
 }
 
-export async function getDashboardData(userId: string, range: HistoryRange = "1y") {
+export async function getDashboardData(
+  userId: string,
+  range: HistoryRange = "1y",
+) {
   const db = getDatabase();
   const settings = await db.query.userSettings.findFirst({
     where: eq(userSettings.userId, userId),
@@ -210,10 +234,16 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
     .from(accounts)
     .innerJoin(
       categories,
-      and(eq(accounts.categoryId, categories.id), eq(accounts.userId, categories.userId)),
+      and(
+        eq(accounts.categoryId, categories.id),
+        eq(accounts.userId, categories.userId),
+      ),
     )
     .where(and(eq(accounts.userId, userId), isNull(accounts.archivedAt)));
-  const rateRows = await db.select().from(exchangeRates).where(eq(exchangeRates.userId, userId));
+  const rateRows = await db
+    .select()
+    .from(exchangeRates)
+    .where(eq(exchangeRates.userId, userId));
   const transactionRows = await db
     .select({
       ...getTableColumns(transactions),
@@ -224,7 +254,10 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
     .from(transactions)
     .innerJoin(
       accounts,
-      and(eq(transactions.accountId, accounts.id), eq(transactions.userId, accounts.userId)),
+      and(
+        eq(transactions.accountId, accounts.id),
+        eq(transactions.userId, accounts.userId),
+      ),
     )
     .where(and(eq(transactions.userId, userId), isNull(accounts.archivedAt)))
     .orderBy(desc(transactions.transactionDate), desc(transactions.createdAt));
@@ -241,8 +274,13 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
         eq(valuationSnapshots.userId, accounts.userId),
       ),
     )
-    .where(and(eq(valuationSnapshots.userId, userId), isNull(accounts.archivedAt)))
-    .orderBy(desc(valuationSnapshots.valuationDate), desc(valuationSnapshots.createdAt));
+    .where(
+      and(eq(valuationSnapshots.userId, userId), isNull(accounts.archivedAt)),
+    )
+    .orderBy(
+      desc(valuationSnapshots.valuationDate),
+      desc(valuationSnapshots.createdAt),
+    );
 
   let assetsTotal = 0n;
   let liabilitiesTotal = 0n;
@@ -267,15 +305,20 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
       );
       if (account.isLiability) liabilitiesTotal += value;
       else assetsTotal += value;
-      if (!account.isLiability && account.categoryIsLiquid) liquidTotal += value;
-      if (!account.isLiability && account.categoryIsInvestible) investibleTotal += value;
+      if (!account.isLiability && account.categoryIsLiquid)
+        liquidTotal += value;
+      if (!account.isLiability && account.categoryIsInvestible)
+        investibleTotal += value;
       if (!account.isLiability) {
         allocationMap.set(
           account.categoryName,
           (allocationMap.get(account.categoryName) ?? 0n) + value,
         );
         const institution = account.institution || "Unspecified";
-        institutionMap.set(institution, (institutionMap.get(institution) ?? 0n) + value);
+        institutionMap.set(
+          institution,
+          (institutionMap.get(institution) ?? 0n) + value,
+        );
         currencyMap.set(
           account.currency,
           (currencyMap.get(account.currency) ?? 0n) + value,
@@ -288,7 +331,8 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
         }
       }
     } catch (error) {
-      if (error instanceof MissingExchangeRateError) missingRates.add(account.currency);
+      if (error instanceof MissingExchangeRateError)
+        missingRates.add(account.currency);
       else throw error;
     }
   }
@@ -308,17 +352,19 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
         rateRows,
         transaction.transactionDate,
       );
-      const flow = calculateFlowMetrics([{ type: transaction.type, amountMinor: value }]);
+      const flow = calculateFlowMetrics([
+        { type: transaction.type, amountMinor: value },
+      ]);
       contributions += flow.contributions;
       withdrawals += flow.withdrawals;
       income += flow.interest + flow.dividends;
       fees += flow.fees;
       capitalGrowth += flow.realizedGrowth;
     } catch (error) {
-      if (error instanceof MissingExchangeRateError) missingRates.add(transaction.currency);
+      if (error instanceof MissingExchangeRateError)
+        missingRates.add(transaction.currency);
       else throw error;
     }
-
   }
 
   const events = eventMap(userId);
@@ -326,7 +372,8 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
     if (account.isLiability || !account.isIncludedInNetWorth) continue;
     let balance = 0n;
     const ordered = [...(events.get(account.id) ?? [])].sort(
-      (a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt),
+      (a, b) =>
+        a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt),
     );
     for (const event of ordered) {
       if (event.kind === "valuation") {
@@ -383,7 +430,10 @@ export async function getDashboardData(userId: string, range: HistoryRange = "1y
     ...new Set(history.flatMap((point) => point.missingCurrencies)),
   ];
   for (const currency of historicalMissingRates) missingRates.add(currency);
-  const goalsCount = await db.select().from(goals).where(eq(goals.userId, userId));
+  const goalsCount = await db
+    .select()
+    .from(goals)
+    .where(eq(goals.userId, userId));
   const toAllocation = (map: Map<string, bigint>) =>
     [...map.entries()]
       .map(([name, value]) => ({ name, value: safeChartNumber(value) }))
@@ -424,7 +474,10 @@ export async function getAccountAnalytics(userId: string, accountId: string) {
   });
   if (!account) return null;
   const rows = await db.query.transactions.findMany({
-    where: and(eq(transactions.userId, userId), eq(transactions.accountId, accountId)),
+    where: and(
+      eq(transactions.userId, userId),
+      eq(transactions.accountId, accountId),
+    ),
     orderBy: [asc(transactions.transactionDate)],
   });
   const values = await db.query.valuationSnapshots.findMany({
@@ -474,7 +527,9 @@ export async function getAccountAnalytics(userId: string, accountId: string) {
 export function valuationGrowthForEvents(events: FinancialEvent[]) {
   let balance = 0n;
   let growth = 0n;
-  for (const event of [...events].sort((a, b) => a.date.localeCompare(b.date))) {
+  for (const event of [...events].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  )) {
     if (event.kind === "valuation") {
       growth += BigInt(event.valueMinor) - balance;
       balance = BigInt(event.valueMinor);
@@ -495,7 +550,10 @@ export async function getAccountComparisons(userId: string) {
   const output = [];
   for (const account of accountRows) {
     const rows = await db.query.transactions.findMany({
-      where: and(eq(transactions.userId, userId), eq(transactions.accountId, account.id)),
+      where: and(
+        eq(transactions.userId, userId),
+        eq(transactions.accountId, account.id),
+      ),
       orderBy: [asc(transactions.transactionDate)],
     });
     const metrics = calculateFlowMetrics(rows);
@@ -508,8 +566,14 @@ export async function getAccountComparisons(userId: string) {
       metrics.transfersIn -
       metrics.withdrawals -
       metrics.transfersOut;
-    const income = metrics.interest + metrics.dividends + metrics.realizedGrowth - metrics.fees;
-    const firstDate = rows[0] ? new Date(rows[0].transactionDate) : new Date(account.createdAt);
+    const income =
+      metrics.interest +
+      metrics.dividends +
+      metrics.realizedGrowth -
+      metrics.fees;
+    const firstDate = rows[0]
+      ? new Date(rows[0].transactionDate)
+      : new Date(account.createdAt);
     const days = Math.max(
       1,
       Math.floor((Date.now() - firstDate.getTime()) / 86_400_000),
@@ -519,7 +583,10 @@ export async function getAccountComparisons(userId: string) {
     if (start > 0n && days >= 30) {
       const gain = ending - start - netFlows;
       const periodReturn = new Decimal(gain.toString()).div(start.toString());
-      simpleAnnualized = periodReturn.mul(new Decimal(365).div(days)).mul(100).toFixed(2);
+      simpleAnnualized = periodReturn
+        .mul(new Decimal(365).div(days))
+        .mul(100)
+        .toFixed(2);
       if (periodReturn.greaterThan("-1") && days >= 90) {
         effectiveAnnualized = periodReturn
           .plus(1)

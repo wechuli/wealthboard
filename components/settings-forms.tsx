@@ -169,7 +169,9 @@ export function GeneralSettingsForm({
               type="hidden"
               value={enabledCurrencies.join(",")}
             />
-            <FieldError>{state.fieldErrors?.supportedCurrencies?.[0]}</FieldError>
+            <FieldError>
+              {state.fieldErrors?.supportedCurrencies?.[0]}
+            </FieldError>
           </fieldset>
           <div>
             <Label htmlFor="timezone">Timezone</Label>

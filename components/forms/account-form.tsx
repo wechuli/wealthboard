@@ -76,27 +76,49 @@ export function AccountForm({
   const progressiveAction = action as unknown as (formData: FormData) => void;
 
   return (
-    <form action={progressiveAction} onSubmit={submit} className="space-y-6" noValidate>
-      {idempotencyKey ? <input type="hidden" name="idempotencyKey" value={idempotencyKey} /> : null}
+    <form
+      action={progressiveAction}
+      onSubmit={submit}
+      className="space-y-6"
+      noValidate
+    >
+      {idempotencyKey ? (
+        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      ) : null}
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Label htmlFor="name">Account or asset name</Label>
-          <Input id="name" placeholder="e.g. Zimele Fixed Income Fund" {...register("name")} />
-          <FieldError>{errors.name?.message || serverState.fieldErrors?.name?.[0]}</FieldError>
+          <Input
+            id="name"
+            placeholder="e.g. Zimele Fixed Income Fund"
+            {...register("name")}
+          />
+          <FieldError>
+            {errors.name?.message || serverState.fieldErrors?.name?.[0]}
+          </FieldError>
         </div>
         <div>
           <Label htmlFor="categoryId">Category</Label>
           <Select id="categoryId" {...register("categoryId")}>
             <option value="">Choose a category</option>
             {categories.map((category) => (
-              <option key={category.id} value={category.id}>{category.name}</option>
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
             ))}
           </Select>
-          <FieldError>{errors.categoryId?.message || serverState.fieldErrors?.categoryId?.[0]}</FieldError>
+          <FieldError>
+            {errors.categoryId?.message ||
+              serverState.fieldErrors?.categoryId?.[0]}
+          </FieldError>
         </div>
         <div>
           <Label htmlFor="institution">Institution</Label>
-          <Input id="institution" placeholder="Optional" {...register("institution")} />
+          <Input
+            id="institution"
+            placeholder="Optional"
+            {...register("institution")}
+          />
         </div>
         <div>
           <Label htmlFor="currency">Currency</Label>
@@ -120,38 +142,71 @@ export function AccountForm({
               ))}
             </Select>
           )}
-          <FieldError>{errors.currency?.message || serverState.fieldErrors?.currency?.[0]}</FieldError>
+          <FieldError>
+            {errors.currency?.message || serverState.fieldErrors?.currency?.[0]}
+          </FieldError>
         </div>
         {!initial ? (
           <div>
             <Label htmlFor="openingValue">Opening value</Label>
-            <Input id="openingValue" inputMode="decimal" placeholder="0.00" defaultValue="0.00" {...register("openingValue")} />
-            <FieldError>{errors.openingValue?.message || serverState.fieldErrors?.openingValue?.[0]}</FieldError>
+            <Input
+              id="openingValue"
+              inputMode="decimal"
+              placeholder="0.00"
+              defaultValue="0.00"
+              {...register("openingValue")}
+            />
+            <FieldError>
+              {errors.openingValue?.message ||
+                serverState.fieldErrors?.openingValue?.[0]}
+            </FieldError>
           </div>
         ) : (
           <input type="hidden" name="openingValue" value="0" />
         )}
         <div>
           <Label htmlFor="costBasis">Cost basis</Label>
-          <Input id="costBasis" inputMode="decimal" placeholder="Optional" {...register("costBasis")} />
+          <Input
+            id="costBasis"
+            inputMode="decimal"
+            placeholder="Optional"
+            {...register("costBasis")}
+          />
         </div>
         {!initial ? (
           <div>
             <Label htmlFor="openedAt">Opened or acquired</Label>
-            <Input id="openedAt" type="date" defaultValue={today} {...register("openedAt")} />
+            <Input
+              id="openedAt"
+              type="date"
+              defaultValue={today}
+              {...register("openedAt")}
+            />
           </div>
         ) : null}
         <div>
           <Label htmlFor="accountReference">Masked account reference</Label>
-          <Input id="accountReference" placeholder="e.g. •••• 4821" {...register("accountReference")} />
+          <Input
+            id="accountReference"
+            placeholder="e.g. •••• 4821"
+            {...register("accountReference")}
+          />
         </div>
         <div className="sm:col-span-2">
           <Label htmlFor="description">Description</Label>
-          <Input id="description" placeholder="A short description" {...register("description")} />
+          <Input
+            id="description"
+            placeholder="A short description"
+            {...register("description")}
+          />
         </div>
         <div className="sm:col-span-2">
           <Label htmlFor="notes">Private notes</Label>
-          <Textarea id="notes" placeholder="Optional details about this holding" {...register("notes")} />
+          <Textarea
+            id="notes"
+            placeholder="Optional details about this holding"
+            {...register("notes")}
+          />
         </div>
       </div>
       <Checkbox
@@ -159,13 +214,20 @@ export function AccountForm({
         {...register("isIncludedInNetWorth")}
       />
       {serverState.message ? (
-        <p role="alert" className="rounded-xl bg-red-400/10 p-3 text-sm text-red-200">
+        <p
+          role="alert"
+          className="rounded-xl bg-red-400/10 p-3 text-sm text-red-200"
+        >
           {serverState.message}
         </p>
       ) : null}
       <div className="flex justify-end">
         <Button disabled={pending}>
-          {pending ? <LoaderCircle className="animate-spin" size={17} /> : <Save size={17} />}
+          {pending ? (
+            <LoaderCircle className="animate-spin" size={17} />
+          ) : (
+            <Save size={17} />
+          )}
           {initial ? "Save account" : "Create account"}
         </Button>
       </div>

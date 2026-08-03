@@ -21,9 +21,14 @@ export default async function NewGoalPage() {
   target.setUTCFullYear(target.getUTCFullYear() + 2);
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="Create a financial goal" description="Link an account to avoid duplicating balances." />
+      <PageHeader
+        title="Create a financial goal"
+        description="Link an account to avoid duplicating balances."
+      />
       <Card>
-        <CardHeader><CardTitle>Goal plan</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Goal plan</CardTitle>
+        </CardHeader>
         <CardContent>
           <GoalForm
             accounts={accounts}

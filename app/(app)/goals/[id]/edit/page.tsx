@@ -11,7 +11,11 @@ import { getGoal } from "@/lib/services/goals";
 import { requireSession } from "@/lib/auth/session";
 import { getCurrencyConfiguration } from "@/lib/services/settings";
 
-export default async function EditGoalPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditGoalPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { userId } = await requireSession();
   const { id } = await params;
   const [goal, accounts, currencyConfiguration] = await Promise.all([
@@ -22,9 +26,14 @@ export default async function EditGoalPage({ params }: { params: Promise<{ id: s
   if (!goal) notFound();
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title={`Edit ${goal.name}`} description="Update the target, link, contribution plan, or forecast assumption." />
+      <PageHeader
+        title={`Edit ${goal.name}`}
+        description="Update the target, link, contribution plan, or forecast assumption."
+      />
       <Card>
-        <CardHeader><CardTitle>Goal plan</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Goal plan</CardTitle>
+        </CardHeader>
         <CardContent>
           <GoalForm
             accounts={accounts}
@@ -33,8 +42,14 @@ export default async function EditGoalPage({ params }: { params: Promise<{ id: s
             initial={{
               name: goal.name,
               description: goal.description || "",
-              targetAmount: minorToDecimalString(goal.targetAmountMinor, goal.currency),
-              currentAmount: minorToDecimalString(goal.currentAmountMinor, goal.currency),
+              targetAmount: minorToDecimalString(
+                goal.targetAmountMinor,
+                goal.currency,
+              ),
+              currentAmount: minorToDecimalString(
+                goal.currentAmountMinor,
+                goal.currency,
+              ),
               currency: goal.currency,
               targetDate: utcToDateInput(goal.targetDate),
               linkedAccountId: goal.linkedAccountId || "",
@@ -42,10 +57,17 @@ export default async function EditGoalPage({ params }: { params: Promise<{ id: s
               status: goal.status,
               priority: goal.priority,
               assumedAnnualReturn: goal.assumedAnnualReturnBps / 100,
-              plannedContribution: minorToDecimalString(goal.plannedContributionMinor || 0, goal.currency),
+              plannedContribution: minorToDecimalString(
+                goal.plannedContributionMinor || 0,
+                goal.currency,
+              ),
               frequency: goal.frequency || "monthly",
-              planStartDate: goal.planStartDate ? utcToDateInput(goal.planStartDate) : new Date().toISOString().slice(0, 10),
-              planEndDate: goal.planEndDate ? utcToDateInput(goal.planEndDate) : "",
+              planStartDate: goal.planStartDate
+                ? utcToDateInput(goal.planStartDate)
+                : new Date().toISOString().slice(0, 10),
+              planEndDate: goal.planEndDate
+                ? utcToDateInput(goal.planEndDate)
+                : "",
             }}
           />
         </CardContent>

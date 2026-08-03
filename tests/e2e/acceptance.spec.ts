@@ -12,6 +12,10 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(page).toHaveURL(/\/signup/);
   await page.getByLabel("Username").fill("alice");
   await page.getByLabel("Display name").fill("Alice Example");
+  await expect(page.getByLabel("Base currency")).toHaveValue("KES");
+  await expect(
+    page.getByLabel("Base currency").getByRole("option", { name: /TZS/ }),
+  ).toHaveCount(1);
   await page
     .getByLabel("Password", { exact: true })
     .fill("wealthboard-e2e-password");
@@ -20,6 +24,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(page.getByText("Passwords do not match.")).toBeVisible();
   await expect(page.getByLabel("Username")).toHaveValue("alice");
   await expect(page.getByLabel("Display name")).toHaveValue("Alice Example");
+  await expect(page.getByLabel("Base currency")).toHaveValue("KES");
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue(
     "wealthboard-e2e-password",
   );
@@ -165,6 +170,34 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(page.getByText(/ahead|on track|behind/).first()).toBeVisible();
   await expect(page.getByText("KCB Car Fund")).toBeVisible();
 
+  await page.goto("/settings");
+  await expect(
+    page.getByRole("checkbox", { name: /TZS.*Tanzanian Shilling/ }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("checkbox", { name: /UGX.*Ugandan Shilling/ }),
+  ).toBeChecked();
+  await page.getByLabel("Base currency").selectOption("USD");
+  await page.getByRole("button", { name: "Save preferences" }).click();
+  await expect(page.getByText("Settings saved.")).toBeVisible();
+
+  await page.goto("/");
+  await expect(
+    page.getByText(/Current or historical totals are incomplete/),
+  ).toBeVisible();
+
+  await page.goto("/settings");
+  await page.getByLabel("Base").selectOption("USD");
+  await page.getByLabel("Quote").selectOption("KES");
+  await page.getByLabel("Rate").fill("130");
+  await page.getByLabel("Effective date").fill("2025-01-01");
+  await page.getByRole("button", { name: "Save rate" }).click();
+  await expect(page.getByText("Exchange rate saved.")).toBeVisible();
+  await page.goto("/");
+  await expect(
+    page.getByText(/Current or historical totals are incomplete/),
+  ).toHaveCount(0);
+
   const exportResponse = await page.request.get("/api/export/json");
   expect(exportResponse.ok()).toBeTruthy();
   const userExport = await exportResponse.body();
@@ -214,6 +247,7 @@ test("responsive layouts fit required viewports", async ({ page }) => {
       "/transactions",
       "/goals",
       "/reports",
+      "/settings",
     ]) {
       await page.goto(route);
       await expect(page.locator("main")).toBeVisible();

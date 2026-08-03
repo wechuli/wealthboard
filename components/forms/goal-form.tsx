@@ -6,7 +6,13 @@ import { LoaderCircle, Save } from "lucide-react";
 
 import type { Account, GoalStatus } from "@/db/schema";
 import { Button } from "@/components/ui/button";
-import { FieldError, Input, Label, Select, Textarea } from "@/components/ui/form-controls";
+import {
+  FieldError,
+  Input,
+  Label,
+  Select,
+  Textarea,
+} from "@/components/ui/form-controls";
 import { currencyOptions } from "@/lib/currencies";
 import type { ActionState } from "@/lib/validation";
 
@@ -79,16 +85,28 @@ export function GoalForm({
       className="space-y-6"
       noValidate
     >
-      {idempotencyKey ? <input type="hidden" name="idempotencyKey" value={idempotencyKey} /> : null}
+      {idempotencyKey ? (
+        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      ) : null}
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <Label htmlFor="name">Goal name</Label>
-          <Input id="name" placeholder="e.g. 2028 Family Car" {...register("name", { required: "Enter a goal name." })} />
-          <FieldError>{errors.name?.message || state.fieldErrors?.name?.[0]}</FieldError>
+          <Input
+            id="name"
+            placeholder="e.g. 2028 Family Car"
+            {...register("name", { required: "Enter a goal name." })}
+          />
+          <FieldError>
+            {errors.name?.message || state.fieldErrors?.name?.[0]}
+          </FieldError>
         </div>
         <div>
           <Label htmlFor="targetAmount">Target amount ({currency})</Label>
-          <Input id="targetAmount" inputMode="decimal" {...register("targetAmount", { required: true })} />
+          <Input
+            id="targetAmount"
+            inputMode="decimal"
+            {...register("targetAmount", { required: true })}
+          />
           <FieldError>{state.fieldErrors?.targetAmount?.[0]}</FieldError>
         </div>
         <div>
@@ -104,25 +122,44 @@ export function GoalForm({
         </div>
         <div>
           <Label htmlFor="targetDate">Target date</Label>
-          <Input id="targetDate" type="date" {...register("targetDate", { required: true })} />
+          <Input
+            id="targetDate"
+            type="date"
+            {...register("targetDate", { required: true })}
+          />
           <FieldError>{state.fieldErrors?.targetDate?.[0]}</FieldError>
         </div>
         <div>
           <Label htmlFor="linkedAccountId">Linked account</Label>
           <Select id="linkedAccountId" {...register("linkedAccountId")}>
             <option value="">No linked account</option>
-            {accounts.filter((account) => !account.isLiability && !account.archivedAt).map((account) => (
-              <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>
-            ))}
+            {accounts
+              .filter((account) => !account.isLiability && !account.archivedAt)
+              .map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} · {account.currency}
+                </option>
+              ))}
           </Select>
         </div>
         <div>
           <Label htmlFor="currentAmount">Current amount ({currency})</Label>
-          <Input id="currentAmount" inputMode="decimal" placeholder="Used only without linked account" {...register("currentAmount")} />
+          <Input
+            id="currentAmount"
+            inputMode="decimal"
+            placeholder="Used only without linked account"
+            {...register("currentAmount")}
+          />
         </div>
         <div>
-          <Label htmlFor="plannedContribution">Planned contribution ({currency})</Label>
-          <Input id="plannedContribution" inputMode="decimal" {...register("plannedContribution")} />
+          <Label htmlFor="plannedContribution">
+            Planned contribution ({currency})
+          </Label>
+          <Input
+            id="plannedContribution"
+            inputMode="decimal"
+            {...register("plannedContribution")}
+          />
         </div>
         <div>
           <Label htmlFor="frequency">Contribution frequency</Label>
@@ -136,7 +173,12 @@ export function GoalForm({
         </div>
         <div>
           <Label htmlFor="planStartDate">Plan start</Label>
-          <Input id="planStartDate" type="date" defaultValue={initial?.planStartDate ?? today} {...register("planStartDate")} />
+          <Input
+            id="planStartDate"
+            type="date"
+            defaultValue={initial?.planStartDate ?? today}
+            {...register("planStartDate")}
+          />
         </div>
         <div>
           <Label htmlFor="planEndDate">Plan end</Label>
@@ -144,7 +186,15 @@ export function GoalForm({
         </div>
         <div>
           <Label htmlFor="assumedAnnualReturn">Assumed annual return (%)</Label>
-          <Input id="assumedAnnualReturn" type="number" min="0" max="100" step="0.1" defaultValue={initial?.assumedAnnualReturn ?? 8} {...register("assumedAnnualReturn")} />
+          <Input
+            id="assumedAnnualReturn"
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            defaultValue={initial?.assumedAnnualReturn ?? 8}
+            {...register("assumedAnnualReturn")}
+          />
         </div>
         <div>
           <Label htmlFor="status">Status</Label>
@@ -160,12 +210,31 @@ export function GoalForm({
           <Textarea id="description" {...register("description")} />
         </div>
       </div>
-      <input type="hidden" defaultValue={initial?.icon ?? "Target"} {...register("icon")} />
-      <input type="hidden" defaultValue={initial?.priority ?? 0} {...register("priority")} />
-      {state.message ? <p role="alert" className="rounded-xl bg-red-400/10 p-3 text-sm text-red-200">{state.message}</p> : null}
+      <input
+        type="hidden"
+        defaultValue={initial?.icon ?? "Target"}
+        {...register("icon")}
+      />
+      <input
+        type="hidden"
+        defaultValue={initial?.priority ?? 0}
+        {...register("priority")}
+      />
+      {state.message ? (
+        <p
+          role="alert"
+          className="rounded-xl bg-red-400/10 p-3 text-sm text-red-200"
+        >
+          {state.message}
+        </p>
+      ) : null}
       <div className="flex justify-end">
         <Button disabled={pending}>
-          {pending ? <LoaderCircle className="animate-spin" size={17} /> : <Save size={17} />}
+          {pending ? (
+            <LoaderCircle className="animate-spin" size={17} />
+          ) : (
+            <Save size={17} />
+          )}
           {editing ? "Save goal" : "Create goal"}
         </Button>
       </div>

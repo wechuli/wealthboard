@@ -6,11 +6,13 @@ import { ArrowRight, LoaderCircle, LockKeyhole, UserRound } from "lucide-react";
 
 import { signupAction } from "@/app/signup/actions";
 import { Button } from "@/components/ui/button";
-import { FieldError, Input, Label, Select } from "@/components/ui/form-controls";
 import {
-  CURRENCY_CATALOG,
-  DEFAULT_BASE_CURRENCY,
-} from "@/lib/currencies";
+  FieldError,
+  Input,
+  Label,
+  Select,
+} from "@/components/ui/form-controls";
+import { CURRENCY_CATALOG, DEFAULT_BASE_CURRENCY } from "@/lib/currencies";
 
 export function SignupForm() {
   const [state, action, pending] = useActionState(signupAction, {});
