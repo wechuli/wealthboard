@@ -310,6 +310,45 @@ export function forecastCompletionDate(
   return null;
 }
 
+export function projectGoalScenario(input: {
+  currentMinor: number | bigint;
+  targetMinor: number | bigint;
+  monthlyContributionMinor: number | bigint;
+  annualReturnBps: number;
+  fromDate: Date;
+  targetDate: Date;
+}) {
+  const monthsToTarget = Math.max(
+    0,
+    monthsBetween(input.fromDate, input.targetDate),
+  );
+  const current = BigInt(input.currentMinor);
+  const monthlyContribution = BigInt(input.monthlyContributionMinor);
+  const futureContributions = monthlyContribution * BigInt(monthsToTarget);
+  const projectedAtTarget = futureValueMinor(
+    current,
+    monthlyContribution,
+    input.annualReturnBps,
+    monthsToTarget,
+  );
+  const forecastDate = forecastCompletionDate(
+    current,
+    input.targetMinor,
+    monthlyContribution,
+    input.annualReturnBps,
+    input.fromDate,
+  );
+
+  return {
+    monthsToTarget,
+    projectedAtTarget,
+    futureContributions,
+    investmentGrowth: projectedAtTarget - current - futureContributions,
+    forecastDate,
+    reachesTarget: projectedAtTarget >= BigInt(input.targetMinor),
+  };
+}
+
 export function goalTrackingStatus(input: {
   currentMinor: number | bigint;
   targetMinor: number | bigint;

@@ -9,6 +9,7 @@ import {
   futureValueWithContributionWindow,
   goalTrackingStatus,
   monthlyPlanAmount,
+  projectGoalScenario,
   replayBalance,
   requiredMonthlyContribution,
   transactionEffect,
@@ -220,6 +221,43 @@ describe("goal calculations", () => {
         ?.toISOString()
         .slice(0, 7),
     ).toBe("2026-09");
+  });
+
+  it("compares goal scenarios without changing their saved assumptions", () => {
+    const saved = {
+      currentMinor: 100_000,
+      targetMinor: 500_000,
+      monthlyContributionMinor: 20_000,
+      annualReturnBps: 0,
+      fromDate: new Date("2026-01-01T00:00:00Z"),
+      targetDate: new Date("2027-01-01T00:00:00Z"),
+    };
+    const baseline = projectGoalScenario(saved);
+    const higherReturn = projectGoalScenario({
+      ...saved,
+      annualReturnBps: 1_200,
+    });
+    const higherContribution = projectGoalScenario({
+      ...saved,
+      monthlyContributionMinor: 30_000,
+    });
+
+    expect(baseline).toMatchObject({
+      monthsToTarget: 12,
+      projectedAtTarget: 340_000n,
+      futureContributions: 240_000n,
+      investmentGrowth: 0n,
+      reachesTarget: false,
+    });
+    expect(higherReturn.projectedAtTarget).toBeGreaterThan(
+      baseline.projectedAtTarget,
+    );
+    expect(higherReturn.investmentGrowth).toBeGreaterThan(0n);
+    expect(higherContribution.projectedAtTarget).toBe(460_000n);
+    expect(saved).toMatchObject({
+      monthlyContributionMinor: 20_000,
+      annualReturnBps: 0,
+    });
   });
 
   it("classifies goal tracking status without relying only on colour", () => {

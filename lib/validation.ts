@@ -177,6 +177,12 @@ export const goalSchema = z.object({
   planEndDate: z.string().date().optional().or(z.literal("")),
 });
 
+export const goalMilestoneSchema = z.object({
+  name: z.string().trim().min(1, "Enter a milestone name.").max(100),
+  targetAmount: z.string().trim().min(1, "Enter a milestone amount."),
+  targetDate: z.string().date().optional().or(z.literal("")),
+});
+
 export const categorySchema = z.object({
   name: z.string().trim().min(1).max(80),
   icon: z.string().trim().min(1).max(50),

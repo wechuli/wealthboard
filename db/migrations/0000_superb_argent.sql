@@ -59,6 +59,17 @@ CREATE TABLE `exchange_rates` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `exchange_rate_user_pair_date_unique` ON `exchange_rates` (`user_id`,`base_currency`,`quote_currency`,`effective_date`);--> statement-breakpoint
 CREATE INDEX `exchange_rate_user_lookup_idx` ON `exchange_rates` (`user_id`,`base_currency`,`quote_currency`,`effective_date`);--> statement-breakpoint
+CREATE TABLE `goal_alert_dismissals` (
+	`user_id` text NOT NULL,
+	`goal_id` text NOT NULL,
+	`alert_key` text NOT NULL,
+	`dismissed_at` text NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`,`goal_id`) REFERENCES `goals`(`user_id`,`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `goal_alert_dismissals_user_goal_key_unique` ON `goal_alert_dismissals` (`user_id`,`goal_id`,`alert_key`);--> statement-breakpoint
+CREATE INDEX `goal_alert_dismissals_user_dismissed_idx` ON `goal_alert_dismissals` (`user_id`,`dismissed_at`);--> statement-breakpoint
 CREATE TABLE `goal_contribution_plans` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -74,6 +85,20 @@ CREATE TABLE `goal_contribution_plans` (
 );
 --> statement-breakpoint
 CREATE INDEX `goal_plans_user_goal_idx` ON `goal_contribution_plans` (`user_id`,`goal_id`);--> statement-breakpoint
+CREATE TABLE `goal_milestones` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`goal_id` text NOT NULL,
+	`name` text NOT NULL,
+	`target_amount_minor` integer NOT NULL,
+	`target_date` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`,`goal_id`) REFERENCES `goals`(`user_id`,`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `goal_milestones_user_goal_target_idx` ON `goal_milestones` (`user_id`,`goal_id`,`target_amount_minor`);--> statement-breakpoint
 CREATE TABLE `goals` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

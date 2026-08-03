@@ -5,12 +5,21 @@ import { and, asc, eq, getTableColumns, ne } from "drizzle-orm";
 import {
   accounts,
   exchangeRates,
+  goalAlertDismissals,
   goalContributionPlans,
+  goalMilestones,
   goals,
   idempotencyKeys,
+  userSettings,
   type GoalStatus,
 } from "@/db/schema";
-import { addUtcMonths, endOfUtcDay, dateInputToUtc, nowIso } from "@/lib/dates";
+import {
+  addUtcMonths,
+  dateInputForTimezone,
+  endOfUtcDay,
+  dateInputToUtc,
+  nowIso,
+} from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import {
   forecastCompletionWithContributionWindow,
@@ -46,7 +55,7 @@ type GoalInput = {
   planEndDate?: string;
 };
 
-export async function listGoals(userId: string) {
+export async function listGoals(userId: string, now = new Date()) {
   const db = getDatabase();
   const rows = await db
     .select({
@@ -106,7 +115,6 @@ export async function listGoals(userId: string) {
           goal.frequency ?? "monthly",
         )
       : 0n;
-    const now = new Date();
     const planStart = goal.planStartDate
       ? new Date(goal.planStartDate)
       : undefined;
@@ -160,9 +168,174 @@ export async function listGoals(userId: string) {
   });
 }
 
-export async function getGoal(userId: string, id: string) {
-  const items = await listGoals(userId);
+export async function getGoal(userId: string, id: string, now = new Date()) {
+  const items = await listGoals(userId, now);
   return items.find((goal) => goal.id === id);
+}
+
+export async function listGoalMilestones(
+  userId: string,
+  goalId: string,
+  now = new Date(),
+) {
+  const goal = await getGoal(userId, goalId, now);
+  if (!goal) return [];
+  const rows = await getDatabase()
+    .select()
+    .from(goalMilestones)
+    .where(
+      and(
+        eq(goalMilestones.userId, userId),
+        eq(goalMilestones.goalId, goalId),
+      ),
+    )
+    .orderBy(
+      asc(goalMilestones.targetAmountMinor),
+      asc(goalMilestones.targetDate),
+    );
+  const current = goal.currentAmountCalculated;
+
+  return rows.map((milestone) => {
+    const target = BigInt(milestone.targetAmountMinor);
+    const reached = current >= target;
+    const overdue = Boolean(
+      !reached && milestone.targetDate && milestone.targetDate < now.toISOString(),
+    );
+    return {
+      ...milestone,
+      status: reached ? "reached" as const : overdue ? "overdue" as const : "upcoming" as const,
+      progressPercent: percentage(current > target ? target : current, target),
+      remainingMinor: current >= target ? 0n : target - current,
+    };
+  });
+}
+
+export function createGoalMilestone(
+  userId: string,
+  goalId: string,
+  input: { name: string; targetAmount: string; targetDate?: string },
+) {
+  const db = getDatabase();
+  return db.transaction((tx) => {
+    const goal = tx.query.goals
+      .findFirst({
+        where: and(eq(goals.userId, userId), eq(goals.id, goalId)),
+      })
+      .sync();
+    if (!goal) throw new Error("Goal not found.");
+    const targetAmountMinor = parseMoney(input.targetAmount, goal.currency);
+    if (targetAmountMinor <= 0) {
+      throw new Error("Milestone amount must be greater than zero.");
+    }
+    if (targetAmountMinor > goal.targetAmountMinor) {
+      throw new Error("Milestone amount cannot exceed the goal target.");
+    }
+    const targetDate = input.targetDate
+      ? dateInputToUtc(input.targetDate)
+      : null;
+    if (targetDate && targetDate > goal.targetDate) {
+      throw new Error("Milestone date cannot be after the goal target date.");
+    }
+    const timestamp = nowIso();
+    const id = crypto.randomUUID();
+    tx.insert(goalMilestones)
+      .values({
+        id,
+        userId,
+        goalId,
+        name: input.name,
+        targetAmountMinor,
+        targetDate,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+    return id;
+  });
+}
+
+export function deleteGoalMilestone(
+  userId: string,
+  goalId: string,
+  milestoneId: string,
+) {
+  const result = getDatabase()
+    .delete(goalMilestones)
+    .where(
+      and(
+        eq(goalMilestones.userId, userId),
+        eq(goalMilestones.goalId, goalId),
+        eq(goalMilestones.id, milestoneId),
+      ),
+    )
+    .run();
+  if (result.changes === 0) throw new Error("Milestone not found.");
+}
+
+function goalAlertKey(userId: string, now: Date) {
+  const settings = getDatabase().query.userSettings
+    .findFirst({
+      where: eq(userSettings.userId, userId),
+      columns: { timezone: true },
+    })
+    .sync();
+  if (!settings) throw new Error("User settings are unavailable.");
+  return `behind:${dateInputForTimezone(settings.timezone, now).slice(0, 7)}`;
+}
+
+export async function listGoalAlerts(userId: string, now = new Date()) {
+  const alertKey = goalAlertKey(userId, now);
+  const [goalRows, dismissals] = await Promise.all([
+    listGoals(userId, now),
+    getDatabase()
+      .select({ goalId: goalAlertDismissals.goalId })
+      .from(goalAlertDismissals)
+      .where(
+        and(
+          eq(goalAlertDismissals.userId, userId),
+          eq(goalAlertDismissals.alertKey, alertKey),
+        ),
+      ),
+  ]);
+  const dismissedGoalIds = new Set(dismissals.map((row) => row.goalId));
+
+  return goalRows
+    .filter(
+      (goal) =>
+        goal.status === "active" &&
+        goal.tracking === "behind" &&
+        !goal.missingExchangeRate &&
+        !dismissedGoalIds.has(goal.id),
+    )
+    .map((goal) => ({
+      goalId: goal.id,
+      goalName: goal.name,
+      currency: goal.currency,
+      requiredMonthly: goal.requiredMonthly,
+      plannedMonthly: goal.currentPlannedMonthly,
+      targetDate: goal.targetDate,
+      alertKey,
+    }));
+}
+
+export function dismissGoalAlert(
+  userId: string,
+  goalId: string,
+  now = new Date(),
+) {
+  const db = getDatabase();
+  const goal = db.query.goals
+    .findFirst({
+      where: and(eq(goals.userId, userId), eq(goals.id, goalId)),
+      columns: { id: true },
+    })
+    .sync();
+  if (!goal) throw new Error("Goal not found.");
+  const alertKey = goalAlertKey(userId, now);
+  db.insert(goalAlertDismissals)
+    .values({ userId, goalId, alertKey, dismissedAt: nowIso() })
+    .onConflictDoNothing()
+    .run();
 }
 
 export function createGoal(userId: string, input: GoalInput) {

@@ -347,6 +347,60 @@ export const goalContributionPlans = sqliteTable(
   ],
 );
 
+export const goalMilestones = sqliteTable(
+  "goal_milestones",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    goalId: text("goal_id").notNull(),
+    name: text("name").notNull(),
+    targetAmountMinor: integer("target_amount_minor").notNull(),
+    targetDate: text("target_date"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("goal_milestones_user_goal_target_idx").on(
+      table.userId,
+      table.goalId,
+      table.targetAmountMinor,
+    ),
+    foreignKey({
+      columns: [table.userId, table.goalId],
+      foreignColumns: [goals.userId, goals.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const goalAlertDismissals = sqliteTable(
+  "goal_alert_dismissals",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    goalId: text("goal_id").notNull(),
+    alertKey: text("alert_key").notNull(),
+    dismissedAt: text("dismissed_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("goal_alert_dismissals_user_goal_key_unique").on(
+      table.userId,
+      table.goalId,
+      table.alertKey,
+    ),
+    index("goal_alert_dismissals_user_dismissed_idx").on(
+      table.userId,
+      table.dismissedAt,
+    ),
+    foreignKey({
+      columns: [table.userId, table.goalId],
+      foreignColumns: [goals.userId, goals.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 export const loginAttempts = sqliteTable(
   "login_attempts",
   {
@@ -387,6 +441,7 @@ export type Category = typeof categories.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type ValuationSnapshot = typeof valuationSnapshots.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
+export type GoalMilestone = typeof goalMilestones.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type TransactionType = (typeof transactionTypes)[number];
