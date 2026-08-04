@@ -299,13 +299,16 @@ describe("OpenAI-compatible review transport", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        openAiResponsesResponse({ partial: true }, {
-          status: "incomplete",
-          incompleteReason: "max_output_tokens",
-          inputTokens: 725,
-          outputTokens: 800,
-          reasoningTokens: 800,
-        }),
+        openAiResponsesResponse(
+          { partial: true },
+          {
+            status: "incomplete",
+            incompleteReason: "max_output_tokens",
+            inputTokens: 725,
+            outputTokens: 800,
+            reasoningTokens: 800,
+          },
+        ),
       ),
     );
 

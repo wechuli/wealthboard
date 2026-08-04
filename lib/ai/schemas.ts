@@ -47,8 +47,7 @@ export const aiProviderSettingsInputSchema = z
       context.addIssue({
         code: "custom",
         path: ["maxOutputTokens"],
-        message:
-          "Maximum output tokens cannot exceed the monthly token limit.",
+        message: "Maximum output tokens cannot exceed the monthly token limit.",
       });
     }
   });
