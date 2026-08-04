@@ -71,10 +71,7 @@ describe.sequential("transaction update invariants", () => {
     });
 
     const category = await getDatabase().query.categories.findFirst({
-      where: and(
-        eq(categories.userId, userId),
-        eq(categories.slug, "savings"),
-      ),
+      where: and(eq(categories.userId, userId), eq(categories.slug, "savings")),
     });
     if (!category) throw new Error("Savings category was not created.");
 
@@ -157,12 +154,14 @@ describe.sequential("transaction update invariants", () => {
 
     const updatedTransaction = await getTransaction(userId, transactionId);
     const updatedAccount = await getAccount(userId, accountId);
-    const accountTransactions = await getDatabase().query.transactions.findMany({
-      where: and(
-        eq(transactions.userId, userId),
-        eq(transactions.accountId, accountId),
-      ),
-    });
+    const accountTransactions = await getDatabase().query.transactions.findMany(
+      {
+        where: and(
+          eq(transactions.userId, userId),
+          eq(transactions.accountId, accountId),
+        ),
+      },
+    );
 
     expect(updatedTransaction).toMatchObject({
       type: "withdrawal",
