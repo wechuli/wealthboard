@@ -19,5 +19,6 @@ applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance
 - Every protected mutation must verify the session. Scope UUID idempotency keys to that user and perform multi-record financial changes atomically.
 - Keep authentication, database handles, password hashes, backup contents, and raw financial exports in server-only modules. Do not add secrets or sensitive values to logs.
 - User-facing exports, imports, and restores contain only the current user's data. Raw SQLite backup and restore are deployment-operator operations, not ordinary authenticated endpoints.
-- For schema changes, regenerate the fresh baseline with `npm run db:generate`, inspect it, and test it against a disposable empty database.
+- For schema changes, use `npm run db:generate` to append a migration, then inspect it. Never delete, rename, or edit an applied migration or snapshot.
+- Test migrations against both a disposable empty database and a disposable database at the previous migration state, and verify `foreign_key_check` after upgrading.
 - Add focused tests for sign behavior, rounding, replay ordering, historical exchange rates, idempotency, rollback, and cross-user denial whenever the touched behavior could affect balances or ownership.

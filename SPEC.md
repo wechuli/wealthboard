@@ -1187,9 +1187,13 @@ Keep the first version focused on manually tracking net worth, account values, c
 ## Database lifecycle
 
 - `db/schema.ts` is the source of truth.
-- Generated migrations target fresh Wealthboard databases only.
-- Pre-release databases and backups may be deleted when the schema changes; no
-  compatibility or data-claim path is required.
+- Generated migrations are append-only and support both fresh Wealthboard
+  databases and upgrades of existing databases.
+- Applied migration files must not be deleted, renamed, or modified. Schema
+  changes require a new generated migration.
+- Disposable pre-release databases may be deleted when their data is not needed;
+  persisted databases and backups must retain a valid upgrade path.
+- No data-claim path is required.
 - Run linting, type checking, relevant tests, and a production build after
   schema changes.
 

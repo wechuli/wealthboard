@@ -149,9 +149,13 @@ own authorization decisions.
 ## Database lifecycle
 
 - `db/schema.ts` defines the current schema.
-- `db/migrations` contains one generated baseline for fresh databases.
-- Pre-release databases may be deleted and recreated when the schema changes.
-- No compatibility, ownership-claim, or account-bootstrap path is supported.
+- `db/migrations` contains an append-only generated migration history for fresh
+  databases and upgrades of existing databases.
+- Startup verifies that the latest applied migration still exists unchanged,
+  then applies pending migrations before serving requests.
+- Disposable pre-release databases may be deleted and recreated, but persisted
+  databases must be upgraded without replacing or modifying applied migrations.
+- No ownership-claim or account-bootstrap path is supported.
 
 ## Product boundaries
 

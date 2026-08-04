@@ -121,16 +121,24 @@ docker compose exec \
 
 ## Database migrations
 
-`db/schema.ts` is the schema source of truth. The generated baseline migration
-under `db/migrations` targets a fresh database.
+`db/schema.ts` is the schema source of truth. Generated migrations under
+`db/migrations` form an append-only history that supports both fresh databases
+and upgrades of existing databases.
 
 ```bash
 npm run db:generate
 npm run db:migrate
 ```
 
-During pre-release development, delete the database and regenerate the baseline
-when schema compatibility is not required.
+After changing the schema, generate and review a new migration. Never delete,
+rename, or edit a migration that may already have been applied. The migration
+runner verifies the latest applied migration before executing pending SQL and
+stops with a migration-history error if files were replaced or modified.
+
+If that check fails, restore the original migration files from the application
+version that created the database, then generate a new migration. A disposable
+development database can instead be backed up if needed, deleted, and recreated;
+do not manually change its migration ledger.
 
 ## Docker deployment
 
