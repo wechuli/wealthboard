@@ -233,7 +233,6 @@ export function AiSettingsForm({
               name="maxOutputTokens"
               type="number"
               min="256"
-              max="4000"
               step="1"
               defaultValue={settings?.maxOutputTokens ?? 1200}
             />

@@ -84,9 +84,11 @@ function validateLimits(monthlyTokenLimit: number, maxOutputTokens: number) {
   if (
     !Number.isInteger(maxOutputTokens) ||
     maxOutputTokens < 256 ||
-    maxOutputTokens > 4_000
+    maxOutputTokens > monthlyTokenLimit
   ) {
-    throw new Error("AI output tokens must be between 256 and 4,000.");
+    throw new Error(
+      "AI output tokens must be at least 256 and cannot exceed the monthly token limit.",
+    );
   }
 }
 

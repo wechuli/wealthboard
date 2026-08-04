@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { aiProviderSettings, aiUsageEvents } from "@/db/schema";
 import { AI_PROVIDER_BASE_URLS } from "@/lib/ai/config";
+import { aiProviderSettingsInputSchema } from "@/lib/ai/schemas";
 import { registerUser } from "@/lib/auth/users";
 import { closeDatabase, getDatabase } from "@/lib/db";
 import {
@@ -116,14 +117,15 @@ describe.sequential("AI provider persistence and limits", () => {
       rememberApiKey: false,
       includeExactAmounts: false,
       includeAccountNames: false,
-      monthlyTokenLimit: 10_000,
-      maxOutputTokens: 1_000,
+      monthlyTokenLimit: 50_000,
+      maxOutputTokens: 25_000,
     });
     const row = await getDatabase().query.aiProviderSettings.findFirst({
       where: eq(aiProviderSettings.userId, bobId),
     });
 
     expect(row?.encryptedApiKey).toBeNull();
+    expect(row?.maxOutputTokens).toBe(25_000);
     await expect(resolveAiProviderRequest(bobId)).rejects.toBeInstanceOf(
       AiCredentialRequiredError,
     );
@@ -133,6 +135,35 @@ describe.sequential("AI provider persistence and limits", () => {
       baseUrl: AI_PROVIDER_BASE_URLS.deepseek,
       apiKey: "sk-bob-session-only",
     });
+  });
+
+  test("accepts user-selected output limits within the monthly budget", () => {
+    const input = {
+      provider: "openai" as const,
+      model: "review-model",
+      rememberApiKey: false,
+      includeExactAmounts: false,
+      includeAccountNames: false,
+      monthlyTokenLimit: 100_000,
+      maxOutputTokens: 25_000,
+    };
+
+    expect(aiProviderSettingsInputSchema.safeParse(input).success).toBe(true);
+
+    const result = aiProviderSettingsInputSchema.safeParse({
+      ...input,
+      maxOutputTokens: 100_001,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ["maxOutputTokens"],
+          message:
+            "Maximum output tokens cannot exceed the monthly token limit.",
+        }),
+      );
+    }
   });
 
   test("reserves, finalizes, rate-limits, and budgets usage per user", async () => {

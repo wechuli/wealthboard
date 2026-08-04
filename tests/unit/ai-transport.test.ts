@@ -283,7 +283,7 @@ describe("OpenAI-compatible review transport", () => {
     expect(requestBody).toMatchObject({
       model: "reasoning-review-model",
       max_output_tokens: 800,
-      reasoning: { effort: "low" },
+      reasoning: { effort: "none" },
       text: {
         format: { type: "json_object" },
         verbosity: "low",
@@ -299,7 +299,7 @@ describe("OpenAI-compatible review transport", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        openAiResponsesResponse(undefined, {
+        openAiResponsesResponse({ partial: true }, {
           status: "incomplete",
           incompleteReason: "max_output_tokens",
           inputTokens: 725,
@@ -317,6 +317,9 @@ describe("OpenAI-compatible review transport", () => {
     }).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(AiProviderResponseError);
+    expect((error as AiProviderResponseError).message).toContain(
+      "Increase Maximum output tokens",
+    );
     expect((error as AiProviderResponseError).details).toEqual({
       failureKind: "incomplete_response",
       providerHost: "api.openai.com",
@@ -400,9 +403,9 @@ describe("OpenAI-compatible review transport", () => {
       providerParam: "model",
       providerRequestId: "request-error",
     });
-    expect(JSON.stringify((error as AiProviderUnavailableError).details)).not.toContain(
-      "Sensitive provider message",
-    );
+    expect(
+      JSON.stringify((error as AiProviderUnavailableError).details),
+    ).not.toContain("Sensitive provider message");
   });
 
   test("maps an aborted request to a cancellation error", async () => {

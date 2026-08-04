@@ -1,6 +1,8 @@
 import "server-only";
 
 import OpenAI from "openai";
+import type { ChatCompletion } from "openai/resources/chat/completions/completions";
+import type { Response as OpenAIResponse } from "openai/resources/responses/responses";
 
 import type { AiProvider } from "@/db/schema";
 import {
@@ -96,7 +98,10 @@ export class AiProviderCancelledError extends AiProviderError {
 export class AiProviderResponseError extends AiProviderError {
   constructor(details?: AiProviderErrorDetails) {
     super(
-      "The provider returned a review that could not be validated.",
+      details?.failureKind === "incomplete_response" &&
+        details.providerIncompleteReason === "max_output_tokens"
+        ? "The review reached the configured output-token limit. Increase Maximum output tokens in AI settings and try again."
+        : "The provider returned a review that could not be validated.",
       "AiProviderResponseError",
       details,
     );
@@ -212,11 +217,7 @@ function errorDetails(
   ) as AiProviderErrorDetails;
 }
 
-function chatResponseDetails(
-  response: Awaited<
-    ReturnType<OpenAI["chat"]["completions"]["create"]>
-  >,
-) {
+function chatResponseDetails(response: ChatCompletion) {
   const choice = response.choices[0];
   return {
     providerFinishReason: diagnosticString(choice?.finish_reason),
@@ -228,9 +229,7 @@ function chatResponseDetails(
   } satisfies Partial<AiProviderErrorDetails>;
 }
 
-function responsesResponseDetails(
-  response: Awaited<ReturnType<OpenAI["responses"]["create"]>>,
-) {
+function responsesResponseDetails(response: OpenAIResponse) {
   return {
     providerResponseStatus: diagnosticString(response.status),
     providerIncompleteReason: diagnosticString(
@@ -277,7 +276,7 @@ async function openAiResponsesRequest(client: OpenAI, input: AiProviderCall) {
         "You are a cautious portfolio-review writer. Wealthboard calculations are authoritative; your role is limited to evidence-linked explanation.",
       input: prompt(input.snapshot),
       max_output_tokens: input.maxOutputTokens,
-      reasoning: { effort: "low" },
+      reasoning: { effort: "none" },
       text: {
         format: { type: "json_object" },
         verbosity: "low",
@@ -292,12 +291,13 @@ async function openAiResponsesRequest(client: OpenAI, input: AiProviderCall) {
       item.type === "message" &&
       item.content.some((content) => content.type === "refusal"),
   );
-  if (!response.output_text) {
-    const failureKind = response.incomplete_details
-      ? "incomplete_response"
-      : refused
-        ? "refusal"
-        : "empty_response";
+  if (response.status === "incomplete" || !response.output_text) {
+    const failureKind =
+      response.status === "incomplete" || response.incomplete_details
+        ? "incomplete_response"
+        : refused
+          ? "refusal"
+          : "empty_response";
     throw new AiProviderResponseError(
       errorDetails(input, failureKind, undefined, response._request_id, {
         ...details,
@@ -346,7 +346,13 @@ async function chatCompletionsRequest(client: OpenAI, input: AiProviderCall) {
         ? "incomplete_response"
         : "empty_response";
     throw new AiProviderResponseError(
-      errorDetails(input, failureKind, undefined, response._request_id, details),
+      errorDetails(
+        input,
+        failureKind,
+        undefined,
+        response._request_id,
+        details,
+      ),
     );
   }
   return {
@@ -392,9 +398,7 @@ export const openAiCompatibleTransport: AiReviewTransport = async (input) => {
       );
     }
     if (error instanceof OpenAI.APIConnectionTimeoutError) {
-      throw new AiProviderTimeoutError(
-        errorDetails(input, "timeout", error),
-      );
+      throw new AiProviderTimeoutError(errorDetails(input, "timeout", error));
     }
     if (error instanceof OpenAI.APIUserAbortError) {
       throw new AiProviderCancelledError(
@@ -412,9 +416,7 @@ export const openAiCompatibleTransport: AiReviewTransport = async (input) => {
       );
     }
     if (error instanceof Error && error.name === "ZodError") {
-      throw new AiProviderResponseError(
-        errorDetails(input, "invalid_review"),
-      );
+      throw new AiProviderResponseError(errorDetails(input, "invalid_review"));
     }
     throw new AiProviderUnavailableError(
       errorDetails(input, "unexpected_error"),

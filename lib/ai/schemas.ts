@@ -39,9 +39,19 @@ export const aiProviderSettingsInputSchema = z
     includeExactAmounts: z.boolean(),
     includeAccountNames: z.boolean(),
     monthlyTokenLimit: z.coerce.number().int().min(10_000).max(5_000_000),
-    maxOutputTokens: z.coerce.number().int().min(256).max(4_000),
+    maxOutputTokens: z.coerce.number().int().min(256),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.maxOutputTokens > value.monthlyTokenLimit) {
+      context.addIssue({
+        code: "custom",
+        path: ["maxOutputTokens"],
+        message:
+          "Maximum output tokens cannot exceed the monthly token limit.",
+      });
+    }
+  });
 
 export const portfolioReviewRequestSchema = portfolioReviewOptionsSchema.extend(
   {

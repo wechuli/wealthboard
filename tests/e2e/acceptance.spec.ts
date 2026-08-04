@@ -229,6 +229,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     "https://api.deepseek.com",
   );
   await page.getByLabel("Model identifier").fill("deepseek-review-model");
+  await page.getByLabel("Maximum output tokens").fill("25000");
   const saveAiSettings = page.getByRole("button", { name: "Save AI settings" });
   const invalidAiSettings = await saveAiSettings.evaluate((button) => {
     const form = button.closest("form");
@@ -249,6 +250,8 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   expect(invalidAiSettings).toEqual([]);
   await saveAiSettings.click();
   await expect(page.getByText("AI provider settings saved.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Maximum output tokens")).toHaveValue("25000");
   await page.goto("/review");
   await expect(
     page.getByRole("heading", { name: "Portfolio review" }),
