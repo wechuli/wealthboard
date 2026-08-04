@@ -2,6 +2,7 @@ import "server-only";
 
 import { AI_MAX_SNAPSHOT_BYTES, aiEndpointHost } from "@/lib/ai/config";
 import {
+  AiProviderError,
   AiProviderAuthenticationError,
   AiProviderCancelledError,
   AiProviderRateLimitError,
@@ -65,6 +66,7 @@ export async function generatePortfolioAiReview(
   const startedAt = performance.now();
   try {
     const result = await (options.transport ?? openAiCompatibleTransport)({
+      provider: provider.provider,
       baseUrl: provider.baseUrl,
       apiKey: provider.apiKey,
       model: provider.model,
@@ -95,6 +97,14 @@ export async function generatePortfolioAiReview(
   } catch (error) {
     completeAiReviewUsage(userId, reservation.id, {
       status: "error",
+      inputTokens:
+        error instanceof AiProviderError
+          ? error.details?.providerInputTokens
+          : undefined,
+      outputTokens:
+        error instanceof AiProviderError
+          ? error.details?.providerOutputTokens
+          : undefined,
       latencyMs: performance.now() - startedAt,
       errorCode: providerErrorCode(error),
     });

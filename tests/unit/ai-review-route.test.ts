@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/lib/auth/origin", () => ({ requireTrustedOrigin: vi.fn() }));
@@ -9,6 +9,7 @@ vi.mock("@/lib/services/ai-review", () => ({
 }));
 
 import { POST } from "@/app/api/ai/review/route";
+import { AiProviderUnavailableError } from "@/lib/ai/provider";
 import { requireTrustedOrigin } from "@/lib/auth/origin";
 import { getSession } from "@/lib/auth/session";
 import { generatePortfolioAiReview } from "@/lib/services/ai-review";
@@ -36,6 +37,10 @@ describe("AI review route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireTrustedOrigin).mockReturnValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   test("rejects unauthenticated requests before origin or provider work", async () => {
@@ -93,5 +98,48 @@ describe("AI review route", () => {
       validRequest,
       expect.objectContaining({ signal: validIncoming.signal }),
     );
+  });
+
+  test("logs safe provider diagnostics for a 502 response", async () => {
+    vi.mocked(getSession).mockResolvedValue({
+      userId: "session-user",
+      username: "session-user",
+      version: 1,
+    });
+    vi.mocked(generatePortfolioAiReview).mockRejectedValue(
+      new AiProviderUnavailableError({
+        failureKind: "api_error",
+        providerHost: "api.openai.com",
+        providerModel: "missing-model",
+        providerStatus: 404,
+        providerCode: "model_not_found",
+        providerType: "invalid_request_error",
+        providerParam: "model",
+        providerRequestId: "request-error",
+      }),
+    );
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await POST(request(validRequest));
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      error: "The AI provider is unavailable. Try again later.",
+    });
+    expect(errorLog).toHaveBeenCalledWith("AI portfolio review failed:", {
+      errorName: "AiProviderUnavailableError",
+      responseStatus: 502,
+      failureKind: "api_error",
+      providerHost: "api.openai.com",
+      providerModel: "missing-model",
+      providerStatus: 404,
+      providerCode: "model_not_found",
+      providerType: "invalid_request_error",
+      providerParam: "model",
+      providerRequestId: "request-error",
+    });
+    const serializedLog = JSON.stringify(errorLog.mock.calls);
+    expect(serializedLog).not.toContain(validRequest.apiKey);
+    expect(serializedLog).not.toContain("session-user");
   });
 });

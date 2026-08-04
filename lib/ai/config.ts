@@ -8,6 +8,7 @@ export const AI_PROVIDER_BASE_URLS = {
 } as const;
 
 export const AI_REVIEW_COOLDOWN_MS = 60_000;
+export const AI_REVIEW_RATE_LIMIT = 10;
 export const AI_USAGE_RETENTION_DAYS = 90;
 export const AI_REQUEST_TIMEOUT_MS = 45_000;
 export const AI_MAX_SNAPSHOT_BYTES = 25_000;

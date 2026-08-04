@@ -1,4 +1,5 @@
 import {
+  AiProviderError,
   AiProviderAuthenticationError,
   AiProviderCancelledError,
   AiProviderRateLimitError,
@@ -115,10 +116,12 @@ export async function POST(request: Request) {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
-    console.error(
-      "AI portfolio review failed:",
-      error instanceof Error ? error.name : "UnknownError",
-    );
-    return errorResponse(error);
+    const response = errorResponse(error);
+    console.error("AI portfolio review failed:", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      responseStatus: response.status,
+      ...(error instanceof AiProviderError ? error.details : undefined),
+    });
+    return response;
   }
 }

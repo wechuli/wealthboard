@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 
 import {
   aiProviderSettings,
@@ -9,6 +9,7 @@ import {
 } from "@/db/schema";
 import {
   AI_REVIEW_COOLDOWN_MS,
+  AI_REVIEW_RATE_LIMIT,
   AI_USAGE_RETENTION_DAYS,
   aiEncryptionAvailable,
   aiEndpointHost,
@@ -287,20 +288,21 @@ export function reserveAiReviewUsage(
       )
       .run();
 
-    const lastAttempt = tx.query.aiUsageEvents
-      .findFirst({
-        where: and(
+    const windowStart = new Date(
+      now.getTime() - AI_REVIEW_COOLDOWN_MS,
+    ).toISOString();
+    const recentAttempts = tx
+      .select({ count: sql<number>`count(*)` })
+      .from(aiUsageEvents)
+      .where(
+        and(
           eq(aiUsageEvents.userId, userId),
           inArray(aiUsageEvents.status, [...activeUsageStatuses]),
+          gt(aiUsageEvents.createdAt, windowStart),
         ),
-        orderBy: desc(aiUsageEvents.createdAt),
-      })
-      .sync();
-    if (
-      lastAttempt &&
-      now.getTime() - new Date(lastAttempt.createdAt).getTime() <
-        AI_REVIEW_COOLDOWN_MS
-    ) {
+      )
+      .get();
+    if ((recentAttempts?.count ?? 0) >= AI_REVIEW_RATE_LIMIT) {
       tx.insert(aiUsageEvents)
         .values({
           id: crypto.randomUUID(),

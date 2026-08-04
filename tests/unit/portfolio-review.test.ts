@@ -351,13 +351,18 @@ describe.sequential("deterministic portfolio review snapshot", () => {
         {
           now: new Date(now.getTime() + 61_000),
           transport: async () => {
-            throw new AiProviderResponseError();
+            throw new AiProviderResponseError({
+              failureKind: "incomplete_response",
+              providerInputTokens: 725,
+              providerOutputTokens: 800,
+              providerReasoningTokens: 800,
+            });
           },
         },
       ),
     ).rejects.toBeInstanceOf(AiProviderResponseError);
     expect(await getAiUsageSummary(aliceId, now)).toMatchObject({
-      chargedTokens: 600,
+      chargedTokens: 2_125,
       successfulReviews: 1,
     });
   });

@@ -137,32 +137,40 @@ describe.sequential("AI provider persistence and limits", () => {
 
   test("reserves, finalizes, rate-limits, and budgets usage per user", async () => {
     const startedAt = new Date("2026-08-04T10:00:00.000Z");
-    const aliceReservation = reserveAiReviewUsage(aliceId, 1_500, startedAt);
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const reservation = reserveAiReviewUsage(
+        aliceId,
+        500,
+        new Date(startedAt.getTime() + attempt * 1_000),
+      );
+      completeAiReviewUsage(aliceId, reservation.id, {
+        status: "success",
+        inputTokens: 40,
+        outputTokens: 10,
+        latencyMs: 100,
+      });
+    }
+
     expect(() =>
       reserveAiReviewUsage(
         aliceId,
-        1_500,
+        500,
         new Date(startedAt.getTime() + 30_000),
       ),
     ).toThrow(AiReviewRateLimitError);
 
-    completeAiReviewUsage(aliceId, aliceReservation.id, {
-      status: "success",
-      inputTokens: 400,
-      outputTokens: 200,
-      latencyMs: 875,
-    });
     const summary = await getAiUsageSummary(aliceId, startedAt);
     expect(summary).toMatchObject({
-      chargedTokens: 600,
-      remainingTokens: 9_400,
-      successfulReviews: 1,
+      chargedTokens: 500,
+      remainingTokens: 9_500,
+      successfulReviews: 10,
     });
 
     expect(() =>
       reserveAiReviewUsage(
         aliceId,
-        9_500,
+        9_501,
         new Date(startedAt.getTime() + 61_000),
       ),
     ).toThrow(AiReviewBudgetError);

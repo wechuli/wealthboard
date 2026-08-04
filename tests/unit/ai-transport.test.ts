@@ -123,7 +123,91 @@ function providerResponse(review: unknown, status = 200) {
   );
 }
 
+function openAiResponsesResponse(
+  review: unknown,
+  options: {
+    status?: "completed" | "incomplete";
+    incompleteReason?: "max_output_tokens" | "content_filter";
+    inputTokens?: number;
+    outputTokens?: number;
+    reasoningTokens?: number;
+  } = {},
+) {
+  const status = options.status ?? "completed";
+  return new Response(
+    JSON.stringify({
+      id: "resp-review",
+      object: "response",
+      created_at: 1_785_844_800,
+      model: "reasoning-review-model",
+      status,
+      error: null,
+      incomplete_details: options.incompleteReason
+        ? { reason: options.incompleteReason }
+        : null,
+      output:
+        review === undefined
+          ? []
+          : [
+              {
+                id: "msg-review",
+                type: "message",
+                status: "completed",
+                role: "assistant",
+                content: [
+                  {
+                    type: "output_text",
+                    text: JSON.stringify(review),
+                    annotations: [],
+                    logprobs: [],
+                  },
+                ],
+              },
+            ],
+      usage: {
+        input_tokens: options.inputTokens ?? 300,
+        input_tokens_details: {
+          cached_tokens: 0,
+          cache_write_tokens: 0,
+        },
+        output_tokens: options.outputTokens ?? 150,
+        output_tokens_details: {
+          reasoning_tokens: options.reasoningTokens ?? 50,
+        },
+        total_tokens:
+          (options.inputTokens ?? 300) + (options.outputTokens ?? 150),
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "x-request-id": "request-responses",
+      },
+    },
+  );
+}
+
+function providerErrorResponse(
+  status: number,
+  error: {
+    message: string;
+    type: string;
+    code: string;
+    param?: string;
+  },
+) {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "x-request-id": "request-error",
+    },
+  });
+}
+
 const call = {
+  provider: "custom" as const,
   baseUrl: "https://models.example.com/v1",
   apiKey: "sk-provider-test",
   model: "review-model",
@@ -160,6 +244,90 @@ describe("OpenAI-compatible review transport", () => {
     expect(new Headers(init.headers).get("authorization")).toBe(
       "Bearer sk-provider-test",
     );
+    const requestBody = JSON.parse(String(init.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(requestBody.max_tokens).toBe(800);
+    expect(requestBody).not.toHaveProperty("max_completion_tokens");
+  });
+
+  test("uses the Responses API with bounded reasoning for OpenAI", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(openAiResponsesResponse(validReview));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await openAiCompatibleTransport({
+      ...call,
+      provider: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      model: "reasoning-review-model",
+    });
+
+    expect(result).toMatchObject({
+      review: validReview,
+      inputTokens: 300,
+      outputTokens: 150,
+      providerRequestId: "request-responses",
+    });
+    const [target, init] = fetchMock.mock.calls[0] as [
+      RequestInfo | URL,
+      RequestInit,
+    ];
+    expect(String(target)).toBe("https://api.openai.com/v1/responses");
+    const requestBody = JSON.parse(String(init.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(requestBody).toMatchObject({
+      model: "reasoning-review-model",
+      max_output_tokens: 800,
+      reasoning: { effort: "low" },
+      text: {
+        format: { type: "json_object" },
+        verbosity: "low",
+      },
+      store: false,
+    });
+    expect(requestBody).not.toHaveProperty("max_tokens");
+    expect(requestBody).not.toHaveProperty("max_completion_tokens");
+    expect(String(init.body)).not.toContain(call.apiKey);
+  });
+
+  test("reports incomplete OpenAI reasoning responses with usage", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        openAiResponsesResponse(undefined, {
+          status: "incomplete",
+          incompleteReason: "max_output_tokens",
+          inputTokens: 725,
+          outputTokens: 800,
+          reasoningTokens: 800,
+        }),
+      ),
+    );
+
+    const error = await openAiCompatibleTransport({
+      ...call,
+      provider: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      model: "reasoning-review-model",
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AiProviderResponseError);
+    expect((error as AiProviderResponseError).details).toEqual({
+      failureKind: "incomplete_response",
+      providerHost: "api.openai.com",
+      providerModel: "reasoning-review-model",
+      providerRequestId: "request-responses",
+      providerResponseStatus: "incomplete",
+      providerIncompleteReason: "max_output_tokens",
+      providerInputTokens: 725,
+      providerOutputTokens: 800,
+      providerReasoningTokens: 800,
+    });
   });
 
   test("rejects invented evidence as an invalid provider response", async () => {
@@ -202,6 +370,39 @@ describe("OpenAI-compatible review transport", () => {
       AiProviderUnavailableError,
     );
     expect(redirectFetch).toHaveBeenCalledTimes(1);
+  });
+
+  test("preserves safe diagnostics for provider API failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        providerErrorResponse(404, {
+          message: "Sensitive provider message must not be retained.",
+          type: "invalid_request_error",
+          code: "model_not_found",
+          param: "model",
+        }),
+      ),
+    );
+
+    const error = await openAiCompatibleTransport(call).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(AiProviderUnavailableError);
+    expect((error as AiProviderUnavailableError).details).toEqual({
+      failureKind: "api_error",
+      providerHost: "models.example.com",
+      providerModel: "review-model",
+      providerStatus: 404,
+      providerCode: "model_not_found",
+      providerType: "invalid_request_error",
+      providerParam: "model",
+      providerRequestId: "request-error",
+    });
+    expect(JSON.stringify((error as AiProviderUnavailableError).details)).not.toContain(
+      "Sensitive provider message",
+    );
   });
 
   test("maps an aborted request to a cancellation error", async () => {
