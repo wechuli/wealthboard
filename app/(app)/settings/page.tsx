@@ -9,22 +9,31 @@ import {
 } from "@/components/settings-forms";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page";
+import { AiSettingsForm } from "@/components/ai-settings-form";
+import { aiEncryptionAvailable } from "@/lib/ai/config";
 import { getSettings } from "@/lib/bootstrap";
 import {
   getCurrencyConfiguration,
   listExchangeRates,
 } from "@/lib/services/settings";
 import { requireSession } from "@/lib/auth/session";
+import {
+  getAiProviderSettings,
+  getAiUsageSummary,
+} from "@/lib/services/ai-provider";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const { userId } = await requireSession();
-  const [settings, rates, currencyConfiguration] = await Promise.all([
-    getSettings(userId),
-    listExchangeRates(userId),
-    getCurrencyConfiguration(userId),
-  ]);
+  const [settings, rates, currencyConfiguration, aiSettings, aiUsage] =
+    await Promise.all([
+      getSettings(userId),
+      listExchangeRates(userId),
+      getCurrencyConfiguration(userId),
+      getAiProviderSettings(userId),
+      getAiUsageSummary(userId),
+    ]);
   return (
     <>
       <PageHeader
@@ -48,6 +57,11 @@ export default async function SettingsPage() {
           rates={rates}
           enabledCurrencies={currencyConfiguration.enabledCurrencies}
           baseCurrency={currencyConfiguration.baseCurrency}
+        />
+        <AiSettingsForm
+          settings={aiSettings}
+          usage={aiUsage}
+          encryptionAvailable={aiEncryptionAvailable()}
         />
         <PasswordForm />
         <DataPortability />

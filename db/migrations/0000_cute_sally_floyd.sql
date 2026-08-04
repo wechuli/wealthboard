@@ -25,6 +25,45 @@ CREATE UNIQUE INDEX `accounts_user_id_unique` ON `accounts` (`user_id`,`id`);-->
 CREATE INDEX `accounts_user_category_idx` ON `accounts` (`user_id`,`category_id`);--> statement-breakpoint
 CREATE INDEX `accounts_user_goal_idx` ON `accounts` (`user_id`,`goal_id`);--> statement-breakpoint
 CREATE INDEX `accounts_user_archived_idx` ON `accounts` (`user_id`,`archived_at`);--> statement-breakpoint
+CREATE TABLE `ai_provider_settings` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`provider` text NOT NULL,
+	`base_url` text NOT NULL,
+	`model` text NOT NULL,
+	`encrypted_api_key` text,
+	`api_key_hint` text,
+	`include_exact_amounts` integer DEFAULT false NOT NULL,
+	`include_account_names` integer DEFAULT false NOT NULL,
+	`monthly_token_limit` integer DEFAULT 100000 NOT NULL,
+	`max_output_tokens` integer DEFAULT 1200 NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `ai_provider_settings_user_unique` ON `ai_provider_settings` (`user_id`);--> statement-breakpoint
+CREATE TABLE `ai_usage_events` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`provider` text NOT NULL,
+	`endpoint_host` text NOT NULL,
+	`model` text NOT NULL,
+	`request_type` text DEFAULT 'portfolio_review' NOT NULL,
+	`status` text NOT NULL,
+	`billing_month` text NOT NULL,
+	`charged_tokens` integer DEFAULT 0 NOT NULL,
+	`input_tokens` integer,
+	`output_tokens` integer,
+	`latency_ms` integer,
+	`error_code` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `ai_usage_user_month_idx` ON `ai_usage_events` (`user_id`,`billing_month`);--> statement-breakpoint
+CREATE INDEX `ai_usage_user_created_idx` ON `ai_usage_events` (`user_id`,`created_at`);--> statement-breakpoint
 CREATE TABLE `categories` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

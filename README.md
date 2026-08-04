@@ -67,15 +67,33 @@ The command never creates an identity or seeds every user.
 
 ## Environment variables
 
-| Variable         | Purpose                                                  |
-| ---------------- | -------------------------------------------------------- |
-| `DATABASE_PATH`  | Persistent SQLite file; default `./data/wealthboard.db`  |
-| `SESSION_SECRET` | HMAC session secret; at least 32 characters              |
-| `APP_URL`        | Canonical deployment URL used for origin validation      |
-| `TZ`             | Default timezone for new users; default `Africa/Nairobi` |
-| `BACKUP_PATH`    | Operator backup directory; default `./backups`           |
+| Variable                       | Purpose                                                         |
+| ------------------------------ | --------------------------------------------------------------- |
+| `DATABASE_PATH`                | Persistent SQLite file; default `./data/wealthboard.db`         |
+| `SESSION_SECRET`               | HMAC session secret; at least 32 characters                     |
+| `APP_URL`                      | Canonical deployment URL used for origin validation             |
+| `TZ`                           | Default timezone for new users; default `Africa/Nairobi`        |
+| `BACKUP_PATH`                  | Operator backup directory; default `./backups`                  |
+| `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys |
+| `AI_ALLOWED_ENDPOINTS`         | Optional comma-separated exact custom OpenAI-compatible URLs    |
 
 There is no initial-user password or environment-created identity.
+
+Generate a dedicated AI credential key only when users should be able to save
+provider keys:
+
+```bash
+openssl rand -base64 32
+```
+
+Do not reuse `SESSION_SECRET`. Without this variable, users can still enter a
+session-only API key on the Portfolio Review page. OpenAI and DeepSeek use fixed
+built-in endpoints; custom endpoints are rejected unless their exact normalized
+URL appears in `AI_ALLOWED_ENDPOINTS`. An operator can explicitly allow a local
+endpoint, for example `http://ollama:11434/v1`, but ordinary users cannot select
+arbitrary internal hosts. Keep the encryption key stable across restarts and
+restores; rotating it currently requires users to delete and save their provider
+credentials again.
 
 ## Password changes and operator reset
 
@@ -151,6 +169,33 @@ kubectl apply -f deploy/kubernetes.yaml
 The example uses one replica with a `Recreate` strategy, ReadWriteOnce PVCs,
 probes, an Ingress, resource bounds, and a non-root security context.
 
+## AI portfolio review
+
+Portfolio Review is optional, read-only, and generated only on request. Configure
+OpenAI, DeepSeek, or an operator-approved OpenAI-compatible endpoint under
+**Settings → AI portfolio review**, then open **Review**. The integration uses the
+provider's Chat Completions API through the official OpenAI Node client.
+
+Wealthboard calculates a bounded, versioned snapshot before contacting a model.
+By default it contains ratios, concentration, goal trajectory, and data-quality
+warnings with pseudonymous account and goal labels. Exact aggregate amounts and
+names are separate per-request opt-ins. Notes, account references, transaction
+descriptions, raw activity rows, and the current cash-flow-naive annualized return
+figures are never sent.
+
+Generated reviews are not stored. The database retains only owner-scoped usage
+metadata such as provider host, model, status, latency, and token counts; users
+can clear that history or disconnect the provider. Prompts, responses, API keys,
+and portfolio values are not written to usage records. A one-minute cooldown,
+UTC calendar-month token limit, response-token bound, redirect blocking, strict response
+validation, and evidence-reference checks apply to every request.
+
+Provider keys entered on the Review page remain in browser component memory for
+that request and are cleared after success. Remembered keys are encrypted with
+AES-256-GCM and bound to the owning user. They are excluded from per-user exports,
+but deployment-wide SQLite backups contain the encrypted credential rows and must
+remain access-restricted. AI output is explanatory and is not financial advice.
+
 ## Per-user import, export, and restore
 
 Settings provides:
@@ -161,8 +206,8 @@ Settings provides:
 - A validated JSON restore that replaces only the authenticated user's
   portfolio in one transaction
 
-Exports contain no credentials, login attempts, session data, idempotency
-records, or another user's rows. Restore downloads a pre-restore user export,
+Exports contain no credentials, AI provider settings or usage, login attempts,
+session data, idempotency records, or another user's rows. Restore downloads a pre-restore user export,
 validates the archive, rejects owner fields and invalid relationships, remaps
 record IDs, and rolls back completely on failure. Current exports use version 3
 and include goal milestones and reminder dismissals; version 2 archives remain

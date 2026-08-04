@@ -85,12 +85,20 @@ export default async function DashboardPage({
         title="Overview"
         description="A clear view of what you own, owe, and are building toward."
         actions={
-          <Button asChild>
-            <Link href="/transactions/new">
-              <Plus size={17} />
-              Quick add
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="secondary">
+              <Link href="/review">
+                <Sparkles size={17} />
+                Review
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/transactions/new">
+                <Plus size={17} />
+                Quick add
+              </Link>
+            </Button>
+          </div>
         }
       />
 

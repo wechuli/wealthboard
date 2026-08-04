@@ -750,6 +750,37 @@ role model, perform consistent full-database backup and offline restore through
 documented CLI or container operations. Document the persistent backup
 directory and require the app to be stopped for a raw-file restore.
 
+## AI portfolio review
+
+Support an optional, on-demand portfolio review through OpenAI, DeepSeek, or an
+operator-approved OpenAI-compatible Chat Completions endpoint.
+
+- Wealthboard must first create a bounded, versioned snapshot from deterministic
+  calculations. Models must not independently calculate authoritative balances,
+  conversions, returns, or goal forecasts.
+- Default snapshots use pseudonymous accounts and goals and omit exact amounts.
+  Exact aggregate amounts and names require separate, explicit per-request
+  consent. Never include notes, account references, raw transaction rows, or
+  transaction descriptions.
+- Omit cash-flow-naive annualized returns, unavailable freshness, and movement
+  attribution until deterministic implementations exist. Include explicit
+  missing-rate and methodology warnings.
+- Validate model output with a strict schema. Every finding must cite a valid
+  evidence ID from the snapshot. Do not expose arbitrary HTML, links, tool calls,
+  or mutation operations.
+- Derive ownership only from the verified session. Apply a per-user cooldown,
+  monthly token limit, request timeout, cancellation, and bounded output size.
+- Provider credentials remain server-side. Session-only keys are not persisted;
+  remembered keys require a dedicated encryption key and owner-bound authenticated
+  encryption. Never reuse the session secret.
+- Fixed OpenAI and DeepSeek endpoints are allowed. Custom endpoint URLs must
+  exactly match an operator allowlist, cannot contain credentials, queries, or
+  fragments, and must not follow redirects.
+- Do not retain reviews. Store only privacy-safe owner-scoped usage metadata;
+  users must be able to delete this metadata, delete a stored credential, and
+  disconnect the provider. Per-user exports exclude all AI credentials and usage.
+- Clearly state that output is explanatory and not regulated financial advice.
+
 ## User interface and styling
 
 The visual style should feel like a modern financial dashboard, not a generic admin template.
@@ -1145,7 +1176,8 @@ Do not implement these in version one:
 - OAuth, SAML, and enterprise single sign-on
 - Social features
 - Public profiles
-- AI financial advice
+- AI financial advice or autonomous financial actions; bounded explanatory
+  portfolio review is permitted under the requirements above
 - Cryptocurrency wallets
 - Complex double-entry accounting
 - Full offline synchronization

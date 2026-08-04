@@ -62,6 +62,18 @@ separate API service and no external identity provider.
 - **Offline:** The service worker caches only the shell and static assets.
   Financial responses and mutations remain server-only. Logout clears
   user-specific client state before another user can sign in on the device.
+- **AI review:** Optional on-demand reviews use a versioned, owner-scoped,
+  read-only snapshot calculated by Wealthboard. The model never receives SQL or
+  mutation tools and cannot become authoritative for balances, conversions,
+  performance, or goals. OpenAI, DeepSeek, and operator-approved
+  OpenAI-compatible endpoints share one Chat Completions adapter. Responses must
+  validate against a bounded schema and cite supplied evidence IDs.
+- **AI credentials and retention:** Session-only keys stay in client component
+  memory for one request. Remembered keys use AES-256-GCM with a dedicated
+  deployment key and immutable `userId` associated data. Usage rows contain
+  metadata only and are user-deletable; prompts, responses, portfolio values,
+  and provider keys are not retained. Custom endpoints require an exact
+  operator allowlist and redirects are disabled.
 
 ## Isolation boundary
 
@@ -101,6 +113,8 @@ separate API service and no external identity provider.
 | `goal_alert_dismissals`   | Monthly owner-scoped suppression of derived goal reminders          |
 | `login_attempts`          | Bounded rate limiting by normalized username and client key         |
 | `idempotency_keys`        | User-scoped duplicate-submission protection                         |
+| `ai_provider_settings`    | Owner-scoped provider, sharing defaults, limits, encrypted key      |
+| `ai_usage_events`         | Owner-scoped request status, latency, model, and token metadata     |
 
 Every table except `login_attempts` is either the identity table or is owned by
 one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
@@ -121,7 +135,8 @@ accounts, or sample portfolio data.
 - `/goals`, `/goals/new`, `/goals/[id]`, `/goals/[id]/edit`
 - `/reports`, `/categories`, `/settings`
 - `/api/export/*`, `/api/import/transactions`, `/api/restore/user`,
-  `/api/health`
+  `/api/ai/review`, `/api/health`
+- `/review` — on-demand, evidence-linked AI portfolio critique
 - `/offline`, `/manifest.webmanifest`, `/sw.js`
 
 The protected layout owns the responsive sidebar, header, mobile bottom
@@ -155,3 +170,6 @@ own authorization decisions.
   OAuth, SAML, and mandatory external services remain out of scope.
 - The initial release is dark-only; semantic CSS tokens make a future light
   theme additive rather than a component rewrite.
+- AI output remains explanatory, non-authoritative, and non-advisory. Reviews
+  are never persisted, cannot execute financial changes, and omit unreliable
+  annualized performance until deterministic cash-flow-aware metrics exist.

@@ -38,6 +38,7 @@ const navigation = [
   { href: "/transactions", label: "Transactions", icon: ReceiptText },
   { href: "/goals", label: "Goals", icon: Goal },
   { href: "/reports", label: "Reports", icon: FileBarChart },
+  { href: "/review", label: "Review", icon: Sparkles },
   { href: "/categories", label: "Categories", icon: FolderCog },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -305,10 +306,66 @@ export function AppShell({
             <QuickAdd />
           </div>
           <MobileLink href="/goals" label="Goals" icon={Goal} />
-          <MobileLink href="/settings" label="More" icon={MoreHorizontal} />
+          <MobileMore />
         </nav>
       </div>
     </PrivacyProvider>
+  );
+}
+
+function MobileMore() {
+  const pathname = usePathname();
+  const items = [
+    { href: "/review", label: "Portfolio review", icon: Sparkles },
+    { href: "/reports", label: "Reports", icon: FileBarChart },
+    { href: "/categories", label: "Categories", icon: FolderCog },
+    { href: "/settings", label: "Settings", icon: Settings },
+  ];
+  const active = items.some(({ href }) => pathname.startsWith(href));
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex min-h-11 flex-col items-center justify-center gap-1 text-[10px] font-medium text-slate-500",
+            active && "text-emerald-300",
+          )}
+          aria-label="More navigation"
+        >
+          <MoreHorizontal size={19} />
+          More
+        </button>
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" />
+        <Dialog.Content className="fixed inset-x-3 bottom-3 z-50 rounded-2xl border border-white/10 bg-[#121918] p-5 shadow-2xl outline-none">
+          <div className="flex items-center justify-between">
+            <Dialog.Title className="text-base font-semibold">
+              More
+            </Dialog.Title>
+            <Dialog.Close asChild>
+              <Button variant="ghost" size="icon" aria-label="Close navigation">
+                <X size={18} />
+              </Button>
+            </Dialog.Close>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {items.map(({ href, label, icon: Icon }) => (
+              <Dialog.Close asChild key={href}>
+                <Link
+                  href={href}
+                  className="flex min-h-14 items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 text-sm font-medium text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                >
+                  <Icon size={17} className="text-emerald-300" />
+                  {label}
+                </Link>
+              </Dialog.Close>
+            ))}
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

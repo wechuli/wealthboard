@@ -61,6 +61,14 @@ spec:
                 secretKeyRef:
                   name: wealthboard-secrets
                   key: session-secret
+            - name: AI_CREDENTIAL_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wealthboard-secrets
+                  key: ai-credential-encryption-key
+                  optional: true
+            - name: AI_ALLOWED_ENDPOINTS
+              value: ""
           volumeMounts:
             - name: data
               mountPath: /data

@@ -10,6 +10,8 @@ services:
       SESSION_SECRET: ${SESSION_SECRET}
       APP_URL: ${APP_URL:-http://localhost:3000}
       TZ: ${TZ:-Africa/Nairobi}
+      AI_CREDENTIAL_ENCRYPTION_KEY: ${AI_CREDENTIAL_ENCRYPTION_KEY:-}
+      AI_ALLOWED_ENDPOINTS: ${AI_ALLOWED_ENDPOINTS:-}
     volumes:
       - wealthboard-data:/data
       - wealthboard-backups:/backups

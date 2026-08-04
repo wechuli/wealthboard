@@ -224,6 +224,44 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await page.getByRole("button", { name: "Save preferences" }).click();
   await expect(page.getByText("Settings saved.")).toBeVisible();
 
+  await page.getByLabel("Provider").selectOption("deepseek");
+  await expect(page.getByLabel("API endpoint")).toHaveValue(
+    "https://api.deepseek.com",
+  );
+  await page.getByLabel("Model identifier").fill("deepseek-review-model");
+  const saveAiSettings = page.getByRole("button", { name: "Save AI settings" });
+  const invalidAiSettings = await saveAiSettings.evaluate((button) => {
+    const form = button.closest("form");
+    if (!form) return [{ name: "form", message: "Form not found." }];
+    return Array.from(form.elements)
+      .filter(
+        (element): element is HTMLInputElement | HTMLSelectElement =>
+          (element instanceof HTMLInputElement ||
+            element instanceof HTMLSelectElement) &&
+          !element.checkValidity(),
+      )
+      .map((element) => ({
+        name: element.name,
+        value: element.value,
+        message: element.validationMessage,
+      }));
+  });
+  expect(invalidAiSettings).toEqual([]);
+  await saveAiSettings.click();
+  await expect(page.getByText("AI provider settings saved.")).toBeVisible();
+  await page.goto("/review");
+  await expect(
+    page.getByRole("heading", { name: "Portfolio review" }),
+  ).toBeVisible();
+  await expect(page.getByText("Data sent to the provider")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate review" }),
+  ).toBeDisabled();
+  await page.getByLabel("Session-only API key").fill("sk-e2e-session-only");
+  await expect(
+    page.getByRole("button", { name: "Generate review" }),
+  ).toBeEnabled();
+
   await page.goto("/");
   await expect(
     page.getByText(/Current or historical totals are incomplete/),
@@ -254,6 +292,10 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     expect.objectContaining({ name: "Halfway funded" }),
   );
   expect(exportedPortfolio.goalAlertDismissals).toHaveLength(1);
+  expect(JSON.stringify(exportedPortfolio)).not.toContain(
+    "deepseek-review-model",
+  );
+  expect(JSON.stringify(exportedPortfolio)).not.toContain("sk-e2e");
   const restoreResponse = await page.request.post("/api/restore/user", {
     headers: { Origin: "http://127.0.0.1:3100" },
     multipart: {
@@ -292,6 +334,10 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     page.getByRole("navigation", { name: "Mobile navigation" }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Home" })).toBeVisible();
+  await page.getByRole("button", { name: "More navigation" }).click();
+  await page.getByRole("link", { name: "Portfolio review" }).click();
+  await expect(page).toHaveURL(/\/review/);
+  await expect(page.getByLabel("Session-only API key")).toBeVisible();
 
   const manifest = await page.request.get("/manifest.webmanifest");
   expect(manifest.ok()).toBeTruthy();
@@ -325,6 +371,7 @@ test("responsive layouts fit required viewports", async ({ page }) => {
       "/transactions",
       "/goals",
       "/reports",
+      "/review",
       "/settings",
       goalHref!,
     ]) {

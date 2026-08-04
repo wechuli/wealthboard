@@ -44,6 +44,14 @@ export const contributionFrequencies = [
 ] as const;
 
 export const userStatuses = ["active", "disabled"] as const;
+export const aiProviders = ["openai", "deepseek", "custom"] as const;
+export const aiRequestStatuses = [
+  "started",
+  "success",
+  "error",
+  "rate_limited",
+  "budget_exceeded",
+] as const;
 
 export const users = sqliteTable(
   "users",
@@ -436,6 +444,59 @@ export const idempotencyKeys = sqliteTable(
   ],
 );
 
+export const aiProviderSettings = sqliteTable(
+  "ai_provider_settings",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: aiProviders }).notNull(),
+    baseUrl: text("base_url").notNull(),
+    model: text("model").notNull(),
+    encryptedApiKey: text("encrypted_api_key"),
+    apiKeyHint: text("api_key_hint"),
+    includeExactAmounts: integer("include_exact_amounts", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    includeAccountNames: integer("include_account_names", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    monthlyTokenLimit: integer("monthly_token_limit").notNull().default(100000),
+    maxOutputTokens: integer("max_output_tokens").notNull().default(1200),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("ai_provider_settings_user_unique").on(table.userId)],
+);
+
+export const aiUsageEvents = sqliteTable(
+  "ai_usage_events",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: aiProviders }).notNull(),
+    endpointHost: text("endpoint_host").notNull(),
+    model: text("model").notNull(),
+    requestType: text("request_type").notNull().default("portfolio_review"),
+    status: text("status", { enum: aiRequestStatuses }).notNull(),
+    billingMonth: text("billing_month").notNull(),
+    chargedTokens: integer("charged_tokens").notNull().default(0),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    latencyMs: integer("latency_ms"),
+    errorCode: text("error_code"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("ai_usage_user_month_idx").on(table.userId, table.billingMonth),
+    index("ai_usage_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
+
 export type Account = typeof accounts.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
@@ -444,5 +505,7 @@ export type Goal = typeof goals.$inferSelect;
 export type GoalMilestone = typeof goalMilestones.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
+export type AiProviderSettings = typeof aiProviderSettings.$inferSelect;
 export type TransactionType = (typeof transactionTypes)[number];
 export type GoalStatus = (typeof goalStatuses)[number];
+export type AiProvider = (typeof aiProviders)[number];

@@ -50,6 +50,13 @@ import { createSession } from "@/lib/auth/session";
 import { changeUserPassword } from "@/lib/auth/users";
 import { z } from "zod";
 import { isValidTimezone } from "@/lib/dates";
+import { aiProviderSettingsInputSchema } from "@/lib/ai/schemas";
+import {
+  clearAiUsageHistory,
+  deleteStoredAiCredential,
+  disconnectAiProvider,
+  saveAiProviderSettings,
+} from "@/lib/services/ai-provider";
 
 function mutationError(error: unknown): ActionState {
   console.error(
@@ -68,6 +75,75 @@ function accountInput(formData: FormData) {
     ...values,
     isIncludedInNetWorth: formData.get("isIncludedInNetWorth") === "on",
   });
+}
+
+export async function updateAiProviderSettingsAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  void _previous;
+  const { userId } = await requireSession();
+  const values = formDataObject(formData);
+  const parsed = aiProviderSettingsInputSchema.safeParse({
+    provider: values.provider,
+    baseUrl: values.baseUrl,
+    model: values.model,
+    apiKey: values.apiKey,
+    rememberApiKey: formData.get("rememberApiKey") === "on",
+    includeExactAmounts: formData.get("includeExactAmounts") === "on",
+    includeAccountNames: formData.get("includeAccountNames") === "on",
+    monthlyTokenLimit: values.monthlyTokenLimit,
+    maxOutputTokens: values.maxOutputTokens,
+  });
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    saveAiProviderSettings(userId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/settings");
+  revalidatePath("/review");
+  return { ok: true, message: "AI provider settings saved." };
+}
+
+export async function deleteStoredAiCredentialAction(
+  _previous: ActionState,
+): Promise<ActionState> {
+  void _previous;
+  const { userId } = await requireSession();
+  try {
+    deleteStoredAiCredential(userId);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/settings");
+  revalidatePath("/review");
+  return { ok: true, message: "Stored AI credential deleted." };
+}
+
+export async function clearAiUsageHistoryAction(
+  _previous: ActionState,
+): Promise<ActionState> {
+  void _previous;
+  const { userId } = await requireSession();
+  clearAiUsageHistory(userId);
+  revalidatePath("/settings");
+  return { ok: true, message: "AI usage history cleared." };
+}
+
+export async function disconnectAiProviderAction(
+  _previous: ActionState,
+): Promise<ActionState> {
+  void _previous;
+  const { userId } = await requireSession();
+  try {
+    disconnectAiProvider(userId);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/settings");
+  revalidatePath("/review");
+  return { ok: true, message: "AI provider disconnected." };
 }
 
 export async function createAccountAction(

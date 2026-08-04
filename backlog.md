@@ -202,31 +202,32 @@ Mandatory constraints for every AI feature:
 - UI copy states that output is explanatory and not regulated financial advice.
 - Per-user rate limits, token limits, monthly budgets, model allowlists, timeouts, and cancellation are required.
 
-AI1 is blocked on authoritative exchange-rate/performance inputs (A1 and A3) and privacy-safe audit telemetry (A12). Scheduled summaries and extraction jobs are additionally blocked on A15. F8 is useful for user security visibility but is not a prerequisite for read-only AI tools.
+The deterministic AI1 foundation and on-demand AI2 review are implemented while explicitly omitting unavailable or unreliable metrics. A1 provenance, A3 cash-flow-aware performance, F4 freshness, and F6 movement attribution can enrich later snapshot versions without making the current model authoritative. Scheduled summaries and extraction jobs remain blocked on A15. F8 is useful for user security visibility but is not a prerequisite for read-only AI tools.
 
-### AI1. Deterministic Portfolio Review Tool Layer
+### AI1. Deterministic Portfolio Review Tool Layer (Implemented)
 
+- **Status:** Implemented on 2026-08-04.
 - **Priority:** P2
 - **Estimated effort:** Large
-- **Current gap:** No AI integration exists, and current services return broad application/domain objects rather than a minimized model-facing contract.
-- **Evidence from the repository:** Calculations live in [lib/services/analytics.ts](lib/services/analytics.ts), [lib/services/goals.ts](lib/services/goals.ts), and [lib/finance.ts](lib/finance.ts). There is no AI module, provider SDK, tool policy, consent setting, or AI audit table.
-- **Proposed improvement:** Create server-only, read-only tools such as `getPortfolioSummary`, `getAllocation`, `getGoalTrajectory`, `getAccountPerformance`, and `explainMovementInputs`. Return calculated, labeled, bounded JSON with completeness warnings.
+- **Previous gap:** No AI integration existed, and services returned broad application/domain objects rather than a minimized model-facing contract.
+- **Implementation:** [lib/services/portfolio-review.ts](lib/services/portfolio-review.ts) builds a strict version 1 owner-scoped snapshot with deterministic totals, ratios, category/currency allocation, pseudonymous concentration, goal trajectory, data-quality warnings, methodology, and stable evidence IDs. Exact aggregates and names are independent opt-ins; notes, references, descriptions, raw activity, annualized returns, unavailable freshness, and unavailable movement attribution are excluded. [lib/ai/schemas.ts](lib/ai/schemas.ts) bounds both snapshot and provider output contracts, and every model finding must cite supplied evidence.
 - **User value:** Establishes a safe base for portfolio explanations without exposing the whole database.
-- **Dependencies:** A1, A3, A12, and user opt-in settings.
-- **Risks or trade-offs:** A broad "portfolio dump" would increase privacy and prompt-injection risk. Tool outputs must be minimal and size-limited.
-- **Acceptance criteria:** Tools cannot query another user, cannot write data, expose completeness/provenance metadata, have strict schemas and row limits, and pass adversarial authorization and structured-output tests.
+- **Dependencies:** Current missing-rate completeness is included. A1 provenance, A3 cash-flow-aware performance, F4 freshness, and F6 movement attribution remain optional future snapshot fields rather than launch blockers.
+- **Risks or trade-offs:** The bounded contract intentionally provides less context than a raw portfolio dump. This reduces privacy and prompt-injection risk but limits causal explanations until deterministic attribution exists.
+- **Acceptance criteria:** Met. [tests/unit/portfolio-review.test.ts](tests/unit/portfolio-review.test.ts) covers two-user isolation, sensitive-field and injection-text exclusion, bounded exact sharing, evidence validation, immutable financial records, fake-provider orchestration, and token accounting.
 
-### AI2. AI Portfolio Review and Monthly Wealth Summary
+### AI2. AI Portfolio Review and Monthly Wealth Summary (On-Demand Implemented)
 
+- **Status:** On-demand review implemented on 2026-08-04. Scheduled monthly summaries remain deferred to A15.
 - **Priority:** P2
 - **Estimated effort:** Epic
-- **Current gap:** The dashboard shows metrics but does not narrate why the portfolio changed, identify concentration, summarize goal trajectory, or highlight stale/inconsistent data in plain language.
-- **Evidence from the repository:** [app/(app)/page.tsx](<app/(app)/page.tsx>) already renders totals, allocation, history, growth, goals, and recent activity. No explanatory layer exists.
-- **Proposed improvement:** Generate an on-demand review from the deterministic tool layer covering net-worth movement, contributions versus returns, concentration, stale values, missing rates, account comparison, and goal status. Add an optional scheduled monthly summary only after background jobs exist.
+- **Previous gap:** The dashboard showed metrics but did not provide a bounded narrative critique of concentration, liquidity, cash flow, goal trajectory, or data quality.
+- **Implementation:** [app/(app)/review/page.tsx](<app/(app)/review/page.tsx>) and [components/portfolio-review-workspace.tsx](components/portfolio-review-workspace.tsx) provide a dedicated, privacy-aware, non-persistent review workspace with period/focus controls, per-request sharing consent, session-only credentials, cancellation, evidence-linked findings, and a non-advisory label. [lib/ai/provider.ts](lib/ai/provider.ts) uses the official OpenAI Node client through Chat Completions for fixed OpenAI/DeepSeek presets or operator-allowlisted compatible endpoints. [lib/services/ai-provider.ts](lib/services/ai-provider.ts) owns encrypted BYOK settings, one-minute cooldown, monthly token budgets, metadata-only usage, and user deletion controls; [app/api/ai/review/route.ts](app/api/ai/review/route.ts) enforces session ownership, trusted origin, bounded input, no-store responses, and safe provider errors.
 - **User value:** Makes the existing analytics understandable and actionable for non-specialists.
-- **Dependencies:** AI1, movement attribution in F6, background jobs for scheduled summaries, cost controls.
-- **Risks or trade-offs:** Models can overstate causality or give advice. Every claim should cite a supplied metric and use cautious explanatory language.
-- **Acceptance criteria:** Reviews cite as-of dates and calculation inputs, distinguish facts from suggestions, contain no invented amounts, respect opt-out, stay within a configured budget, and are clearly labeled as non-advisory.
+- **Remaining change:** Add optional idempotent scheduled monthly summaries only after A15 provides durable jobs and retention. F6 may later add deterministic movement-driver evidence.
+- **Dependencies:** AI1 is implemented. A15 is required only for scheduled reviews; F6 is required only for causal movement narrative.
+- **Risks or trade-offs:** OpenAI-compatible providers differ in model behavior and JSON reliability. Responses are therefore validated locally, rejected for invented evidence, never persisted, and cannot execute tools or financial mutations. BYOK shifts provider cost and retention policy to each user, with explicit disclosure.
+- **Acceptance criteria:** On-demand criteria are met. [tests/unit/ai-security.test.ts](tests/unit/ai-security.test.ts) covers encryption, tampering, owner binding, and endpoint policy; [tests/unit/ai-provider.test.ts](tests/unit/ai-provider.test.ts) covers two-user credential/usage isolation, cooldown, budgets, exports, deletion, and disconnect; [tests/unit/ai-review-route.test.ts](tests/unit/ai-review-route.test.ts) covers authentication, origin, strict input, and session-derived ownership; [tests/component/portfolio-review.test.tsx](tests/component/portfolio-review.test.tsx) covers sharing consent, session-key clearing, privacy-mode removal, and cancellation. Scheduled-summary acceptance remains deferred with A15.
 
 ### AI3. Natural-Language Portfolio Questions and Scenario Planning
 
@@ -571,8 +572,8 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 
 ### Phase 4: Intelligent Features
 
-- AI1 deterministic read-only tool layer.
-- AI2 AI Portfolio Review and monthly summary.
+- AI1 deterministic read-only tool layer. **Implemented 2026-08-04.**
+- AI2 on-demand AI Portfolio Review. **Implemented 2026-08-04; monthly scheduling deferred to A15.**
 - AI3 natural-language questions and goal scenarios.
 - AI4 statement extraction through import preview.
 - AI5 anomaly explanations and categorization suggestions.
