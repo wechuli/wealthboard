@@ -679,6 +679,9 @@ export function updateTransaction(
     "type" | "amount" | "transactionDate" | "description" | "notes"
   >,
 ) {
+  if (input.type === "opening_balance" || input.type === "transfer") {
+    throw new Error("Use the dedicated workflow for this transaction type.");
+  }
   const db = getDatabase();
   assertNotFutureDate(userId, input.transactionDate, db);
   db.transaction((tx) => {

@@ -84,14 +84,27 @@ export const accountSchema = z.object({
   openedAt: z.string().date().optional(),
 });
 
-export const transactionSchema = z.object({
-  accountId: z.string().uuid(),
-  type: z.enum(transactionTypes),
+const ordinaryTransactionTypeSchema = z
+  .enum(transactionTypes)
+  .exclude(["opening_balance", "transfer"]);
+
+const transactionMutationFields = {
+  type: ordinaryTransactionTypeSchema,
   amount: z.string().trim().min(1),
   transactionDate: z.string().date(),
   description: z.string().trim().max(200).optional(),
   notes: optionalText,
+};
+
+export const transactionSchema = z.object({
+  accountId: z.string().uuid(),
+  ...transactionMutationFields,
   idempotencyKey: z.string().uuid(),
+});
+
+export const transactionUpdateSchema = z.object({
+  accountId: z.string().uuid(),
+  ...transactionMutationFields,
 });
 
 const optionalTransactionQueryText = z

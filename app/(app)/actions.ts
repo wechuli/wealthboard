@@ -12,6 +12,7 @@ import {
   goalSchema,
   passwordChangeSchema,
   transactionSchema,
+  transactionUpdateSchema,
   transferSchema,
   valuationSchema,
   type ActionState,
@@ -154,7 +155,7 @@ export async function updateTransactionAction(
   formData: FormData,
 ): Promise<ActionState> {
   const { userId } = await requireSession();
-  const parsed = transactionSchema.safeParse(formDataObject(formData));
+  const parsed = transactionUpdateSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   try {
     updateTransaction(userId, id, parsed.data);

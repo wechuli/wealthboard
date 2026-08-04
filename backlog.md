@@ -19,7 +19,7 @@ Supporting multiple users increases the blast radius of mistakes. No proven cros
 The five highest-priority improvements are:
 
 1. Make exchange-rate provenance and historical completeness explicit so totals and charts never silently omit holdings.
-2. Close the reserved transaction-type update path and enforce financial mutation invariants at the service boundary.
+2. Enforce archived-account and goal-link rules at the financial service boundary.
 3. Make full-database restore fail-safe with an automatic pre-restore backup and tested rollback.
 4. Replace or remove cash-flow-naive annualized return figures.
 5. Gate container publication on tests and remediate the currently reported high-severity production dependency advisories.
@@ -60,7 +60,7 @@ Effort estimates:
 - **Evidence from the repository:** [lib/services/accounts.ts](lib/services/accounts.ts) rejects edits to existing opening balances and transfers. [app/(app)/accounts/[id]/page.tsx](<app/(app)/accounts/[id]/page.tsx>) offers valuation deletion but no edit. Balance replay is already centralized in `recalculateAccountBalance()`.
 - **Proposed improvement:** Add explicit correction operations: adjust an opening balance with full replay, edit both transfer legs atomically, edit a valuation, and reconcile an account to a statement balance as of a date with a previewed adjustment.
 - **User value:** Users can correct mistakes without deleting history or manually calculating compensating entries.
-- **Dependencies:** Architecture item A2; audit-event support is desirable; new forms and replay integration tests.
+- **Dependencies:** Implemented architecture item A2; audit-event support is desirable; new forms and replay integration tests.
 - **Risks or trade-offs:** Rewriting historical events changes every later balance. The UI must preview affected balances and distinguish correction from new economic activity.
 - **Acceptance criteria:** Each correction shows old and new values, requires confirmation, updates all affected balances atomically, preserves transfer net worth, does not classify reconciliation adjustments as contributions, and is covered by replay tests.
 
@@ -279,17 +279,17 @@ AI1 is blocked on authoritative exchange-rate/performance inputs (A1 and A3) and
 - **Risks and trade-offs:** Users with cross-currency holdings now see an initial missing-rate warning until they enter a rate. That is preferable to a plausible but stale number. Automatic rates can remain optional later.
 - **Acceptance criteria:** Placeholder removal, aggregate/history completeness flags, affected currency codes, and historical missing-rate regression tests are complete. Rate provenance/freshness and explicit affected date ranges remain.
 
-### A2. Enforce Reserved Transaction-Type Invariants on Update
+### A2. Enforce Reserved Transaction-Type Invariants on Update (Implemented)
 
+- **Status:** Implemented on 2026-08-04.
 - **Priority:** P0
 - **Estimated effort:** Small
-- **Current architectural concern:** Creation blocks `opening_balance` and `transfer`, but update validation accepts every `transactionType`. `updateTransaction()` checks the existing row's type, not the requested new type, so a crafted authenticated action can turn a normal row into an unpaired transfer or an extra opening balance.
-- **Evidence from the repository:** `transactionSchema` in [lib/validation.ts](lib/validation.ts) uses `z.enum(transactionTypes)`. `recordTransaction()` in [lib/services/accounts.ts](lib/services/accounts.ts) rejects reserved types; `updateTransaction()` does not reject `input.type`.
-- **Proposed change:** Define separate create/update schemas for ordinary activity and make reserved types impossible at the service boundary. Keep paired transfers in [lib/services/transfers.ts](lib/services/transfers.ts) and opening-balance corrections in the dedicated workflow proposed by F2.
+- **Previous architectural concern:** Creation blocked `opening_balance` and `transfer`, but update validation accepted every `transactionType`. `updateTransaction()` checked the existing row's type, not the requested new type, so a crafted authenticated action could turn a normal row into an unpaired transfer or an extra opening balance.
+- **Implementation:** [lib/validation.ts](lib/validation.ts) now defines ordinary transaction mutations by excluding `opening_balance` and `transfer`, with separate create and update schemas. [app/(app)/actions.ts](<app/(app)/actions.ts>) uses the update-specific schema, and [lib/services/accounts.ts](lib/services/accounts.ts) independently rejects both reserved target types before database work so non-action callers cannot bypass the invariant.
 - **Expected benefit:** Preserves transfer pairing, contribution classification, and balance replay invariants even under crafted requests.
-- **Migration considerations:** Scan for existing `transfer` rows without a group and duplicate opening balances before enforcing constraints. Fresh databases need no data migration.
+- **Migration considerations:** No schema or fresh-database migration was required. Existing malformed historical rows, if any, are not rewritten by this guard and should be audited separately before correction workflows are introduced.
 - **Risks and trade-offs:** Users still need correction workflows; merely blocking edits without F2 preserves current friction.
-- **Acceptance criteria:** `updateTransaction()` rejects a requested `input.type` of `transfer` or `opening_balance` even when the existing row is ordinary; the failed request leaves type, amount, idempotency data, and balance unchanged; normal type changes still work; every transfer has exactly two same-user legs; each account has one opening balance; service and action integration tests submit crafted reserved-type payloads.
+- **Acceptance criteria:** Met. [tests/unit/transaction-update.test.ts](tests/unit/transaction-update.test.ts) submits crafted `transfer` and `opening_balance` payloads through the server action and directly to the service, verifies the complete transaction row, idempotency key, and account balance remain unchanged, confirms no extra opening or transfer row appears, and proves a normal type change still replays the balance.
 
 ### A3. Replace Cash-Flow-Naive Annualized Return Calculations
 
@@ -535,7 +535,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 ### Phase 1: Critical Correctness and Security
 
 - A1 exchange-rate provenance and completeness.
-- A2 reserved transaction-type invariants.
+- A2 reserved transaction-type invariants. **Implemented 2026-08-04.**
 - A3 cash-flow-aware return methodology.
 - A4 fail-safe restore.
 - A5 service-level account/currency/goal rules.
@@ -588,7 +588,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 
 "Quick" describes implementation size and independence, not urgency. P0 quick wins remain release-blocking.
 
-- Block reserved `transfer` and `opening_balance` types in transaction updates (A2).
+- ~~Block reserved `transfer` and `opening_balance` types in transaction updates (A2).~~ Completed on 2026-08-04.
 - Reject archived accounts and invalid goal links at service boundaries (A5).
 - ~~Stop treating the seeded USD/KES placeholder as authoritative (first part of A1).~~ Completed on 2026-08-03.
 - Add a server-side pre-restore backup before replacing the SQLite file (first part of A4).
@@ -602,7 +602,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 ## Recommended Next Five Tasks
 
 1. **Complete exchange-rate provenance and freshness.** Why next: placeholder removal and missing-rate completeness are implemented, but users still need richer source/freshness metadata and affected historical date ranges. **Estimated effort:** Medium. **Dependencies:** F12 implemented foundation. **Expected outcome:** Every configured rate has clear provenance/freshness and incomplete periods identify their affected ranges.
-2. **Close the reserved transaction update path and add invariant tests.** Why next: it is a small authenticated path to unpaired transfers or duplicate opening-balance semantics. **Estimated effort:** Small. **Dependencies:** None. **Expected outcome:** Reserved transaction types can only be created or corrected through dedicated atomic workflows.
-3. **Implement fail-safe database restore with automatic rollback.** Why next: the current operator restore can replace the last working database without creating a recovery copy. **Estimated effort:** Medium. **Dependencies:** Shared backup primitive. **Expected outcome:** Every restore either succeeds and validates or leaves the previous database recoverable.
-4. **Replace or temporarily remove the current annualized return figures.** Why next: cash-flow timing is ignored, so a prominent report can misstate performance. **Estimated effort:** Large. **Dependencies:** Agreed TWR/XIRR methodology and golden fixtures. **Expected outcome:** Performance comparisons are mathematically defensible and disclose method/data sufficiency.
-5. **Create a required CI quality and dependency-security gate before image publication.** Why next: verified high-severity transitive advisories are present and the publish workflow currently has no test or scan prerequisite. **Estimated effort:** Medium. **Dependencies:** Supported Next/Sharp remediation choice and stable E2E environment. **Expected outcome:** Only tested, audited, traceable container images can receive publish tags.
+2. **Implement fail-safe database restore with automatic rollback.** Why next: the current operator restore can replace the last working database without creating a recovery copy. **Estimated effort:** Medium. **Dependencies:** Shared backup primitive. **Expected outcome:** Every restore either succeeds and validates or leaves the previous database recoverable.
+3. **Replace or temporarily remove the current annualized return figures.** Why next: cash-flow timing is ignored, so a prominent report can misstate performance. **Estimated effort:** Large. **Dependencies:** Agreed TWR/XIRR methodology and golden fixtures. **Expected outcome:** Performance comparisons are mathematically defensible and disclose method/data sufficiency.
+4. **Create a required CI quality and dependency-security gate before image publication.** Why next: verified high-severity transitive advisories are present and the publish workflow currently has no test or scan prerequisite. **Estimated effort:** Medium. **Dependencies:** Supported Next/Sharp remediation choice and stable E2E environment. **Expected outcome:** Only tested, audited, traceable container images can receive publish tags.
+5. **Reject archived accounts and invalid goal links at service boundaries.** Why next: UI filtering does not stop crafted or stale requests from mutating archived accounts or linking liabilities to savings goals. **Estimated effort:** Medium. **Dependencies:** A2 implemented foundation. **Expected outcome:** Normal financial mutations and goal links consistently enforce active, compatible accounts regardless of caller.
