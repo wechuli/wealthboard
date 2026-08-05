@@ -9,6 +9,8 @@ import {
   previewAccountHistory,
 } from "@/lib/services/account-history-import";
 
+const noStore = { "Cache-Control": "no-store" };
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -17,14 +19,14 @@ export async function POST(
   if (!session)
     return Response.json(
       { error: "Authentication required." },
-      { status: 401 },
+      { status: 401, headers: noStore },
     );
   try {
     requireTrustedOrigin(request);
   } catch {
     return Response.json(
       { error: "The request origin is not trusted." },
-      { status: 403 },
+      { status: 403, headers: noStore },
     );
   }
 
@@ -33,13 +35,13 @@ export async function POST(
   if (!(file instanceof File)) {
     return Response.json(
       { error: "Choose an Account History Import v1 CSV or JSON file." },
-      { status: 400 },
+      { status: 400, headers: noStore },
     );
   }
   if (file.size > ACCOUNT_HISTORY_MAX_BYTES) {
     return Response.json(
       { error: "Account history import is limited to 5 MB." },
-      { status: 413 },
+      { status: 413, headers: noStore },
     );
   }
   const format = file.name.toLowerCase().endsWith(".csv")
@@ -50,7 +52,7 @@ export async function POST(
   if (!format) {
     return Response.json(
       { error: "Choose a .csv or .json file." },
-      { status: 400 },
+      { status: 400, headers: noStore },
     );
   }
 
@@ -67,7 +69,7 @@ export async function POST(
         ...preview,
         hash: createHash("sha256").update(content, "utf8").digest("hex"),
       },
-      { headers: { "Cache-Control": "no-store" } },
+      { headers: noStore },
     );
   } catch (error) {
     if (
@@ -76,14 +78,14 @@ export async function POST(
     ) {
       return Response.json(
         { error: "The account history preview could not be created." },
-        { status: 500, headers: { "Cache-Control": "no-store" } },
+        { status: 500, headers: noStore },
       );
     }
     return Response.json(
       { error: error.message },
       {
         status: error instanceof AccountHistoryAccessError ? 404 : 400,
-        headers: { "Cache-Control": "no-store" },
+        headers: noStore,
       },
     );
   }

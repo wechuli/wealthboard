@@ -9,6 +9,8 @@ import {
   commitAccountHistory,
 } from "@/lib/services/account-history-import";
 
+const noStore = { "Cache-Control": "no-store" };
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -17,14 +19,14 @@ export async function POST(
   if (!session)
     return Response.json(
       { error: "Authentication required." },
-      { status: 401 },
+      { status: 401, headers: noStore },
     );
   try {
     requireTrustedOrigin(request);
   } catch {
     return Response.json(
       { error: "The request origin is not trusted." },
-      { status: 403 },
+      { status: 403, headers: noStore },
     );
   }
 
@@ -34,13 +36,13 @@ export async function POST(
   if (!(file instanceof File) || typeof expectedHash !== "string") {
     return Response.json(
       { error: "Preview the account history file before importing it." },
-      { status: 400 },
+      { status: 400, headers: noStore },
     );
   }
   if (file.size > ACCOUNT_HISTORY_MAX_BYTES) {
     return Response.json(
       { error: "Account history import is limited to 5 MB." },
-      { status: 413 },
+      { status: 413, headers: noStore },
     );
   }
   const format = file.name.toLowerCase().endsWith(".csv")
@@ -51,7 +53,7 @@ export async function POST(
   if (!format) {
     return Response.json(
       { error: "Choose a .csv or .json file." },
-      { status: 400 },
+      { status: 400, headers: noStore },
     );
   }
   const content = await file.text();
@@ -59,14 +61,14 @@ export async function POST(
   if (!/^[a-f0-9]{64}$/.test(expectedHash) || actualHash !== expectedHash) {
     return Response.json(
       { error: "The file changed after preview. Preview it again." },
-      { status: 409, headers: { "Cache-Control": "no-store" } },
+      { status: 409, headers: noStore },
     );
   }
 
   try {
     return Response.json(
       commitAccountHistory(session.userId, (await params).id, content, format),
-      { headers: { "Cache-Control": "no-store" } },
+      { headers: noStore },
     );
   } catch (error) {
     if (
@@ -77,13 +79,13 @@ export async function POST(
         { error: error.message },
         {
           status: error instanceof AccountHistoryAccessError ? 404 : 400,
-          headers: { "Cache-Control": "no-store" },
+          headers: noStore,
         },
       );
     }
     return Response.json(
       { error: "No transactions were imported. Try again." },
-      { status: 500, headers: { "Cache-Control": "no-store" } },
+      { status: 500, headers: noStore },
     );
   }
 }
