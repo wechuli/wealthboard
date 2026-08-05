@@ -217,9 +217,10 @@ Settings provides:
 Exports contain no credentials, AI provider settings or usage, login attempts,
 session data, idempotency records, or another user's rows. Restore downloads a pre-restore user export,
 validates the archive, rejects owner fields and invalid relationships, remaps
-record IDs, and rolls back completely on failure. Current exports use version 3
-and include goal milestones and reminder dismissals; version 2 archives remain
-restorable.
+record IDs, and rolls back completely on failure. Current exports use version 4
+and include institutions, goal milestones, and reminder dismissals. Version 2
+and 3 archives remain restorable; legacy institution names are normalized into
+the importing user's private institution directory.
 
 Transaction CSV uses this header:
 

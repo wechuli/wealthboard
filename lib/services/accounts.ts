@@ -21,6 +21,7 @@ import {
   accounts,
   categories,
   idempotencyKeys,
+  institutions,
   transactions,
   userSettings,
   valuationSnapshots,
@@ -41,6 +42,29 @@ type TransactionClient = Parameters<
   Parameters<DatabaseClient["transaction"]>[0]
 >[0];
 type Client = DatabaseClient | TransactionClient;
+
+function requireAvailableInstitution(
+  client: Client,
+  userId: string,
+  institutionId: string | undefined,
+  currentInstitutionId?: string | null,
+) {
+  if (!institutionId) return;
+  const institution = client.query.institutions
+    .findFirst({
+      where: and(
+        eq(institutions.userId, userId),
+        eq(institutions.id, institutionId),
+      ),
+    })
+    .sync();
+  if (
+    !institution ||
+    (institution.archivedAt && institution.id !== currentInstitutionId)
+  ) {
+    throw new Error("The selected institution is unavailable.");
+  }
+}
 
 function checkedNumber(value: bigint) {
   const number = Number(value);
@@ -141,6 +165,9 @@ export async function listAccounts(
       categorySlug: categories.slug,
       categoryIsLiquid: categories.isLiquid,
       categoryIsInvestible: categories.isInvestible,
+      institutionName: institutions.name,
+      institutionType: institutions.type,
+      institutionArchivedAt: institutions.archivedAt,
     })
     .from(accounts)
     .innerJoin(
@@ -148,6 +175,13 @@ export async function listAccounts(
       and(
         eq(accounts.categoryId, categories.id),
         eq(accounts.userId, categories.userId),
+      ),
+    )
+    .leftJoin(
+      institutions,
+      and(
+        eq(accounts.institutionId, institutions.id),
+        eq(accounts.userId, institutions.userId),
       ),
     )
     .where(
@@ -167,6 +201,9 @@ export async function getAccount(userId: string, id: string) {
       categorySlug: categories.slug,
       categoryIsLiquid: categories.isLiquid,
       categoryIsInvestible: categories.isInvestible,
+      institutionName: institutions.name,
+      institutionType: institutions.type,
+      institutionArchivedAt: institutions.archivedAt,
     })
     .from(accounts)
     .innerJoin(
@@ -174,6 +211,13 @@ export async function getAccount(userId: string, id: string) {
       and(
         eq(accounts.categoryId, categories.id),
         eq(accounts.userId, categories.userId),
+      ),
+    )
+    .leftJoin(
+      institutions,
+      and(
+        eq(accounts.institutionId, institutions.id),
+        eq(accounts.userId, institutions.userId),
       ),
     )
     .where(and(eq(accounts.userId, userId), eq(accounts.id, id)))
@@ -441,7 +485,7 @@ type AccountInput = {
   name: string;
   description?: string;
   categoryId: string;
-  institution?: string;
+  institutionId?: string;
   accountReference?: string;
   currency: string;
   openingValue: string;
@@ -491,6 +535,7 @@ export function createAccount(userId: string, input: AccountInput) {
       })
       .sync();
     if (!category) throw new Error("The selected category is unavailable.");
+    requireAvailableInstitution(tx, userId, input.institutionId);
 
     tx.insert(accounts)
       .values({
@@ -499,7 +544,7 @@ export function createAccount(userId: string, input: AccountInput) {
         name: input.name,
         description: input.description,
         categoryId: input.categoryId,
-        institution: input.institution || null,
+        institutionId: input.institutionId || null,
         accountReference: input.accountReference || null,
         currency,
         currentValueMinor: openingValueMinor,
@@ -565,6 +610,12 @@ export function updateAccount(
       })
       .sync();
     if (!category) throw new Error("The selected category is unavailable.");
+    requireAvailableInstitution(
+      tx,
+      userId,
+      input.institutionId,
+      existing.institutionId,
+    );
     if (existing.currency !== input.currency) {
       throw new Error("Account currency cannot be changed after creation.");
     }
@@ -578,7 +629,7 @@ export function updateAccount(
         name: input.name,
         description: input.description,
         categoryId: input.categoryId,
-        institution: input.institution || null,
+        institutionId: input.institutionId || null,
         accountReference: input.accountReference || null,
         costBasisMinor: input.costBasis
           ? parseMoney(input.costBasis, input.currency)

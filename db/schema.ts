@@ -44,6 +44,19 @@ export const contributionFrequencies = [
 ] as const;
 
 export const userStatuses = ["active", "disabled"] as const;
+export const institutionTypes = [
+  "bank",
+  "credit_union",
+  "brokerage",
+  "asset_manager",
+  "pension_provider",
+  "insurer",
+  "lender",
+  "digital_wallet",
+  "government",
+  "employer",
+  "other",
+] as const;
 export const aiProviders = ["openai", "deepseek", "custom"] as const;
 export const aiRequestStatuses = [
   "started",
@@ -140,6 +153,34 @@ export const categories = sqliteTable(
   ],
 );
 
+export const institutions = sqliteTable(
+  "institutions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    type: text("type", { enum: institutionTypes }).notNull().default("other"),
+    websiteUrl: text("website_url"),
+    countryCode: text("country_code"),
+    address: text("address"),
+    notes: text("notes"),
+    archivedAt: text("archived_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("institutions_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("institutions_user_name_unique").on(
+      table.userId,
+      table.normalizedName,
+    ),
+    index("institutions_user_archived_idx").on(table.userId, table.archivedAt),
+  ],
+);
+
 export const accounts = sqliteTable(
   "accounts",
   {
@@ -150,7 +191,7 @@ export const accounts = sqliteTable(
     name: text("name").notNull(),
     description: text("description"),
     categoryId: text("category_id").notNull(),
-    institution: text("institution"),
+    institutionId: text("institution_id"),
     accountReference: text("account_reference"),
     currency: text("currency").notNull(),
     currentValueMinor: integer("current_value_minor").notNull().default(0),
@@ -178,6 +219,10 @@ export const accounts = sqliteTable(
     foreignKey({
       columns: [table.userId, table.categoryId],
       foreignColumns: [categories.userId, categories.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.userId, table.institutionId],
+      foreignColumns: [institutions.userId, institutions.id],
     }).onDelete("restrict"),
   ],
 );
@@ -499,6 +544,7 @@ export const aiUsageEvents = sqliteTable(
 
 export type Account = typeof accounts.$inferSelect;
 export type Category = typeof categories.$inferSelect;
+export type Institution = typeof institutions.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type ValuationSnapshot = typeof valuationSnapshots.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
@@ -508,4 +554,5 @@ export type UserSettings = typeof userSettings.$inferSelect;
 export type AiProviderSettings = typeof aiProviderSettings.$inferSelect;
 export type TransactionType = (typeof transactionTypes)[number];
 export type GoalStatus = (typeof goalStatuses)[number];
+export type InstitutionType = (typeof institutionTypes)[number];
 export type AiProvider = (typeof aiProviders)[number];

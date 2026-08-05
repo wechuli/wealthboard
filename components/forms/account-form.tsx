@@ -2,9 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { LoaderCircle, Save } from "lucide-react";
 
+import {
+  InstitutionSelector,
+  type InstitutionOption,
+} from "@/components/institution-selector";
 import { Button } from "@/components/ui/button";
 import {
   Checkbox,
@@ -22,7 +26,7 @@ type AccountValues = {
   name: string;
   description?: string;
   categoryId: string;
-  institution?: string;
+  institutionId?: string;
   accountReference?: string;
   currency: string;
   openingValue: string;
@@ -40,6 +44,7 @@ export function AccountForm({
   today,
   currencies,
   baseCurrency,
+  institutions,
 }: {
   categories: Category[];
   action: (formData: FormData) => Promise<ActionState>;
@@ -48,11 +53,13 @@ export function AccountForm({
   today?: string;
   currencies: string[];
   baseCurrency: string;
+  institutions: InstitutionOption[];
 }) {
   const [serverState, setServerState] = useState<ActionState>({});
   const [pending, startTransition] = useTransition();
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<AccountValues>({
@@ -114,11 +121,21 @@ export function AccountForm({
         </div>
         <div>
           <Label htmlFor="institution">Institution</Label>
-          <Input
-            id="institution"
-            placeholder="Optional"
-            {...register("institution")}
+          <Controller
+            control={control}
+            name="institutionId"
+            render={({ field }) => (
+              <InstitutionSelector
+                institutions={institutions}
+                value={field.value}
+                onChange={field.onChange}
+              />
+            )}
           />
+          <FieldError>
+            {errors.institutionId?.message ||
+              serverState.fieldErrors?.institutionId?.[0]}
+          </FieldError>
         </div>
         <div>
           <Label htmlFor="currency">Currency</Label>

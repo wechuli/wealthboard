@@ -7,6 +7,7 @@ import {
   categories,
   exchangeRates,
   goals,
+  institutions,
   transactions,
   userSettings,
   valuationSnapshots,
@@ -230,6 +231,7 @@ export async function getDashboardData(
       categoryName: categories.name,
       categoryIsLiquid: categories.isLiquid,
       categoryIsInvestible: categories.isInvestible,
+      institutionName: institutions.name,
     })
     .from(accounts)
     .innerJoin(
@@ -237,6 +239,13 @@ export async function getDashboardData(
       and(
         eq(accounts.categoryId, categories.id),
         eq(accounts.userId, categories.userId),
+      ),
+    )
+    .leftJoin(
+      institutions,
+      and(
+        eq(accounts.institutionId, institutions.id),
+        eq(accounts.userId, institutions.userId),
       ),
     )
     .where(and(eq(accounts.userId, userId), isNull(accounts.archivedAt)));
@@ -314,7 +323,7 @@ export async function getDashboardData(
           account.categoryName,
           (allocationMap.get(account.categoryName) ?? 0n) + value,
         );
-        const institution = account.institution || "Unspecified";
+        const institution = account.institutionName || "Unspecified";
         institutionMap.set(
           institution,
           (institutionMap.get(institution) ?? 0n) + value,

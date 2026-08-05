@@ -560,7 +560,7 @@ describe.sequential("multi-user persistence and isolation", () => {
 
   test("exports, restores, and imported owner fields cannot cross users", async () => {
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(3);
+    expect(archive.version).toBe(4);
     expect(archive.goalMilestones).toHaveLength(2);
     expect(archive.goalAlertDismissals).toHaveLength(1);
     const serialized = JSON.stringify(archive);
@@ -605,10 +605,16 @@ describe.sequential("multi-user persistence and isolation", () => {
     const versionTwoArchive = structuredClone(archive) as Record<
       string,
       unknown
-    >;
+    > & { accounts: Array<Record<string, unknown>> };
     versionTwoArchive.version = 2;
+    delete versionTwoArchive.institutions;
     delete versionTwoArchive.goalMilestones;
     delete versionTwoArchive.goalAlertDismissals;
+    versionTwoArchive.accounts = versionTwoArchive.accounts.map((account) => {
+      const legacyAccount = { ...account };
+      delete legacyAccount.institutionId;
+      return { ...legacyAccount, institution: null };
+    });
     restoreUserData(aliceId, versionTwoArchive);
     const legacyRestoredGoal = (await listGoals(aliceId)).find(
       (goal) => goal.name === "Rate-aware goal",

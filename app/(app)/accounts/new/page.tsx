@@ -7,16 +7,19 @@ import { getSettings } from "@/lib/bootstrap";
 import { requireSession } from "@/lib/auth/session";
 import { dateInputForTimezone } from "@/lib/dates";
 import { getCurrencyConfiguration } from "@/lib/services/settings";
+import { listInstitutions } from "@/lib/services/institutions";
 
 export const metadata = { title: "Add account" };
 
 export default async function NewAccountPage() {
   const { userId } = await requireSession();
-  const [categories, settings, currencyConfiguration] = await Promise.all([
-    listCategories(userId),
-    getSettings(userId),
-    getCurrencyConfiguration(userId),
-  ]);
+  const [categories, settings, currencyConfiguration, institutions] =
+    await Promise.all([
+      listCategories(userId),
+      getSettings(userId),
+      getCurrencyConfiguration(userId),
+      listInstitutions(userId),
+    ]);
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
@@ -35,6 +38,7 @@ export default async function NewAccountPage() {
             today={dateInputForTimezone(settings.timezone)}
             currencies={currencyConfiguration.enabledCurrencies}
             baseCurrency={currencyConfiguration.baseCurrency}
+            institutions={institutions}
           />
         </CardContent>
       </Card>

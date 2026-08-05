@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   contributionFrequencies,
   goalStatuses,
+  institutionTypes,
   transactionTypes,
 } from "@/db/schema";
 import {
@@ -21,6 +22,11 @@ const optionalText = z
   .string()
   .trim()
   .max(2000)
+  .optional()
+  .transform((value) => value || undefined);
+
+const optionalUuid = z
+  .union([z.literal(""), z.string().uuid()])
   .optional()
   .transform((value) => value || undefined);
 
@@ -74,7 +80,7 @@ export const accountSchema = z.object({
   name: z.string().trim().min(1, "Enter an account name.").max(100),
   description: optionalText,
   categoryId: z.string().min(1, "Choose a category."),
-  institution: z.string().trim().max(100).optional(),
+  institutionId: optionalUuid,
   accountReference: z.string().trim().max(50).optional(),
   currency: currencyCodeSchema,
   openingValue: z.string().trim().min(1),
@@ -82,6 +88,40 @@ export const accountSchema = z.object({
   isIncludedInNetWorth: z.boolean(),
   notes: optionalText,
   openedAt: z.string().date().optional(),
+});
+
+const optionalInstitutionText = (maximum: number) =>
+  z
+    .string()
+    .trim()
+    .max(maximum)
+    .optional()
+    .transform((value) => value || undefined);
+
+export const institutionSchema = z.object({
+  name: z.string().trim().min(1, "Enter an institution name.").max(100),
+  type: z.enum(institutionTypes),
+  websiteUrl: optionalInstitutionText(500).refine((value) => {
+    if (!value) return true;
+    try {
+      const url = new URL(value);
+      return url.protocol === "http:" || url.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "Enter a valid HTTP or HTTPS website."),
+  countryCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .optional()
+    .transform((value) => value || undefined)
+    .refine(
+      (value) => value === undefined || /^[A-Z]{2}$/.test(value),
+      "Use a two-letter country code.",
+    ),
+  address: optionalInstitutionText(500),
+  notes: optionalInstitutionText(2000),
 });
 
 const ordinaryTransactionTypeSchema = z

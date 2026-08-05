@@ -16,6 +16,8 @@ import {
   goals,
   goalStatuses,
   idempotencyKeys,
+  institutions,
+  institutionTypes,
   transactions,
   transactionTypes,
   userSettings,
@@ -35,6 +37,7 @@ import {
   nowIso,
 } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
+import { normalizeInstitutionName } from "@/lib/institutions";
 import { parseMoney } from "@/lib/money";
 import {
   listTransactionsForExport,
@@ -113,7 +116,7 @@ const categoryArchiveSchema = z
   })
   .strict();
 
-const accountArchiveSchema = z
+const legacyAccountArchiveSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1).max(100),
@@ -129,6 +132,26 @@ const accountArchiveSchema = z
     goalId: z.string().nullable(),
     notes: nullableText,
     openedAt: timestamp.nullable(),
+    archivedAt: timestamp.nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const accountArchiveV4Schema = legacyAccountArchiveSchema
+  .omit({ institution: true })
+  .extend({ institutionId: z.string().nullable() })
+  .strict();
+
+const institutionArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1).max(100),
+    type: z.enum(institutionTypes),
+    websiteUrl: z.string().max(500).nullable(),
+    countryCode: z.string().regex(/^[A-Z]{2}$/).nullable(),
+    address: z.string().max(500).nullable(),
+    notes: nullableText,
     archivedAt: timestamp.nullable(),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -235,7 +258,7 @@ const userArchiveV2Schema = z
     exportedAt: timestamp,
     settings: settingsArchiveSchema,
     categories: z.array(categoryArchiveSchema).min(1).max(1000),
-    accounts: z.array(accountArchiveSchema).max(10000),
+    accounts: z.array(legacyAccountArchiveSchema).max(10000),
     transactions: z.array(transactionArchiveSchema).max(100000),
     valuations: z.array(valuationArchiveSchema).max(100000),
     exchangeRates: z.array(exchangeRateArchiveSchema).max(10000),
@@ -252,16 +275,94 @@ const userArchiveV3Schema = userArchiveV2Schema
   })
   .strict();
 
-const userArchiveSchema = z
-  .union([userArchiveV3Schema, userArchiveV2Schema])
-  .transform((archive) =>
+const userArchiveV4Schema = userArchiveV3Schema
+  .extend({
+    version: z.literal(4),
+    institutions: z.array(institutionArchiveSchema).max(10000),
+    accounts: z.array(accountArchiveV4Schema).max(10000),
+  })
+  .strict();
+
+function upgradeLegacyArchive(
+  archive: z.infer<typeof userArchiveV2Schema | typeof userArchiveV3Schema>,
+) {
+  const source =
     archive.version === 3
       ? archive
       : {
           ...archive,
           goalMilestones: [],
           goalAlertDismissals: [],
-        },
+        };
+  const institutionsByName = new Map<
+    string,
+    { name: string; createdAt: string; updatedAt: string }
+  >();
+  for (const account of [...source.accounts].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )) {
+    const name = account.institution?.trim().replace(/\s+/g, " ");
+    if (!name) continue;
+    const normalizedName = normalizeInstitutionName(name);
+    const existing = institutionsByName.get(normalizedName);
+    institutionsByName.set(normalizedName, {
+      name: existing && existing.name < name ? existing.name : name,
+      createdAt:
+        existing && existing.createdAt < account.createdAt
+          ? existing.createdAt
+          : account.createdAt,
+      updatedAt:
+        existing && existing.updatedAt > account.updatedAt
+          ? existing.updatedAt
+          : account.updatedAt,
+    });
+  }
+  const institutionEntries = [...institutionsByName.entries()].sort(
+    ([left], [right]) => left.localeCompare(right),
+  );
+  const institutionIds = new Map(
+    institutionEntries.map(([normalizedName], index) => [
+      normalizedName,
+      `legacy-institution-${index + 1}`,
+    ]),
+  );
+  const upgradedAccounts = source.accounts.map((row) => {
+    const { institution, ...account } = row;
+    return {
+      ...account,
+      institutionId: institution?.trim()
+        ? (institutionIds.get(normalizeInstitutionName(institution)) ?? null)
+        : null,
+    };
+  });
+
+  return {
+    ...source,
+    version: 4 as const,
+    institutions: institutionEntries.map(
+      ([normalizedName, institution], index) => ({
+        id:
+          institutionIds.get(normalizedName) ??
+          `legacy-institution-${index + 1}`,
+        name: institution.name,
+        type: "other" as const,
+        websiteUrl: null,
+        countryCode: null,
+        address: null,
+        notes: null,
+        archivedAt: null,
+        createdAt: institution.createdAt,
+        updatedAt: institution.updatedAt,
+      }),
+    ),
+    accounts: upgradedAccounts,
+  };
+}
+
+const userArchiveSchema = z
+  .union([userArchiveV4Schema, userArchiveV3Schema, userArchiveV2Schema])
+  .transform((archive) =>
+    archive.version === 4 ? archive : upgradeLegacyArchive(archive),
   );
 
 function csvCell(value: unknown) {
@@ -303,6 +404,7 @@ export async function exportData(userId: string) {
     planRows,
     milestoneRows,
     alertDismissalRows,
+    institutionRows,
   ] = await Promise.all([
     db.select().from(categories).where(eq(categories.userId, userId)),
     db.select().from(accounts).where(eq(accounts.userId, userId)),
@@ -322,11 +424,12 @@ export async function exportData(userId: string) {
       .select()
       .from(goalAlertDismissals)
       .where(eq(goalAlertDismissals.userId, userId)),
+    db.select().from(institutions).where(eq(institutions.userId, userId)),
   ]);
 
   return {
     format: "wealthboard-user-json" as const,
-    version: 3 as const,
+    version: 4 as const,
     exportedAt: nowIso(),
     settings: {
       displayName: settings.displayName,
@@ -340,6 +443,18 @@ export async function exportData(userId: string) {
       defaultGoalReturnBps: settings.defaultGoalReturnBps,
     },
     categories: categoryRows.map(stripOwner),
+    institutions: institutionRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      websiteUrl: row.websiteUrl,
+      countryCode: row.countryCode,
+      address: row.address,
+      notes: row.notes,
+      archivedAt: row.archivedAt,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    })),
     accounts: accountRows.map(stripOwner),
     transactions: transactionRows.map(stripOwner),
     valuations: valuationRows.map(stripOwner),
@@ -398,6 +513,7 @@ export function restoreUserData(userId: string, input: unknown) {
     ),
   };
   const categoryIds = uniqueIdMap(archive.categories, "category");
+  const institutionIds = uniqueIdMap(archive.institutions, "institution");
   const accountIds = uniqueIdMap(archive.accounts, "account");
   const transactionIds = uniqueIdMap(archive.transactions, "transaction");
   const valuationIds = uniqueIdMap(archive.valuations, "valuation");
@@ -409,8 +525,24 @@ export function restoreUserData(userId: string, input: unknown) {
   );
   const milestoneIds = uniqueIdMap(archive.goalMilestones, "milestone");
 
+  const normalizedInstitutionNames = new Set<string>();
+  for (const institution of archive.institutions) {
+    const normalizedName = normalizeInstitutionName(institution.name);
+    if (normalizedInstitutionNames.has(normalizedName)) {
+      throw new Error("The archive contains duplicate institution names.");
+    }
+    normalizedInstitutionNames.add(normalizedName);
+  }
+
   for (const account of archive.accounts) {
     requiredMappedId(categoryIds, account.categoryId, "account category");
+    if (account.institutionId) {
+      requiredMappedId(
+        institutionIds,
+        account.institutionId,
+        "account institution",
+      );
+    }
     if (account.goalId)
       requiredMappedId(goalIds, account.goalId, "account goal");
   }
@@ -464,6 +596,7 @@ export function restoreUserData(userId: string, input: unknown) {
       .where(eq(valuationSnapshots.userId, userId))
       .run();
     tx.delete(accounts).where(eq(accounts.userId, userId)).run();
+    tx.delete(institutions).where(eq(institutions.userId, userId)).run();
     tx.delete(categories).where(eq(categories.userId, userId)).run();
     tx.delete(exchangeRates).where(eq(exchangeRates.userId, userId)).run();
     tx.delete(idempotencyKeys).where(eq(idempotencyKeys.userId, userId)).run();
@@ -481,6 +614,18 @@ export function restoreUserData(userId: string, input: unknown) {
         })),
       )
       .run();
+    if (archive.institutions.length) {
+      tx.insert(institutions)
+        .values(
+          archive.institutions.map((row) => ({
+            ...row,
+            id: requiredMappedId(institutionIds, row.id, "institution"),
+            userId,
+            normalizedName: normalizeInstitutionName(row.name),
+          })),
+        )
+        .run();
+    }
     if (archive.accounts.length) {
       tx.insert(accounts)
         .values(
@@ -493,6 +638,13 @@ export function restoreUserData(userId: string, input: unknown) {
               row.categoryId,
               "account category",
             ),
+            institutionId: row.institutionId
+              ? requiredMappedId(
+                  institutionIds,
+                  row.institutionId,
+                  "account institution",
+                )
+              : null,
             goalId: row.goalId
               ? requiredMappedId(goalIds, row.goalId, "account goal")
               : null,
@@ -607,6 +759,7 @@ export function restoreUserData(userId: string, input: unknown) {
   });
 
   return {
+    institutions: archive.institutions.length,
     accounts: archive.accounts.length,
     transactions: archive.transactions.length,
     goals: archive.goals.length,
@@ -753,7 +906,7 @@ export async function accountCsv(userId: string) {
       id: accounts.id,
       name: accounts.name,
       category: categories.name,
-      institution: accounts.institution,
+      institution: institutions.name,
       currency: accounts.currency,
       current_value_minor: accounts.currentValueMinor,
       cost_basis_minor: accounts.costBasisMinor,
@@ -767,6 +920,13 @@ export async function accountCsv(userId: string) {
       and(
         eq(accounts.userId, categories.userId),
         eq(accounts.categoryId, categories.id),
+      ),
+    )
+    .leftJoin(
+      institutions,
+      and(
+        eq(accounts.userId, institutions.userId),
+        eq(accounts.institutionId, institutions.id),
       ),
     )
     .where(eq(accounts.userId, userId));

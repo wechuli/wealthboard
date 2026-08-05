@@ -12,6 +12,7 @@ import {
   exchangeRates,
   goalContributionPlans,
   goals,
+  institutions,
   transactions,
   users,
 } from "../db/schema";
@@ -96,28 +97,44 @@ db.insert(exchangeRates)
   .run();
 
 const demoAccounts = [
-  ["Zimele Fixed Income Fund", "fixed-income", "KES", 457_691_800, "Zimele"],
+  [
+    "Zimele Fixed Income Fund",
+    "fixed-income",
+    "KES",
+    457_691_800,
+    "Zimele",
+    "asset_manager",
+  ],
   [
     "Madison Money Market Fund",
     "money-market-fund",
     "KES",
     139_600_000,
     "Madison",
+    "asset_manager",
   ],
-  ["KCB Car Fund", "money-market-fund", "KES", 11_961_700, "KCB"],
+  ["KCB Car Fund", "money-market-fund", "KES", 11_961_700, "KCB", "bank"],
   [
     "Interactive Brokers VWRA",
     "securities",
     "USD",
     411_100,
     "Interactive Brokers",
+    "brokerage",
   ],
-  ["Southern Bypass Land", "land-real-estate", "KES", 500_000_000, null],
-  ["Honda Fit", "vehicle", "KES", 75_000_000, null],
+  ["Southern Bypass Land", "land-real-estate", "KES", 500_000_000, null, null],
+  ["Honda Fit", "vehicle", "KES", 75_000_000, null, null],
 ] as const;
 
 const accountIds = new Map<string, string>();
-for (const [name, categorySlug, currency, value, institution] of demoAccounts) {
+for (const [
+  name,
+  categorySlug,
+  currency,
+  value,
+  institutionName,
+  institutionType,
+] of demoAccounts) {
   const existing = db
     .select()
     .from(accounts)
@@ -136,13 +153,45 @@ for (const [name, categorySlug, currency, value, institution] of demoAccounts) {
     )
     .get();
   if (!category) throw new Error(`Missing demo category ${categorySlug}.`);
+  let institutionId: string | null = null;
+  if (institutionName && institutionType) {
+    const normalizedName = institutionName
+      .normalize("NFKC")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase("en-US");
+    const existingInstitution = db
+      .select()
+      .from(institutions)
+      .where(
+        and(
+          eq(institutions.userId, userId),
+          eq(institutions.normalizedName, normalizedName),
+        ),
+      )
+      .get();
+    institutionId = existingInstitution?.id ?? crypto.randomUUID();
+    if (!existingInstitution) {
+      db.insert(institutions)
+        .values({
+          id: institutionId,
+          userId,
+          name: institutionName,
+          normalizedName,
+          type: institutionType,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .run();
+    }
+  }
   db.insert(accounts)
     .values({
       id,
       userId,
       name,
       categoryId: category.id,
-      institution,
+      institutionId,
       currency,
       currentValueMinor: value,
       isLiability: false,

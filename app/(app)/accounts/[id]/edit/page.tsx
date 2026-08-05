@@ -9,6 +9,7 @@ import { getAccount } from "@/lib/services/accounts";
 import { listCategories } from "@/lib/services/categories";
 import { requireSession } from "@/lib/auth/session";
 import { getCurrencyConfiguration } from "@/lib/services/settings";
+import { listInstitutions } from "@/lib/services/institutions";
 
 export default async function EditAccountPage({
   params,
@@ -17,11 +18,13 @@ export default async function EditAccountPage({
 }) {
   const { userId } = await requireSession();
   const { id } = await params;
-  const [account, categories, currencyConfiguration] = await Promise.all([
-    getAccount(userId, id),
-    listCategories(userId),
-    getCurrencyConfiguration(userId),
-  ]);
+  const [account, categories, currencyConfiguration, institutions] =
+    await Promise.all([
+      getAccount(userId, id),
+      listCategories(userId),
+      getCurrencyConfiguration(userId),
+      listInstitutions(userId, { includeArchived: true }),
+    ]);
   if (!account) notFound();
   return (
     <div className="mx-auto max-w-3xl">
@@ -38,12 +41,13 @@ export default async function EditAccountPage({
             categories={categories}
             currencies={currencyConfiguration.enabledCurrencies}
             baseCurrency={currencyConfiguration.baseCurrency}
+            institutions={institutions}
             action={updateAccountAction.bind(null, id)}
             initial={{
               name: account.name,
               description: account.description || "",
               categoryId: account.categoryId,
-              institution: account.institution || "",
+              institutionId: account.institutionId || "",
               accountReference: account.accountReference || "",
               currency: account.currency,
               costBasis:

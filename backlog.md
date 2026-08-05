@@ -98,7 +98,7 @@ Effort estimates:
 - **User value:** Users can answer "what if I add KES 20,000 per month?" and receive useful prompts before a target becomes unreachable.
 - **Alert policy:** Active goals that are reliably calculated as behind plan appear on the post-login dashboard. A dismissal suppresses that goal through the current month in the user's timezone; it may return next month if still behind. No background worker or external notification channel was added.
 - **Trade-offs:** Forecasts remain estimates, not promises. Comparison copy exposes monthly compounding, contribution timing, fixed target/date, and excluded fees, taxes, inflation, and volatility. Monthly dismissal prevents repeated prompts while preserving a later reminder.
-- **Acceptance criteria:** Met. [tests/unit/finance.test.ts](tests/unit/finance.test.ts) covers immutable scenario math. [tests/unit/multi-user.test.ts](tests/unit/multi-user.test.ts) covers milestone status, cross-user denial, monthly dismissal recurrence, version 3 round-trip, and version 2 compatibility. [tests/e2e/acceptance.spec.ts](tests/e2e/acceptance.spec.ts) covers three scenario controls, reload non-persistence, milestone creation/restore, alert dismissal across refresh/restore, and responsive goal detail layouts.
+- **Acceptance criteria:** Met. [tests/unit/finance.test.ts](tests/unit/finance.test.ts) covers immutable scenario math. [tests/unit/multi-user.test.ts](tests/unit/multi-user.test.ts) covers milestone status, cross-user denial, monthly dismissal recurrence, version 4 round-trip, and version 2 compatibility. [tests/e2e/acceptance.spec.ts](tests/e2e/acceptance.spec.ts) covers three scenario controls, reload non-persistence, milestone creation/restore, alert dismissal across refresh/restore, and responsive goal detail layouts.
 
 ### F6. Date-Scoped and Downloadable Reports with Movement Attribution
 
@@ -184,6 +184,18 @@ Effort estimates:
 - **Supporting work:** Fresh users enable KES, USD, TZS, and UGX and receive no fabricated rate. Restore normalizes its enabled set from every source record and supports zero-rate archives. Historical net-worth points carry completeness metadata, and dashboard/report warnings identify currencies excluded for missing effective-dated rates.
 - **Trade-offs:** The curated list is intentionally smaller than all ISO 4217 codes, while valid previously configured currencies remain available as legacy options. Base-currency changes can leave totals incomplete until the user supplies rates; original source amounts are never rewritten.
 - **Acceptance criteria:** Met. [tests/unit/money.test.ts](tests/unit/money.test.ts) covers catalog defaults plus JPY/KWD precision. [tests/unit/multi-user.test.ts](tests/unit/multi-user.test.ts) covers disabled and invalid service inputs, base auto-inclusion, in-use protection, source immutability, historical completeness, zero-rate portability, and two-user base/rate isolation. [tests/e2e/acceptance.spec.ts](tests/e2e/acceptance.spec.ts) covers signup choice, TZS/UGX discovery, settings, missing-rate resolution, restore persistence, enabled account/goal selectors, and supported responsive widths.
+
+### F13. Institution Directory and Account Linking (Implemented)
+
+- **Status:** Implemented on 2026-08-05.
+- **Priority:** P2
+- **Estimated effort:** Medium
+- **Previous gap:** Each account stored an optional free-text institution name. Spelling variants became unrelated filter and report groups, institution details were duplicated or omitted, and users could not manage a consistent directory of banks, SACCOs, brokers, fund managers, lenders, or other providers.
+- **Implementation:** [db/schema.ts](db/schema.ts) defines owner-scoped institutions and a composite-owned optional account relationship. [lib/services/institutions.ts](lib/services/institutions.ts) owns normalized uniqueness, CRUD, archive behavior, and linked-account counts. [components/institution-selector.tsx](components/institution-selector.tsx) provides searchable selection, self-custodied accounts, and inline creation, while [app/(app)/institutions/page.tsx](<app/(app)/institutions/page.tsx>) manages full details and archives. Account filtering uses institution IDs, and analytics and CSV output resolve current names through owner-scoped joins.
+- **User value:** Users select a consistent provider once, maintain its useful reference details centrally, and receive stable account filters and institution-allocation reports even after the provider is renamed.
+- **Migration and portability:** [db/migrations/0001_concerned_famine.sql](db/migrations/0001_concerned_famine.sql) backfills distinct normalized legacy names per user before replacing the account string. User exports are version 4; version 2 and 3 archives synthesize institutions from legacy names during restore.
+- **Trade-offs:** Institutions remain user-scoped rather than becoming a shared global catalog. Selection stays optional for property, vehicles, cash, private businesses, and self-custodied assets. Branch names and masked references remain account-level data, archived institutions retain existing links, and website values are validated but never fetched automatically. Merge-duplicate tooling remains deferred.
+- **Acceptance criteria:** Met. [tests/unit/institutions.test.ts](tests/unit/institutions.test.ts) covers normalized uniqueness, two-user isolation, active/archive link policy, rename-driven reporting, version 4 round-trip, and version 3 conversion. [tests/e2e/institutions.spec.ts](tests/e2e/institutions.spec.ts) covers inline creation, account linking, directory counts, rename propagation, and ID-based filtering. The migration is tested against fresh and previous-schema disposable databases with foreign-key validation.
 
 ## AI-Assisted Functionality
 
@@ -517,7 +529,7 @@ If those triggers are reached, use a phased PostgreSQL plan: introduce dialect-n
 
 - **Priority:** P2
 - **Estimated effort:** Medium
-- **Issue:** User export now emits version 3 and restore explicitly normalizes version 2 archives for the new goal collections, but there is still no general converter registry or documented support window.
+- **Issue:** User export now emits version 4 and restore explicitly converts version 2 and 3 archives for newer goal and institution collections, but there is still no general converter registry or documented support window.
 - **Improvement:** Document archive support windows, add version-dispatched parsers/converters, and keep exported calculation-independent source records forward portable.
 - **Acceptance criteria:** The archive version changes only when the serialized contract changes; each supported version has an isolated parser and converter; unsupported versions return a clear message; at least one fixture per supported version validates conversion and round-trip; removals follow the documented support window.
 
@@ -554,6 +566,7 @@ Phases describe dependency order for one delivery stream, not a ban on parallel 
 - F6 date-scoped downloadable reports.
 - F7 account deletion and export-before-delete.
 - F12 currency catalog and per-user base currency. **Implemented 2026-08-03.**
+- F13 institution directory and account linking. **Implemented 2026-08-05.**
 - F9 onboarding.
 
 ### Phase 3: Reliability and Operational Maturity

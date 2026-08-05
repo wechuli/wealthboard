@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Building2, Plus } from "lucide-react";
 
 import { AccountsList } from "@/components/accounts-list";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,10 @@ export default async function AccountsPage() {
   const [accountRows, settings, rates, goalRows] = await Promise.all([
     listAccounts(userId, { includeArchived: true }),
     getSettings(userId),
-    getDatabase().select().from(exchangeRates).where(eq(exchangeRates.userId, userId)),
+    getDatabase()
+      .select()
+      .from(exchangeRates)
+      .where(eq(exchangeRates.userId, userId)),
     getDatabase()
       .select({ id: goals.id, name: goals.name })
       .from(goals)
@@ -60,7 +63,8 @@ export default async function AccountsPage() {
     return {
       id: account.id,
       name: account.name,
-      institution: account.institution,
+      institutionId: account.institutionId,
+      institution: account.institutionName,
       categoryName: account.categoryName,
       categoryIcon: account.categoryIcon,
       currency: account.currency,
@@ -70,7 +74,7 @@ export default async function AccountsPage() {
       isLiability: account.isLiability,
       archivedAt: account.archivedAt,
       updatedAt: account.updatedAt,
-      goalName: account.goalId ? goalNames.get(account.goalId) ?? null : null,
+      goalName: account.goalId ? (goalNames.get(account.goalId) ?? null) : null,
     };
   });
   return (
@@ -78,7 +82,22 @@ export default async function AccountsPage() {
       <PageHeader
         title="Accounts & assets"
         description="Everything you own and owe, organized in one clear view."
-        actions={<Button asChild><Link href="/accounts/new"><Plus size={17} />Add account</Link></Button>}
+        actions={
+          <>
+            <Button asChild variant="secondary">
+              <Link href="/institutions">
+                <Building2 size={17} />
+                Institutions
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/accounts/new">
+                <Plus size={17} />
+                Add account
+              </Link>
+            </Button>
+          </>
+        }
       />
       <AccountsList
         accounts={items}

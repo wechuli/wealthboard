@@ -44,7 +44,6 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await page
     .getByLabel("Category")
     .selectOption({ label: "Money Market Fund" });
-  await page.getByLabel("Institution").fill("KCB");
   await page.getByLabel("Opening value").fill("100000");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(
@@ -287,10 +286,12 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   const userExport = await exportResponse.body();
   const exportedPortfolio = JSON.parse(userExport.toString()) as {
     version: number;
+    institutions: Array<{ name: string }>;
     goalMilestones: Array<{ name: string }>;
     goalAlertDismissals: unknown[];
   };
-  expect(exportedPortfolio.version).toBe(3);
+  expect(exportedPortfolio.version).toBe(4);
+  expect(exportedPortfolio.institutions).toEqual([]);
   expect(exportedPortfolio.goalMilestones).toContainEqual(
     expect.objectContaining({ name: "Halfway funded" }),
   );

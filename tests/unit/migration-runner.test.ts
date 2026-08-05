@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { afterEach, describe, expect, test } from "vitest";
 
 const projectRoot = path.resolve(".");
@@ -55,6 +56,117 @@ describe("migration runner", () => {
     sqlite.close();
 
     expect(migrationCount.count).toBe(journal.entries.length);
+  });
+
+  test("upgrades legacy institution strings without changing account values", () => {
+    const databasePath = createDatabasePath();
+    const migrations = readMigrationFiles({ migrationsFolder: path.join(projectRoot, "db/migrations") });
+    const baseline = migrations[0];
+    expect(migrations.length).toBeGreaterThanOrEqual(2);
+
+    const sqlite = new Database(databasePath);
+    sqlite.pragma("foreign_keys = OFF");
+    sqlite.transaction(() => {
+      for (const statement of baseline.sql) sqlite.exec(statement);
+      sqlite.exec(`
+        CREATE TABLE __drizzle_migrations (
+          id integer PRIMARY KEY AUTOINCREMENT,
+          hash text NOT NULL,
+          created_at numeric
+        );
+      `);
+      sqlite
+        .prepare(
+          "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+        )
+        .run(baseline.hash, baseline.folderMillis);
+    })();
+    sqlite.exec(`
+      INSERT INTO users
+        (id, username, password_hash, status, session_version, created_at, updated_at)
+      VALUES
+        ('user-a', 'migration-a', 'hash', 'active', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+        ('user-b', 'migration-b', 'hash', 'active', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      INSERT INTO categories
+        (id, user_id, name, slug, icon, display_order, asset_or_liability, is_liquid, is_investible, is_archived, is_system, created_at, updated_at)
+      VALUES
+        ('category-a', 'user-a', 'Cash', 'cash', 'Wallet', 0, 'asset', 1, 1, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+        ('category-b', 'user-b', 'Cash', 'cash', 'Wallet', 0, 'asset', 1, 1, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      INSERT INTO accounts
+        (id, user_id, name, category_id, institution, currency, current_value_minor, is_liability, is_included_in_net_worth, created_at, updated_at)
+      VALUES
+        ('account-a1', 'user-a', 'Primary', 'category-a', 'KCB Bank', 'KES', 100, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+        ('account-a2', 'user-a', 'Savings', 'category-a', '  kcb' || char(9) || '        bank  ', 'KES', 200, 0, 1, '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z'),
+        ('account-a3', 'user-a', 'Cash', 'category-a', NULL, 'KES', 300, 0, 1, '2026-01-03T00:00:00.000Z', '2026-01-03T00:00:00.000Z'),
+        ('account-b1', 'user-b', 'Primary', 'category-b', 'KCB Bank', 'KES', 400, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+    `);
+    sqlite.close();
+
+    const result = runMigrations(databasePath);
+    expect(result.status, result.stderr).toBe(0);
+
+    const upgraded = new Database(databasePath, { readonly: true });
+    const institutionRows = upgraded
+      .prepare(
+        "SELECT id, user_id, name, normalized_name FROM institutions ORDER BY user_id",
+      )
+      .all() as Array<{
+      id: string;
+      user_id: string;
+      name: string;
+      normalized_name: string;
+    }>;
+    const accountRows = upgraded
+      .prepare(
+        "SELECT id, user_id, institution_id, current_value_minor FROM accounts ORDER BY id",
+      )
+      .all() as Array<{
+      id: string;
+      user_id: string;
+      institution_id: string | null;
+      current_value_minor: number;
+    }>;
+    const violations = upgraded.pragma("foreign_key_check");
+    upgraded.close();
+
+    expect(violations).toEqual([]);
+    expect(institutionRows).toHaveLength(2);
+    expect(institutionRows.map((row) => row.user_id)).toEqual([
+      "user-a",
+      "user-b",
+    ]);
+    expect(
+      institutionRows.every((row) => row.normalized_name === "kcb bank"),
+    ).toBe(true);
+    expect(
+      institutionRows.every((row) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+          row.id,
+        ),
+      ),
+    ).toBe(true);
+    expect(accountRows).toEqual([
+      expect.objectContaining({
+        id: "account-a1",
+        institution_id: institutionRows[0].id,
+        current_value_minor: 100,
+      }),
+      expect.objectContaining({
+        id: "account-a2",
+        institution_id: institutionRows[0].id,
+        current_value_minor: 200,
+      }),
+      expect.objectContaining({
+        id: "account-a3",
+        institution_id: null,
+        current_value_minor: 300,
+      }),
+      expect.objectContaining({
+        id: "account-b1",
+        institution_id: institutionRows[1].id,
+        current_value_minor: 400,
+      }),
+    ]);
   });
 
   test("rejects a replacement baseline before running its SQL", () => {

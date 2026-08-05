@@ -10,6 +10,7 @@ import {
   formDataObject,
   goalMilestoneSchema,
   goalSchema,
+  institutionSchema,
   passwordChangeSchema,
   transactionSchema,
   transactionUpdateSchema,
@@ -35,6 +36,11 @@ import {
   updateCategory,
 } from "@/lib/services/categories";
 import {
+  createInstitution,
+  setInstitutionArchived,
+  updateInstitution,
+} from "@/lib/services/institutions";
+import {
   createGoal,
   createGoalMilestone,
   deleteGoal,
@@ -44,7 +50,7 @@ import {
   updateGoal,
 } from "@/lib/services/goals";
 import { recordTransfer } from "@/lib/services/transfers";
-import type { GoalStatus } from "@/db/schema";
+import type { GoalStatus, InstitutionType } from "@/db/schema";
 import { addExchangeRate, updateSettings } from "@/lib/services/settings";
 import { createSession } from "@/lib/auth/session";
 import { changeUserPassword } from "@/lib/auth/users";
@@ -341,6 +347,69 @@ export async function moveCategoryAction(id: string, direction: "up" | "down") {
   const { userId } = await requireSession();
   moveCategory(userId, id, direction);
   revalidatePath("/categories");
+}
+
+function institutionInput(formData: FormData) {
+  return institutionSchema.safeParse(formDataObject(formData));
+}
+
+function revalidateInstitutionViews() {
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  revalidatePath("/institutions");
+  revalidatePath("/reports");
+}
+
+export async function createInstitutionAction(formData: FormData): Promise<
+  ActionState & {
+    institution?: {
+      id: string;
+      name: string;
+      type: InstitutionType;
+    };
+  }
+> {
+  const { userId } = await requireSession();
+  const parsed = institutionInput(formData);
+  if (!parsed.success) return zodActionError(parsed.error);
+  let id: string;
+  try {
+    id = createInstitution(userId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidateInstitutionViews();
+  return {
+    ok: true,
+    message: "Institution created.",
+    institution: { id, name: parsed.data.name, type: parsed.data.type },
+  };
+}
+
+export async function updateInstitutionAction(
+  id: string,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = institutionInput(formData);
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    updateInstitution(userId, id, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidateInstitutionViews();
+  return { ok: true, message: "Institution updated." };
+}
+
+export async function archiveInstitutionAction(id: string, archived: boolean) {
+  const { userId } = await requireSession();
+  try {
+    setInstitutionArchived(userId, id, archived);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidateInstitutionViews();
 }
 
 export async function createGoalAction(

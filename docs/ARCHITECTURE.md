@@ -35,6 +35,10 @@ separate API service and no external identity provider.
 - **Authorization:** Every private operation derives `userId` from the verified
   session and supplies it to the owning service. Queries use both owner and
   resource ID; client input is never accepted as ownership evidence.
+- **Institutions:** Each user owns a private directory of financial providers.
+  Accounts may link one institution through a composite owner foreign key or
+  remain self-custodied. Names are normalized for per-user uniqueness; archived
+  institutions retain existing links but cannot receive new ones.
 - **Balances:** Transactions and valuations are immutable inputs to a balance
   replay. A valuation sets the balance at that point without becoming a
   contribution; later transactions apply signed effects. Editing or deleting an
@@ -55,8 +59,9 @@ separate API service and no external identity provider.
   reads; owner-scoped dismissals suppress one goal for one user-calendar month.
 - **Portability:** JSON and CSV routes operate only on the authenticated user's
   records. A per-user JSON restore replaces only that user's portfolio in one
-  transaction. Export version 3 includes milestones and alert dismissals;
-  version 2 remains restorable with empty values for those collections. Raw
+  transaction. Export version 4 includes institutions, milestones, and alert
+  dismissals. Versions 2 and 3 remain restorable; legacy account institution
+  strings are normalized into owner-scoped records during conversion. Raw
   SQLite backup and offline restore are deployment-operator commands, never
   ordinary authenticated routes.
 - **Offline:** The service worker caches only the shell and static assets.
@@ -87,7 +92,7 @@ separate API service and no external identity provider.
   A foreign resource returns not found so its existence is not disclosed.
 - Same-owner relationships are enforced with composite foreign keys where
   practical and are always validated inside the mutation transaction. This
-  applies to account/category, transaction/account, valuation/account,
+  applies to account/category, account/institution, transaction/account, valuation/account,
   goal/account, plan/goal, milestone/goal, alert-dismissal/goal, and both sides
   of a transfer.
 - Owner-scoped uniqueness covers category slugs, exchange-rate pair/date,
@@ -103,6 +108,7 @@ separate API service and no external identity provider.
 | `users`                   | Login identity, password hash, status, and session version          |
 | `user_settings`           | One user's locale, display, dashboard, and goal preferences         |
 | `categories`              | One user's seeded and custom classifications                        |
+| `institutions`            | One user's financial-provider directory and reference details       |
 | `accounts`                | One user's holdings and liabilities with replayed values            |
 | `transactions`            | User-owned cash flows, returns, and paired transfers                |
 | `valuation_snapshots`     | User-owned absolute valuations, separate from cash flow             |
@@ -133,7 +139,7 @@ accounts, or sample portfolio data.
 - `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/[id]/edit`
 - `/transactions`, `/transactions/new`, `/transactions/[id]/edit`
 - `/goals`, `/goals/new`, `/goals/[id]`, `/goals/[id]/edit`
-- `/reports`, `/categories`, `/settings`
+- `/reports`, `/categories`, `/institutions`, `/settings`
 - `/api/export/*`, `/api/import/transactions`, `/api/restore/user`,
   `/api/ai/review`, `/api/health`
 - `/review` — on-demand, evidence-linked AI portfolio critique

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FolderCog } from "lucide-react";
+import { Building2, FolderCog } from "lucide-react";
 
 import {
   DataPortability,
@@ -40,12 +40,20 @@ export default async function SettingsPage() {
         title="Settings"
         description="Personalize Wealthboard, manage security, rates, classifications, and portable data."
         actions={
-          <Button asChild variant="secondary">
-            <Link href="/categories">
-              <FolderCog size={16} />
-              Manage categories
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="secondary">
+              <Link href="/institutions">
+                <Building2 size={16} />
+                Manage institutions
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/categories">
+                <FolderCog size={16} />
+                Manage categories
+              </Link>
+            </Button>
+          </>
         }
       />
       <div className="space-y-5">
