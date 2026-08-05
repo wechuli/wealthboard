@@ -3,7 +3,6 @@
 import { useActionState, useRef, useState } from "react";
 import {
   Download,
-  FileInput,
   KeyRound,
   LoaderCircle,
   RefreshCw,
@@ -439,51 +438,45 @@ export function PasswordForm() {
 
 export function DataPortability() {
   const restoreRef = useRef<HTMLInputElement>(null);
-  const importRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<"restore" | "import" | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  async function upload(kind: "restore" | "import") {
-    const input = kind === "restore" ? restoreRef.current : importRef.current;
-    const file = input?.files?.[0];
+  async function restore() {
+    const file = restoreRef.current?.files?.[0];
     if (!file) return toast.error("Choose a file first.");
     if (
-      kind === "restore" &&
       !window.confirm(
         "Replace only your portfolio with this export? A copy of your current data will download first.",
       )
     )
       return;
-    if (kind === "restore") {
-      const current = await fetch("/api/export/json", { cache: "no-store" });
-      if (!current.ok)
-        return toast.error("Your pre-restore export could not be created.");
-      const url = URL.createObjectURL(await current.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `wealthboard-before-restore-${new Date().toISOString().slice(0, 10)}.json`;
-      link.click();
-      URL.revokeObjectURL(url);
-    }
+    const current = await fetch("/api/export/json", { cache: "no-store" });
+    if (!current.ok)
+      return toast.error("Your pre-restore export could not be created.");
+    const url = URL.createObjectURL(await current.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `wealthboard-before-restore-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
     const body = new FormData();
     body.set("file", file);
-    setBusy(kind);
+    setBusy(true);
     try {
-      const response = await fetch(
-        kind === "restore" ? "/api/restore/user" : "/api/import/transactions",
-        { method: "POST", body },
-      );
+      const response = await fetch("/api/restore/user", {
+        method: "POST",
+        body,
+      });
       const result = (await response.json()) as {
         message?: string;
         error?: string;
       };
       if (!response.ok) throw new Error(result.error || "Upload failed.");
       toast.success(result.message);
-      if (kind === "restore") window.location.assign("/");
-      else window.location.reload();
+      window.location.assign("/");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed.");
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
@@ -519,30 +512,7 @@ export function DataPortability() {
             </a>
           </Button>
         </div>
-        <div className="grid gap-4 border-t border-white/[0.06] pt-5 md:grid-cols-2">
-          <div className="rounded-xl bg-white/[0.025] p-4">
-            <Label htmlFor="csvImport">Import transactions CSV</Label>
-            <Input
-              ref={importRef}
-              id="csvImport"
-              type="file"
-              accept=".csv,text/csv"
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              className="mt-3"
-              onClick={() => upload("import")}
-              disabled={busy !== null}
-            >
-              {busy === "import" ? (
-                <LoaderCircle className="animate-spin" size={16} />
-              ) : (
-                <FileInput size={16} />
-              )}
-              Import transactions
-            </Button>
-          </div>
+        <div className="border-t border-white/[0.06] pt-5">
           <div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.035] p-4">
             <Label htmlFor="userRestore">Restore your JSON export</Label>
             <Input
@@ -555,10 +525,10 @@ export function DataPortability() {
               type="button"
               variant="danger"
               className="mt-3"
-              onClick={() => upload("restore")}
-              disabled={busy !== null}
+              onClick={restore}
+              disabled={busy}
             >
-              {busy === "restore" ? (
+              {busy ? (
                 <LoaderCircle className="animate-spin" size={16} />
               ) : (
                 <Upload size={16} />

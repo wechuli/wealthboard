@@ -7,6 +7,7 @@ import {
   ArrowUpFromLine,
   Edit3,
   Landmark,
+  FileInput,
   Plus,
   Sparkles,
   Trash2,
@@ -159,6 +160,13 @@ export default async function AccountDetailPage({
               icon={<Landmark size={17} />}
               label="Fee"
             />
+            {!account.archivedAt ? (
+              <Quick
+                href={`/accounts/${id}/import`}
+                icon={<FileInput size={17} />}
+                label="Import"
+              />
+            ) : null}
           </CardContent>
         </Card>
       </div>
@@ -192,6 +200,9 @@ export default async function AccountDetailPage({
                         )}
                         {transaction.description
                           ? ` · ${transaction.description}`
+                          : ""}
+                        {transaction.externalId
+                          ? ` · External ID: ${transaction.externalId}`
                           : ""}
                       </p>
                     </div>

@@ -2,7 +2,6 @@ import "server-only";
 
 import Decimal from "decimal.js";
 import { and, eq } from "drizzle-orm";
-import { parse } from "csv-parse/sync";
 import { z } from "zod";
 
 import {
@@ -22,7 +21,6 @@ import {
   transactionTypes,
   userSettings,
   valuationSnapshots,
-  type TransactionType,
 } from "@/db/schema";
 import {
   isIsoCurrencyCode,
@@ -31,8 +29,6 @@ import {
   parseEnabledCurrencies,
 } from "@/lib/currencies";
 import {
-  dateInputForTimezone,
-  dateInputToUtc,
   isValidTimezone,
   nowIso,
 } from "@/lib/dates";
@@ -42,13 +38,10 @@ import {
   isHttpUrl,
   normalizeInstitutionName,
 } from "@/lib/institutions";
-import { parseMoney } from "@/lib/money";
 import {
   listTransactionsForExport,
-  recalculateAccountBalance,
   type TransactionFilters,
 } from "@/lib/services/accounts";
-import { requireEnabledCurrency } from "@/lib/services/settings";
 
 const safeInteger = z
   .number()
@@ -186,6 +179,10 @@ const transactionArchiveSchema = z
   })
   .strict();
 
+const transactionArchiveV5Schema = transactionArchiveSchema
+  .extend({ externalId: z.string().min(1).max(200).nullable() })
+  .strict();
+
 const valuationArchiveSchema = z
   .object({
     id: z.string().min(1),
@@ -294,6 +291,13 @@ const userArchiveV4Schema = userArchiveV3Schema
   })
   .strict();
 
+const userArchiveV5Schema = userArchiveV4Schema
+  .extend({
+    version: z.literal(5),
+    transactions: z.array(transactionArchiveV5Schema).max(100000),
+  })
+  .strict();
+
 function upgradeLegacyArchive(
   archive: z.infer<typeof userArchiveV2Schema | typeof userArchiveV3Schema>,
 ) {
@@ -372,11 +376,29 @@ function upgradeLegacyArchive(
   };
 }
 
+function upgradeV4Archive(archive: z.infer<typeof userArchiveV4Schema>) {
+  return {
+    ...archive,
+    version: 5 as const,
+    transactions: archive.transactions.map((row) => ({
+      ...row,
+      externalId: null,
+    })),
+  };
+}
+
 const userArchiveSchema = z
-  .union([userArchiveV4Schema, userArchiveV3Schema, userArchiveV2Schema])
-  .transform((archive) =>
-    archive.version === 4 ? archive : upgradeLegacyArchive(archive),
-  );
+  .union([
+    userArchiveV5Schema,
+    userArchiveV4Schema,
+    userArchiveV3Schema,
+    userArchiveV2Schema,
+  ])
+  .transform((archive) => {
+    if (archive.version === 5) return archive;
+    if (archive.version === 4) return upgradeV4Archive(archive);
+    return upgradeV4Archive(upgradeLegacyArchive(archive));
+  });
 
 function csvCell(value: unknown) {
   const text = value == null ? "" : String(value);
@@ -442,7 +464,7 @@ export async function exportData(userId: string) {
 
   return {
     format: "wealthboard-user-json" as const,
-    version: 4 as const,
+    version: 5 as const,
     exportedAt: nowIso(),
     settings: {
       displayName: settings.displayName,
@@ -780,118 +802,6 @@ export function restoreUserData(userId: string, input: unknown) {
   };
 }
 
-type CsvTransaction = {
-  account_id?: string;
-  account_name?: string;
-  type?: string;
-  amount?: string;
-  currency?: string;
-  date?: string;
-  description?: string;
-  notes?: string;
-};
-
-export function importTransactionsCsv(userId: string, content: string) {
-  const parsed = parse(content, {
-    columns: (headers: string[]) =>
-      headers.map((header) => header.trim().toLowerCase()),
-    skip_empty_lines: true,
-    trim: true,
-    bom: true,
-  }) as CsvTransaction[];
-  if (!parsed.length) throw new Error("The CSV contains no transaction rows.");
-  if (parsed.length > 10_000)
-    throw new Error("Import is limited to 10,000 rows at a time.");
-
-  const db = getDatabase();
-  const accountRows = db
-    .select()
-    .from(accounts)
-    .where(eq(accounts.userId, userId))
-    .all();
-  const timezone =
-    db.query.userSettings
-      .findFirst({ where: eq(userSettings.userId, userId) })
-      .sync()?.timezone ??
-    process.env.TZ ??
-    "Africa/Nairobi";
-  const prepared = parsed.map((row, index) => {
-    const matchingNames = row.account_name
-      ? accountRows.filter(
-          (item) => item.name.toLowerCase() === row.account_name?.toLowerCase(),
-        )
-      : [];
-    if (!row.account_id && matchingNames.length > 1) {
-      throw new Error(
-        `Row ${index + 2}: account name is ambiguous; provide account_id.`,
-      );
-    }
-    const account = row.account_id
-      ? accountRows.find((item) => item.id === row.account_id)
-      : matchingNames[0];
-    if (!account) throw new Error(`Row ${index + 2}: account was not found.`);
-    if (!row.type || !transactionTypes.includes(row.type as TransactionType)) {
-      throw new Error(`Row ${index + 2}: unsupported transaction type.`);
-    }
-    if (row.type === "opening_balance" || row.type === "transfer") {
-      throw new Error(
-        `Row ${index + 2}: opening balances and transfers cannot be imported.`,
-      );
-    }
-    if (!row.date) throw new Error(`Row ${index + 2}: date is required.`);
-    if (row.date > dateInputForTimezone(timezone)) {
-      throw new Error(
-        `Row ${index + 2}: financial activity cannot be future-dated.`,
-      );
-    }
-    const currency = (row.currency || account.currency).toUpperCase();
-    requireEnabledCurrency(userId, currency, db);
-    if (currency !== account.currency) {
-      throw new Error(`Row ${index + 2}: currency must match ${account.name}.`);
-    }
-    const amountMinor = parseMoney(row.amount || "", currency);
-    if (row.type !== "manual_adjustment" && amountMinor <= 0) {
-      throw new Error(`Row ${index + 2}: amount must be positive.`);
-    }
-    return {
-      account,
-      type: row.type as TransactionType,
-      amountMinor,
-      currency,
-      transactionDate: dateInputToUtc(row.date),
-      description: row.description,
-      notes: row.notes,
-    };
-  });
-
-  const affected = new Set(prepared.map((row) => row.account.id));
-  const createdAt = nowIso();
-  db.transaction((tx) => {
-    tx.insert(transactions)
-      .values(
-        prepared.map((row) => ({
-          id: crypto.randomUUID(),
-          userId,
-          accountId: row.account.id,
-          type: row.type,
-          amountMinor: row.amountMinor,
-          currency: row.currency,
-          transactionDate: row.transactionDate,
-          description: row.description,
-          notes: row.notes,
-          idempotencyKey: crypto.randomUUID(),
-          createdAt,
-          updatedAt: createdAt,
-        })),
-      )
-      .run();
-    for (const accountId of affected) {
-      recalculateAccountBalance(userId, tx, accountId);
-    }
-  });
-  return prepared.length;
-}
-
 export async function transactionCsv(
   userId: string,
   filters: TransactionFilters = { sort: "newest" },
@@ -899,6 +809,7 @@ export async function transactionCsv(
   const rows = (await listTransactionsForExport(userId, filters)).map(
     (row) => ({
       id: row.id,
+      external_id: row.externalId,
       account_id: row.accountId,
       account_name: row.accountName,
       type: row.type,

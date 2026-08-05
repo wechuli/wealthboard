@@ -58,6 +58,61 @@ describe("migration runner", () => {
     expect(migrationCount.count).toBe(journal.entries.length);
   });
 
+  test("upgrades the previous schema with nullable external IDs and uniqueness", () => {
+    const databasePath = createDatabasePath();
+    const migrations = readMigrationFiles({
+      migrationsFolder: path.join(projectRoot, "db/migrations"),
+    });
+    expect(migrations.length).toBeGreaterThanOrEqual(3);
+    const previous = migrations.slice(0, -1);
+    const sqlite = new Database(databasePath);
+    sqlite.pragma("foreign_keys = OFF");
+    sqlite.transaction(() => {
+      for (const migration of previous) {
+        for (const statement of migration.sql) sqlite.exec(statement);
+      }
+      sqlite.exec(`
+        CREATE TABLE __drizzle_migrations (
+          id integer PRIMARY KEY AUTOINCREMENT,
+          hash text NOT NULL,
+          created_at numeric
+        );
+      `);
+      for (const migration of previous) {
+        sqlite
+          .prepare(
+            "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
+          )
+          .run(migration.hash, migration.folderMillis);
+      }
+    })();
+    sqlite.close();
+
+    const result = runMigrations(databasePath);
+    expect(result.status, result.stderr).toBe(0);
+
+    const upgraded = new Database(databasePath);
+    const columns = upgraded.pragma("table_info(transactions)") as Array<{
+      name: string;
+      notnull: number;
+    }>;
+    const indexes = upgraded.pragma("index_list(transactions)") as Array<{
+      name: string;
+      unique: number;
+    }>;
+    expect(columns).toContainEqual(
+      expect.objectContaining({ name: "external_id", notnull: 0 }),
+    );
+    expect(indexes).toContainEqual(
+      expect.objectContaining({
+        name: "transactions_user_account_external_unique",
+        unique: 1,
+      }),
+    );
+    expect(upgraded.pragma("foreign_key_check")).toEqual([]);
+    upgraded.close();
+  });
+
   test("upgrades legacy institution strings without changing account values", () => {
     const databasePath = createDatabasePath();
     const migrations = readMigrationFiles({

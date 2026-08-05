@@ -41,9 +41,9 @@ import {
 } from "@/lib/services/goals";
 import {
   exportData,
-  importTransactionsCsv,
   restoreUserData,
 } from "@/lib/services/portability";
+import { previewAccountHistory } from "@/lib/services/account-history-import";
 import {
   addExchangeRate,
   listExchangeRates,
@@ -476,11 +476,13 @@ describe.sequential("multi-user persistence and isolation", () => {
     ).toContain(rateAwareGoalId);
 
     expect(() =>
-      importTransactionsCsv(
+      previewAccountHistory(
         bobId,
-        `account_id,type,amount,currency,date\n${aliceAccountId},deposit,10,KES,2025-02-01`,
+        aliceAccountId,
+        "external_id,type,amount,date,description,notes\nforeign-1,deposit,10,2025-02-01,,",
+        "csv",
       ),
-    ).toThrow("account was not found");
+    ).toThrow("Account not found");
 
     const [aliceDashboard, bobDashboard] = await Promise.all([
       getDashboardData(aliceId),
@@ -562,7 +564,7 @@ describe.sequential("multi-user persistence and isolation", () => {
 
   test("exports, restores, and imported owner fields cannot cross users", async () => {
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(4);
+    expect(archive.version).toBe(5);
     expect(archive.goalMilestones).toHaveLength(2);
     expect(archive.goalAlertDismissals).toHaveLength(1);
     const serialized = JSON.stringify(archive);
@@ -607,7 +609,10 @@ describe.sequential("multi-user persistence and isolation", () => {
     const versionTwoArchive = structuredClone(archive) as Record<
       string,
       unknown
-    > & { accounts: Array<Record<string, unknown>> };
+    > & {
+      accounts: Array<Record<string, unknown>>;
+      transactions: Array<Record<string, unknown>>;
+    };
     versionTwoArchive.version = 2;
     delete versionTwoArchive.institutions;
     delete versionTwoArchive.goalMilestones;
@@ -617,6 +622,13 @@ describe.sequential("multi-user persistence and isolation", () => {
       delete legacyAccount.institutionId;
       return { ...legacyAccount, institution: null };
     });
+    versionTwoArchive.transactions = versionTwoArchive.transactions.map(
+      (transaction) => {
+        const legacyTransaction = { ...transaction };
+        delete legacyTransaction.externalId;
+        return legacyTransaction;
+      },
+    );
     restoreUserData(aliceId, versionTwoArchive);
     const legacyRestoredGoal = (await listGoals(aliceId)).find(
       (goal) => goal.name === "Rate-aware goal",

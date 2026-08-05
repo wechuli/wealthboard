@@ -740,6 +740,38 @@ Support:
 - Restore a validated per-user JSON export by replacing only the current user's
   portfolio in one transaction.
 
+Account history imports start from `/accounts/[id]/import` and use Account
+History Import v1. CSV files contain exactly
+`external_id,type,amount,date,description,notes`; JSON files use the strict
+`wealthboard-account-history` version 1 envelope. Files contain no owner,
+account, institution, or currency fields. The verified session and URL select
+one active owned account.
+
+Each row requires a stable, trimmed, case-sensitive external ID of at most 200
+characters. Provider IDs should be used when available; otherwise users must
+construct deterministic IDs outside Wealthboard (changing row numbers are not
+stable IDs). Dates are non-future `YYYY-MM-DD` values and amounts are decimal
+strings with the target account currency's precision. Imports are limited to 5
+MB and 10,000 rows.
+
+Balance directions are:
+
+- `deposit`, `interest`, `dividend`, `capital_gain`, `purchase`, and
+  `liability_increase` increase the replayed balance.
+- `withdrawal`, `capital_loss`, `fee`, `sale`, and `liability_payment` decrease
+  it.
+- `manual_adjustment` applies its signed, non-zero amount directly.
+- Opening balances and transfers are not importable and retain their dedicated
+  workflows.
+
+Preview performs no writes and shows the selected account, institution,
+currency, date range, current balance, projected balance, net change, and every
+row outcome. Confirmation resends the file and its SHA-256 hash, reparses it,
+rechecks ownership and duplicates, and atomically imports the currently valid
+subset before one balance replay. Existing identical external IDs are skipped;
+conflicting or in-file duplicate IDs fail and are never overwritten. Raw files
+and reports are not retained or logged.
+
 Before a per-user restore:
 
 - Validate the archive version and every record.

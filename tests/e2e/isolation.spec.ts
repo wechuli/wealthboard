@@ -56,19 +56,22 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   await page.goto(`/goals/${aliceExport.goals[0].id}`);
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
 
-  const importResponse = await page.request.post("/api/import/transactions", {
-    headers: { Origin: "http://127.0.0.1:3100" },
-    multipart: {
-      file: {
-        name: "foreign.csv",
-        mimeType: "text/csv",
-        buffer: Buffer.from(
-          `account_id,type,amount,currency,date\n${aliceAccount!.id},deposit,10,KES,2025-02-01`,
-        ),
+  const importResponse = await page.request.post(
+    `/api/accounts/${aliceAccount!.id}/history-import/preview`,
+    {
+      headers: { Origin: "http://127.0.0.1:3100" },
+      multipart: {
+        file: {
+          name: "foreign.csv",
+          mimeType: "text/csv",
+          buffer: Buffer.from(
+            "external_id,type,amount,date,description,notes\nforeign-1,deposit,10,2025-02-01,,",
+          ),
+        },
       },
     },
-  });
-  expect(importResponse.status()).toBe(400);
+  );
+  expect(importResponse.status()).toBe(404);
   expect(await importResponse.text()).not.toContain("Alice Private Savings");
 
   await page.goto("/accounts/new");
