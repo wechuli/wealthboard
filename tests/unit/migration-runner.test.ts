@@ -100,6 +100,7 @@ describe("migration runner", () => {
         ('account-a1', 'user-a', 'Primary', 'category-a', 'KCB Bank', 'KES', 100, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
         ('account-a2', 'user-a', 'Savings', 'category-a', '  kcb' || char(9) || '        bank  ', 'KES', 200, 0, 1, '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z'),
         ('account-a3', 'user-a', 'Cash', 'category-a', NULL, 'KES', 300, 0, 1, '2026-01-03T00:00:00.000Z', '2026-01-03T00:00:00.000Z'),
+        ('account-a4', 'user-a', 'Unicode', 'category-a', 'ＫＣＢ' || char(160) || 'Bank', 'KES', 350, 0, 1, '2026-01-04T00:00:00.000Z', '2026-01-04T00:00:00.000Z'),
         ('account-b1', 'user-b', 'Primary', 'category-b', 'KCB Bank', 'KES', 400, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
     `);
     sqlite.close();
@@ -132,14 +133,25 @@ describe("migration runner", () => {
     upgraded.close();
 
     expect(violations).toEqual([]);
-    expect(institutionRows).toHaveLength(2);
+    expect(institutionRows).toHaveLength(3);
     expect(institutionRows.map((row) => row.user_id)).toEqual([
+      "user-a",
       "user-a",
       "user-b",
     ]);
-    expect(
-      institutionRows.every((row) => row.normalized_name === "kcb bank"),
-    ).toBe(true);
+    const aliceKcb = institutionRows.find(
+      (row) => row.user_id === "user-a" && row.normalized_name === "kcb bank",
+    );
+    const aliceUnicode = institutionRows.find(
+      (row) =>
+        row.user_id === "user-a" && row.normalized_name === "ＫＣＢ bank",
+    );
+    const bobKcb = institutionRows.find(
+      (row) => row.user_id === "user-b" && row.normalized_name === "kcb bank",
+    );
+    expect(aliceKcb).toBeDefined();
+    expect(aliceUnicode).toBeDefined();
+    expect(bobKcb).toBeDefined();
     expect(
       institutionRows.every((row) =>
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
@@ -150,12 +162,12 @@ describe("migration runner", () => {
     expect(accountRows).toEqual([
       expect.objectContaining({
         id: "account-a1",
-        institution_id: institutionRows[0].id,
+        institution_id: aliceKcb!.id,
         current_value_minor: 100,
       }),
       expect.objectContaining({
         id: "account-a2",
-        institution_id: institutionRows[0].id,
+        institution_id: aliceKcb!.id,
         current_value_minor: 200,
       }),
       expect.objectContaining({
@@ -164,8 +176,13 @@ describe("migration runner", () => {
         current_value_minor: 300,
       }),
       expect.objectContaining({
+        id: "account-a4",
+        institution_id: aliceUnicode!.id,
+        current_value_minor: 350,
+      }),
+      expect.objectContaining({
         id: "account-b1",
-        institution_id: institutionRows[1].id,
+        institution_id: bobKcb!.id,
         current_value_minor: 400,
       }),
     ]);

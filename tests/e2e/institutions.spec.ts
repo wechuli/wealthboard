@@ -28,6 +28,11 @@ test("institutions can be created, linked, filtered, and renamed", async ({
   await addDialog.getByLabel("Name").fill("KCB");
   await addDialog.getByLabel("Type").selectOption("bank");
   await addDialog.getByLabel("Country code").fill("KE");
+  await addDialog.getByLabel("Website").fill("ftp://invalid.example.com");
+  await addDialog.getByRole("button", { name: "Add institution" }).click();
+  await expect(
+    addDialog.getByText("Enter a valid HTTP or HTTPS website."),
+  ).toBeVisible();
   await addDialog.getByLabel("Website").fill("https://ke.kcbgroup.com");
   await addDialog.getByRole("button", { name: "Add institution" }).click();
   await expect(addDialog).toBeHidden();
@@ -67,20 +72,27 @@ test("institutions can be created, linked, filtered, and renamed", async ({
   await expect(institutionCard.getByRole("status")).toHaveText(
     "Institution updated.",
   );
+  page.once("dialog", (dialog) => dialog.accept());
+  await institutionCard
+    .getByRole("button", { name: "Archive institution" })
+    .click();
+  await expect(page.getByText("Institution archived.")).toBeVisible();
 
   await page.goto("/accounts");
   await page
     .getByLabel("Filter by institution")
-    .selectOption({ label: "KCB Group" });
+    .selectOption({ label: "KCB Group (archived)" });
   await expect(
     page.getByText("Provider-linked fund", { exact: true }),
   ).toBeVisible();
   await page.getByText("Provider-linked fund", { exact: true }).first().click();
-  await expect(page.getByText("KCB Group · Money Market Fund")).toBeVisible();
+  await expect(
+    page.getByText("KCB Group (archived) · Money Market Fund"),
+  ).toBeVisible();
 
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: width < 768 ? 800 : 900 });
-    for (const route of ["/institutions", "/accounts/new"]) {
+    for (const route of ["/accounts", "/institutions", "/accounts/new"]) {
       await page.goto(route);
       const dimensions = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
@@ -90,6 +102,20 @@ test("institutions can be created, linked, filtered, and renamed", async ({
         dimensions.scrollWidth,
         `${route} overflows at ${width}px`,
       ).toBeLessThanOrEqual(dimensions.clientWidth);
+      if (route === "/accounts") {
+        for (const label of ["Sort accounts", "Table view"]) {
+          const box = await page.getByLabel(label).boundingBox();
+          expect(box, `${label} is missing at ${width}px`).not.toBeNull();
+          expect(
+            box!.x,
+            `${label} starts outside ${width}px`,
+          ).toBeGreaterThanOrEqual(0);
+          expect(
+            box!.x + box!.width,
+            `${label} ends outside ${width}px`,
+          ).toBeLessThanOrEqual(width);
+        }
+      }
     }
   }
 

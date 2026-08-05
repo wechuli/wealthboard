@@ -37,7 +37,11 @@ import {
   nowIso,
 } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
-import { normalizeInstitutionName } from "@/lib/institutions";
+import {
+  canonicalizeInstitutionName,
+  isHttpUrl,
+  normalizeInstitutionName,
+} from "@/lib/institutions";
 import { parseMoney } from "@/lib/money";
 import {
   listTransactionsForExport,
@@ -140,15 +144,19 @@ const legacyAccountArchiveSchema = z
 
 const accountArchiveV4Schema = legacyAccountArchiveSchema
   .omit({ institution: true })
-  .extend({ institutionId: z.string().nullable() })
+  .extend({ institutionId: z.string().min(1).nullable() })
   .strict();
 
 const institutionArchiveSchema = z
   .object({
     id: z.string().min(1),
-    name: z.string().min(1).max(100),
+    name: z
+      .string()
+      .max(200)
+      .transform(canonicalizeInstitutionName)
+      .pipe(z.string().min(1).max(100)),
     type: z.enum(institutionTypes),
-    websiteUrl: z.string().max(500).nullable(),
+    websiteUrl: z.string().max(500).refine(isHttpUrl).nullable(),
     countryCode: z
       .string()
       .regex(/^[A-Z]{2}$/)
@@ -304,7 +312,7 @@ function upgradeLegacyArchive(
   for (const account of [...source.accounts].sort((left, right) =>
     left.id.localeCompare(right.id),
   )) {
-    const name = account.institution?.trim().replace(/\s+/g, " ");
+    const name = canonicalizeInstitutionName(account.institution ?? "");
     if (!name) continue;
     const normalizedName = normalizeInstitutionName(name);
     const existing = institutionsByName.get(normalizedName);
@@ -331,10 +339,12 @@ function upgradeLegacyArchive(
   );
   const upgradedAccounts = source.accounts.map((row) => {
     const { institution, ...account } = row;
+    const institutionName = canonicalizeInstitutionName(institution ?? "");
     return {
       ...account,
-      institutionId: institution?.trim()
-        ? (institutionIds.get(normalizeInstitutionName(institution)) ?? null)
+      institutionId: institutionName
+        ? (institutionIds.get(normalizeInstitutionName(institutionName)) ??
+          null)
         : null,
     };
   });
@@ -910,6 +920,7 @@ export async function accountCsv(userId: string) {
       name: accounts.name,
       category: categories.name,
       institution: institutions.name,
+      institution_archived_at: institutions.archivedAt,
       currency: accounts.currency,
       current_value_minor: accounts.currentValueMinor,
       cost_basis_minor: accounts.costBasisMinor,

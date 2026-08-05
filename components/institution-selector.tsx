@@ -14,12 +14,18 @@ import {
 
 import { createInstitutionAction } from "@/app/(app)/actions";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select } from "@/components/ui/form-controls";
+import {
+  FieldError,
+  Input,
+  Label,
+  Select,
+} from "@/components/ui/form-controls";
 import type { Institution } from "@/db/schema";
 import {
   INSTITUTION_TYPE_OPTIONS,
   institutionTypeLabel,
 } from "@/lib/institutions";
+import type { ActionState } from "@/lib/validation";
 
 export type InstitutionOption = Pick<
   Institution,
@@ -41,6 +47,7 @@ export function InstitutionSelector({
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState<string>();
+  const [fieldErrors, setFieldErrors] = useState<ActionState["fieldErrors"]>();
   const [pending, startTransition] = useTransition();
   const selected = options.find((option) => option.id === value);
   const visibleOptions = useMemo(() => {
@@ -62,6 +69,7 @@ export function InstitutionSelector({
     setAdding(false);
     setQuery("");
     setMessage(undefined);
+    setFieldErrors(undefined);
   };
 
   return (
@@ -75,6 +83,7 @@ export function InstitutionSelector({
             setAdding(false);
             setQuery("");
             setMessage(undefined);
+            setFieldErrors(undefined);
           }
         }}
       >
@@ -127,12 +136,14 @@ export function InstitutionSelector({
                 onSubmit={(event) => {
                   event.preventDefault();
                   setMessage(undefined);
+                  setFieldErrors(undefined);
                   startTransition(async () => {
                     const result = await createInstitutionAction(
                       new FormData(formRef.current!),
                     );
                     if (!result.ok || !result.institution) {
                       setMessage(result.message);
+                      setFieldErrors(result.fieldErrors);
                       return;
                     }
                     const institution = {
@@ -153,6 +164,7 @@ export function InstitutionSelector({
                     required
                     maxLength={100}
                   />
+                  <FieldError>{fieldErrors?.name?.[0]}</FieldError>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
@@ -168,6 +180,7 @@ export function InstitutionSelector({
                         </option>
                       ))}
                     </Select>
+                    <FieldError>{fieldErrors?.type?.[0]}</FieldError>
                   </div>
                   <div>
                     <Label htmlFor="inline-institution-country">
@@ -179,6 +192,7 @@ export function InstitutionSelector({
                       placeholder="e.g. KE"
                       maxLength={2}
                     />
+                    <FieldError>{fieldErrors?.countryCode?.[0]}</FieldError>
                   </div>
                 </div>
                 <div>
@@ -190,6 +204,7 @@ export function InstitutionSelector({
                     placeholder="https://example.com"
                     maxLength={500}
                   />
+                  <FieldError>{fieldErrors?.websiteUrl?.[0]}</FieldError>
                 </div>
                 {message ? (
                   <p role="alert" className="text-sm text-red-300">
@@ -203,6 +218,7 @@ export function InstitutionSelector({
                     onClick={() => {
                       setAdding(false);
                       setMessage(undefined);
+                      setFieldErrors(undefined);
                     }}
                   >
                     Back
@@ -220,11 +236,15 @@ export function InstitutionSelector({
             ) : (
               <>
                 <div className="relative mt-5">
+                  <Label htmlFor="institution-search" className="sr-only">
+                    Search institutions
+                  </Label>
                   <Search
                     className="absolute left-3 top-3.5 text-slate-500"
                     size={16}
                   />
                   <Input
+                    id="institution-search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Search institutions"

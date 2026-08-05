@@ -23,6 +23,7 @@ export type AccountListItem = {
   name: string;
   institutionId: string | null;
   institution: string | null;
+  institutionArchivedAt: string | null;
   categoryName: string;
   categoryIcon: string;
   currency: string;
@@ -64,7 +65,11 @@ export function AccountsList({
         .filter((account) => account.institutionId && account.institution)
         .map((account) => [
           account.institutionId!,
-          { id: account.institutionId!, name: account.institution! },
+          {
+            id: account.institutionId!,
+            name: account.institution!,
+            archivedAt: account.institutionArchivedAt,
+          },
         ]),
     ).values(),
   ].sort((left, right) => left.name.localeCompare(right.name));
@@ -105,7 +110,7 @@ export function AccountsList({
 
   return (
     <>
-      <div className="mb-5 grid gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1fr)_repeat(6,minmax(115px,auto))_auto]">
+      <div className="mb-5 grid gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <div className="relative">
           <Search
             className="absolute left-3 top-3.5 text-slate-500"
@@ -149,6 +154,7 @@ export function AccountsList({
           {institutions.map((option) => (
             <option key={option.id} value={option.id}>
               {option.name}
+              {option.archivedAt ? " (archived)" : ""}
             </option>
           ))}
         </Select>
@@ -227,6 +233,9 @@ export function AccountsList({
                       </h2>
                       <p className="truncate text-xs text-slate-500">
                         {account.institution || account.categoryName}
+                        {account.institutionArchivedAt
+                          ? " · Archived institution"
+                          : ""}
                       </p>
                     </div>
                   </div>
@@ -321,6 +330,9 @@ export function AccountsList({
                     </Link>
                     <p className="text-xs text-slate-500">
                       {account.institution}
+                      {account.institutionArchivedAt
+                        ? " · Archived institution"
+                        : ""}
                     </p>
                   </td>
                   <td className="p-4 text-slate-400">{account.categoryName}</td>

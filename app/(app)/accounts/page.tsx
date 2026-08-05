@@ -65,6 +65,7 @@ export default async function AccountsPage() {
       name: account.name,
       institutionId: account.institutionId,
       institution: account.institutionName,
+      institutionArchivedAt: account.institutionArchivedAt,
       categoryName: account.categoryName,
       categoryIcon: account.categoryIcon,
       currency: account.currency,

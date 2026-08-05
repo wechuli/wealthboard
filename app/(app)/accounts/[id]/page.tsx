@@ -52,12 +52,15 @@ export default async function AccountDetailPage({
   if (!account || !analytics) notFound();
   const linkedGoals = allGoals.filter((goal) => goal.linkedAccountId === id);
   const manualAsset = !account.categoryIsInvestible;
+  const institutionLabel = account.institutionName
+    ? `${account.institutionName}${account.institutionArchivedAt ? " (archived)" : ""}`
+    : null;
 
   return (
     <>
       <PageHeader
         title={account.name}
-        description={[account.institutionName, account.categoryName]
+        description={[institutionLabel, account.categoryName]
           .filter(Boolean)
           .join(" · ")}
         actions={
@@ -291,10 +294,7 @@ export default async function AccountDetailPage({
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <Detail label="Category" value={account.categoryName} />
-            <Detail
-              label="Institution"
-              value={account.institutionName || "Not set"}
-            />
+            <Detail label="Institution" value={institutionLabel || "Not set"} />
             <Detail
               label="Reference"
               value={account.accountReference || "Not set"}

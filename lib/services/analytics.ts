@@ -232,6 +232,7 @@ export async function getDashboardData(
       categoryIsLiquid: categories.isLiquid,
       categoryIsInvestible: categories.isInvestible,
       institutionName: institutions.name,
+      institutionArchivedAt: institutions.archivedAt,
     })
     .from(accounts)
     .innerJoin(
@@ -323,7 +324,9 @@ export async function getDashboardData(
           account.categoryName,
           (allocationMap.get(account.categoryName) ?? 0n) + value,
         );
-        const institution = account.institutionName || "Unspecified";
+        const institution = account.institutionName
+          ? `${account.institutionName}${account.institutionArchivedAt ? " (archived)" : ""}`
+          : "Unspecified";
         institutionMap.set(
           institution,
           (institutionMap.get(institution) ?? 0n) + value,

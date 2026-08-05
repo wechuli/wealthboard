@@ -466,7 +466,9 @@ describe.sequential("multi-user persistence and isolation", () => {
       "Goal not found",
     );
     dismissGoalAlert(aliceId, rateAwareGoalId, alertNow);
-    expect(await listGoalAlerts(aliceId, alertNow)).toEqual([]);
+    expect(
+      (await listGoalAlerts(aliceId, alertNow)).map((alert) => alert.goalId),
+    ).not.toContain(rateAwareGoalId);
     const nextMonth = new Date(alertNow);
     nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
     expect(

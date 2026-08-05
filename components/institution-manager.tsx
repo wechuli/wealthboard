@@ -20,7 +20,13 @@ import { MutationButton } from "@/components/mutation-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input, Label, Select, Textarea } from "@/components/ui/form-controls";
+import {
+  FieldError,
+  Input,
+  Label,
+  Select,
+  Textarea,
+} from "@/components/ui/form-controls";
 import type { Institution } from "@/db/schema";
 import { INSTITUTION_TYPE_OPTIONS } from "@/lib/institutions";
 import type { ActionState } from "@/lib/validation";
@@ -36,7 +42,7 @@ function InstitutionEditor({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, startTransition] = useTransition();
-  const [message, setMessage] = useState<string>();
+  const [serverState, setServerState] = useState<ActionState>({});
 
   return (
     <form
@@ -46,7 +52,7 @@ function InstitutionEditor({
         event.preventDefault();
         startTransition(async () => {
           const result = await action(new FormData(formRef.current!));
-          setMessage(result.message);
+          setServerState(result);
           if (result.ok) {
             toast.success(result.message);
             if (!institution) formRef.current?.reset();
@@ -67,6 +73,7 @@ function InstitutionEditor({
           required
           maxLength={100}
         />
+        <FieldError>{serverState.fieldErrors?.name?.[0]}</FieldError>
       </div>
       <div>
         <Label htmlFor={`institution-type-${institution?.id ?? "new"}`}>
@@ -83,6 +90,7 @@ function InstitutionEditor({
             </option>
           ))}
         </Select>
+        <FieldError>{serverState.fieldErrors?.type?.[0]}</FieldError>
       </div>
       <div>
         <Label htmlFor={`institution-website-${institution?.id ?? "new"}`}>
@@ -96,6 +104,7 @@ function InstitutionEditor({
           placeholder="https://example.com"
           maxLength={500}
         />
+        <FieldError>{serverState.fieldErrors?.websiteUrl?.[0]}</FieldError>
       </div>
       <div>
         <Label htmlFor={`institution-country-${institution?.id ?? "new"}`}>
@@ -108,6 +117,7 @@ function InstitutionEditor({
           placeholder="e.g. KE"
           maxLength={2}
         />
+        <FieldError>{serverState.fieldErrors?.countryCode?.[0]}</FieldError>
       </div>
       <div className="lg:col-span-2">
         <Label htmlFor={`institution-address-${institution?.id ?? "new"}`}>
@@ -120,6 +130,7 @@ function InstitutionEditor({
           maxLength={500}
           className="min-h-20"
         />
+        <FieldError>{serverState.fieldErrors?.address?.[0]}</FieldError>
       </div>
       <div className="lg:col-span-2">
         <Label htmlFor={`institution-notes-${institution?.id ?? "new"}`}>
@@ -132,13 +143,18 @@ function InstitutionEditor({
           maxLength={2000}
           className="min-h-20"
         />
+        <FieldError>{serverState.fieldErrors?.notes?.[0]}</FieldError>
       </div>
-      {message ? (
+      {serverState.message ? (
         <p
-          role={message ? "status" : undefined}
-          className="text-sm text-slate-400 lg:col-span-2"
+          role={serverState.ok ? "status" : "alert"}
+          className={
+            serverState.ok
+              ? "text-sm text-slate-400 lg:col-span-2"
+              : "text-sm text-red-300 lg:col-span-2"
+          }
         >
-          {message}
+          {serverState.message}
         </p>
       ) : null}
       <div className="flex justify-end lg:col-span-2">

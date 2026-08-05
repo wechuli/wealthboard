@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { categories } from "@/db/schema";
 import { registerUser } from "@/lib/auth/users";
 import { closeDatabase, getDatabase } from "@/lib/db";
+import { normalizeInstitutionName } from "@/lib/institutions";
 import {
   createAccount,
   getAccount,
@@ -26,7 +27,11 @@ import {
   setInstitutionArchived,
   updateInstitution,
 } from "@/lib/services/institutions";
-import { exportData, restoreUserData } from "@/lib/services/portability";
+import {
+  accountCsv,
+  exportData,
+  restoreUserData,
+} from "@/lib/services/portability";
 
 const migrationsFolder = path.resolve("db/migrations");
 const workspace = fs.mkdtempSync(
@@ -91,6 +96,8 @@ describe.sequential("institution directory and account linking", () => {
   });
 
   test("normalizes names while keeping directories isolated", async () => {
+    expect(normalizeInstitutionName("  KCB\t    Bank\u00a0")).toBe("kcb bank");
+    expect(normalizeInstitutionName("ＫＣＢ\u00a0Bank")).toBe("ＫＣＢ bank");
     institutionId = createInstitution(aliceId, institutionInput);
     const bobInstitutionId = createInstitution(bobId, institutionInput);
 
@@ -100,6 +107,13 @@ describe.sequential("institution directory and account linking", () => {
         name: "  kcb   bank  ",
       }),
     ).toThrow("already exists");
+    expect(() =>
+      createInstitution(aliceId, {
+        ...institutionInput,
+        name: "Invalid website",
+        websiteUrl: "javascript:alert('invalid')",
+      }),
+    ).toThrow();
     expect((await listInstitutions(aliceId)).map((row) => row.id)).toEqual([
       institutionId,
     ]);
@@ -207,8 +221,11 @@ describe.sequential("institution directory and account linking", () => {
       ),
     ).toBe(true);
     expect((await getDashboardData(aliceId)).institutionAllocation).toEqual([
-      { name: "KCB Group", value: 150_000 },
+      { name: "KCB Group (archived)", value: 150_000 },
     ]);
+    const csv = await accountCsv(aliceId);
+    expect(csv).toContain("institution_archived_at");
+    expect(csv).toContain("KCB Group");
   });
 
   test("round-trips v4 and upgrades normalized v3 institution strings", async () => {
@@ -223,6 +240,18 @@ describe.sequential("institution directory and account linking", () => {
       },
     ]);
     expect(JSON.stringify(archive)).not.toContain('"userId"');
+
+    const invalidNameArchive = structuredClone(archive);
+    invalidNameArchive.institutions[0].name = "\u00a0";
+    expect(() => restoreUserData(aliceId, invalidNameArchive)).toThrow();
+    const invalidWebsiteArchive = structuredClone(archive);
+    invalidWebsiteArchive.institutions[0].websiteUrl =
+      "javascript:alert('invalid')";
+    expect(() => restoreUserData(aliceId, invalidWebsiteArchive)).toThrow();
+    const emptyRelationshipArchive = structuredClone(archive);
+    emptyRelationshipArchive.accounts[0].institutionId = "";
+    expect(() => restoreUserData(aliceId, emptyRelationshipArchive)).toThrow();
+    expect(await listAccounts(aliceId)).toHaveLength(2);
 
     restoreUserData(aliceId, archive);
     const roundTrippedInstitutions = await listInstitutions(aliceId, {

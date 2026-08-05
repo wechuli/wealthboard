@@ -50,7 +50,11 @@ describe.sequential("AI provider security", () => {
 
   test("rejects tampered ciphertext and invalid encryption configuration", () => {
     const encrypted = encryptAiCredential("alice-id", "sk-review-secret");
-    const tampered = `${encrypted.slice(0, -1)}${encrypted.endsWith("A") ? "B" : "A"}`;
+    const encryptedParts = encrypted.split(".");
+    const ciphertext = Buffer.from(encryptedParts[3], "base64url");
+    ciphertext[0] ^= 1;
+    encryptedParts[3] = ciphertext.toString("base64url");
+    const tampered = encryptedParts.join(".");
     expect(() => decryptAiCredential("alice-id", tampered)).toThrow(
       "could not be decrypted",
     );

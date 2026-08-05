@@ -17,6 +17,7 @@ import {
   users,
 } from "../db/schema";
 import { CATEGORY_SEEDS } from "../lib/constants";
+import { normalizeInstitutionName } from "../lib/institutions";
 
 if (process.env.DEMO_DATA !== "true") {
   throw new Error("Demo seeding is disabled. Set DEMO_DATA=true to opt in.");
@@ -155,11 +156,7 @@ for (const [
   if (!category) throw new Error(`Missing demo category ${categorySlug}.`);
   let institutionId: string | null = null;
   if (institutionName && institutionType) {
-    const normalizedName = institutionName
-      .normalize("NFKC")
-      .trim()
-      .replace(/\s+/g, " ")
-      .toLocaleLowerCase("en-US");
+    const normalizedName = normalizeInstitutionName(institutionName);
     const existingInstitution = db
       .select()
       .from(institutions)
@@ -170,6 +167,11 @@ for (const [
         ),
       )
       .get();
+    if (existingInstitution?.archivedAt) {
+      throw new Error(
+        `Restore demo institution ${institutionName} before seeding accounts.`,
+      );
+    }
     institutionId = existingInstitution?.id ?? crypto.randomUUID();
     if (!existingInstitution) {
       db.insert(institutions)

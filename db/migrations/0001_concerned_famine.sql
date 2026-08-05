@@ -20,8 +20,8 @@ CREATE INDEX `institutions_user_archived_idx` ON `institutions` (`user_id`,`arch
 WITH RECURSIVE `legacy_institution_names` (`user_id`, `name`, `normalized_name`, `created_at`, `updated_at`) AS (
 	SELECT
 		`user_id`,
-		TRIM(REPLACE(REPLACE(REPLACE(`institution`, CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' ')),
-		LOWER(TRIM(REPLACE(REPLACE(REPLACE(`institution`, CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' '))),
+		TRIM(REPLACE(REPLACE(REPLACE(REPLACE(`institution`, CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' '), CHAR(160), ' ')),
+		LOWER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(`institution`, CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' '), CHAR(160), ' '))),
 		`created_at`,
 		`updated_at`
 	FROM `accounts`
@@ -86,7 +86,7 @@ WITH RECURSIVE `legacy_account_institutions` (`id`, `user_id`, `normalized_name`
 	SELECT
 		`id`,
 		`user_id`,
-		LOWER(TRIM(REPLACE(REPLACE(REPLACE(COALESCE(`institution`, ''), CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' ')))
+		LOWER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(`institution`, ''), CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' '), CHAR(160), ' ')))
 	FROM `accounts`
 	UNION ALL
 	SELECT `id`, `user_id`, REPLACE(`normalized_name`, '  ', ' ')

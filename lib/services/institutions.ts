@@ -5,7 +5,11 @@ import { and, asc, count, eq, getTableColumns, isNull, ne } from "drizzle-orm";
 import { accounts, institutions, type InstitutionType } from "@/db/schema";
 import { nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
-import { normalizeInstitutionName } from "@/lib/institutions";
+import {
+  canonicalizeInstitutionName,
+  normalizeInstitutionName,
+} from "@/lib/institutions";
+import { institutionSchema } from "@/lib/validation";
 
 export type InstitutionInput = {
   name: string;
@@ -50,7 +54,9 @@ export async function getInstitution(userId: string, id: string) {
 
 export function createInstitution(userId: string, input: InstitutionInput) {
   const db = getDatabase();
-  const normalizedName = normalizeInstitutionName(input.name);
+  const parsedInput = institutionSchema.parse(input);
+  const name = canonicalizeInstitutionName(parsedInput.name);
+  const normalizedName = normalizeInstitutionName(name);
   const duplicate = db.query.institutions
     .findFirst({
       where: and(
@@ -68,13 +74,13 @@ export function createInstitution(userId: string, input: InstitutionInput) {
     .values({
       id,
       userId,
-      name: input.name,
+      name,
       normalizedName,
-      type: input.type,
-      websiteUrl: input.websiteUrl || null,
-      countryCode: input.countryCode || null,
-      address: input.address || null,
-      notes: input.notes || null,
+      type: parsedInput.type,
+      websiteUrl: parsedInput.websiteUrl || null,
+      countryCode: parsedInput.countryCode || null,
+      address: parsedInput.address || null,
+      notes: parsedInput.notes || null,
       archivedAt: null,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -89,7 +95,9 @@ export function updateInstitution(
   input: InstitutionInput,
 ) {
   const db = getDatabase();
-  const normalizedName = normalizeInstitutionName(input.name);
+  const parsedInput = institutionSchema.parse(input);
+  const name = canonicalizeInstitutionName(parsedInput.name);
+  const normalizedName = normalizeInstitutionName(name);
   const duplicate = db.query.institutions
     .findFirst({
       where: and(
@@ -105,13 +113,13 @@ export function updateInstitution(
   const result = db
     .update(institutions)
     .set({
-      name: input.name,
+      name,
       normalizedName,
-      type: input.type,
-      websiteUrl: input.websiteUrl || null,
-      countryCode: input.countryCode || null,
-      address: input.address || null,
-      notes: input.notes || null,
+      type: parsedInput.type,
+      websiteUrl: parsedInput.websiteUrl || null,
+      countryCode: parsedInput.countryCode || null,
+      address: parsedInput.address || null,
+      notes: parsedInput.notes || null,
       updatedAt: nowIso(),
     })
     .where(and(eq(institutions.userId, userId), eq(institutions.id, id)))

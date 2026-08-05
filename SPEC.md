@@ -232,6 +232,11 @@ own categories. Category slugs are unique only within one user.
 
 Treat bank accounts, investments, vehicles, and land as trackable holdings under one flexible model.
 
+Institutions are optional, owner-scoped reference records. Each institution has
+a normalized unique name per user, a controlled provider type, optional website,
+country, address, and notes, plus archive timestamps. Archived institutions keep
+existing account links but cannot be selected for a new link.
+
 Fields:
 
 - id
@@ -239,7 +244,7 @@ Fields:
 - name
 - description
 - categoryId
-- institution
+- institutionId, optional
 - accountReference or optional masked account number
 - currency
 - currentValueMinor

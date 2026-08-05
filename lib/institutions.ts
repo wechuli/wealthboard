@@ -17,12 +17,26 @@ export const INSTITUTION_TYPE_OPTIONS = [
   label: string;
 }>;
 
-export function normalizeInstitutionName(value: string) {
+export function canonicalizeInstitutionName(value: string) {
   return value
-    .normalize("NFKC")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase("en-US");
+    .replace(/[\t\n\r\u00a0]/g, " ")
+    .replace(/ {2,}/g, " ")
+    .replace(/^ +| +$/g, "");
+}
+
+export function normalizeInstitutionName(value: string) {
+  return canonicalizeInstitutionName(value).replace(/[A-Z]/g, (character) =>
+    character.toLowerCase(),
+  );
+}
+
+export function isHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export function institutionTypeLabel(type: InstitutionType) {

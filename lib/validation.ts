@@ -11,6 +11,7 @@ import {
   isCatalogCurrencyCode,
   isIsoCurrencyCode,
 } from "@/lib/currencies";
+import { canonicalizeInstitutionName, isHttpUrl } from "@/lib/institutions";
 
 const currencyCodeSchema = z
   .string()
@@ -99,17 +100,16 @@ const optionalInstitutionText = (maximum: number) =>
     .transform((value) => value || undefined);
 
 export const institutionSchema = z.object({
-  name: z.string().trim().min(1, "Enter an institution name.").max(100),
+  name: z
+    .string()
+    .max(200)
+    .transform(canonicalizeInstitutionName)
+    .pipe(z.string().min(1, "Enter an institution name.").max(100)),
   type: z.enum(institutionTypes),
-  websiteUrl: optionalInstitutionText(500).refine((value) => {
-    if (!value) return true;
-    try {
-      const url = new URL(value);
-      return url.protocol === "http:" || url.protocol === "https:";
-    } catch {
-      return false;
-    }
-  }, "Enter a valid HTTP or HTTPS website."),
+  websiteUrl: optionalInstitutionText(500).refine(
+    (value) => !value || isHttpUrl(value),
+    "Enter a valid HTTP or HTTPS website.",
+  ),
   countryCode: z
     .string()
     .trim()
