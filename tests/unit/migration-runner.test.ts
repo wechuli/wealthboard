@@ -60,7 +60,9 @@ describe("migration runner", () => {
 
   test("upgrades legacy institution strings without changing account values", () => {
     const databasePath = createDatabasePath();
-    const migrations = readMigrationFiles({ migrationsFolder: path.join(projectRoot, "db/migrations") });
+    const migrations = readMigrationFiles({
+      migrationsFolder: path.join(projectRoot, "db/migrations"),
+    });
     const baseline = migrations[0];
     expect(migrations.length).toBeGreaterThanOrEqual(2);
 

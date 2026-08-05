@@ -149,7 +149,10 @@ const institutionArchiveSchema = z
     name: z.string().min(1).max(100),
     type: z.enum(institutionTypes),
     websiteUrl: z.string().max(500).nullable(),
-    countryCode: z.string().regex(/^[A-Z]{2}$/).nullable(),
+    countryCode: z
+      .string()
+      .regex(/^[A-Z]{2}$/)
+      .nullable(),
     address: z.string().max(500).nullable(),
     notes: nullableText,
     archivedAt: timestamp.nullable(),

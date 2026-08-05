@@ -271,9 +271,9 @@ describe.sequential("institution directory and account linking", () => {
       accountCount: 2,
     });
     const upgradedAccounts = await listAccounts(aliceId);
-    expect(new Set(upgradedAccounts.map((account) => account.institutionId))).toEqual(
-      new Set([upgradedInstitutions[0].id]),
-    );
+    expect(
+      new Set(upgradedAccounts.map((account) => account.institutionId)),
+    ).toEqual(new Set([upgradedInstitutions[0].id]));
 
     const versionTwo = structuredClone(legacy);
     versionTwo.version = 2;
@@ -282,8 +282,6 @@ describe.sequential("institution directory and account linking", () => {
     restoreUserData(aliceId, versionTwo);
     expect(
       await listInstitutions(aliceId, { includeArchived: true }),
-    ).toMatchObject([
-      { name: "KCB Group", type: "other", accountCount: 2 },
-    ]);
+    ).toMatchObject([{ name: "KCB Group", type: "other", accountCount: 2 }]);
   });
 });

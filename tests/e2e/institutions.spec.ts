@@ -9,9 +9,7 @@ test("institutions can be created, linked, filtered, and renamed", async ({
   await page
     .getByLabel("Password", { exact: true })
     .fill("institution-e2e-password");
-  await page
-    .getByLabel("Confirm password")
-    .fill("institution-e2e-password");
+  await page.getByLabel("Confirm password").fill("institution-e2e-password");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
@@ -74,7 +72,9 @@ test("institutions can be created, linked, filtered, and renamed", async ({
   await page
     .getByLabel("Filter by institution")
     .selectOption({ label: "KCB Group" });
-  await expect(page.getByText("Provider-linked fund", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Provider-linked fund", { exact: true }),
+  ).toBeVisible();
   await page.getByText("Provider-linked fund", { exact: true }).first().click();
   await expect(page.getByText("KCB Group · Money Market Fund")).toBeVisible();
 
