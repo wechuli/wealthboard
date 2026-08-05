@@ -199,39 +199,55 @@ export const portfolioReviewSnapshotSchema = z
   })
   .strict();
 
-const reviewFindingSchema = z
-  .object({
-    id: z.string().min(1).max(80),
-    category: z.enum([
-      "data-quality",
-      "allocation",
-      "liquidity",
-      "cash-flow",
-      "goals",
-      "general",
-    ]),
-    severity: z.enum(["info", "attention", "high"]),
-    confidence: z.enum(["low", "medium", "high"]),
-    title: z.string().min(1).max(140),
-    explanation: z.string().min(1).max(700),
-    evidenceRefs: z.array(z.string().min(1).max(120)).min(1).max(6),
-  })
-  .strict();
+function createPortfolioAiReviewSchema(evidenceRefSchema: z.ZodType<string>) {
+  const reviewFindingSchema = z
+    .object({
+      id: z.string().min(1).max(80),
+      category: z.enum([
+        "data-quality",
+        "allocation",
+        "liquidity",
+        "cash-flow",
+        "goals",
+        "general",
+      ]),
+      severity: z.enum(["info", "attention", "high"]),
+      confidence: z.enum(["low", "medium", "high"]),
+      title: z.string().min(1).max(140),
+      explanation: z.string().min(1).max(700),
+      evidenceRefs: z.array(evidenceRefSchema).min(1).max(6),
+    })
+    .strict();
 
-export const portfolioAiReviewSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    headline: z.string().min(1).max(160),
-    executiveSummary: z.string().min(1).max(1400),
-    dataQuality: z.array(reviewFindingSchema).max(6),
-    strengths: z.array(reviewFindingSchema).max(6),
-    attentionItems: z.array(reviewFindingSchema).max(8),
-    goalObservations: z.array(reviewFindingSchema).max(6),
-    questions: z.array(z.string().min(1).max(300)).max(6),
-    possibleNextChecks: z.array(z.string().min(1).max(300)).max(6),
-    limitations: z.array(z.string().min(1).max(300)).min(1).max(8),
-  })
-  .strict();
+  return z
+    .object({
+      schemaVersion: z.literal(1),
+      headline: z.string().min(1).max(160),
+      executiveSummary: z.string().min(1).max(1400),
+      dataQuality: z.array(reviewFindingSchema).max(6),
+      strengths: z.array(reviewFindingSchema).max(6),
+      attentionItems: z.array(reviewFindingSchema).max(8),
+      goalObservations: z.array(reviewFindingSchema).max(6),
+      questions: z.array(z.string().min(1).max(300)).max(6),
+      possibleNextChecks: z.array(z.string().min(1).max(300)).max(6),
+      limitations: z.array(z.string().min(1).max(300)).min(1).max(8),
+    })
+    .strict();
+}
+
+export const portfolioAiReviewSchema = createPortfolioAiReviewSchema(
+  z.string().min(1).max(120),
+);
+
+export function portfolioAiReviewSchemaForEvidence(
+  evidenceIds: readonly string[],
+) {
+  const allowedEvidenceIds = [...new Set(evidenceIds)];
+  if (allowedEvidenceIds.length === 0) return portfolioAiReviewSchema;
+  return createPortfolioAiReviewSchema(
+    z.enum(allowedEvidenceIds as [string, ...string[]]),
+  );
+}
 
 export type PortfolioReviewOptions = z.infer<
   typeof portfolioReviewOptionsSchema

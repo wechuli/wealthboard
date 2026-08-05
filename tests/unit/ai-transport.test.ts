@@ -285,7 +285,12 @@ describe("OpenAI-compatible review transport", () => {
       max_output_tokens: 800,
       reasoning: { effort: "none" },
       text: {
-        format: { type: "json_object" },
+        format: {
+          type: "json_schema",
+          name: "portfolio_review",
+          strict: true,
+          schema: expect.any(Object),
+        },
         verbosity: "low",
       },
       store: false,
@@ -293,6 +298,11 @@ describe("OpenAI-compatible review transport", () => {
     expect(requestBody).not.toHaveProperty("max_tokens");
     expect(requestBody).not.toHaveProperty("max_completion_tokens");
     expect(String(init.body)).not.toContain(call.apiKey);
+    const textFormat = (requestBody.text as { format: { schema: unknown } })
+      .format;
+    expect(JSON.stringify(textFormat.schema)).toContain(
+      '"enum":["portfolio.totals","portfolio.ratios","portfolio.period-change","cash-flow.summary"]',
+    );
   });
 
   test("reports incomplete OpenAI reasoning responses with usage", async () => {

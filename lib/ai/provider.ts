@@ -1,17 +1,22 @@
 import "server-only";
 
 import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import type { ChatCompletion } from "openai/resources/chat/completions/completions";
 import type { Response as OpenAIResponse } from "openai/resources/responses/responses";
 
 import type { AiProvider } from "@/db/schema";
 import {
   portfolioAiReviewSchema,
+  portfolioAiReviewSchemaForEvidence,
   type PortfolioAiReview,
   type PortfolioReviewSnapshot,
 } from "@/lib/ai/schemas";
 import { AI_REQUEST_TIMEOUT_MS } from "@/lib/ai/config";
-import { validatePortfolioReviewEvidence } from "@/lib/services/portfolio-review";
+import {
+  portfolioReviewEvidenceIds,
+  validatePortfolioReviewEvidence,
+} from "@/lib/services/portfolio-review";
 
 export type AiProviderErrorDetails = {
   failureKind:
@@ -278,7 +283,12 @@ async function openAiResponsesRequest(client: OpenAI, input: AiProviderCall) {
       max_output_tokens: input.maxOutputTokens,
       reasoning: { effort: "none" },
       text: {
-        format: { type: "json_object" },
+        format: zodTextFormat(
+          portfolioAiReviewSchemaForEvidence([
+            ...portfolioReviewEvidenceIds(input.snapshot),
+          ]),
+          "portfolio_review",
+        ),
         verbosity: "low",
       },
       store: false,
