@@ -1,12 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AccountHistoryImport } from "@/components/account-history-import";
-import {
-  PrivacyProvider,
-  PrivacyToggle,
-} from "@/components/privacy-provider";
+import { PrivacyProvider, PrivacyToggle } from "@/components/privacy-provider";
 
 const account = {
   id: "account-1",
@@ -34,6 +31,7 @@ function jsonResponse(value: unknown) {
 
 describe("account history import workflow", () => {
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
     localStorage.clear();
   });
@@ -86,23 +84,29 @@ describe("account history import workflow", () => {
     );
 
     const file = new File(
-        [
-          "external_id,type,amount,date,description,notes\nstable-1,deposit,10.00,2025-01-01,,",
-        ],
-        "history.csv",
-        { type: "text/csv" },
-      );
+      [
+        "external_id,type,amount,date,description,notes\nstable-1,deposit,10.00,2025-01-01,,",
+      ],
+      "history.csv",
+      { type: "text/csv" },
+    );
     Object.defineProperty(file, "arrayBuffer", {
       value: vi.fn().mockResolvedValue(new Uint8Array([1]).buffer),
     });
     await user.upload(screen.getByLabelText("CSV or JSON file"), file);
     await user.click(screen.getByRole("button", { name: "Preview file" }));
 
-    expect(await screen.findByText("Prepared Savings · Example Bank · USD")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Confirm import" })).toBeEnabled();
+    expect(
+      await screen.findByText("Prepared Savings · Example Bank · USD"),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Confirm import" }),
+    ).toBeEnabled();
     expect(screen.getByRole("table")).toHaveTextContent("stable-1");
 
-    await user.click(screen.getByRole("button", { name: "Hide financial values" }));
+    await user.click(
+      screen.getByRole("button", { name: "Hide financial values" }),
+    );
     expect(screen.getAllByText("••••••")).toHaveLength(3);
 
     await user.click(screen.getByRole("button", { name: "Confirm import" }));
@@ -118,5 +122,48 @@ describe("account history import workflow", () => {
 
     const commitBody = fetchMock.mock.calls[1][1]?.body as FormData;
     expect(commitBody.get("hash")).toBe(hash);
+  });
+
+  it("rejects a preview whose server hash does not match the selected file", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("crypto", {
+      subtle: {
+        digest: vi.fn().mockResolvedValue(new Uint8Array(32).buffer),
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          hash: "ff".repeat(32),
+          account,
+          dateRange: null,
+          currentBalanceMinor: 0,
+          projectedBalanceMinor: 0,
+          netChangeMinor: 0,
+          summary: { ready: 0, skippedDuplicates: 0, failed: 0 },
+          rows: [],
+        }),
+      ),
+    );
+
+    render(
+      <PrivacyProvider>
+        <AccountHistoryImport accountId="account-1" />
+      </PrivacyProvider>,
+    );
+    const file = new File(["history"], "history.csv", { type: "text/csv" });
+    Object.defineProperty(file, "arrayBuffer", {
+      value: vi.fn().mockResolvedValue(new Uint8Array([1]).buffer),
+    });
+    await user.upload(screen.getByLabelText("CSV or JSON file"), file);
+    await user.click(screen.getByRole("button", { name: "Preview file" }));
+
+    expect(
+      await screen.findByText("The uploaded file hash did not match."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Confirm import" }),
+    ).not.toBeInTheDocument();
   });
 });

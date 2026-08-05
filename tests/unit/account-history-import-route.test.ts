@@ -18,6 +18,8 @@ import { POST as previewPost } from "@/app/api/accounts/[id]/history-import/prev
 import { requireTrustedOrigin } from "@/lib/auth/origin";
 import { getSession } from "@/lib/auth/session";
 import {
+  AccountHistoryAccessError,
+  AccountHistoryFileError,
   commitAccountHistory,
   previewAccountHistory,
 } from "@/lib/services/account-history-import";
@@ -26,9 +28,18 @@ const content =
   "external_id,type,amount,date,description,notes\nstable-1,deposit,1.00,2025-01-01,,";
 const params = { params: Promise.resolve({ id: "account-1" }) };
 
-function request(path: "preview" | "commit", hash?: string) {
+function request(
+  path: "preview" | "commit",
+  hash?: string,
+  options: { content?: string; name?: string } = {},
+) {
   const body = new FormData();
-  body.set("file", new File([content], "history.csv", { type: "text/csv" }));
+  body.set(
+    "file",
+    new File([options.content ?? content], options.name ?? "history.csv", {
+      type: "text/csv",
+    }),
+  );
   if (hash) body.set("hash", hash);
   return new Request(
     `https://wealthboard.example.com/api/accounts/account-1/history-import/${path}`,
@@ -103,6 +114,39 @@ describe("account history import routes", () => {
       content,
       "csv",
     );
+  });
+
+  test("rejects unsupported and oversized files before calling the service", async () => {
+    const unsupported = await previewPost(
+      request("preview", undefined, { name: "history.txt" }),
+      params,
+    );
+    expect(unsupported.status).toBe(400);
+
+    const oversized = await previewPost(
+      request("preview", undefined, {
+        content: "x".repeat(5 * 1024 * 1024 + 1),
+      }),
+      params,
+    );
+    expect(oversized.status).toBe(413);
+    expect(previewAccountHistory).not.toHaveBeenCalled();
+  });
+
+  test("maps account access and file validation errors without caching", async () => {
+    vi.mocked(previewAccountHistory).mockImplementationOnce(() => {
+      throw new AccountHistoryAccessError("Account not found.");
+    });
+    const denied = await previewPost(request("preview"), params);
+    expect(denied.status).toBe(404);
+    expect(denied.headers.get("Cache-Control")).toBe("no-store");
+
+    vi.mocked(previewAccountHistory).mockImplementationOnce(() => {
+      throw new AccountHistoryFileError("The CSV is malformed.");
+    });
+    const invalid = await previewPost(request("preview"), params);
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({ error: "The CSV is malformed." });
   });
 
   test("rejects changed files and commits the verified content", async () => {

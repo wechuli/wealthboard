@@ -141,7 +141,8 @@ function parseCsv(content: string): SourceRow[] {
   } catch {
     return fileError("The CSV is malformed.");
   }
-  if (!records.length) return fileError("The file contains no transaction rows.");
+  if (!records.length)
+    return fileError("The file contains no transaction rows.");
   const headers = records[0].map((value) =>
     typeof value === "string" ? value.trim() : "",
   );
@@ -160,7 +161,8 @@ function parseCsv(content: string): SourceRow[] {
     return fileError("Import is limited to 10,000 rows at a time.");
   }
   return data.map((values) => {
-    if (values.length !== headers.length) return fileError("The CSV is malformed.");
+    if (values.length !== headers.length)
+      return fileError("The CSV is malformed.");
     return Object.fromEntries(
       headers.map((header, index) => [header, values[index]]),
     );
@@ -213,7 +215,8 @@ function textValue(
   max: number,
 ): { value: string | null } | { error: string } {
   if (value == null || value === "") return { value: null };
-  if (typeof value !== "string") return { error: `${field} must be text or null.` };
+  if (typeof value !== "string")
+    return { error: `${field} must be text or null.` };
   if (value.length > max)
     return { error: `${field} must be ${max} characters or fewer.` };
   return { value };
@@ -247,7 +250,13 @@ function validateRow(
 ): PreparedRow {
   const allowedKeys = new Set(ACCOUNT_HISTORY_HEADERS);
   if (Object.keys(source).some((key) => !allowedKeys.has(key as never))) {
-    return failed(row, source, null, "unknown_field", "The row contains an unknown field.");
+    return failed(
+      row,
+      source,
+      null,
+      "unknown_field",
+      "The row contains an unknown field.",
+    );
   }
   if (typeof source.external_id !== "string") {
     return failed(
@@ -341,7 +350,13 @@ function validateRow(
   }
   const description = textValue(source.description, "description", 200);
   if ("error" in description) {
-    return failed(row, source, externalId, "invalid_description", description.error);
+    return failed(
+      row,
+      source,
+      externalId,
+      "invalid_description",
+      description.error,
+    );
   }
   const notes = textValue(source.notes, "notes", 2000);
   if ("error" in notes) {
@@ -384,7 +399,10 @@ function existingTransactions(
           and(
             eq(transactions.userId, userId),
             eq(transactions.accountId, accountId),
-            inArray(transactions.externalId, externalIds.slice(index, index + 500)),
+            inArray(
+              transactions.externalId,
+              externalIds.slice(index, index + 500),
+            ),
           ),
         )
         .all(),
@@ -400,9 +418,15 @@ function classifyRows(
   currency: string,
   timezone: string,
   sourceRows: SourceRow[],
+  firstRow: number,
 ) {
   const rows = sourceRows.map((source, index) =>
-    validateRow(source, index + 1, currency, dateInputForTimezone(timezone)),
+    validateRow(
+      source,
+      index + firstRow,
+      currency,
+      dateInputForTimezone(timezone),
+    ),
   );
   const counts = new Map<string, number>();
   for (const row of rows) {
@@ -417,7 +441,9 @@ function classifyRows(
       delete row.prepared;
     }
   }
-  const candidates = rows.filter((row) => row.status === "ready" && row.prepared);
+  const candidates = rows.filter(
+    (row) => row.status === "ready" && row.prepared,
+  );
   const existing = existingTransactions(
     client,
     userId,
@@ -543,9 +569,8 @@ function checkedBalance(value: bigint) {
 function summarize(rows: PreparedRow[]) {
   return {
     ready: rows.filter((row) => row.status === "ready").length,
-    skippedDuplicates: rows.filter(
-      (row) => row.status === "duplicate_existing",
-    ).length,
+    skippedDuplicates: rows.filter((row) => row.status === "duplicate_existing")
+      .length,
     failed: rows.filter(
       (row) =>
         row.status === "failed" ||
@@ -588,6 +613,7 @@ export function previewAccountHistory(
     account.currency,
     timezone,
     parseAccountHistoryFile(content, format),
+    format === "csv" ? 2 : 1,
   );
   const ready = rows.filter((row) => row.status === "ready" && row.prepared);
   const projected = checkedBalance(projectedBalance(userId, accountId, ready));
@@ -632,6 +658,7 @@ export function commitAccountHistory(
       account.currency,
       timezone,
       sourceRows,
+      format === "csv" ? 2 : 1,
     );
     const ready = rows.filter((row) => row.status === "ready" && row.prepared);
     const createdAt = nowIso();

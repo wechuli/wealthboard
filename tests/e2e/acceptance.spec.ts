@@ -132,6 +132,12 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     page.getByRole("heading", { name: "Cash Savings" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Import" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Import history for Cash Savings" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("external_id,type,amount,date,description,notes"),
+  ).toBeVisible();
   await page.getByLabel("CSV or JSON file").setInputFiles({
     name: "cash-history.csv",
     mimeType: "text/csv",
@@ -141,7 +147,9 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   });
   await page.getByRole("button", { name: "Preview file" }).click();
   await expect(page.getByText(/1 ready · 0 existing duplicates/)).toBeVisible();
-  await expect(page.getByText("Cash Savings · No institution · KES")).toBeVisible();
+  await expect(
+    page.getByText("Cash Savings · No institution · KES"),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Hide financial values" }).click();
   await expect(page.getByText("••••••").first()).toBeVisible();
   await page.getByRole("button", { name: "Reveal financial values" }).click();

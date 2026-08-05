@@ -18,6 +18,7 @@ import {
   valuationSnapshots,
 } from "@/db/schema";
 import { closeDatabase, getDatabase, getSqlite } from "@/lib/db";
+import { createAccount, deleteTransaction } from "@/lib/services/accounts";
 import {
   commitAccountHistory,
   previewAccountHistory,
@@ -191,7 +192,14 @@ describe.sequential("account history import", () => {
       "json",
     );
 
-    expect(jsonPreview).toEqual(csvPreview);
+    const { rows: csvRows, ...csvSummary } = csvPreview;
+    const { rows: jsonRows, ...jsonSummary } = jsonPreview;
+    expect(jsonSummary).toEqual(csvSummary);
+    expect(jsonRows).toEqual(
+      csvRows.map((row) => ({ ...row, row: row.row - 1 })),
+    );
+    expect(csvPreview.rows[0].row).toBe(2);
+    expect(jsonPreview.rows[0].row).toBe(1);
     expect(csvPreview.projectedBalanceMinor).toBe(21_000);
     expect(csvPreview.netChangeMinor).toBe(1_000);
     expect(
@@ -274,12 +282,61 @@ describe.sequential("account history import", () => {
       failed: 1,
     });
     expect(result.rows[0].status).toBe("conflicting_existing");
-    const stored = getDatabase().query.transactions.findFirst({
-      where: eq(transactions.externalId, "equivalent-1"),
-    }).sync();
+    const stored = getDatabase()
+      .query.transactions.findFirst({
+        where: eq(transactions.externalId, "equivalent-1"),
+      })
+      .sync();
     expect(stored).toMatchObject({
       amountMinor: 1_000,
       description: "Funding",
+    });
+  });
+
+  test("scopes external IDs by owner and account and releases them on deletion", () => {
+    const secondAliceAccountId = createAccount(aliceId, {
+      name: "Alice Secondary History",
+      categoryId: aliceCategoryId,
+      currency: "USD",
+      openingValue: "0",
+      isIncludedInNetWorth: true,
+    });
+    const sameOwnerResult = commitAccountHistory(
+      aliceId,
+      secondAliceAccountId,
+      csv("equivalent-1,deposit,10.00,2025-02-01,Funding,note"),
+      "csv",
+    );
+    expect(sameOwnerResult.summary.imported).toBe(1);
+
+    const bobResult = commitAccountHistory(
+      bobId,
+      bobAccountId,
+      csv("equivalent-1,deposit,10.00,2025-02-01,Funding,note"),
+      "csv",
+    );
+    expect(bobResult.summary.imported).toBe(1);
+
+    const aliceImported = getDatabase()
+      .query.transactions.findFirst({
+        where: and(
+          eq(transactions.userId, aliceId),
+          eq(transactions.accountId, aliceAccountId),
+          eq(transactions.externalId, "equivalent-1"),
+        ),
+      })
+      .sync()!;
+    deleteTransaction(aliceId, aliceImported.id);
+    const reimported = commitAccountHistory(
+      aliceId,
+      aliceAccountId,
+      csv("equivalent-1,deposit,10.00,2025-02-01,Funding,note"),
+      "csv",
+    );
+    expect(reimported.summary.imported).toBe(1);
+    expect(reimported.rows[0]).toMatchObject({
+      status: "imported",
+      transactionId: expect.not.stringMatching(aliceImported.id),
     });
   });
 
@@ -380,8 +437,7 @@ describe.sequential("account history import", () => {
     const content = csv(
       ...Array.from(
         { length: 10_000 },
-        (_, index) =>
-          `bulk-${index},deposit,0.01,2025-01-02,Bulk transaction,`,
+        (_, index) => `bulk-${index},deposit,0.01,2025-01-02,Bulk transaction,`,
       ),
     );
     const preview = previewAccountHistory(
