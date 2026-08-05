@@ -32,7 +32,9 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     "different-e2e-password",
   );
   await page.getByLabel("Confirm password").fill("wealthboard-e2e-password");
-  await page.getByRole("button", { name: "Create account" }).click();
+  const createAccount = page.getByRole("button", { name: "Create account" });
+  await expect(createAccount).toBeEnabled();
+  await createAccount.click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Add your first account" }),
