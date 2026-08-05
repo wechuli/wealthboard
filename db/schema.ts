@@ -241,6 +241,7 @@ export const transactions = sqliteTable(
     transactionDate: text("transaction_date").notNull(),
     description: text("description"),
     notes: text("notes"),
+    externalId: text("external_id"),
     transferGroupId: text("transfer_group_id"),
     idempotencyKey: text("idempotency_key"),
     createdAt: text("created_at").notNull(),
@@ -274,6 +275,11 @@ export const transactions = sqliteTable(
     uniqueIndex("transactions_user_idempotency_unique").on(
       table.userId,
       table.idempotencyKey,
+    ),
+    uniqueIndex("transactions_user_account_external_unique").on(
+      table.userId,
+      table.accountId,
+      table.externalId,
     ),
     foreignKey({
       columns: [table.userId, table.accountId],

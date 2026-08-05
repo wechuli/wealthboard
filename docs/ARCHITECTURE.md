@@ -59,9 +59,11 @@ separate API service and no external identity provider.
   reads; owner-scoped dismissals suppress one goal for one user-calendar month.
 - **Portability:** JSON and CSV routes operate only on the authenticated user's
   records. A per-user JSON restore replaces only that user's portfolio in one
-  transaction. Export version 4 includes institutions, milestones, and alert
-  dismissals. Versions 2 and 3 remain restorable; legacy account institution
-  strings are normalized into owner-scoped records during conversion. Raw
+  transaction. Export version 5 includes transaction external IDs; versions 2
+  through 4 remain restorable and receive null external IDs during conversion.
+  Legacy account institution strings are normalized into owner-scoped records.
+  Account history import uses stateless account-scoped preview and atomic commit
+  routes with a strict CSV/JSON v1 contract and SHA-256 confirmation. Raw
   SQLite backup and offline restore are deployment-operator commands, never
   ordinary authenticated routes.
 - **Offline:** The service worker caches only the shell and static assets.
@@ -110,7 +112,7 @@ separate API service and no external identity provider.
 | `categories`              | One user's seeded and custom classifications                        |
 | `institutions`            | One user's financial-provider directory and reference details       |
 | `accounts`                | One user's holdings and liabilities with replayed values            |
-| `transactions`            | User-owned cash flows, returns, and paired transfers                |
+| `transactions`            | User-owned cash flows, returns, transfers, and account-scoped source IDs |
 | `valuation_snapshots`     | User-owned absolute valuations, separate from cash flow             |
 | `exchange_rates`          | One user's effective-dated decimal exchange rates                   |
 | `goals`                   | One user's targets, links, status, priority, and return assumptions |
@@ -136,11 +138,12 @@ accounts, or sample portfolio data.
 - `/login` — public username/password login
 - `/signup` — always-public user registration
 - `/` — net-worth dashboard
-- `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/[id]/edit`
+- `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/[id]/edit`,
+  `/accounts/[id]/import`
 - `/transactions`, `/transactions/new`, `/transactions/[id]/edit`
 - `/goals`, `/goals/new`, `/goals/[id]`, `/goals/[id]/edit`
 - `/reports`, `/categories`, `/institutions`, `/settings`
-- `/api/export/*`, `/api/import/transactions`, `/api/restore/user`,
+- `/api/export/*`, `/api/accounts/[id]/history-import/{preview,commit}`, `/api/restore/user`,
   `/api/ai/review`, `/api/health`
 - `/review` — on-demand, evidence-linked AI portfolio critique
 - `/offline`, `/manifest.webmanifest`, `/sw.js`

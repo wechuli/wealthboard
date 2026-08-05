@@ -129,6 +129,27 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Cash Savings" }),
   ).toBeVisible();
+  await page.getByRole("link", { name: "Import" }).click();
+  await page.getByLabel("CSV or JSON file").setInputFiles({
+    name: "cash-history.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "external_id,type,amount,date,description,notes\ncash-history-1,interest,125.50,2025-02-01,Imported interest,",
+    ),
+  });
+  await page.getByRole("button", { name: "Preview file" }).click();
+  await expect(page.getByText(/1 ready · 0 existing duplicates/)).toBeVisible();
+  await expect(page.getByText("Cash Savings · No institution · KES")).toBeVisible();
+  await page.getByRole("button", { name: "Hide financial values" }).click();
+  await expect(page.getByText("••••••").first()).toBeVisible();
+  await page.getByRole("button", { name: "Reveal financial values" }).click();
+  await page.getByRole("button", { name: "Confirm import" }).click();
+  await expect(
+    page.getByText("1 imported, 0 duplicates skipped, 0 failed."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Download CSV report" }),
+  ).toBeVisible();
 
   await page.goto("/transactions/new?type=transfer");
   await page
@@ -290,7 +311,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     goalMilestones: Array<{ name: string }>;
     goalAlertDismissals: unknown[];
   };
-  expect(exportedPortfolio.version).toBe(4);
+  expect(exportedPortfolio.version).toBe(5);
   expect(exportedPortfolio.institutions).toEqual([]);
   expect(exportedPortfolio.goalMilestones).toContainEqual(
     expect.objectContaining({ name: "Halfway funded" }),
@@ -366,6 +387,14 @@ test("responsive layouts fit required viewports", async ({ page }) => {
     .filter({ hasText: "July 2028 Family Car" })
     .getAttribute("href");
   expect(goalHref).toBeTruthy();
+  const responsiveExport = (await (
+    await page.request.get("/api/export/json")
+  ).json()) as { accounts: Array<{ id: string; name: string }> };
+  const responsiveAccount = responsiveExport.accounts.find(
+    (account) => account.name === "Cash Savings",
+  );
+  expect(responsiveAccount).toBeTruthy();
+  const importHref = `/accounts/${responsiveAccount!.id}/import`;
 
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: width < 768 ? 800 : 900 });
@@ -377,6 +406,7 @@ test("responsive layouts fit required viewports", async ({ page }) => {
       "/reports",
       "/review",
       "/settings",
+      importHref!,
       goalHref!,
     ]) {
       await page.goto(route);
