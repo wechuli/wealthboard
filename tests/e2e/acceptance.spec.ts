@@ -62,6 +62,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
 
   await page.getByRole("link", { name: "Interest" }).click();
   await page.getByLabel(/Amount/).fill("500");
+  await page.getByLabel("External ID").fill("kcb-interest-2025-06");
   await page.getByRole("button", { name: "Record transaction" }).click();
   await expect(
     page.getByRole("heading", { name: "KCB Car Fund" }),
@@ -69,6 +70,9 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
 
   await page.goto("/transactions");
   await page.getByLabel("Edit transaction").first().click();
+  await expect(page.getByLabel("External ID")).toHaveValue(
+    "kcb-interest-2025-06",
+  );
   await page.getByLabel(/Amount/).fill("600");
   await page.getByRole("button", { name: "Save transaction" }).click();
   await expect(

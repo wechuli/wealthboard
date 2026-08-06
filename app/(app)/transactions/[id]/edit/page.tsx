@@ -9,19 +9,33 @@ import { minorToDecimalString } from "@/lib/money";
 import { getTransaction, listAccounts } from "@/lib/services/accounts";
 import { requireSession } from "@/lib/auth/session";
 
-export default async function EditTransactionPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditTransactionPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { userId } = await requireSession();
   const { id } = await params;
   const [transaction, accountRows] = await Promise.all([
     getTransaction(userId, id),
     listAccounts(userId),
   ]);
-  if (!transaction || transaction.type === "opening_balance" || transaction.type === "transfer") notFound();
+  if (
+    !transaction ||
+    transaction.type === "opening_balance" ||
+    transaction.type === "transfer"
+  )
+    notFound();
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="Edit transaction" description="Saving will replay this account’s complete history." />
+      <PageHeader
+        title="Edit transaction"
+        description="Saving will replay this account’s complete history."
+      />
       <Card>
-        <CardHeader><CardTitle>Transaction details</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Transaction details</CardTitle>
+        </CardHeader>
         <CardContent>
           <TransactionForm
             accounts={accountRows}
@@ -39,6 +53,7 @@ export default async function EditTransactionPage({ params }: { params: Promise<
               ),
               transactionDate: utcToDateInput(transaction.transactionDate),
               description: transaction.description || "",
+              externalId: transaction.externalId || "",
               notes: transaction.notes || "",
             }}
           />

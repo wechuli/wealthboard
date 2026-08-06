@@ -663,6 +663,7 @@ type TransactionInput = {
   amount: string;
   transactionDate: string;
   description?: string;
+  externalId?: string;
   notes?: string;
   idempotencyKey: string;
 };
@@ -711,6 +712,7 @@ export function recordTransaction(userId: string, input: TransactionInput) {
         currency: account.currency,
         transactionDate: dateInputToUtc(input.transactionDate),
         description: input.description || null,
+        externalId: input.externalId || null,
         notes: input.notes,
         idempotencyKey: input.idempotencyKey,
         createdAt: timestamp,
@@ -727,7 +729,12 @@ export function updateTransaction(
   id: string,
   input: Pick<
     TransactionInput,
-    "type" | "amount" | "transactionDate" | "description" | "notes"
+    | "type"
+    | "amount"
+    | "transactionDate"
+    | "description"
+    | "externalId"
+    | "notes"
   >,
 ) {
   if (input.type === "opening_balance" || input.type === "transfer") {
@@ -766,6 +773,7 @@ export function updateTransaction(
         amountMinor,
         transactionDate: dateInputToUtc(input.transactionDate),
         description: input.description || null,
+        externalId: input.externalId || null,
         notes: input.notes,
         updatedAt: nowIso(),
       })

@@ -13,11 +13,15 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn() }));
 
-import { updateTransactionAction } from "@/app/(app)/actions";
+import {
+  transactionAction,
+  updateTransactionAction,
+} from "@/app/(app)/actions";
 import { categories, transactions } from "@/db/schema";
 import { requireSession } from "@/lib/auth/session";
 import { registerUser } from "@/lib/auth/users";
 import { closeDatabase, getDatabase } from "@/lib/db";
+import { commitAccountHistory } from "@/lib/services/account-history-import";
 import {
   createAccount,
   getAccount,
@@ -175,5 +179,77 @@ describe.sequential("transaction update invariants", () => {
     expect(
       accountTransactions.filter(({ type }) => type === "transfer"),
     ).toHaveLength(0);
+  });
+
+  test("a manual external ID prevents a later import duplicate", async () => {
+    const category = await getDatabase().query.categories.findFirst({
+      where: and(eq(categories.userId, userId), eq(categories.slug, "savings")),
+    });
+    if (!category) throw new Error("Savings category was not created.");
+    const importAccountId = createAccount(userId, {
+      name: "Import Deduplication Account",
+      categoryId: category.id,
+      currency: "KES",
+      openingValue: "0",
+      isIncludedInNetWorth: true,
+      openedAt: "2025-01-01",
+    });
+    const formData = new FormData();
+    formData.set("accountId", importAccountId);
+    formData.set("type", "deposit");
+    formData.set("amount", "12.34");
+    formData.set("transactionDate", "2025-03-02");
+    formData.set("description", "Broker dividend");
+    formData.set("externalId", "  broker-transaction-42  ");
+    formData.set("notes", "Entered manually");
+    formData.set("idempotencyKey", crypto.randomUUID());
+
+    await transactionAction(formData);
+
+    const stored = getDatabase()
+      .query.transactions.findFirst({
+        where: and(
+          eq(transactions.userId, userId),
+          eq(transactions.accountId, importAccountId),
+          eq(transactions.externalId, "broker-transaction-42"),
+        ),
+      })
+      .sync();
+    expect(stored).toMatchObject({
+      type: "deposit",
+      amountMinor: 1_234,
+      description: "Broker dividend",
+      notes: "Entered manually",
+    });
+
+    const result = commitAccountHistory(
+      userId,
+      importAccountId,
+      [
+        "external_id,type,amount,date,description,notes",
+        "broker-transaction-42,deposit,12.34,2025-03-02,Broker dividend,Entered manually",
+      ].join("\n"),
+      "csv",
+    );
+
+    expect(result.summary).toEqual({
+      imported: 0,
+      skippedDuplicates: 1,
+      failed: 0,
+    });
+    expect(result.rows[0].status).toBe("duplicate_existing");
+    expect(
+      getDatabase()
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.accountId, importAccountId),
+            eq(transactions.externalId, "broker-transaction-42"),
+          ),
+        )
+        .all(),
+    ).toHaveLength(1);
   });
 });

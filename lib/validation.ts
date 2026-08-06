@@ -133,6 +133,12 @@ const transactionMutationFields = {
   amount: z.string().trim().min(1),
   transactionDate: z.string().date(),
   description: z.string().trim().max(200).optional(),
+  externalId: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((value) => value || undefined),
   notes: optionalText,
 };
 

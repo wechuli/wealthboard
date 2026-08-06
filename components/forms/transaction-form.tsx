@@ -26,6 +26,11 @@ const clientSchema = z.object({
   destinationAmount: z.string().optional(),
   transactionDate: z.string().min(1, "Choose a date."),
   description: z.string().optional(),
+  externalId: z
+    .string()
+    .trim()
+    .max(200, "Use 200 characters or fewer.")
+    .optional(),
   notes: z.string().optional(),
 });
 
@@ -212,6 +217,20 @@ export function TransactionForm({
             {...register("description")}
           />
         </div>
+        {type !== "transfer" ? (
+          <div>
+            <Label htmlFor="externalId">External ID</Label>
+            <Input
+              id="externalId"
+              placeholder="Optional ID from another system"
+              {...register("externalId")}
+            />
+            <FieldError>
+              {errors.externalId?.message ||
+                serverState.fieldErrors?.externalId?.[0]}
+            </FieldError>
+          </div>
+        ) : null}
         <div className="sm:col-span-2">
           <Label htmlFor="notes">Notes</Label>
           <Textarea
