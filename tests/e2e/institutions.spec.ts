@@ -19,10 +19,19 @@ test("institutions can be created, linked, filtered, and renamed", async ({
     .getByLabel("Category")
     .selectOption({ label: "Money Market Fund" });
   await page.getByLabel("Institution", { exact: true }).click();
-  await page
-    .getByRole("dialog", { name: "Choose institution" })
-    .getByRole("button", { name: "Add institution" })
-    .click();
+  const chooseDialog = page.getByRole("dialog", {
+    name: "Choose institution",
+  });
+  const dialogZIndex = await chooseDialog.evaluate((element) =>
+    Number.parseInt(getComputedStyle(element).zIndex, 10),
+  );
+  const overlayZIndex = await page
+    .locator('[data-state="open"].fixed.inset-0')
+    .evaluate((element) =>
+      Number.parseInt(getComputedStyle(element).zIndex, 10),
+    );
+  expect(dialogZIndex).toBeGreaterThan(overlayZIndex);
+  await chooseDialog.getByRole("button", { name: "Add institution" }).click();
 
   const addDialog = page.getByRole("dialog", { name: "Add institution" });
   await addDialog.getByLabel("Name").fill("KCB");
