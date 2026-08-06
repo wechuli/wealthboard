@@ -3,7 +3,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { getAuthConfig } from "@/lib/auth/config";
 import { signupRateLimit, recordLoginAttempt } from "@/lib/auth/rate-limit";
+import { clientAddress } from "@/lib/auth/request";
 import { createSession } from "@/lib/auth/session";
 import { registerUser, UsernameUnavailableError } from "@/lib/auth/users";
 import {
@@ -17,14 +19,14 @@ export async function signupAction(
   _previousState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  if (!getAuthConfig().localEnabled) {
+    return { message: "Account creation is not available." };
+  }
   const parsed = signupSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
 
   const requestHeaders = await headers();
-  const address =
-    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    requestHeaders.get("x-real-ip") ||
-    "local";
+  const address = clientAddress(requestHeaders);
   const rateLimit = signupRateLimit(address);
   if (!rateLimit.allowed) {
     return {

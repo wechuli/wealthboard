@@ -76,6 +76,28 @@ export const passwordChangeSchema = z
     path: ["confirmPassword"],
   });
 
+export const passwordConfirmationSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password.").max(256),
+});
+
+export const localCredentialSchema = z
+  .object({
+    username: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(
+        /^[a-z0-9._-]{3,32}$/,
+        "Use 3-32 letters, numbers, dots, underscores, or hyphens.",
+      ),
+    password: z.string().min(12, "Use at least 12 characters.").max(256),
+    confirmPassword: z.string().max(256),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
+
 export const accountSchema = z.object({
   idempotencyKey: z.string().uuid().optional(),
   name: z.string().trim().min(1, "Enter an account name.").max(100),

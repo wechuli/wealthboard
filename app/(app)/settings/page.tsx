@@ -10,13 +10,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page";
 import { AiSettingsForm } from "@/components/ai-settings-form";
+import { AuthenticationMethodsForm } from "@/components/auth-methods-form";
 import { aiEncryptionAvailable } from "@/lib/ai/config";
+import { getAuthConfig } from "@/lib/auth/config";
 import { getSettings } from "@/lib/bootstrap";
 import {
   getCurrencyConfiguration,
   listExchangeRates,
 } from "@/lib/services/settings";
 import { requireSession } from "@/lib/auth/session";
+import { getUserAuthState } from "@/lib/auth/users";
 import {
   getAiProviderSettings,
   getAiUsageSummary,
@@ -24,16 +27,35 @@ import {
 
 export const metadata = { title: "Settings" };
 
-export default async function SettingsPage() {
+const authenticationFeedback: Record<string, string> = {
+  provider_error: "Provider verification was cancelled or rejected.",
+  invalid_callback: "The provider response could not be verified. Try again.",
+  access_denied: "Authentication method access was denied.",
+};
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ auth?: string }>;
+}) {
   const { userId } = await requireSession();
-  const [settings, rates, currencyConfiguration, aiSettings, aiUsage] =
-    await Promise.all([
-      getSettings(userId),
-      listExchangeRates(userId),
-      getCurrencyConfiguration(userId),
-      getAiProviderSettings(userId),
-      getAiUsageSummary(userId),
-    ]);
+  const query = await searchParams;
+  const authConfig = getAuthConfig();
+  const [
+    settings,
+    rates,
+    currencyConfiguration,
+    aiSettings,
+    aiUsage,
+    authState,
+  ] = await Promise.all([
+    getSettings(userId),
+    listExchangeRates(userId),
+    getCurrencyConfiguration(userId),
+    getAiProviderSettings(userId),
+    getAiUsageSummary(userId),
+    getUserAuthState(userId, authConfig.oidc?.issuer),
+  ]);
   return (
     <>
       <PageHeader
@@ -71,7 +93,18 @@ export default async function SettingsPage() {
           usage={aiUsage}
           encryptionAvailable={aiEncryptionAvailable()}
         />
-        <PasswordForm />
+        <AuthenticationMethodsForm
+          localEnabled={authConfig.localEnabled}
+          oidcEnabled={authConfig.oidcEnabled}
+          providerName={authConfig.oidc?.providerName}
+          hasPassword={authState?.hasPassword ?? false}
+          oidcLinked={Boolean(authState?.oidcIdentity)}
+          reauthenticated={query.auth === "reauthenticated"}
+          feedback={query.auth ? authenticationFeedback[query.auth] : undefined}
+        />
+        {authConfig.localEnabled && authState?.hasPassword ? (
+          <PasswordForm />
+        ) : null}
         <DataPortability />
       </div>
     </>

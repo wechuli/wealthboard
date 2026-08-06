@@ -29,7 +29,7 @@
 
 - Change `db/schema.ts`, then run `npm run db:generate` and review the new incremental migration. Migration history is append-only: never delete, rename, or edit an applied migration or its snapshot.
 - Test schema changes against both a disposable empty database and a disposable database at the previous migration state. Persisted pre-release databases must retain an upgrade path.
-- Signup is always public; do not add a claim flow, feature flag, environment-created identity, or default user.
+- Signup is public only when deployment policy enables local authentication. Validated OIDC first login is the only other provisioning path; do not add claim-based merging, environment-created identities, invitations, setup users, or default credentials.
 - Keep foreign keys enabled and retain historical records through the established archive behavior.
 - Do not hand-edit generated or runtime artifacts such as `.next`, `next-env.d.ts`, `node_modules`, `data/*.db`, or files under `test-results`.
 

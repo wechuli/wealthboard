@@ -54,6 +54,28 @@ spec:
               value: /backups
             - name: APP_URL
               value: https://wealthboard.example.com
+            - name: TRUST_PROXY_HEADERS
+              value: "true"
+            - name: AUTH_METHODS
+              value: local
+            - name: OIDC_ISSUER
+              value: ""
+            - name: OIDC_CLIENT_ID
+              value: ""
+            - name: OIDC_PROVIDER_NAME
+              value: ""
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: wealthboard-secrets
+                  key: oidc-client-secret
+                  optional: true
+            - name: OIDC_TRANSACTION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: wealthboard-secrets
+                  key: oidc-transaction-secret
+                  optional: true
             - name: TZ
               value: Africa/Nairobi
             - name: SESSION_SECRET
@@ -80,19 +102,28 @@ spec:
               drop: [ALL]
           readinessProbe:
             httpGet:
-              path: /api/health
+              path: /api/health/ready
               port: http
-            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /api/health
+              path: /api/health/live
               port: http
-            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /api/health/ready
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
             limits:
+              cpu: "1"
               memory: 1Gi
       volumes:
         - name: data

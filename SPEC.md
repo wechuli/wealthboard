@@ -83,7 +83,7 @@ The application should be suitable for deployment to a home server or Kubernetes
 - Do not implement organizations, teams, households, roles, invitations,
   shared portfolios, or cross-user financial accounts in the initial
   multi-user release.
-- No dependency on cloud authentication providers
+- No mandatory external authentication provider; local-only operation remains supported
 - No mandatory external APIs
 - Manual data entry should work without external financial integrations
 - Prefer simple and reliable architecture over enterprise abstractions
@@ -98,45 +98,63 @@ The application should be suitable for deployment to a home server or Kubernetes
 
 ## Identity, signup, and authentication
 
-Implement simple local authentication for independent application users. Do
-not require email delivery, OAuth, or another identity provider.
+Authentication is deployment-selected with `AUTH_METHODS=local`, `oidc`, or
+`local,oidc`; the backward-compatible default is `local`. Keep the immutable
+internal user UUID as the application session subject and ownership boundary in
+every mode.
 
 Requirements:
 
-- Authenticate with a unique, case-insensitive username and password. Keep the
-  display name separate from the login identifier.
+- Local authentication uses a unique, case-insensitive username and bcrypt
+  password. Keep display name separate from the login identifier.
 - Normalize usernames to lowercase and restrict them to 3-32 characters using
   letters, numbers, `.`, `_`, and `-`.
-- Keep `/signup` publicly available at all times. Every application user,
-  including the first user, must create their identity through the signup form.
+- Expose `/signup`, local password login, password changes, and local credential
+  creation only when local authentication is enabled. OIDC-only `/signup`
+  redirects to `/login`, and crafted local actions fail before parsing secrets.
 - Do not support environment-created users, default credentials, setup users,
   invitation-only creation, or any other account bootstrap path.
 - Hash passwords with bcrypt using the existing work factor. Never store or log
   plaintext passwords or sensitive form values.
 - Require a password of at least 12 characters and confirm it during signup.
-- Create each user, their settings, seeded categories, and initial exchange
-  rates atomically. A failed signup must not leave partial user data.
+- Create each local or OIDC-JIT user, settings, and seeded categories atomically.
+  A failed operation must not leave partial user data.
 - Signup must not create financial accounts or sample portfolio data. Each user
   adds their own financial accounts after authentication unless they explicitly
   run the optional demo seed against their own identity.
-- After signup, create a session and redirect to the private dashboard.
+- A validated first OIDC login may provision one internal user with a null
+  password hash. Resolve identities only by canonical issuer and opaque subject;
+  never auto-link or merge using username, email, display claims, or verified
+  email status.
+- After local signup or OIDC login, create the same internal Wealthboard session
+  and redirect to the private dashboard.
 - Put the immutable user ID in the signed session token subject. Never accept a
   user ID from form data, route parameters, headers, or query strings as proof
   of ownership.
 - Use secure, HTTP-only, SameSite=Strict cookies. Sessions expire after the
   user's configured period and are rejected when the user is inactive or the
   session version no longer matches.
-- Allow password changes from Settings. A password change increments that
-  user's session version and invalidates their other sessions only.
+- Allow password and authentication-method changes only under the active mode.
+  Explicit hybrid linking requires a current password and complete provider
+  flow; local credential changes require fresh provider reauthentication. Never
+  remove the last usable method. Every method change increments session version.
 - Include logout and clear user-specific client state when switching users.
-- Protect every application route except login, signup, health checks, and
-  public PWA assets.
+- Protect every application route except login, mode-enabled signup, the two
+  OIDC protocol endpoints, health checks, and public PWA assets.
 - Rate-limit login by normalized username and client address, and rate-limit
   signup by client address. Login errors must not reveal whether a username
   exists.
 - Do not implement email password reset. Provide a documented operator CLI that
   resets one user by username, reads the new password from an environment
-  variable, and invalidates only that user's sessions.
+  variable, and invalidates only that user's sessions. It must not create a
+  local credential for an OIDC-only user.
+- OIDC uses discovery, Authorization Code flow, PKCE S256, state, nonce, exact
+  callback matching, RS256 verification, bounded network responses, and a
+  short-lived encrypted A256GCM transaction cookie. Provider codes, tokens,
+  verifiers, and claims are never persisted or logged.
+- OIDC-only startup/readiness requires valid discovery and a link for every
+  active user. Local-only readiness requires every active user to have a
+  password. Hybrid remains locally usable during provider outages.
 
 ## Core data model
 
@@ -150,12 +168,20 @@ Fields should include:
 
 - id, generated UUID
 - username, normalized and unique case-insensitively
-- passwordHash
+- passwordHash, nullable for OIDC-only users
 - status: Active or Disabled
 - sessionVersion
 - lastLoginAt, optional
 - createdAt
 - updatedAt
+
+### OIDC identities
+
+Store provider mappings separately with `id`, `userId`, canonical `issuer`,
+opaque `subject`, `createdAt`, `updatedAt`, and `lastLoginAt`. Enforce unique
+`(issuer, subject)` and `(userId, issuer)` and cascade-delete mappings with the
+internal user. Exclude mappings from per-user portability while retaining them
+in operator SQLite backups.
 
 ### User settings
 
@@ -1126,7 +1152,10 @@ Use:
 
 Test at minimum:
 
+- All local, OIDC-only, and hybrid mode UI/action/proxy combinations
 - Signup for the first and subsequent users
+- OIDC discovery, state/nonce/PKCE, token/JWKS validation, expiry, replay, and JIT races
+- Explicit link/unlink and local credential transitions, collisions, and rollout guards
 - Rejection of access to the private application before signup or login
 - Confirmation that signup creates no financial accounts or demo data
 - Login and logout
@@ -1219,7 +1248,7 @@ Do not implement these in version one:
 - Invitations and shared portfolios
 - Cross-user financial accounts or transfers
 - Email verification and email password recovery
-- OAuth, SAML, and enterprise single sign-on
+- Additional OAuth/social providers, SAML, and multiple simultaneous OIDC issuers
 - Social features
 - Public profiles
 - AI financial advice or autonomous financial actions; bounded explanatory

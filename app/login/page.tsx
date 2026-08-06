@@ -1,14 +1,35 @@
 import { redirect } from "next/navigation";
-import { BarChart3, ShieldCheck } from "lucide-react";
+import { BarChart3, LogIn, ShieldCheck } from "lucide-react";
 
 import { LoginForm } from "@/components/login-form";
+import { Button } from "@/components/ui/button";
+import { getAuthConfig } from "@/lib/auth/config";
 import { getSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sign in" };
 
-export default async function LoginPage() {
+const oidcErrors: Record<string, string> = {
+  unavailable: "Provider sign-in is temporarily unavailable. Try again later.",
+  provider: "Provider sign-in was cancelled or rejected.",
+  invalid_callback: "The provider response could not be verified. Try again.",
+  access_denied: "Sign in is not available for this account.",
+  rate_limited: "Too many sign-in requests. Try again later.",
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ oidc_error?: string; next?: string }>;
+}) {
   if (await getSession()) redirect("/");
+  const authConfig = getAuthConfig();
+  const query = await searchParams;
+  const oidcError = query.oidc_error
+    ? (oidcErrors[query.oidc_error] ?? oidcErrors.invalid_callback)
+    : null;
+  const oidcHref = new URLSearchParams();
+  if (query.next) oidcHref.set("next", query.next);
   return (
     <main className="financial-grid flex min-h-screen items-center justify-center px-5 py-10">
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#101615]/95 p-7 shadow-2xl sm:p-9">
@@ -25,7 +46,38 @@ export default async function LoginPage() {
           Sign in to your private financial dashboard. Your data stays on this
           server.
         </p>
-        <LoginForm />
+        {authConfig.localEnabled ? <LoginForm /> : null}
+        {authConfig.localEnabled && authConfig.oidcEnabled ? (
+          <div className="my-6 flex items-center gap-3" aria-hidden="true">
+            <span className="h-px flex-1 bg-white/10" />
+            <span className="text-xs uppercase text-slate-500">or</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+        ) : null}
+        {authConfig.oidcEnabled && authConfig.oidc ? (
+          <div className={authConfig.localEnabled ? "" : "mt-8"}>
+            {oidcError ? (
+              <p
+                role="alert"
+                className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200"
+              >
+                {oidcError.replace("Provider", authConfig.oidc.providerName)}
+              </p>
+            ) : null}
+            <Button
+              asChild
+              className="w-full"
+              variant={authConfig.localEnabled ? "secondary" : "default"}
+            >
+              <a
+                href={`/api/auth/oidc/start${oidcHref.size ? `?${oidcHref}` : ""}`}
+              >
+                <LogIn size={17} />
+                Continue with {authConfig.oidc.providerName}
+              </a>
+            </Button>
+          </div>
+        ) : null}
         <div className="mt-7 flex items-center gap-2 border-t border-white/[0.07] pt-5 text-xs text-slate-500">
           <ShieldCheck size={15} />
           Private, independent portfolios

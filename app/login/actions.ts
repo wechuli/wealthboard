@@ -3,6 +3,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { getAuthConfig } from "@/lib/auth/config";
+import { clientAddress } from "@/lib/auth/request";
 import { createSession, destroySession } from "@/lib/auth/session";
 import { loginRateLimit, recordLoginAttempt } from "@/lib/auth/rate-limit";
 import { authenticateUser } from "@/lib/auth/users";
@@ -17,15 +19,15 @@ export async function loginAction(
   _previousState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  if (!getAuthConfig().localEnabled) {
+    return { message: "This sign-in method is not available." };
+  }
   const parsed = loginSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
 
   try {
     const requestHeaders = await headers();
-    const address =
-      requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      requestHeaders.get("x-real-ip") ||
-      "local";
+    const address = clientAddress(requestHeaders);
     const rateLimit = loginRateLimit(parsed.data.username, address);
     if (!rateLimit.allowed) {
       return {
@@ -45,7 +47,10 @@ export async function loginAction(
       authenticated.sessionTimeoutMinutes,
     );
   } catch (error) {
-    console.error("Login failed safely:", error instanceof Error ? error.name : "UnknownError");
+    console.error(
+      "Login failed safely:",
+      error instanceof Error ? error.name : "UnknownError",
+    );
     return {
       message:
         error instanceof Error && error.message.includes("SESSION_SECRET")

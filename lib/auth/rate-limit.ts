@@ -9,6 +9,7 @@ import { getDatabase } from "@/lib/db";
 
 const WINDOW_MINUTES = 15;
 const MAX_FAILURES = 5;
+const OIDC_REQUEST_LIMITS = { start: 20, callback: 40 } as const;
 
 function clientKey(value: string) {
   return createHash("sha256")
@@ -66,6 +67,42 @@ export function loginRateLimit(username: string, address: string) {
 
 export function signupRateLimit(address: string) {
   return takeRateLimit([`signup-client:${address}`]);
+}
+
+export function oidcRequestRateLimit(
+  kind: keyof typeof OIDC_REQUEST_LIMITS,
+  address: string,
+) {
+  const db = getDatabase();
+  const key = clientKey(`oidc-${kind}:${address}`);
+  const since = new Date(Date.now() - WINDOW_MINUTES * 60_000).toISOString();
+  return db.transaction((tx) => {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    tx.delete(loginAttempts).where(lt(loginAttempts.attemptedAt, cutoff)).run();
+    const total =
+      tx
+        .select({ total: count() })
+        .from(loginAttempts)
+        .where(
+          and(
+            eq(loginAttempts.clientKey, key),
+            gte(loginAttempts.attemptedAt, since),
+          ),
+        )
+        .get()?.total ?? 0;
+    const allowed = total < OIDC_REQUEST_LIMITS[kind];
+    if (allowed) {
+      tx.insert(loginAttempts)
+        .values({
+          id: crypto.randomUUID(),
+          clientKey: key,
+          succeeded: true,
+          attemptedAt: nowIso(),
+        })
+        .run();
+    }
+    return { allowed, retryAfterMinutes: WINDOW_MINUTES };
+  });
 }
 
 export function recordLoginAttempt(

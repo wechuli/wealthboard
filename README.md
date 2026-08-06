@@ -3,7 +3,8 @@
 Wealthboard is a self-hosted, multi-user wealth and goals tracker. Each user has
 an independent portfolio, settings, categories, exchange rates, reports, and
 portable exports. The Next.js application reads SQLite directly and requires no
-separate backend, cloud identity provider, or financial integration.
+separate backend or financial integration. Authentication can remain fully
+local or use one operator-configured OpenID Connect provider.
 
 > **Screenshot placeholder:** add desktop dashboard, account detail, goal
 > projection, signup, and 390 px mobile screenshots after deployment branding
@@ -11,7 +12,7 @@ separate backend, cloud identity provider, or financial integration.
 
 ## Features
 
-- Public self-service signup with local username/password authentication
+- Deployment-selected local, OpenID Connect, or hybrid authentication
 - Strict owner-scoped accounts, transactions, valuations, goals, analytics,
   rates, imports, exports, restores, caches, and idempotency keys
 - Accounts and liabilities with custom categories, archives, filters, and
@@ -49,11 +50,12 @@ Set `SESSION_SECRET` to at least 32 random characters before starting. The
 development command applies pending migrations, then starts Next.js at
 <http://localhost:3000>.
 
-Open `/signup` to create the first user. Signup remains available for every
-subsequent user and is the only application-user creation path. It atomically
-creates the identity, selected base/enabled currency settings, and default
-categories; it does not create exchange rates, financial accounts, or sample
-data.
+The default `AUTH_METHODS=local` mode preserves the original workflow. Open
+`/signup` to create local users. Signup atomically creates the internal identity,
+selected base/enabled currency settings, and default categories; it does not
+create exchange rates, financial accounts, goals, or sample data. OIDC-only
+deployments have no local signup or password-login path and provision internal
+users only after a validated provider login.
 
 ### Optional fictional demo data
 
@@ -72,12 +74,104 @@ The command never creates an identity or seeds every user.
 | `DATABASE_PATH`                | Persistent SQLite file; default `./data/wealthboard.db`         |
 | `SESSION_SECRET`               | HMAC session secret; at least 32 characters                     |
 | `APP_URL`                      | Canonical deployment URL used for origin validation             |
+| `TRUST_PROXY_HEADERS`          | Trust one ingress-overwritten client IP header; default `false` |
+| `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`; default `local`               |
+| `OIDC_ISSUER`                  | Exact provider issuer when OIDC is enabled                      |
+| `OIDC_CLIENT_ID`               | Confidential OIDC client ID                                     |
+| `OIDC_CLIENT_SECRET`           | Confidential OIDC client secret                                 |
+| `OIDC_PROVIDER_NAME`           | Login-button provider label; 1-60 characters                    |
+| `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key           |
 | `TZ`                           | Default timezone for new users; default `Africa/Nairobi`        |
 | `BACKUP_PATH`                  | Operator backup directory; default `./backups`                  |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys |
 | `AI_ALLOWED_ENDPOINTS`         | Optional comma-separated exact custom OpenAI-compatible URLs    |
 
 There is no initial-user password or environment-created identity.
+
+## Authentication modes and OIDC
+
+`AUTH_METHODS` is deployment policy and is read at startup:
+
+| Value        | Login and account creation behavior                              |
+| ------------ | ---------------------------------------------------------------- |
+| `local`      | Username/password login and public local signup only             |
+| `oidc`       | Only `Continue with <provider>`; `/signup` redirects to `/login` |
+| `local,oidc` | Local login/signup plus explicit OIDC login and linking          |
+
+OIDC uses Authorization Code flow, PKCE S256, state, nonce, discovery, and
+RS256 ID-token verification through `jose`. The exact callback is
+`${APP_URL}/api/auth/oidc/callback`; register that URI with the provider. Use an
+HTTPS `APP_URL` and issuer in production. Plain HTTP is accepted only for an
+explicit localhost address. Issuer URLs may contain a path, such as a Keycloak
+realm, but not credentials, a query, or a fragment.
+
+Generate independent secrets:
+
+```bash
+openssl rand -hex 32       # SESSION_SECRET
+openssl rand -base64 32    # OIDC_TRANSACTION_SECRET
+```
+
+Do not reuse either value as `OIDC_CLIENT_SECRET`. OIDC transaction state is
+encrypted in a short-lived, callback-scoped, HTTP-only `SameSite=Lax` cookie.
+Provider tokens, authorization codes, PKCE verifiers, and claim payloads are
+never stored in SQLite, exports, browser storage, analytics, or logs. A
+successful callback issues the ordinary Wealthboard session containing only the
+internal user UUID, session version, and expiry.
+
+### Keycloak example
+
+Create a confidential Keycloak client with standard Authorization Code flow,
+client authentication enabled, PKCE method S256, and this exact valid redirect
+URI:
+
+```text
+https://wealthboard.example.com/api/auth/oidc/callback
+```
+
+Assign only intended users or groups to the client. Wealthboard accepts every
+identity the configured client permits; provider-side assignment is the default
+admission policy. Configure only the realm issuer, not Keycloak endpoint paths:
+
+```dotenv
+APP_URL=https://wealthboard.example.com
+AUTH_METHODS=local,oidc
+OIDC_ISSUER=https://id.example.com/realms/wealthboard
+OIDC_CLIENT_ID=wealthboard
+OIDC_CLIENT_SECRET=replace-with-keycloak-client-secret
+OIDC_PROVIDER_NAME=Company SSO
+OIDC_TRANSACTION_SECRET=replace-with-openssl-base64-output
+```
+
+Wealthboard discovers Keycloak's authorization, token, and JWKS endpoints from
+`${OIDC_ISSUER}/.well-known/openid-configuration`. Scopes are `openid profile
+email`; only issuer, opaque subject, nonce, audience, and token validity are
+authentication evidence. Email and display claims never link or merge users.
+
+### Rollout and rollback
+
+Existing installations start in `local`. To adopt OIDC without duplicate
+portfolios:
+
+1. Configure `local,oidc`, restart, and verify readiness.
+2. Existing local users link the provider explicitly under **Settings >
+   Authentication methods** after confirming their password.
+3. Confirm every active user has a link, then change to `oidc` and restart.
+
+Startup/readiness refuses OIDC-only mode while any active user lacks a link for
+the configured issuer. It likewise refuses local-only mode while any active user
+lacks a password. Disable users deliberately or complete their migration first.
+Password hashes and identity links remain dormant when their method is disabled,
+so rollback does not require recreating credentials. Hybrid mode remains ready
+and local login remains usable during a temporary provider outage; OIDC-only
+login and readiness are unavailable until discovery succeeds.
+
+Rate limiting ignores forwarding headers by default. This prevents a direct
+client from choosing its own limit key, but direct clients share one
+conservative bucket. Set `TRUST_PROXY_HEADERS=true` only behind one trusted
+ingress that strips client-supplied `X-Forwarded-For` and `X-Real-IP` values and
+writes exactly one client IP. Forwarding chains and malformed addresses fall
+into shared fail-closed buckets.
 
 Generate a dedicated AI credential key only when users should be able to save
 provider keys:
@@ -97,8 +191,10 @@ credentials again.
 
 ## Password changes and operator reset
 
-Users change their password under **Settings → Password**. This increments only
-that user's session version and invalidates their other sessions.
+Users with a local credential change it under **Settings > Password** when local
+authentication is enabled. Hybrid users explicitly link/unlink OIDC or enable
+and remove local login under **Settings > Authentication methods**. Every method
+change increments that user's session version and invalidates other sessions.
 
 There is no email reset flow. An operator can reset one user by normalized
 username; the password is read from the environment rather than command
@@ -109,6 +205,10 @@ TARGET_USERNAME=alice \
 NEW_USER_PASSWORD='a-new-password-with-12-characters' \
 npm run password:reset
 ```
+
+The reset command works only when local authentication is enabled and only for a
+user who already has a local credential. It never creates a password for an
+OIDC-only user.
 
 For Docker Compose:
 
@@ -142,7 +242,8 @@ do not manually change its migration ledger.
 
 ## Docker deployment
 
-Create `.env` with `SESSION_SECRET` and `APP_URL`, then run:
+Create `.env` with `SESSION_SECRET`, `APP_URL`, `AUTH_METHODS`, and any required
+OIDC values, then run:
 
 ```bash
 docker compose up -d --build
@@ -151,7 +252,8 @@ docker compose ps
 
 Compose mounts `/data` for SQLite and `/backups` for operator backups. Both
 volumes survive image replacement. The container runs as UID/GID 1001, applies
-migrations on startup, and exposes `/api/health`.
+migrations on startup, and exposes `/api/health/live` and
+`/api/health/ready`. The legacy `/api/health` path has readiness semantics.
 
 To update:
 
@@ -165,17 +267,24 @@ read-write into multiple application replicas.
 
 ## Kubernetes deployment
 
-Edit the image, hostname, storage classes, and resource limits in
-`deploy/kubernetes.yaml`, then create the session secret separately:
+Edit the image, hostname, auth mode/provider values, storage classes, and
+resource limits in `deploy/kubernetes.yaml`, then create secrets separately:
 
 ```bash
 kubectl create secret generic wealthboard-secrets \
-  --from-literal=session-secret="$(openssl rand -hex 32)"
+  --from-literal=session-secret="$(openssl rand -hex 32)" \
+  --from-literal=oidc-client-secret='replace-with-provider-secret' \
+  --from-literal=oidc-transaction-secret="$(openssl rand -base64 32)"
 kubectl apply -f deploy/kubernetes.yaml
 ```
 
-The example uses one replica with a `Recreate` strategy, ReadWriteOnce PVCs,
-probes, an Ingress, resource bounds, and a non-root security context.
+The OIDC keys may be omitted while `AUTH_METHODS=local`. The example uses one
+replica with a `Recreate` strategy, ReadWriteOnce PVCs, separate startup,
+readiness, and liveness probes, an Ingress, resource bounds, and a non-root
+security context. TLS must terminate at the configured `APP_URL`, and the proxy
+must preserve the original host and scheme. The example enables trusted proxy
+headers for its single ingress; that ingress must overwrite rather than append
+client-supplied forwarding headers.
 
 ## AI portfolio review
 
@@ -298,8 +407,11 @@ layouts at 360, 390, 768, 1024, and 1440 px.
 ## Security considerations
 
 - Use a unique, high-entropy `SESSION_SECRET` and strong user passwords.
-- Production cookies are Secure, HTTP-only, SameSite=Strict, and explicitly
-  expiring.
+- Keep `OIDC_CLIENT_SECRET` and `OIDC_TRANSACTION_SECRET` in deployment secret
+  storage, never an image or committed manifest.
+- Production session cookies are Secure, HTTP-only, SameSite=Strict, and
+  explicitly expiring. OIDC transaction cookies are separate, callback-scoped,
+  Secure, HTTP-only, SameSite=Lax, and expire within ten minutes.
 - Restrict filesystem access to SQLite databases, backups, and exports.
 - Never publish raw backups or user exports to public object storage.
 - Keep TLS, the host, Node.js, the base image, and dependencies updated.

@@ -58,12 +58,12 @@ describe("migration runner", () => {
     expect(migrationCount.count).toBe(journal.entries.length);
   });
 
-  test("upgrades the previous schema with nullable external IDs and uniqueness", () => {
+  test("upgrades local users and adds OIDC identity invariants", () => {
     const databasePath = createDatabasePath();
     const migrations = readMigrationFiles({
       migrationsFolder: path.join(projectRoot, "db/migrations"),
     });
-    expect(migrations.length).toBeGreaterThanOrEqual(3);
+    expect(migrations.length).toBeGreaterThanOrEqual(4);
     const previous = migrations.slice(0, -1);
     const sqlite = new Database(databasePath);
     sqlite.pragma("foreign_keys = OFF");
@@ -85,6 +85,12 @@ describe("migration runner", () => {
           )
           .run(migration.hash, migration.folderMillis);
       }
+      sqlite.exec(`
+        INSERT INTO users
+          (id, username, password_hash, status, session_version, created_at, updated_at)
+        VALUES
+          ('local-user', 'existing-local', 'preserved-password-hash', 'active', 7, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      `);
     })();
     sqlite.close();
 
@@ -92,23 +98,69 @@ describe("migration runner", () => {
     expect(result.status, result.stderr).toBe(0);
 
     const upgraded = new Database(databasePath);
-    const columns = upgraded.pragma("table_info(transactions)") as Array<{
+    const columns = upgraded.pragma("table_info(users)") as Array<{
       name: string;
       notnull: number;
     }>;
-    const indexes = upgraded.pragma("index_list(transactions)") as Array<{
+    const indexes = upgraded.pragma("index_list(oidc_identities)") as Array<{
       name: string;
       unique: number;
     }>;
     expect(columns).toContainEqual(
-      expect.objectContaining({ name: "external_id", notnull: 0 }),
+      expect.objectContaining({ name: "password_hash", notnull: 0 }),
     );
-    expect(indexes).toContainEqual(
-      expect.objectContaining({
-        name: "transactions_user_account_external_unique",
-        unique: 1,
-      }),
+    expect(indexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "oidc_identities_issuer_subject_unique",
+          unique: 1,
+        }),
+        expect.objectContaining({
+          name: "oidc_identities_user_issuer_unique",
+          unique: 1,
+        }),
+      ]),
     );
+    expect(
+      upgraded
+        .prepare(
+          "SELECT password_hash, session_version FROM users WHERE id = ?",
+        )
+        .get("local-user"),
+    ).toEqual({
+      password_hash: "preserved-password-hash",
+      session_version: 7,
+    });
+    upgraded.exec(`
+      INSERT INTO users
+        (id, username, password_hash, status, session_version, created_at, updated_at)
+      VALUES
+        ('oidc-user', 'oidc-generated', NULL, 'active', 1, '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z');
+      INSERT INTO oidc_identities
+        (id, user_id, issuer, subject, created_at, updated_at, last_login_at)
+      VALUES
+        ('identity-one', 'oidc-user', 'https://identity.example.test/realm', 'subject-one', '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z');
+    `);
+    expect(() =>
+      upgraded.exec(`
+        INSERT INTO oidc_identities
+          (id, user_id, issuer, subject, created_at, updated_at, last_login_at)
+        VALUES
+          ('identity-duplicate-subject', 'local-user', 'https://identity.example.test/realm', 'subject-one', '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z');
+      `),
+    ).toThrow(/UNIQUE constraint failed/);
+    expect(() =>
+      upgraded.exec(`
+        INSERT INTO oidc_identities
+          (id, user_id, issuer, subject, created_at, updated_at, last_login_at)
+        VALUES
+          ('identity-duplicate-issuer', 'oidc-user', 'https://identity.example.test/realm', 'subject-two', '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z', '2026-01-02T00:00:00.000Z');
+      `),
+    ).toThrow(/UNIQUE constraint failed/);
+    upgraded.prepare("DELETE FROM users WHERE id = ?").run("oidc-user");
+    expect(
+      upgraded.prepare("SELECT COUNT(*) AS count FROM oidc_identities").get(),
+    ).toEqual({ count: 0 });
     expect(upgraded.pragma("foreign_key_check")).toEqual([]);
     upgraded.close();
   });

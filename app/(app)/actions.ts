@@ -1,9 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { requireSession } from "@/lib/auth/session";
+import { getAuthConfig } from "@/lib/auth/config";
+import { requireTrustedHeadersOrigin } from "@/lib/auth/origin";
 import {
   accountSchema,
   categorySchema,
@@ -11,6 +14,8 @@ import {
   goalMilestoneSchema,
   goalSchema,
   institutionSchema,
+  localCredentialSchema,
+  passwordConfirmationSchema,
   passwordChangeSchema,
   transactionSchema,
   transactionUpdateSchema,
@@ -53,7 +58,34 @@ import { recordTransfer } from "@/lib/services/transfers";
 import type { GoalStatus, InstitutionType } from "@/db/schema";
 import { addExchangeRate, updateSettings } from "@/lib/services/settings";
 import { createSession } from "@/lib/auth/session";
-import { changeUserPassword } from "@/lib/auth/users";
+import {
+  AuthenticationMethodError,
+  changeUserPassword,
+  enableLocalCredential,
+  getUserAuthState,
+  removeLocalCredential,
+  unlinkOidcIdentity,
+  UsernameUnavailableError,
+  verifyUserPassword,
+} from "@/lib/auth/users";
+import {
+  clearOidcReauthGrant,
+  consumeOidcReauthGrant,
+  storeOidcTransaction,
+} from "@/lib/auth/oidc-cookie";
+import {
+  constantTimeEqual,
+  createAuthorizationRequest,
+  discoverOidcProvider,
+  openOidcReauthGrant,
+  sealOidcTransaction,
+} from "@/lib/auth/oidc";
+import {
+  loginRateLimit,
+  oidcRequestRateLimit,
+  recordLoginAttempt,
+} from "@/lib/auth/rate-limit";
+import { clientAddress } from "@/lib/auth/request";
 import { z } from "zod";
 import { isValidTimezone } from "@/lib/dates";
 import { aiProviderSettingsInputSchema } from "@/lib/ai/schemas";
@@ -73,6 +105,15 @@ function mutationError(error: unknown): ActionState {
     message:
       error instanceof Error ? error.message : "The change could not be saved.",
   };
+}
+
+async function trustedActionOrigin() {
+  try {
+    requireTrustedHeadersOrigin(await headers());
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function accountInput(formData: FormData) {
@@ -614,6 +655,12 @@ export async function changePasswordAction(
   formData: FormData,
 ): Promise<ActionState> {
   const { userId } = await requireSession();
+  if (!getAuthConfig().localEnabled) {
+    return { message: "Password authentication is not available." };
+  }
+  if (!(await trustedActionOrigin())) {
+    return { message: "The request could not be verified." };
+  }
   const parsed = passwordChangeSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
   const session = await changeUserPassword(
@@ -633,4 +680,271 @@ export async function changePasswordAction(
     ok: true,
     message: "Password changed. Other sessions were signed out.",
   };
+}
+
+function hybridOidcConfig() {
+  const config = getAuthConfig();
+  return config.localEnabled && config.oidcEnabled ? config.oidc : undefined;
+}
+
+async function settingsOidcRedirect(
+  userId: string,
+  sessionVersion: number,
+  intent: "link" | "reauth_local",
+  next: string,
+) {
+  const oidc = hybridOidcConfig();
+  if (!oidc) return null;
+  const metadata = await discoverOidcProvider(oidc);
+  const authorization = createAuthorizationRequest(oidc, metadata, {
+    intent,
+    linkingUserId: userId,
+    linkingSessionVersion: sessionVersion,
+    next,
+  });
+  await storeOidcTransaction(
+    await sealOidcTransaction(oidc, authorization.transaction),
+  );
+  return authorization.authorizationUrl.toString();
+}
+
+async function confirmPasswordForAuthChange(
+  userId: string,
+  username: string,
+  password: string,
+) {
+  const requestHeaders = await headers();
+  const rateLimit = loginRateLimit(
+    `auth-change:${username}`,
+    clientAddress(requestHeaders),
+  );
+  if (!rateLimit.allowed) {
+    return {
+      ok: false as const,
+      message: `Too many attempts. Try again in ${rateLimit.retryAfterMinutes} minutes.`,
+    };
+  }
+  const verified = await verifyUserPassword(userId, password);
+  recordLoginAttempt(rateLimit, verified);
+  return verified
+    ? { ok: true as const }
+    : { ok: false as const, message: "The current password is incorrect." };
+}
+
+async function allowOidcSettingsStart() {
+  const requestHeaders = await headers();
+  return oidcRequestRateLimit("start", clientAddress(requestHeaders));
+}
+
+export async function startOidcLinkAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId, username, version } = await requireSession();
+  const oidc = hybridOidcConfig();
+  if (!oidc) return { message: "OIDC linking is not available." };
+  if (!(await trustedActionOrigin())) {
+    return { message: "The request could not be verified." };
+  }
+  const parsed = passwordConfirmationSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  const state = getUserAuthState(userId, oidc.issuer);
+  if (!state?.hasPassword || state.oidcIdentity) {
+    return { message: "OIDC linking is not available." };
+  }
+  const passwordConfirmation = await confirmPasswordForAuthChange(
+    userId,
+    username,
+    parsed.data.currentPassword,
+  );
+  if (!passwordConfirmation.ok)
+    return { message: passwordConfirmation.message };
+  const rateLimit = await allowOidcSettingsStart();
+  if (!rateLimit.allowed) {
+    return { message: "Too many provider sign-in requests. Try again later." };
+  }
+
+  let authorizationUrl: string | null;
+  try {
+    authorizationUrl = await settingsOidcRedirect(
+      userId,
+      version,
+      "link",
+      "/settings?auth=linked",
+    );
+  } catch (error) {
+    console.error(
+      "OIDC link initiation failed safely:",
+      error instanceof Error ? error.name : "UnknownError",
+    );
+    return { message: "Provider sign-in is temporarily unavailable." };
+  }
+  if (!authorizationUrl) return { message: "OIDC linking is not available." };
+  redirect(authorizationUrl);
+}
+
+export async function startOidcReauthenticationAction(
+  _previous: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  void _previous;
+  void _formData;
+  const { userId, version } = await requireSession();
+  const oidc = hybridOidcConfig();
+  if (!oidc) return { message: "OIDC reauthentication is not available." };
+  if (!(await trustedActionOrigin())) {
+    return { message: "The request could not be verified." };
+  }
+  const state = getUserAuthState(userId, oidc.issuer);
+  if (!state?.oidcIdentity) {
+    return { message: "OIDC reauthentication is not available." };
+  }
+  const rateLimit = await allowOidcSettingsStart();
+  if (!rateLimit.allowed) {
+    return { message: "Too many provider sign-in requests. Try again later." };
+  }
+
+  let authorizationUrl: string | null;
+  try {
+    authorizationUrl = await settingsOidcRedirect(
+      userId,
+      version,
+      "reauth_local",
+      "/settings?auth=reauthenticated",
+    );
+  } catch (error) {
+    console.error(
+      "OIDC reauthentication initiation failed safely:",
+      error instanceof Error ? error.name : "UnknownError",
+    );
+    return { message: "Provider sign-in is temporarily unavailable." };
+  }
+  if (!authorizationUrl) {
+    return { message: "OIDC reauthentication is not available." };
+  }
+  redirect(authorizationUrl);
+}
+
+export async function unlinkOidcIdentityAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId, username } = await requireSession();
+  const oidc = hybridOidcConfig();
+  if (!oidc) return { message: "OIDC unlinking is not available." };
+  if (!(await trustedActionOrigin())) {
+    return { message: "The request could not be verified." };
+  }
+  const parsed = passwordConfirmationSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  const state = getUserAuthState(userId, oidc.issuer);
+  if (!state?.hasPassword || !state.oidcIdentity) {
+    return { message: "OIDC unlinking is not available." };
+  }
+  const passwordConfirmation = await confirmPasswordForAuthChange(
+    userId,
+    username,
+    parsed.data.currentPassword,
+  );
+  if (!passwordConfirmation.ok)
+    return { message: passwordConfirmation.message };
+  try {
+    const session = unlinkOidcIdentity(userId, oidc.issuer);
+    await createSession(
+      userId,
+      session.sessionVersion,
+      session.sessionTimeoutMinutes,
+    );
+  } catch (error) {
+    if (!(error instanceof AuthenticationMethodError)) throw error;
+    return { message: error.message };
+  }
+  revalidatePath("/settings");
+  return { ok: true, message: "OIDC sign-in was unlinked." };
+}
+
+async function verifiedReauthUser(userId: string) {
+  const oidc = hybridOidcConfig();
+  if (!oidc) return null;
+  const token = await consumeOidcReauthGrant();
+  if (!token) return null;
+  try {
+    const grant = await openOidcReauthGrant(oidc, token);
+    if (!constantTimeEqual(grant.userId, userId)) {
+      await clearOidcReauthGrant();
+      return null;
+    }
+    return oidc;
+  } catch {
+    await clearOidcReauthGrant();
+    return null;
+  }
+}
+
+export async function enableLocalCredentialAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  if (!(await trustedActionOrigin())) {
+    return { message: "The request could not be verified." };
+  }
+  const parsed = localCredentialSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  const oidc = await verifiedReauthUser(userId);
+  if (!oidc) return { message: "Verify with your provider before continuing." };
+  try {
+    const session = await enableLocalCredential(userId, {
+      username: parsed.data.username,
+      password: parsed.data.password,
+      issuer: oidc.issuer,
+    });
+    await clearOidcReauthGrant();
+    await createSession(
+      userId,
+      session.sessionVersion,
+      session.sessionTimeoutMinutes,
+    );
+  } catch (error) {
+    if (error instanceof UsernameUnavailableError) {
+      return {
+        message: error.message,
+        fieldErrors: { username: [error.message] },
+      };
+    }
+    if (!(error instanceof AuthenticationMethodError)) throw error;
+    await clearOidcReauthGrant();
+    return { message: error.message };
+  }
+  revalidatePath("/settings");
+  return { ok: true, message: "Local password sign-in was enabled." };
+}
+
+export async function removeLocalCredentialAction(
+  _previous: ActionState,
+  _formData: FormData,
+): Promise<ActionState> {
+  void _previous;
+  void _formData;
+  const { userId } = await requireSession();
+  if (!(await trustedActionOrigin())) {
+    return { message: "The request could not be verified." };
+  }
+  const oidc = await verifiedReauthUser(userId);
+  if (!oidc) return { message: "Verify with your provider before continuing." };
+  try {
+    const session = removeLocalCredential(userId, oidc.issuer);
+    await clearOidcReauthGrant();
+    await createSession(
+      userId,
+      session.sessionVersion,
+      session.sessionTimeoutMinutes,
+    );
+  } catch (error) {
+    await clearOidcReauthGrant();
+    if (!(error instanceof AuthenticationMethodError)) throw error;
+    return { message: error.message };
+  }
+  revalidatePath("/settings");
+  return { ok: true, message: "Local password sign-in was removed." };
 }

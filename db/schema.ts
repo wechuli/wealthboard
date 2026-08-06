@@ -71,7 +71,7 @@ export const users = sqliteTable(
   {
     id: text("id").primaryKey(),
     username: text("username").notNull(),
-    passwordHash: text("password_hash").notNull(),
+    passwordHash: text("password_hash"),
     status: text("status", { enum: userStatuses }).notNull().default("active"),
     sessionVersion: integer("session_version").notNull().default(1),
     lastLoginAt: text("last_login_at"),
@@ -79,6 +79,32 @@ export const users = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [uniqueIndex("users_username_unique").on(table.username)],
+);
+
+export const oidcIdentities = sqliteTable(
+  "oidc_identities",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    issuer: text("issuer").notNull(),
+    subject: text("subject").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    lastLoginAt: text("last_login_at").notNull(),
+  },
+  (table) => [
+    index("oidc_identities_user_idx").on(table.userId),
+    uniqueIndex("oidc_identities_issuer_subject_unique").on(
+      table.issuer,
+      table.subject,
+    ),
+    uniqueIndex("oidc_identities_user_issuer_unique").on(
+      table.userId,
+      table.issuer,
+    ),
+  ],
 );
 
 export const userSettings = sqliteTable(

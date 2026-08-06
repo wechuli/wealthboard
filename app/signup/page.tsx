@@ -2,6 +2,7 @@ import { BarChart3, ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { SignupForm } from "@/components/signup-form";
+import { getAuthConfig } from "@/lib/auth/config";
 import { getSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export const metadata = { title: "Create account" };
 
 export default async function SignupPage() {
   if (await getSession()) redirect("/");
+  if (!getAuthConfig().localEnabled) redirect("/login");
 
   return (
     <main className="financial-grid flex min-h-screen items-center justify-center px-5 py-10">

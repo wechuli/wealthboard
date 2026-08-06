@@ -6,7 +6,7 @@
 Wealthboard remains a single-process Next.js application. Server Components read
 SQLite through Drizzle ORM, Server Actions perform validated mutations, and
 Route Handlers provide user-scoped import/export and health checks. There is no
-separate API service and no external identity provider.
+separate API service. One optional OIDC provider may authenticate internal users.
 
 ## Decisions
 
@@ -23,15 +23,30 @@ separate API service and no external identity provider.
   enabled set. Services reject disabled currencies, while existing referenced
   currencies are preserved during migration and restore.
 - **Identity:** A dedicated `users` table stores a UUID, normalized unique
-  username, bcrypt password hash, status, and session version. `user_settings`
-  stores one preferences row per user and contains no credentials.
-- **Signup:** `/signup` is always public and is the only application-user
-  creation path. There is no signup mode, environment-created identity, default
-  credential, setup user, invitation, or first-user bootstrap.
-- **Authentication:** Login issues a short-lived, signed, HTTP-only,
+  internal handle, nullable bcrypt password hash, status, and session version.
+  `oidc_identities` maps one canonical issuer/opaque subject to one internal
+  UUID. `user_settings` stores preferences and contains no credentials.
+- **Authentication policy:** `AUTH_METHODS` selects local, OIDC-only, or hybrid
+  authentication at startup. Local remains the default. `/signup` exists only
+  when local is enabled; validated first OIDC login is the only other
+  provisioning path. Neither path creates portfolio data.
+- **Authentication:** Local or OIDC login issues the same short-lived, signed, HTTP-only,
   SameSite=Strict cookie whose subject is the immutable user ID. Session
   verification loads that user and checks status, expiry, and session version.
-  Failed login and signup attempts are rate-limited in SQLite.
+  Failed login/signup and bounded OIDC start/callback traffic are rate-limited
+  in SQLite.
+- **OIDC protocol:** Native fetch plus `jose` performs exact-issuer discovery,
+  Authorization Code + PKCE S256, state/nonce validation, bounded token exchange,
+  cached remote JWKS, and RS256 verification. Encrypted A256GCM transaction and
+  reauthentication cookies are distinct from the application session. No
+  provider code, token, verifier, or claim payload is retained.
+- **Method management:** Hybrid links are explicit and require fresh local
+  password confirmation. Local credential enable/remove operations require an
+  exact linked-identity reauthentication. Identity claims never trigger merging,
+  and successful changes increment session version.
+- **Readiness:** Startup and readiness reject mode changes that strand active
+  users. OIDC-only also requires valid discovery. Hybrid remains ready through a
+  temporary provider outage so local login continues to work.
 - **Authorization:** Every private operation derives `userId` from the verified
   session and supplies it to the owning service. Queries use both owner and
   resource ID; client input is never accepted as ownership evidence.
@@ -105,24 +120,25 @@ separate API service and no external identity provider.
 
 ## Database schema
 
-| Table                     | Purpose                                                             |
-| ------------------------- | ------------------------------------------------------------------- |
-| `users`                   | Login identity, password hash, status, and session version          |
-| `user_settings`           | One user's locale, display, dashboard, and goal preferences         |
-| `categories`              | One user's seeded and custom classifications                        |
-| `institutions`            | One user's financial-provider directory and reference details       |
-| `accounts`                | One user's holdings and liabilities with replayed values            |
+| Table                     | Purpose                                                                  |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `users`                   | Login identity, password hash, status, and session version               |
+| `oidc_identities`         | Internal-user mapping for one canonical issuer and opaque subject        |
+| `user_settings`           | One user's locale, display, dashboard, and goal preferences              |
+| `categories`              | One user's seeded and custom classifications                             |
+| `institutions`            | One user's financial-provider directory and reference details            |
+| `accounts`                | One user's holdings and liabilities with replayed values                 |
 | `transactions`            | User-owned cash flows, returns, transfers, and account-scoped source IDs |
-| `valuation_snapshots`     | User-owned absolute valuations, separate from cash flow             |
-| `exchange_rates`          | One user's effective-dated decimal exchange rates                   |
-| `goals`                   | One user's targets, links, status, priority, and return assumptions |
-| `goal_contribution_plans` | User-owned planned contribution amounts and frequency               |
-| `goal_milestones`         | Optional owner-scoped amount and date checkpoints                   |
-| `goal_alert_dismissals`   | Monthly owner-scoped suppression of derived goal reminders          |
-| `login_attempts`          | Bounded rate limiting by normalized username and client key         |
-| `idempotency_keys`        | User-scoped duplicate-submission protection                         |
-| `ai_provider_settings`    | Owner-scoped provider, sharing defaults, limits, encrypted key      |
-| `ai_usage_events`         | Owner-scoped request status, latency, model, and token metadata     |
+| `valuation_snapshots`     | User-owned absolute valuations, separate from cash flow                  |
+| `exchange_rates`          | One user's effective-dated decimal exchange rates                        |
+| `goals`                   | One user's targets, links, status, priority, and return assumptions      |
+| `goal_contribution_plans` | User-owned planned contribution amounts and frequency                    |
+| `goal_milestones`         | Optional owner-scoped amount and date checkpoints                        |
+| `goal_alert_dismissals`   | Monthly owner-scoped suppression of derived goal reminders               |
+| `login_attempts`          | Bounded rate limiting by normalized username and client key              |
+| `idempotency_keys`        | User-scoped duplicate-submission protection                              |
+| `ai_provider_settings`    | Owner-scoped provider, sharing defaults, limits, encrypted key           |
+| `ai_usage_events`         | Owner-scoped request status, latency, model, and token metadata          |
 
 Every table except `login_attempts` is either the identity table or is owned by
 one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
@@ -131,12 +147,13 @@ operations retain history. All timestamps are UTC ISO-8601 strings.
 Creating a user is one transaction that inserts the identity, base/enabled
 currency settings, and a copy of the default categories. User defaults are
 copied, not shared mutable rows. Signup creates no exchange rates, financial
-accounts, or sample portfolio data.
+accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 
 ## Routes and components
 
-- `/login` — public username/password login
-- `/signup` — always-public user registration
+- `/login` — renders only deployment-enabled login methods
+- `/signup` — public local registration only when local authentication is enabled
+- `/api/auth/oidc/{start,callback}` — public only when OIDC is enabled
 - `/` — net-worth dashboard
 - `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/[id]/edit`,
   `/accounts/[id]/import`
@@ -144,7 +161,7 @@ accounts, or sample portfolio data.
 - `/goals`, `/goals/new`, `/goals/[id]`, `/goals/[id]/edit`
 - `/reports`, `/categories`, `/institutions`, `/settings`
 - `/api/export/*`, `/api/accounts/[id]/history-import/{preview,commit}`, `/api/restore/user`,
-  `/api/ai/review`, `/api/health`
+  `/api/ai/review`, `/api/health/{live,ready}`
 - `/review` — on-demand, evidence-linked AI portfolio critique
 - `/offline`, `/manifest.webmanifest`, `/sw.js`
 
@@ -177,10 +194,12 @@ own authorization decisions.
 - Application users are independent tenants. There are no administrator roles,
   invitations, shared portfolios, or cross-user transfers. Filesystem-level
   deployment operators are outside the application authorization model.
-- Every application identity originates from the public signup form. Signup is
-  not configurable and no environment variable can create a user.
-- Usernames are the local login identifiers. Email verification, email recovery,
-  OAuth, SAML, and mandatory external services remain out of scope.
+- Every application identity originates from local signup or a validated OIDC
+  first login. No environment variable, default credential, invitation, or
+  unauthenticated ownership claim can create a user.
+- Usernames are local identifiers or collision-resistant generated handles.
+  Email linking/recovery, SAML, multiple simultaneous issuers, and mandatory
+  external services remain out of scope.
 - The initial release is dark-only; semantic CSS tokens make a future light
   theme additive rather than a component rewrite.
 - AI output remains explanatory, non-authoritative, and non-advisory. Reviews

@@ -9,6 +9,13 @@ services:
       BACKUP_PATH: /backups
       SESSION_SECRET: ${SESSION_SECRET}
       APP_URL: ${APP_URL:-http://localhost:3000}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      AUTH_METHODS: ${AUTH_METHODS:-local}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-}
+      OIDC_TRANSACTION_SECRET: ${OIDC_TRANSACTION_SECRET:-}
       TZ: ${TZ:-Africa/Nairobi}
       AI_CREDENTIAL_ENCRYPTION_KEY: ${AI_CREDENTIAL_ENCRYPTION_KEY:-}
       AI_ALLOWED_ENDPOINTS: ${AI_ALLOWED_ENDPOINTS:-}
@@ -17,6 +24,18 @@ services:
       - wealthboard-backups:/backups
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
 volumes:
   wealthboard-data:
