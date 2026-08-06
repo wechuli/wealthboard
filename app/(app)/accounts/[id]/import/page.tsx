@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download } from "lucide-react";
 
+import { AccountHistoryAiPrompt } from "@/components/account-history-ai-prompt";
 import { AccountHistoryImport } from "@/components/account-history-import";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page";
 import { requireSession } from "@/lib/auth/session";
+import { currencyDigits } from "@/lib/money";
 import { getAccount } from "@/lib/services/accounts";
 
 export default async function AccountHistoryImportPage({
@@ -98,6 +100,10 @@ export default async function AccountHistoryImportPage({
           </div>
         </CardContent>
       </Card>
+      <AccountHistoryAiPrompt
+        currency={account.currency}
+        fractionDigits={currencyDigits(account.currency)}
+      />
       <AccountHistoryImport accountId={id} />
     </>
   );

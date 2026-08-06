@@ -210,30 +210,42 @@ Settings provides:
 
 - A complete JSON export of the authenticated user's settings and portfolio
 - Account and transaction CSV exports
-- Transaction CSV import resolved only against that user's accounts
 - A validated JSON restore that replaces only the authenticated user's
   portfolio in one transaction
+
+Each active account provides an **Import** action for strict Account History
+Import v1 CSV or JSON files. The import page publishes templates, a JSON Schema,
+field and balance-direction rules, and an optional currency-aware prompt that can
+be copied into an external AI service to transform a provider statement. The
+prompt runs entirely in the browser; Wealthboard does not send the prompt,
+statement, or generated file to an AI provider. Use only an AI provider you
+trust, then preview and validate the generated file in Wealthboard before
+confirming the import.
 
 Exports contain no credentials, AI provider settings or usage, login attempts,
 session data, idempotency records, or another user's rows. Restore downloads a pre-restore user export,
 validates the archive, rejects owner fields and invalid relationships, remaps
-record IDs, and rolls back completely on failure. Current exports use version 4
-and include institutions, goal milestones, and reminder dismissals. Version 2
-and 3 archives remain restorable; legacy institution names are normalized into
-the importing user's private institution directory.
+record IDs, and rolls back completely on failure. Current exports use version 5
+and include transaction external IDs, institutions, goal milestones, and
+reminder dismissals. Versions 2 through 4 remain restorable; legacy institution
+names are normalized and legacy transactions receive null external IDs.
 
-Transaction CSV uses this header:
+Account History Import v1 CSV uses this exact header:
 
 ```csv
-account_id,account_name,type,amount,currency,date,description,notes
+external_id,type,amount,date,description,notes
 ```
 
-Use either `account_id` or an exact `account_name`. Supported types are
+The selected account supplies ownership and currency; import files contain no
+account or user fields. Every row requires a stable, case-sensitive
+`external_id`. Supported types are
 `deposit`, `withdrawal`, `interest`, `dividend`, `capital_gain`,
 `capital_loss`, `fee`, `purchase`, `sale`, `manual_adjustment`,
-`liability_payment`, and `liability_increase`. Amount is a major-unit decimal,
-date is `YYYY-MM-DD`, and currency must match the owned account. Opening
-balances and transfers use their dedicated workflows.
+`liability_payment`, and `liability_increase`. Amount is a decimal string in the
+selected account currency and date is `YYYY-MM-DD`. Opening balances and
+transfers use their dedicated workflows. Files are previewed without writes;
+identical external IDs are skipped, conflicts are never overwritten, and all
+currently valid rows commit atomically before one balance replay.
 
 ## Deployment-wide backup and offline restore
 

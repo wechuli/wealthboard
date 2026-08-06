@@ -136,8 +136,20 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     page.getByRole("heading", { name: "Import history for Cash Savings" }),
   ).toBeVisible();
   await expect(
-    page.getByText("external_id,type,amount,date,description,notes"),
+    page.getByText("external_id,type,amount,date,description,notes", {
+      exact: true,
+    }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Prepare your file with AI" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Show prompt" }).click();
+  await expect(page.getByRole("button", { name: "Copy prompt" })).toBeVisible();
+  await page.getByRole("button", { name: "json", exact: true }).click();
+  await expect(page.getByLabel("AI conversion prompt")).toHaveValue(
+    /OUTPUT CONTRACT: JSON/,
+  );
+  await page.getByRole("button", { name: "csv", exact: true }).click();
   await page.getByLabel("CSV or JSON file").setInputFiles({
     name: "cash-history.csv",
     mimeType: "text/csv",

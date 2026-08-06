@@ -747,6 +747,15 @@ History Import v1. CSV files contain exactly
 account, institution, or currency fields. The verified session and URL select
 one active owned account.
 
+The import page may provide a copyable, currency-aware prompt for use with an
+external AI service. It must offer CSV and JSON output modes, require the exact
+v1 schema, preserve one output row per source transaction, prohibit invented or
+ambiguous financial records, and explain deterministic external IDs and balance
+directions. Prompt generation and copying are entirely client-side: Wealthboard
+must not send the prompt, account history, statement, or generated file to an AI
+provider. Users are responsible for choosing a provider they trust and must
+still preview the generated file before importing it.
+
 Each row requires a stable, trimmed, case-sensitive external ID of at most 200
 characters. Provider IDs should be used when available; otherwise users must
 construct deterministic IDs outside Wealthboard (changing row numbers are not
