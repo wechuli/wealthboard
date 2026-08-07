@@ -150,3 +150,6 @@ vite.config.ts.timestamp-*
 /playwright-report/
 /test-results/
 /.auth/
+
+# Coverage output
+/coverage/
