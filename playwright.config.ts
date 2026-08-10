@@ -7,7 +7,7 @@ const environment = {
   SESSION_SECRET: "e2e-session-secret-that-is-longer-than-32-characters",
   APP_URL: "http://127.0.0.1:3100",
   AUTH_METHODS: "local,oidc",
-  OIDC_ISSUER: "http://127.0.0.1:4100/realms/wealthboard",
+  OIDC_ISSUER: "http://localhost:4100/realms/wealthboard",
   OIDC_CLIENT_ID: "wealthboard-e2e",
   OIDC_CLIENT_SECRET: "wealthboard-e2e-client-secret",
   OIDC_PROVIDER_NAME: "E2E Keycloak",
@@ -29,7 +29,7 @@ export default defineConfig({
   webServer: [
     {
       command: "node tests/e2e/mock-oidc-provider.mjs",
-      url: "http://127.0.0.1:4100/health",
+      url: "http://localhost:4100/health",
       reuseExistingServer: false,
       timeout: 30_000,
     },

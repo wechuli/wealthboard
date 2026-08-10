@@ -238,7 +238,7 @@ describe("OIDC routes", () => {
     expect(exchangeAuthorizationCode).not.toHaveBeenCalled();
   });
 
-  test("a valid callback issues only the internal Wealthboard session", async () => {
+  test("a valid callback issues the session before a same-origin handoff", async () => {
     const response = await callbackGet(
       request(
         `/api/auth/oidc/callback?state=${transaction.state}&code=one-use-code`,
@@ -266,8 +266,14 @@ describe("OIDC routes", () => {
       1,
       10080,
     );
-    expect(response.headers.get("location")).toBe(
-      "https://wealth.example.test/reports",
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-security-policy")).toContain(
+      "frame-ancestors 'none'",
+    );
+    expect(await response.text()).toContain(
+      'window.location.replace("https://wealth.example.test/reports")',
     );
   });
 
@@ -321,8 +327,9 @@ describe("OIDC routes", () => {
       10080,
     );
     expect(storeOidcReauthGrant).not.toHaveBeenCalled();
-    expect(response.headers.get("location")).toBe(
-      "https://wealth.example.test/settings?auth=linked",
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(
+      'window.location.replace("https://wealth.example.test/settings?auth=linked")',
     );
   });
 
@@ -357,8 +364,9 @@ describe("OIDC routes", () => {
       "00000000-0000-4000-8000-000000000010",
     );
     expect(storeOidcReauthGrant).toHaveBeenCalledWith("encrypted-reauth-grant");
-    expect(response.headers.get("location")).toBe(
-      "https://wealth.example.test/settings?auth=reauthenticated",
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(
+      'window.location.replace("https://wealth.example.test/settings?auth=reauthenticated")',
     );
   });
 
@@ -387,8 +395,9 @@ describe("OIDC routes", () => {
 
     expect(resolveOidcLogin).not.toHaveBeenCalled();
     expect(createSession).not.toHaveBeenCalled();
-    expect(response.headers.get("location")).toBe(
-      "https://wealth.example.test/settings?auth=invalid_callback",
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(
+      'window.location.replace("https://wealth.example.test/settings?auth=invalid_callback")',
     );
   });
 
@@ -414,7 +423,10 @@ describe("OIDC routes", () => {
       expect.any(Object),
       1,
     );
-    expect(response.headers.get("location")).toContain("auth=invalid_callback");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(
+      'window.location.replace("https://wealth.example.test/settings?auth=invalid_callback")',
+    );
     expect(createSession).not.toHaveBeenCalled();
   });
 

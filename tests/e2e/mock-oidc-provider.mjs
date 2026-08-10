@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import http from "node:http";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
-const host = "127.0.0.1";
+const host = "localhost";
 const port = 4100;
 const issuer = `http://${host}:${port}/realms/wealthboard`;
 const clientId = "wealthboard-e2e";
@@ -216,7 +216,7 @@ const server = http.createServer(async (request, response) => {
   sendJson(response, 404, { error: "not_found" });
 });
 
-server.listen(port, host, () => {
+server.listen(port, () => {
   console.log(`Mock OIDC provider listening at ${issuer}`);
 });
 

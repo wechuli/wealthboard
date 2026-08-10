@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAuthConfig } from "@/lib/auth/config";
@@ -31,7 +33,70 @@ function errorRedirect(
 ) {
   const url = new URL(intent === "login" ? "/login" : "/settings", appOrigin);
   url.searchParams.set(intent === "login" ? "oidc_error" : "auth", error);
-  return NextResponse.redirect(url);
+  return intent === "login"
+    ? NextResponse.redirect(url)
+    : sessionHandoff(appOrigin, `${url.pathname}${url.search}`);
+}
+
+function serializeForInlineScript(value: string) {
+  return JSON.stringify(value)
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
+}
+
+function escapeHtmlAttribute(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function sessionHandoff(appOrigin: string, next: string) {
+  const destination = new URL(next, appOrigin).toString();
+  const serializedDestination = serializeForInlineScript(destination);
+  const escapedDestination = escapeHtmlAttribute(destination);
+  const nonce = randomBytes(16).toString("base64");
+  const contentSecurityPolicy = [
+    "default-src 'none'",
+    `script-src 'nonce-${nonce}'`,
+    `style-src 'nonce-${nonce}'`,
+    "base-uri 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'none'",
+  ].join("; ");
+
+  return new NextResponse(
+    `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>Completing sign in</title>
+    <style nonce="${nonce}">body{margin:0;min-height:100vh;display:grid;place-items:center;background:#101615;color:#d1fae5;font:500 1rem/1.5 sans-serif}</style>
+    <script nonce="${nonce}">window.addEventListener("DOMContentLoaded",()=>window.location.replace(${serializedDestination}),{once:true});</script>
+  </head>
+  <body>
+    <p role="status">Completing sign in...</p>
+    <noscript><a href="${escapedDestination}">Continue</a></noscript>
+  </body>
+</html>`,
+    {
+      status: 200,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": contentSecurityPolicy,
+        "Content-Type": "text/html; charset=utf-8",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+      },
+    },
+  );
 }
 
 export async function GET(request: NextRequest) {
@@ -115,7 +180,7 @@ export async function GET(request: NextRequest) {
       authenticated.sessionVersion,
       authenticated.sessionTimeoutMinutes,
     );
-    return NextResponse.redirect(new URL(transaction.next, appOrigin));
+    return sessionHandoff(appOrigin, transaction.next);
   } catch (error) {
     console.error(
       "OIDC callback failed safely:",

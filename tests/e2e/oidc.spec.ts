@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const localPassword = "oidc-local-password-12345";
 
 async function continueWithProvider(page: Page, identity: string) {
-  await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:4100\//);
+  await expect(page).toHaveURL(/^http:\/\/localhost:4100\//);
   await expect(
     page.getByRole("heading", { name: "E2E Keycloak" }),
   ).toBeVisible();
