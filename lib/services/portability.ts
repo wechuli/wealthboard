@@ -1,13 +1,24 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import {
   accounts,
+  beneficiaries,
+  beneficiaryKinds,
   categories,
   contributionFrequencies,
+  estateAccountDirectives,
+  estateAllocations,
+  estateAllocationTiers,
+  estateDistributionMethods,
+  estatePlans,
+  estatePlanSnapshots,
+  estateResiduaryAllocations,
+  estateTransferContexts,
   exchangeRates,
   goalAlertDismissals,
   goalContributionPlans,
@@ -259,6 +270,119 @@ const alertDismissalArchiveSchema = z
   })
   .strict();
 
+const beneficiaryArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.enum(beneficiaryKinds),
+    name: z.string().min(1).max(120),
+    relationship: z.string().max(80).nullable(),
+    contactSummary: z.string().max(300).nullable(),
+    notes: nullableText,
+    archivedAt: timestamp.nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const estatePlanArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    title: z.string().min(1).max(120),
+    jurisdiction: z.string().max(120).nullable(),
+    lastReviewedDate: timestamp.nullable(),
+    reviewReminderDate: timestamp.nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const estateDirectiveArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    estatePlanId: z.string().min(1),
+    accountId: z.string().min(1),
+    isIncluded: z.boolean(),
+    ownershipShareBps: z.number().int().min(1).max(10000),
+    transferContext: z.enum(estateTransferContexts),
+    distributionMethod: z.enum(estateDistributionMethods),
+    documentReference: z.string().max(300).nullable(),
+    notes: nullableText,
+    reviewedAt: timestamp.nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const estateAllocationArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    estatePlanId: z.string().min(1),
+    directiveId: z.string().min(1),
+    beneficiaryId: z.string().min(1),
+    tier: z.enum(estateAllocationTiers),
+    allocationBps: z.number().int().min(1).max(10000),
+    notes: nullableText,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const estateResiduaryArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    estatePlanId: z.string().min(1),
+    beneficiaryId: z.string().min(1),
+    tier: z.enum(estateAllocationTiers),
+    allocationBps: z.number().int().min(1).max(10000),
+    notes: nullableText,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const estateSnapshotArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    estatePlanId: z.string().min(1),
+    version: z.literal(1),
+    title: z.string().min(1).max(120),
+    valueAsOfDate: z.string().date(),
+    baseCurrency: isoCurrency,
+    content: z.string().min(1).max(5_000_000),
+    contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+    generatedAt: timestamp,
+  })
+  .strict()
+  .superRefine((row, context) => {
+    const hash = createHash("sha256").update(row.content).digest("hex");
+    if (hash !== row.contentHash) {
+      context.addIssue({
+        code: "custom",
+        path: ["contentHash"],
+        message: "The estate snapshot integrity hash is invalid.",
+      });
+    }
+    try {
+      const content = JSON.parse(row.content) as Record<string, unknown>;
+      if (
+        row.content.includes('"userId"') ||
+        content.format !== "wealthboard-estate-summary" ||
+        content.version !== 1 ||
+        !Array.isArray(content.assets) ||
+        !Array.isArray(content.beneficiaries) ||
+        !Array.isArray(content.reviewItems)
+      ) {
+        throw new Error("Invalid estate snapshot content.");
+      }
+    } catch {
+      context.addIssue({
+        code: "custom",
+        path: ["content"],
+        message: "The estate snapshot content is invalid.",
+      });
+    }
+  });
+
 const userArchiveV2Schema = z
   .object({
     format: z.literal("wealthboard-user-json"),
@@ -295,6 +419,18 @@ const userArchiveV5Schema = userArchiveV4Schema
   .extend({
     version: z.literal(5),
     transactions: z.array(transactionArchiveV5Schema).max(100000),
+  })
+  .strict();
+
+const userArchiveV6Schema = userArchiveV5Schema
+  .extend({
+    version: z.literal(6),
+    beneficiaries: z.array(beneficiaryArchiveSchema).max(10000),
+    estatePlans: z.array(estatePlanArchiveSchema).max(1),
+    estateAccountDirectives: z.array(estateDirectiveArchiveSchema).max(10000),
+    estateAllocations: z.array(estateAllocationArchiveSchema).max(100000),
+    estateResiduaryAllocations: z.array(estateResiduaryArchiveSchema).max(10000),
+    estatePlanSnapshots: z.array(estateSnapshotArchiveSchema).max(1000),
   })
   .strict();
 
@@ -387,17 +523,32 @@ function upgradeV4Archive(archive: z.infer<typeof userArchiveV4Schema>) {
   };
 }
 
+function upgradeV5Archive(archive: z.infer<typeof userArchiveV5Schema>) {
+  return {
+    ...archive,
+    version: 6 as const,
+    beneficiaries: [],
+    estatePlans: [],
+    estateAccountDirectives: [],
+    estateAllocations: [],
+    estateResiduaryAllocations: [],
+    estatePlanSnapshots: [],
+  };
+}
+
 const userArchiveSchema = z
   .union([
+    userArchiveV6Schema,
     userArchiveV5Schema,
     userArchiveV4Schema,
     userArchiveV3Schema,
     userArchiveV2Schema,
   ])
   .transform((archive) => {
-    if (archive.version === 5) return archive;
-    if (archive.version === 4) return upgradeV4Archive(archive);
-    return upgradeV4Archive(upgradeLegacyArchive(archive));
+    if (archive.version === 6) return archive;
+    if (archive.version === 5) return upgradeV5Archive(archive);
+    if (archive.version === 4) return upgradeV5Archive(upgradeV4Archive(archive));
+    return upgradeV5Archive(upgradeV4Archive(upgradeLegacyArchive(archive)));
   });
 
 function csvCell(value: unknown) {
@@ -440,6 +591,12 @@ export async function exportData(userId: string) {
     milestoneRows,
     alertDismissalRows,
     institutionRows,
+    beneficiaryRows,
+    estatePlanRows,
+    estateDirectiveRows,
+    estateAllocationRows,
+    estateResiduaryRows,
+    estateSnapshotRows,
   ] = await Promise.all([
     db.select().from(categories).where(eq(categories.userId, userId)),
     db.select().from(accounts).where(eq(accounts.userId, userId)),
@@ -460,11 +617,29 @@ export async function exportData(userId: string) {
       .from(goalAlertDismissals)
       .where(eq(goalAlertDismissals.userId, userId)),
     db.select().from(institutions).where(eq(institutions.userId, userId)),
+    db.select().from(beneficiaries).where(eq(beneficiaries.userId, userId)),
+    db.select().from(estatePlans).where(eq(estatePlans.userId, userId)),
+    db
+      .select()
+      .from(estateAccountDirectives)
+      .where(eq(estateAccountDirectives.userId, userId)),
+    db
+      .select()
+      .from(estateAllocations)
+      .where(eq(estateAllocations.userId, userId)),
+    db
+      .select()
+      .from(estateResiduaryAllocations)
+      .where(eq(estateResiduaryAllocations.userId, userId)),
+    db
+      .select()
+      .from(estatePlanSnapshots)
+      .where(eq(estatePlanSnapshots.userId, userId)),
   ]);
 
   return {
     format: "wealthboard-user-json" as const,
-    version: 5 as const,
+    version: 6 as const,
     exportedAt: nowIso(),
     settings: {
       displayName: settings.displayName,
@@ -498,6 +673,12 @@ export async function exportData(userId: string) {
     goalContributionPlans: planRows.map(stripOwner),
     goalMilestones: milestoneRows.map(stripOwner),
     goalAlertDismissals: alertDismissalRows.map(stripOwner),
+    beneficiaries: beneficiaryRows.map(stripOwner),
+    estatePlans: estatePlanRows.map(stripOwner),
+    estateAccountDirectives: estateDirectiveRows.map(stripOwner),
+    estateAllocations: estateAllocationRows.map(stripOwner),
+    estateResiduaryAllocations: estateResiduaryRows.map(stripOwner),
+    estatePlanSnapshots: estateSnapshotRows.map(stripOwner),
   };
 }
 
@@ -559,6 +740,24 @@ export function restoreUserData(userId: string, input: unknown) {
     "contribution-plan",
   );
   const milestoneIds = uniqueIdMap(archive.goalMilestones, "milestone");
+  const beneficiaryIds = uniqueIdMap(archive.beneficiaries, "beneficiary");
+  const estatePlanIds = uniqueIdMap(archive.estatePlans, "estate plan");
+  const estateDirectiveIds = uniqueIdMap(
+    archive.estateAccountDirectives,
+    "estate directive",
+  );
+  const estateAllocationIds = uniqueIdMap(
+    archive.estateAllocations,
+    "estate allocation",
+  );
+  const estateResiduaryIds = uniqueIdMap(
+    archive.estateResiduaryAllocations,
+    "estate residual allocation",
+  );
+  const estateSnapshotIds = uniqueIdMap(
+    archive.estatePlanSnapshots,
+    "estate snapshot",
+  );
 
   const normalizedInstitutionNames = new Set<string>();
   for (const institution of archive.institutions) {
@@ -607,6 +806,66 @@ export function restoreUserData(userId: string, input: unknown) {
   for (const dismissal of archive.goalAlertDismissals) {
     requiredMappedId(goalIds, dismissal.goalId, "alert-dismissal goal");
   }
+  const accountById = new Map(archive.accounts.map((row) => [row.id, row]));
+  const directiveById = new Map(
+    archive.estateAccountDirectives.map((row) => [row.id, row]),
+  );
+  const allocationTotals = new Map<string, number>();
+  for (const directive of archive.estateAccountDirectives) {
+    requiredMappedId(estatePlanIds, directive.estatePlanId, "estate directive plan");
+    requiredMappedId(accountIds, directive.accountId, "estate directive account");
+    if (accountById.get(directive.accountId)?.isLiability) {
+      throw new Error("The archive assigns a liability to estate beneficiaries.");
+    }
+  }
+  for (const allocation of archive.estateAllocations) {
+    requiredMappedId(
+      estatePlanIds,
+      allocation.estatePlanId,
+      "estate allocation plan",
+    );
+    requiredMappedId(
+      estateDirectiveIds,
+      allocation.directiveId,
+      "estate allocation directive",
+    );
+    requiredMappedId(
+      beneficiaryIds,
+      allocation.beneficiaryId,
+      "estate allocation beneficiary",
+    );
+    const directive = directiveById.get(allocation.directiveId)!;
+    if (directive.estatePlanId !== allocation.estatePlanId) {
+      throw new Error("The archive contains an invalid estate allocation plan relationship.");
+    }
+    const key = `${allocation.directiveId}:${allocation.tier}`;
+    const total = (allocationTotals.get(key) ?? 0) + allocation.allocationBps;
+    if (total > 10000) {
+      throw new Error("The archive contains estate allocations over 100%.");
+    }
+    allocationTotals.set(key, total);
+  }
+  for (const allocation of archive.estateResiduaryAllocations) {
+    requiredMappedId(
+      estatePlanIds,
+      allocation.estatePlanId,
+      "estate residual plan",
+    );
+    requiredMappedId(
+      beneficiaryIds,
+      allocation.beneficiaryId,
+      "estate residual beneficiary",
+    );
+    const key = `${allocation.estatePlanId}:${allocation.tier}`;
+    const total = (allocationTotals.get(key) ?? 0) + allocation.allocationBps;
+    if (total > 10000) {
+      throw new Error("The archive contains residual allocations over 100%.");
+    }
+    allocationTotals.set(key, total);
+  }
+  for (const snapshot of archive.estatePlanSnapshots) {
+    requiredMappedId(estatePlanIds, snapshot.estatePlanId, "estate snapshot plan");
+  }
 
   const db = getDatabase();
   db.transaction((tx) => {
@@ -618,6 +877,20 @@ export function restoreUserData(userId: string, input: unknown) {
       .sync();
     if (!existingSettings) throw new Error("User settings are unavailable.");
 
+    tx.delete(estatePlanSnapshots)
+      .where(eq(estatePlanSnapshots.userId, userId))
+      .run();
+    tx.delete(estateAllocations)
+      .where(eq(estateAllocations.userId, userId))
+      .run();
+    tx.delete(estateResiduaryAllocations)
+      .where(eq(estateResiduaryAllocations.userId, userId))
+      .run();
+    tx.delete(estateAccountDirectives)
+      .where(eq(estateAccountDirectives.userId, userId))
+      .run();
+    tx.delete(estatePlans).where(eq(estatePlans.userId, userId)).run();
+    tx.delete(beneficiaries).where(eq(beneficiaries.userId, userId)).run();
     tx.delete(goalAlertDismissals)
       .where(eq(goalAlertDismissals.userId, userId))
       .run();
@@ -791,6 +1064,116 @@ export function restoreUserData(userId: string, input: unknown) {
         )
         .run();
     }
+    if (archive.beneficiaries.length) {
+      tx.insert(beneficiaries)
+        .values(
+          archive.beneficiaries.map((row) => ({
+            ...row,
+            id: requiredMappedId(beneficiaryIds, row.id, "beneficiary"),
+            userId,
+          })),
+        )
+        .run();
+    }
+    if (archive.estatePlans.length) {
+      tx.insert(estatePlans)
+        .values(
+          archive.estatePlans.map((row) => ({
+            ...row,
+            id: requiredMappedId(estatePlanIds, row.id, "estate plan"),
+            userId,
+          })),
+        )
+        .run();
+    }
+    if (archive.estateAccountDirectives.length) {
+      tx.insert(estateAccountDirectives)
+        .values(
+          archive.estateAccountDirectives.map((row) => ({
+            ...row,
+            id: requiredMappedId(estateDirectiveIds, row.id, "estate directive"),
+            userId,
+            estatePlanId: requiredMappedId(
+              estatePlanIds,
+              row.estatePlanId,
+              "estate directive plan",
+            ),
+            accountId: requiredMappedId(
+              accountIds,
+              row.accountId,
+              "estate directive account",
+            ),
+          })),
+        )
+        .run();
+    }
+    if (archive.estateAllocations.length) {
+      tx.insert(estateAllocations)
+        .values(
+          archive.estateAllocations.map((row) => ({
+            ...row,
+            id: requiredMappedId(estateAllocationIds, row.id, "estate allocation"),
+            userId,
+            estatePlanId: requiredMappedId(
+              estatePlanIds,
+              row.estatePlanId,
+              "estate allocation plan",
+            ),
+            directiveId: requiredMappedId(
+              estateDirectiveIds,
+              row.directiveId,
+              "estate allocation directive",
+            ),
+            beneficiaryId: requiredMappedId(
+              beneficiaryIds,
+              row.beneficiaryId,
+              "estate allocation beneficiary",
+            ),
+          })),
+        )
+        .run();
+    }
+    if (archive.estateResiduaryAllocations.length) {
+      tx.insert(estateResiduaryAllocations)
+        .values(
+          archive.estateResiduaryAllocations.map((row) => ({
+            ...row,
+            id: requiredMappedId(
+              estateResiduaryIds,
+              row.id,
+              "estate residual allocation",
+            ),
+            userId,
+            estatePlanId: requiredMappedId(
+              estatePlanIds,
+              row.estatePlanId,
+              "estate residual plan",
+            ),
+            beneficiaryId: requiredMappedId(
+              beneficiaryIds,
+              row.beneficiaryId,
+              "estate residual beneficiary",
+            ),
+          })),
+        )
+        .run();
+    }
+    if (archive.estatePlanSnapshots.length) {
+      tx.insert(estatePlanSnapshots)
+        .values(
+          archive.estatePlanSnapshots.map((row) => ({
+            ...row,
+            id: requiredMappedId(estateSnapshotIds, row.id, "estate snapshot"),
+            userId,
+            estatePlanId: requiredMappedId(
+              estatePlanIds,
+              row.estatePlanId,
+              "estate snapshot plan",
+            ),
+          })),
+        )
+        .run();
+    }
   });
 
   return {
@@ -799,6 +1182,9 @@ export function restoreUserData(userId: string, input: unknown) {
     transactions: archive.transactions.length,
     goals: archive.goals.length,
     milestones: archive.goalMilestones.length,
+    beneficiaries: archive.beneficiaries.length,
+    estatePlans: archive.estatePlans.length,
+    estateSnapshots: archive.estatePlanSnapshots.length,
   };
 }
 

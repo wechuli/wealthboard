@@ -95,3 +95,39 @@ a {
   cursor: not-allowed;
   opacity: 0.45;
 }
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .estate-print-document,
+  .estate-print-document * {
+    visibility: visible;
+  }
+
+  .estate-print-document {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .estate-print-controls {
+    display: none !important;
+  }
+
+  .print-break-inside-avoid {
+    break-inside: avoid;
+  }
+}

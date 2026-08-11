@@ -20,6 +20,7 @@ import {
   MoreHorizontal,
   Plus,
   ReceiptText,
+  ScrollText,
   Settings,
   Sparkles,
   TrendingUp,
@@ -39,6 +40,7 @@ const navigation = [
   { href: "/goals", label: "Goals", icon: Goal },
   { href: "/reports", label: "Reports", icon: FileBarChart },
   { href: "/review", label: "Review", icon: Sparkles },
+  { href: "/estate", label: "Estate", icon: ScrollText },
   { href: "/categories", label: "Categories", icon: FolderCog },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -318,6 +320,7 @@ function MobileMore() {
   const items = [
     { href: "/review", label: "Portfolio review", icon: Sparkles },
     { href: "/reports", label: "Reports", icon: FileBarChart },
+    { href: "/estate", label: "Estate planning", icon: ScrollText },
     { href: "/categories", label: "Categories", icon: FolderCog },
     { href: "/settings", label: "Settings", icon: Settings },
   ];

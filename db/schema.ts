@@ -65,6 +65,21 @@ export const aiRequestStatuses = [
   "rate_limited",
   "budget_exceeded",
 ] as const;
+export const beneficiaryKinds = ["person", "organization", "trust"] as const;
+export const estateTransferContexts = [
+  "estate",
+  "joint_survivorship",
+  "provider_designation",
+  "trust_entity",
+  "unknown",
+] as const;
+export const estateDistributionMethods = [
+  "transfer_asset",
+  "sell_and_divide",
+  "cash_equivalent",
+  "undecided",
+] as const;
+export const estateAllocationTiers = ["primary", "contingent"] as const;
 
 export const users = sqliteTable(
   "users",
@@ -486,6 +501,215 @@ export const goalAlertDismissals = sqliteTable(
   ],
 );
 
+export const beneficiaries = sqliteTable(
+  "beneficiaries",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: beneficiaryKinds }).notNull(),
+    name: text("name").notNull(),
+    relationship: text("relationship"),
+    contactSummary: text("contact_summary"),
+    notes: text("notes"),
+    archivedAt: text("archived_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("beneficiaries_user_id_unique").on(table.userId, table.id),
+    index("beneficiaries_user_archived_idx").on(table.userId, table.archivedAt),
+  ],
+);
+
+export const estatePlans = sqliteTable(
+  "estate_plans",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("My estate plan"),
+    jurisdiction: text("jurisdiction"),
+    lastReviewedDate: text("last_reviewed_date"),
+    reviewReminderDate: text("review_reminder_date"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("estate_plans_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("estate_plans_user_unique").on(table.userId),
+  ],
+);
+
+export const estateAccountDirectives = sqliteTable(
+  "estate_account_directives",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    estatePlanId: text("estate_plan_id").notNull(),
+    accountId: text("account_id").notNull(),
+    isIncluded: integer("is_included", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    ownershipShareBps: integer("ownership_share_bps").notNull().default(10000),
+    transferContext: text("transfer_context", {
+      enum: estateTransferContexts,
+    })
+      .notNull()
+      .default("unknown"),
+    distributionMethod: text("distribution_method", {
+      enum: estateDistributionMethods,
+    })
+      .notNull()
+      .default("undecided"),
+    documentReference: text("document_reference"),
+    notes: text("notes"),
+    reviewedAt: text("reviewed_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("estate_directives_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("estate_directives_user_plan_account_unique").on(
+      table.userId,
+      table.estatePlanId,
+      table.accountId,
+    ),
+    uniqueIndex("estate_directives_user_plan_id_unique").on(
+      table.userId,
+      table.estatePlanId,
+      table.id,
+    ),
+    index("estate_directives_user_plan_idx").on(
+      table.userId,
+      table.estatePlanId,
+    ),
+    foreignKey({
+      columns: [table.userId, table.estatePlanId],
+      foreignColumns: [estatePlans.userId, estatePlans.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.userId, table.accountId],
+      foreignColumns: [accounts.userId, accounts.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const estateAllocations = sqliteTable(
+  "estate_allocations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    estatePlanId: text("estate_plan_id").notNull(),
+    directiveId: text("directive_id").notNull(),
+    beneficiaryId: text("beneficiary_id").notNull(),
+    tier: text("tier", { enum: estateAllocationTiers }).notNull(),
+    allocationBps: integer("allocation_bps").notNull(),
+    notes: text("notes"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("estate_allocations_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("estate_allocations_user_directive_beneficiary_tier_unique").on(
+      table.userId,
+      table.directiveId,
+      table.beneficiaryId,
+      table.tier,
+    ),
+    index("estate_allocations_user_plan_idx").on(
+      table.userId,
+      table.estatePlanId,
+    ),
+    foreignKey({
+      columns: [table.userId, table.estatePlanId, table.directiveId],
+      foreignColumns: [
+        estateAccountDirectives.userId,
+        estateAccountDirectives.estatePlanId,
+        estateAccountDirectives.id,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.userId, table.beneficiaryId],
+      foreignColumns: [beneficiaries.userId, beneficiaries.id],
+    }).onDelete("restrict"),
+  ],
+);
+
+export const estateResiduaryAllocations = sqliteTable(
+  "estate_residuary_allocations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    estatePlanId: text("estate_plan_id").notNull(),
+    beneficiaryId: text("beneficiary_id").notNull(),
+    tier: text("tier", { enum: estateAllocationTiers }).notNull(),
+    allocationBps: integer("allocation_bps").notNull(),
+    notes: text("notes"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("estate_residuary_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("estate_residuary_user_plan_beneficiary_tier_unique").on(
+      table.userId,
+      table.estatePlanId,
+      table.beneficiaryId,
+      table.tier,
+    ),
+    index("estate_residuary_user_plan_idx").on(
+      table.userId,
+      table.estatePlanId,
+    ),
+    foreignKey({
+      columns: [table.userId, table.estatePlanId],
+      foreignColumns: [estatePlans.userId, estatePlans.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.userId, table.beneficiaryId],
+      foreignColumns: [beneficiaries.userId, beneficiaries.id],
+    }).onDelete("restrict"),
+  ],
+);
+
+export const estatePlanSnapshots = sqliteTable(
+  "estate_plan_snapshots",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    estatePlanId: text("estate_plan_id").notNull(),
+    version: integer("version").notNull().default(1),
+    title: text("title").notNull(),
+    valueAsOfDate: text("value_as_of_date").notNull(),
+    baseCurrency: text("base_currency").notNull(),
+    content: text("content").notNull(),
+    contentHash: text("content_hash").notNull(),
+    generatedAt: text("generated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("estate_snapshots_user_id_unique").on(table.userId, table.id),
+    index("estate_snapshots_user_plan_generated_idx").on(
+      table.userId,
+      table.estatePlanId,
+      table.generatedAt,
+    ),
+    foreignKey({
+      columns: [table.userId, table.estatePlanId],
+      foreignColumns: [estatePlans.userId, estatePlans.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 export const loginAttempts = sqliteTable(
   "login_attempts",
   {
@@ -581,6 +805,13 @@ export type Transaction = typeof transactions.$inferSelect;
 export type ValuationSnapshot = typeof valuationSnapshots.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
 export type GoalMilestone = typeof goalMilestones.$inferSelect;
+export type Beneficiary = typeof beneficiaries.$inferSelect;
+export type EstatePlan = typeof estatePlans.$inferSelect;
+export type EstateAccountDirective = typeof estateAccountDirectives.$inferSelect;
+export type EstateAllocation = typeof estateAllocations.$inferSelect;
+export type EstateResiduaryAllocation =
+  typeof estateResiduaryAllocations.$inferSelect;
+export type EstatePlanSnapshot = typeof estatePlanSnapshots.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type AiProviderSettings = typeof aiProviderSettings.$inferSelect;
@@ -588,3 +819,8 @@ export type TransactionType = (typeof transactionTypes)[number];
 export type GoalStatus = (typeof goalStatuses)[number];
 export type InstitutionType = (typeof institutionTypes)[number];
 export type AiProvider = (typeof aiProviders)[number];
+export type BeneficiaryKind = (typeof beneficiaryKinds)[number];
+export type EstateTransferContext = (typeof estateTransferContexts)[number];
+export type EstateDistributionMethod =
+  (typeof estateDistributionMethods)[number];
+export type EstateAllocationTier = (typeof estateAllocationTiers)[number];

@@ -457,9 +457,9 @@ describe.sequential("account history import", () => {
     ).toThrow("10,000");
   });
 
-  test("round-trips external IDs in v5 and restores v4 with null IDs", async () => {
+  test("round-trips external IDs in v6 and restores v4 with null IDs", async () => {
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(5);
+    expect(archive.version).toBe(6);
     expect(archive.transactions).toContainEqual(
       expect.objectContaining({ externalId: "equivalent-1" }),
     );
@@ -476,6 +476,12 @@ describe.sequential("account history import", () => {
       transactions: Array<Record<string, unknown>>;
     };
     versionFour.version = 4;
+    delete versionFour.beneficiaries;
+    delete versionFour.estatePlans;
+    delete versionFour.estateAccountDirectives;
+    delete versionFour.estateAllocations;
+    delete versionFour.estateResiduaryAllocations;
+    delete versionFour.estatePlanSnapshots;
     versionFour.transactions = versionFour.transactions.map((transaction) => {
       const legacyTransaction = { ...transaction };
       delete legacyTransaction.externalId;

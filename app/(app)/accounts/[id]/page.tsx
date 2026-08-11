@@ -9,6 +9,7 @@ import {
   Landmark,
   FileInput,
   Plus,
+  ScrollText,
   Sparkles,
   Trash2,
   TrendingUp,
@@ -66,6 +67,14 @@ export default async function AccountDetailPage({
           .join(" · ")}
         actions={
           <>
+            {!account.isLiability ? (
+              <Button asChild variant="secondary">
+                <Link href={`/estate/distribution?account=${id}#asset-${id}`}>
+                  <ScrollText size={16} />
+                  Estate plan
+                </Link>
+              </Button>
+            ) : null}
             <Button asChild variant="secondary">
               <Link href={`/accounts/${id}/edit`}>
                 <Edit3 size={16} />

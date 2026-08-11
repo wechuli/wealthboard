@@ -1,7 +1,12 @@
+import Decimal from "decimal.js";
 import { z } from "zod";
 
 import {
+  beneficiaryKinds,
   contributionFrequencies,
+  estateAllocationTiers,
+  estateDistributionMethods,
+  estateTransferContexts,
   goalStatuses,
   institutionTypes,
   transactionTypes,
@@ -272,6 +277,53 @@ export const categorySchema = z.object({
   isLiquid: z.boolean().default(false),
   isInvestible: z.boolean().default(true),
 });
+
+const estatePercentageBps = z
+  .string()
+  .trim()
+  .regex(/^\d{1,3}(?:\.\d{1,2})?$/, "Use a percentage with at most two decimal places.")
+  .refine(
+    (value) => new Decimal(value).greaterThan(0) && new Decimal(value).lessThanOrEqualTo(100),
+    "Enter a percentage greater than 0 and no more than 100.",
+  )
+  .transform((value) => new Decimal(value).mul(100).toNumber());
+
+export const beneficiarySchema = z.object({
+  kind: z.enum(beneficiaryKinds),
+  name: z.string().trim().min(1, "Enter a beneficiary name.").max(120),
+  relationship: z.string().trim().max(80).optional().transform((value) => value || undefined),
+  contactSummary: z.string().trim().max(300).optional().transform((value) => value || undefined),
+  notes: optionalText,
+});
+
+export const estatePlanSchema = z.object({
+  title: z.string().trim().min(1, "Enter a plan title.").max(120),
+  jurisdiction: z.string().trim().max(120).optional().transform((value) => value || undefined),
+  lastReviewedDate: z.string().date().optional().or(z.literal("")),
+  reviewReminderDate: z.string().date().optional().or(z.literal("")),
+});
+
+export const estateDirectiveSchema = z.object({
+  isIncluded: z.boolean(),
+  ownershipShareBps: estatePercentageBps,
+  transferContext: z.enum(estateTransferContexts),
+  distributionMethod: z.enum(estateDistributionMethods),
+  documentReference: z.string().trim().max(300).optional().transform((value) => value || undefined),
+  notes: optionalText,
+  reviewedAt: z.string().date().optional().or(z.literal("")),
+});
+
+export const estateAllocationSchema = z.object({
+  beneficiaryId: z.string().uuid(),
+  tier: z.enum(estateAllocationTiers),
+  allocationBps: estatePercentageBps,
+  notes: optionalText,
+});
+
+export type BeneficiaryInput = z.infer<typeof beneficiarySchema>;
+export type EstatePlanInput = z.infer<typeof estatePlanSchema>;
+export type EstateDirectiveInput = z.infer<typeof estateDirectiveSchema>;
+export type EstateAllocationInput = z.infer<typeof estateAllocationSchema>;
 
 export type ActionState = {
   ok?: boolean;
