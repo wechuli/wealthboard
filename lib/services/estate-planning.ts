@@ -91,6 +91,53 @@ function scaleByBasisPoints(amountMinor: number | bigint, basisPoints: number) {
   );
 }
 
+export function apportionMinorUnits(
+  amountMinor: number | bigint,
+  entries: Array<{ key: string; numerator: bigint }>,
+  denominator: bigint,
+) {
+  if (denominator <= 0n || entries.some((entry) => entry.numerator < 0n)) {
+    throw new EstatePlanningError("Allocation weights are invalid.");
+  }
+  const sign = BigInt(amountMinor) < 0n ? -1n : 1n;
+  const absoluteAmount = BigInt(amountMinor) * sign;
+  const totalNumerator = entries.reduce(
+    (total, entry) => total + entry.numerator,
+    0n,
+  );
+  if (totalNumerator > denominator) {
+    throw new EstatePlanningError("Allocation weights cannot exceed 100%.");
+  }
+
+  const targetProduct = absoluteAmount * totalNumerator;
+  const target =
+    targetProduct / denominator +
+    ((targetProduct % denominator) * 2n >= denominator ? 1n : 0n);
+  const parts = entries.map((entry) => {
+    const product = absoluteAmount * entry.numerator;
+    return {
+      key: entry.key,
+      amount: product / denominator,
+      remainder: product % denominator,
+    };
+  });
+  let undistributed =
+    target - parts.reduce((total, part) => total + part.amount, 0n);
+  const ranked = [...parts].sort((left, right) =>
+    left.remainder === right.remainder
+      ? left.key.localeCompare(right.key)
+      : left.remainder > right.remainder
+        ? -1
+        : 1,
+  );
+  for (const part of ranked) {
+    if (undistributed === 0n) break;
+    part.amount += 1n;
+    undistributed -= 1n;
+  }
+  return new Map(parts.map((part) => [part.key, part.amount * sign]));
+}
+
 function requirePlan(client: Client, userId: string) {
   const plan = client.query.estatePlans
     .findFirst({ where: eq(estatePlans.userId, userId) })
@@ -202,9 +249,7 @@ export function updateEstatePlan(userId: string, input: PlanInput) {
         : null,
       updatedAt: nowIso(),
     })
-    .where(
-      and(eq(estatePlans.userId, userId), eq(estatePlans.id, plan.id)),
-    )
+    .where(and(eq(estatePlans.userId, userId), eq(estatePlans.id, plan.id)))
     .run();
 }
 
@@ -225,7 +270,9 @@ export function upsertEstateDirective(
       throw new EstatePlanningError("The selected asset is unavailable.");
     }
     if (account.isLiability) {
-      throw new EstatePlanningError("Liabilities cannot be assigned to beneficiaries.");
+      throw new EstatePlanningError(
+        "Liabilities cannot be assigned to beneficiaries.",
+      );
     }
 
     const existing = tx.query.estateAccountDirectives
@@ -283,7 +330,10 @@ function allocationTotal(
   excludedId?: string,
 ) {
   return client
-    .select({ id: estateAllocations.id, allocationBps: estateAllocations.allocationBps })
+    .select({
+      id: estateAllocations.id,
+      allocationBps: estateAllocations.allocationBps,
+    })
     .from(estateAllocations)
     .where(
       and(
@@ -482,7 +532,10 @@ export function upsertResiduaryAllocation(
   });
 }
 
-export function deleteResiduaryAllocation(userId: string, allocationId: string) {
+export function deleteResiduaryAllocation(
+  userId: string,
+  allocationId: string,
+) {
   const result = getDatabase()
     .delete(estateResiduaryAllocations)
     .where(
@@ -520,7 +573,8 @@ function latestActivityByAccount(userId: string) {
     .all();
   for (const row of [...transactionDates, ...valuationDates]) {
     const current = dates.get(row.accountId);
-    if (row.date && (!current || row.date > current)) dates.set(row.accountId, row.date);
+    if (row.date && (!current || row.date > current))
+      dates.set(row.accountId, row.date);
   }
   return dates;
 }
@@ -538,7 +592,8 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
   const settings = db.query.userSettings
     .findFirst({ where: eq(userSettings.userId, userId) })
     .sync();
-  if (!settings) throw new EstatePlanningError("User settings are unavailable.");
+  if (!settings)
+    throw new EstatePlanningError("User settings are unavailable.");
 
   const beneficiaryRows = db
     .select()
@@ -555,7 +610,10 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
     .from(accounts)
     .innerJoin(
       categories,
-      and(eq(accounts.userId, categories.userId), eq(accounts.categoryId, categories.id)),
+      and(
+        eq(accounts.userId, categories.userId),
+        eq(accounts.categoryId, categories.id),
+      ),
     )
     .leftJoin(
       institutions,
@@ -616,7 +674,9 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
     .orderBy(desc(estatePlanSnapshots.generatedAt))
     .all();
 
-  const directiveByAccount = new Map(directiveRows.map((row) => [row.accountId, row]));
+  const directiveByAccount = new Map(
+    directiveRows.map((row) => [row.accountId, row]),
+  );
   const beneficiaryById = new Map(beneficiaryRows.map((row) => [row.id, row]));
   const activityByAccount = latestActivityByAccount(userId);
   const valueAsOfDate = dateInputForTimezone(settings.timezone, now);
@@ -640,7 +700,21 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
       severity: "blocking",
     });
   }
-  if (residualPrimaryTotal > 0 && residualPrimaryTotal !== FULL_ALLOCATION_BPS) {
+  if (
+    residueRows.some(
+      (row) => beneficiaryById.get(row.beneficiaryId)?.archivedAt,
+    )
+  ) {
+    reviewItems.push({
+      code: "archived-residual-beneficiary",
+      message: "A residual allocation references an archived beneficiary.",
+      severity: "blocking",
+    });
+  }
+  if (
+    residualPrimaryTotal > 0 &&
+    residualPrimaryTotal !== FULL_ALLOCATION_BPS
+  ) {
     reviewItems.push({
       code: "residue-incomplete",
       message: "Primary residual allocations must total 100% when used.",
@@ -666,7 +740,10 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
     { amountBaseMinor: bigint; incomplete: boolean }
   >();
   for (const beneficiary of beneficiaryRows) {
-    beneficiaryTotals.set(beneficiary.id, { amountBaseMinor: 0n, incomplete: false });
+    beneficiaryTotals.set(beneficiary.id, {
+      amountBaseMinor: 0n,
+      incomplete: false,
+    });
   }
 
   const assetRows = accountRows
@@ -676,7 +753,8 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
       const isIncluded =
         directive?.isIncluded ??
         (!account.archivedAt && account.isIncludedInNetWorth);
-      const ownershipShareBps = directive?.ownershipShareBps ?? FULL_ALLOCATION_BPS;
+      const ownershipShareBps =
+        directive?.ownershipShareBps ?? FULL_ALLOCATION_BPS;
       const estateValueMinor = isIncluded
         ? scaleByBasisPoints(account.currentValueMinor, ownershipShareBps)
         : 0n;
@@ -716,13 +794,62 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
         (sum, row) => sum + row.allocationBps,
         0,
       );
-      const unallocatedBps = Math.max(0, FULL_ALLOCATION_BPS - primaryAllocatedBps);
+      const unallocatedBps = Math.max(
+        0,
+        FULL_ALLOCATION_BPS - primaryAllocatedBps,
+      );
+      const primaryWeights = [
+        ...primaryRows.map((row) => ({
+          key: `allocation:${row.id}`,
+          numerator: BigInt(row.allocationBps) * BigInt(FULL_ALLOCATION_BPS),
+        })),
+        ...residualPrimary.map((row) => ({
+          key: `residual:${row.id}`,
+          numerator: BigInt(unallocatedBps) * BigInt(row.allocationBps),
+        })),
+      ];
+      const primarySourceAmounts = apportionMinorUnits(
+        estateValueMinor,
+        primaryWeights,
+        BigInt(FULL_ALLOCATION_BPS) ** 2n,
+      );
+      const primaryBaseAmounts =
+        estateValueBaseMinor === null
+          ? null
+          : apportionMinorUnits(
+              estateValueBaseMinor,
+              primaryWeights,
+              BigInt(FULL_ALLOCATION_BPS) ** 2n,
+            );
+      const contingentWeights = contingentRows.map((row) => ({
+        key: `allocation:${row.id}`,
+        numerator: BigInt(row.allocationBps),
+      }));
+      const contingentSourceAmounts = apportionMinorUnits(
+        estateValueMinor,
+        contingentWeights,
+        BigInt(FULL_ALLOCATION_BPS),
+      );
+      const contingentBaseAmounts =
+        estateValueBaseMinor === null
+          ? null
+          : apportionMinorUnits(
+              estateValueBaseMinor,
+              contingentWeights,
+              BigInt(FULL_ALLOCATION_BPS),
+            );
       const allocationView = rows.map((row) => {
         const beneficiary = beneficiaryById.get(row.beneficiaryId)!;
-        const amountMinor = scaleByBasisPoints(estateValueMinor, row.allocationBps);
-        const amountBaseMinor = estateValueBaseMinor === null
-          ? null
-          : scaleByBasisPoints(estateValueBaseMinor, row.allocationBps);
+        const key = `allocation:${row.id}`;
+        const sourceAmounts =
+          row.tier === "primary"
+            ? primarySourceAmounts
+            : contingentSourceAmounts;
+        const baseAmounts =
+          row.tier === "primary" ? primaryBaseAmounts : contingentBaseAmounts;
+        const amountMinor = sourceAmounts.get(key) ?? 0n;
+        const amountBaseMinor =
+          baseAmounts === null ? null : (baseAmounts.get(key) ?? 0n);
         if (row.tier === "primary") {
           const total = beneficiaryTotals.get(row.beneficiaryId)!;
           if (amountBaseMinor === null) total.incomplete = true;
@@ -742,12 +869,14 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
         const residualShareBps = new Decimal(unallocatedBps)
           .mul(row.allocationBps)
           .div(FULL_ALLOCATION_BPS)
-          .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+          .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
           .toNumber();
-        const amountMinor = scaleByBasisPoints(estateValueMinor, residualShareBps);
-        const amountBaseMinor = estateValueBaseMinor === null
-          ? null
-          : scaleByBasisPoints(estateValueBaseMinor, residualShareBps);
+        const key = `residual:${row.id}`;
+        const amountMinor = primarySourceAmounts.get(key) ?? 0n;
+        const amountBaseMinor =
+          primaryBaseAmounts === null
+            ? null
+            : (primaryBaseAmounts.get(key) ?? 0n);
         const total = beneficiaryTotals.get(row.beneficiaryId)!;
         if (amountBaseMinor === null) total.incomplete = true;
         else total.amountBaseMinor += amountBaseMinor;
@@ -770,7 +899,11 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
           accountId: account.id,
         });
       }
-      if (isIncluded && primaryAllocatedBps < FULL_ALLOCATION_BPS && residualPrimaryTotal !== FULL_ALLOCATION_BPS) {
+      if (
+        isIncluded &&
+        primaryAllocatedBps < FULL_ALLOCATION_BPS &&
+        residualPrimaryTotal !== FULL_ALLOCATION_BPS
+      ) {
         reviewItems.push({
           code: "allocation-incomplete",
           message: `${account.name} has ${(unallocatedBps / 100).toFixed(2)}% without a complete primary or residual allocation.`,
@@ -778,7 +911,11 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
           accountId: account.id,
         });
       }
-      if (isIncluded && contingentAllocatedBps > 0 && contingentAllocatedBps !== FULL_ALLOCATION_BPS) {
+      if (
+        isIncluded &&
+        contingentAllocatedBps > 0 &&
+        contingentAllocatedBps !== FULL_ALLOCATION_BPS
+      ) {
         reviewItems.push({
           code: "contingent-incomplete",
           message: `Contingent allocations for ${account.name} must total 100% when used.`,
@@ -810,7 +947,8 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
           accountId: account.id,
         });
       }
-      const latestActivityAt = activityByAccount.get(account.id) ?? account.createdAt;
+      const latestActivityAt =
+        activityByAccount.get(account.id) ?? account.createdAt;
       if (isIncluded && new Date(latestActivityAt) < staleCutoff) {
         reviewItems.push({
           code: "stale-value",
@@ -819,7 +957,7 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
           accountId: account.id,
         });
       }
-      if (account.archivedAt && directive) {
+      if (account.archivedAt && directive?.isIncluded) {
         reviewItems.push({
           code: "archived-asset",
           message: `${account.name} is archived but remains in the estate plan.`,
@@ -839,7 +977,11 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
           accountId: account.id,
         });
       }
-      if (allocationView.some((row) => row.beneficiaryArchivedAt) || residualView.some((row) => row.beneficiaryArchivedAt)) {
+      if (
+        isIncluded &&
+        (allocationView.some((row) => row.beneficiaryArchivedAt) ||
+          residualView.some((row) => row.beneficiaryArchivedAt))
+      ) {
         reviewItems.push({
           code: "archived-beneficiary",
           message: `${account.name} references an archived beneficiary.`,
@@ -912,7 +1054,8 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
   if (liabilityRows.length) {
     reviewItems.push({
       code: "liabilities-review",
-      message: "Review how debts, secured claims, taxes, and estate expenses may affect actual gifts.",
+      message:
+        "Review how debts, secured claims, taxes, and estate expenses may affect actual gifts.",
       severity: "warning",
     });
   }
@@ -943,13 +1086,17 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
     totals: {
       grossAssetsBaseMinor: grossAssetsBaseMinor.toString(),
       liabilitiesBaseMinor: liabilitiesBaseMinor.toString(),
-      netEstateBaseMinor: (grossAssetsBaseMinor - liabilitiesBaseMinor).toString(),
+      netEstateBaseMinor: (
+        grossAssetsBaseMinor - liabilitiesBaseMinor
+      ).toString(),
       complete: totalsComplete,
     },
     beneficiaryTotals: beneficiaryRows.map((beneficiary) => ({
       beneficiaryId: beneficiary.id,
       beneficiaryName: beneficiary.name,
-      amountBaseMinor: beneficiaryTotals.get(beneficiary.id)!.amountBaseMinor.toString(),
+      amountBaseMinor: beneficiaryTotals
+        .get(beneficiary.id)!
+        .amountBaseMinor.toString(),
       incomplete: beneficiaryTotals.get(beneficiary.id)!.incomplete,
     })),
     reviewItems,
@@ -964,6 +1111,7 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
           "residue-incomplete",
           "residue-contingent-incomplete",
           "archived-beneficiary",
+          "archived-residual-beneficiary",
           "archived-asset",
         ].includes(item.code),
     ),
@@ -974,7 +1122,10 @@ export type EstateWorkspace = ReturnType<typeof getEstateWorkspace>;
 
 export type EstateSnapshotContent = ReturnType<typeof estateSnapshotContent>;
 
-function estateSnapshotContent(workspace: ReturnType<typeof getEstateWorkspace>, generatedAt: string) {
+function estateSnapshotContent(
+  workspace: ReturnType<typeof getEstateWorkspace>,
+  generatedAt: string,
+) {
   return {
     format: "wealthboard-estate-summary" as const,
     version: 1 as const,
@@ -1088,8 +1239,8 @@ export function createEstatePlanSnapshot(userId: string, now = new Date()) {
 }
 
 export function getEstatePlanSnapshot(userId: string, snapshotId: string) {
-  const row = getDatabase().query.estatePlanSnapshots
-    .findFirst({
+  const row = getDatabase()
+    .query.estatePlanSnapshots.findFirst({
       where: and(
         eq(estatePlanSnapshots.userId, userId),
         eq(estatePlanSnapshots.id, snapshotId),
@@ -1099,7 +1250,9 @@ export function getEstatePlanSnapshot(userId: string, snapshotId: string) {
   if (!row) return undefined;
   const actualHash = createHash("sha256").update(row.content).digest("hex");
   if (actualHash !== row.contentHash) {
-    throw new EstatePlanningError("The estate summary snapshot failed its integrity check.");
+    throw new EstatePlanningError(
+      "The estate summary snapshot failed its integrity check.",
+    );
   }
   return {
     ...row,
@@ -1117,5 +1270,6 @@ export function deleteEstatePlanSnapshot(userId: string, snapshotId: string) {
       ),
     )
     .run();
-  if (!result.changes) throw new EstatePlanningError("Estate summary not found.");
+  if (!result.changes)
+    throw new EstatePlanningError("Estate summary not found.");
 }

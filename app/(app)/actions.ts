@@ -225,6 +225,7 @@ export async function updateAccountAction(
   revalidatePath("/");
   revalidatePath("/accounts");
   revalidatePath(`/accounts/${id}`);
+  revalidatePath("/estate");
   redirect(`/accounts/${id}?updated=1`);
 }
 
@@ -234,6 +235,7 @@ export async function archiveAccountAction(id: string, archived: boolean) {
   revalidatePath("/");
   revalidatePath("/accounts");
   revalidatePath(`/accounts/${id}`);
+  revalidatePath("/estate");
   redirect("/accounts");
 }
 

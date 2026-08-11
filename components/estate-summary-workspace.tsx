@@ -48,7 +48,11 @@ function SnapshotButton() {
         });
       }}
     >
-      {pending ? <LoaderCircle size={16} className="animate-spin" /> : <FilePlus2 size={16} />}
+      {pending ? (
+        <LoaderCircle size={16} className="animate-spin" />
+      ) : (
+        <FilePlus2 size={16} />
+      )}
       Create summary
     </Button>
   );
@@ -59,13 +63,19 @@ export function EstateSummaryWorkspace({
 }: {
   workspace: EstateWorkspace;
 }) {
-  const blocking = workspace.reviewItems.filter((item) => item.severity === "blocking");
-  const warnings = workspace.reviewItems.filter((item) => item.severity === "warning");
+  const blocking = workspace.reviewItems.filter(
+    (item) => item.severity === "blocking",
+  );
+  const warnings = workspace.reviewItems.filter(
+    (item) => item.severity === "warning",
+  );
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="p-4">
-          <p className="text-xs uppercase text-slate-500">Gross estate assets</p>
+          <p className="text-xs uppercase text-slate-500">
+            Gross estate assets
+          </p>
           <p className="mt-2 text-lg font-semibold">
             <MoneyValue
               amount={BigInt(workspace.totals.grossAssetsBaseMinor)}
@@ -74,7 +84,9 @@ export function EstateSummaryWorkspace({
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase text-slate-500">Recorded liabilities</p>
+          <p className="text-xs uppercase text-slate-500">
+            Recorded liabilities
+          </p>
           <p className="mt-2 text-lg font-semibold text-amber-200">
             <MoneyValue
               amount={BigInt(workspace.totals.liabilitiesBaseMinor)}
@@ -83,7 +95,9 @@ export function EstateSummaryWorkspace({
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase text-slate-500">Estimated net estate</p>
+          <p className="text-xs uppercase text-slate-500">
+            Estimated net estate
+          </p>
           <p className="mt-2 text-lg font-semibold">
             <MoneyValue
               amount={BigInt(workspace.totals.netEstateBaseMinor)}
@@ -91,7 +105,9 @@ export function EstateSummaryWorkspace({
             />
           </p>
           {!workspace.totals.complete ? (
-            <p className="mt-1 text-xs text-amber-300">Known values only; exchange rates are missing.</p>
+            <p className="mt-1 text-xs text-amber-300">
+              Known values only; exchange rates are missing.
+            </p>
           ) : null}
         </Card>
       </div>
@@ -101,7 +117,8 @@ export function EstateSummaryWorkspace({
           <div>
             <CardTitle className="text-base">Plan details</CardTitle>
             <p className="mt-1 text-sm text-slate-400">
-              Jurisdiction is a reference only; Wealthboard does not infer local law.
+              Jurisdiction is a reference only; Wealthboard does not infer local
+              law.
             </p>
           </div>
         </CardHeader>
@@ -125,7 +142,9 @@ export function EstateSummaryWorkspace({
                   <FieldError>{state.fieldErrors?.title?.[0]}</FieldError>
                 </div>
                 <div>
-                  <Label htmlFor="estate-jurisdiction">Jurisdiction or residence</Label>
+                  <Label htmlFor="estate-jurisdiction">
+                    Jurisdiction or residence
+                  </Label>
                   <Input
                     id="estate-jurisdiction"
                     name="jurisdiction"
@@ -133,7 +152,9 @@ export function EstateSummaryWorkspace({
                     placeholder="Optional planning reference"
                     maxLength={120}
                   />
-                  <FieldError>{state.fieldErrors?.jurisdiction?.[0]}</FieldError>
+                  <FieldError>
+                    {state.fieldErrors?.jurisdiction?.[0]}
+                  </FieldError>
                 </div>
                 <div>
                   <Label htmlFor="estate-last-reviewed">Last reviewed</Label>
@@ -141,19 +162,29 @@ export function EstateSummaryWorkspace({
                     id="estate-last-reviewed"
                     name="lastReviewedDate"
                     type="date"
-                    defaultValue={workspace.plan.lastReviewedDate?.slice(0, 10) ?? ""}
+                    defaultValue={
+                      workspace.plan.lastReviewedDate?.slice(0, 10) ?? ""
+                    }
                   />
-                  <FieldError>{state.fieldErrors?.lastReviewedDate?.[0]}</FieldError>
+                  <FieldError>
+                    {state.fieldErrors?.lastReviewedDate?.[0]}
+                  </FieldError>
                 </div>
                 <div>
-                  <Label htmlFor="estate-review-reminder">Review again on</Label>
+                  <Label htmlFor="estate-review-reminder">
+                    Review again on
+                  </Label>
                   <Input
                     id="estate-review-reminder"
                     name="reviewReminderDate"
                     type="date"
-                    defaultValue={workspace.plan.reviewReminderDate?.slice(0, 10) ?? ""}
+                    defaultValue={
+                      workspace.plan.reviewReminderDate?.slice(0, 10) ?? ""
+                    }
                   />
-                  <FieldError>{state.fieldErrors?.reviewReminderDate?.[0]}</FieldError>
+                  <FieldError>
+                    {state.fieldErrors?.reviewReminderDate?.[0]}
+                  </FieldError>
                 </div>
               </>
             )}
@@ -166,8 +197,12 @@ export function EstateSummaryWorkspace({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="text-base">Completion review</CardTitle>
-              <Badge tone={workspace.mathematicallyComplete ? "positive" : "warning"}>
-                {workspace.mathematicallyComplete ? "Allocation math complete" : "Decisions needed"}
+              <Badge
+                tone={workspace.mathematicallyComplete ? "positive" : "warning"}
+              >
+                {workspace.mathematicallyComplete
+                  ? "Allocation math complete"
+                  : "Decisions needed"}
               </Badge>
             </div>
             <p className="mt-1 text-sm text-slate-400">
@@ -179,7 +214,8 @@ export function EstateSummaryWorkspace({
           {blocking.length === 0 ? (
             <div className="flex gap-3 rounded-xl bg-emerald-400/10 p-4 text-sm text-emerald-100">
               <CheckCircle2 size={18} className="shrink-0" />
-              Every included asset has complete primary coverage through specific or residual allocations.
+              Every included asset has complete primary coverage through
+              specific or residual allocations.
             </div>
           ) : (
             <div className="space-y-2">
@@ -213,15 +249,26 @@ export function EstateSummaryWorkspace({
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Indicative beneficiary totals</CardTitle>
+            <CardTitle className="text-base">
+              Indicative beneficiary totals
+            </CardTitle>
           </CardHeader>
           <CardContent className="divide-y divide-white/[0.06]">
             {workspace.beneficiaryTotals.length ? (
               workspace.beneficiaryTotals.map((total) => (
-                <div key={total.beneficiaryId} className="flex items-center justify-between gap-4 py-3">
+                <div
+                  key={total.beneficiaryId}
+                  className="flex items-center justify-between gap-4 py-3"
+                >
                   <div>
-                    <p className="text-sm font-medium text-slate-100">{total.beneficiaryName}</p>
-                    {total.incomplete ? <p className="text-xs text-amber-300">Missing exchange rate</p> : null}
+                    <p className="text-sm font-medium text-slate-100">
+                      {total.beneficiaryName}
+                    </p>
+                    {total.incomplete ? (
+                      <p className="text-xs text-amber-300">
+                        Missing exchange rate
+                      </p>
+                    ) : null}
                   </div>
                   <MoneyValue
                     amount={BigInt(total.amountBaseMinor)}
@@ -230,7 +277,9 @@ export function EstateSummaryWorkspace({
                 </div>
               ))
             ) : (
-              <p className="py-4 text-sm text-slate-500">No beneficiaries have been added.</p>
+              <p className="py-4 text-sm text-slate-500">
+                No beneficiaries have been added.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -241,8 +290,9 @@ export function EstateSummaryWorkspace({
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-6 text-slate-400">
-              Create an immutable as-of snapshot for printing or adviser review. Exact values,
-              contact details, references, and notes are excluded from print until you choose to reveal them.
+              Create an immutable as-of snapshot for printing or adviser review.
+              Exact values, contact details, references, and notes are excluded
+              from print until you choose to reveal them.
             </p>
             <div className="mt-4">
               <SnapshotButton />
@@ -264,9 +314,17 @@ export function EstateSummaryWorkspace({
                   className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                 >
                   <div>
-                    <p className="text-sm font-medium text-slate-100">{snapshot.title}</p>
+                    <p className="text-sm font-medium text-slate-100">
+                      {snapshot.title}
+                    </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Values as of {snapshot.valueAsOfDate} · Created {formatDate(snapshot.generatedAt, workspace.timezone, workspace.preferredDateFormat)} · Hash {snapshot.contentHash.slice(0, 12)}…
+                      Values as of {snapshot.valueAsOfDate} · Created{" "}
+                      {formatDate(
+                        snapshot.generatedAt,
+                        workspace.timezone,
+                        workspace.preferredDateFormat,
+                      )}{" "}
+                      · Hash {snapshot.contentHash.slice(0, 12)}…
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -281,7 +339,10 @@ export function EstateSummaryWorkspace({
                       </a>
                     </Button>
                     <MutationButton
-                      action={deleteEstateSnapshotAction.bind(null, snapshot.id)}
+                      action={deleteEstateSnapshotAction.bind(
+                        null,
+                        snapshot.id,
+                      )}
                       confirm="Delete this retained estate summary? The current plan will not change."
                       successMessage="Estate summary deleted."
                       variant="ghost"
@@ -295,7 +356,9 @@ export function EstateSummaryWorkspace({
               ))}
             </div>
           ) : (
-            <p className="py-4 text-sm text-slate-500">No summaries have been retained yet.</p>
+            <p className="py-4 text-sm text-slate-500">
+              No summaries have been retained yet.
+            </p>
           )}
         </CardContent>
       </Card>

@@ -4,7 +4,6 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Landmark,
-  ListPlus,
   Scale,
   ShieldAlert,
   Trash2,
@@ -63,7 +62,11 @@ function AllocationForm({
   beneficiaries,
   label,
 }: {
-  action: (formData: FormData) => Promise<{ ok?: boolean; message?: string; fieldErrors?: Record<string, string[] | undefined> }>;
+  action: (formData: FormData) => Promise<{
+    ok?: boolean;
+    message?: string;
+    fieldErrors?: Record<string, string[] | undefined>;
+  }>;
   beneficiaries: ActiveBeneficiary[];
   label: string;
 }) {
@@ -107,7 +110,9 @@ function AllocationForm({
                 required
                 className="pr-9"
               />
-              <span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-500">%</span>
+              <span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-500">
+                %
+              </span>
             </div>
             <FieldError>{state.fieldErrors?.allocationBps?.[0]}</FieldError>
           </div>
@@ -150,10 +155,14 @@ function AllocationRows({ asset }: { asset: Asset }) {
               <Badge tone={allocation.tier === "primary" ? "positive" : "info"}>
                 {allocation.tier === "primary" ? "Primary" : "Contingent"}
               </Badge>
-              {allocation.beneficiaryArchivedAt ? <Badge tone="warning">Archived</Badge> : null}
+              {allocation.beneficiaryArchivedAt ? (
+                <Badge tone="warning">Archived</Badge>
+              ) : null}
             </div>
             {allocation.notes ? (
-              <p className="mt-1 truncate text-xs text-slate-500">{allocation.notes}</p>
+              <p className="mt-1 truncate text-xs text-slate-500">
+                {allocation.notes}
+              </p>
             ) : null}
           </div>
           <div className="text-left sm:text-right">
@@ -161,7 +170,10 @@ function AllocationRows({ asset }: { asset: Asset }) {
               {percent(allocation.allocationBps)}%
             </p>
             <p className="text-xs text-slate-500">
-              <MoneyValue amount={BigInt(allocation.amountMinor)} currency={asset.currency} />
+              <MoneyValue
+                amount={BigInt(allocation.amountMinor)}
+                currency={asset.currency}
+              />
             </p>
           </div>
           <MutationButton
@@ -197,7 +209,9 @@ function DirectiveForm({ asset }: { asset: Asset }) {
             />
           </div>
           <div>
-            <Label htmlFor={`ownership-${asset.id}`}>Estate ownership share</Label>
+            <Label htmlFor={`ownership-${asset.id}`}>
+              Estate ownership share
+            </Label>
             <div className="relative">
               <Input
                 id={`ownership-${asset.id}`}
@@ -207,7 +221,9 @@ function DirectiveForm({ asset }: { asset: Asset }) {
                 className="pr-9"
                 required
               />
-              <span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-500">%</span>
+              <span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-500">
+                %
+              </span>
             </div>
             <FieldError>{state.fieldErrors?.ownershipShareBps?.[0]}</FieldError>
           </div>
@@ -249,10 +265,14 @@ function DirectiveForm({ asset }: { asset: Asset }) {
                 </option>
               ))}
             </Select>
-            <FieldError>{state.fieldErrors?.distributionMethod?.[0]}</FieldError>
+            <FieldError>
+              {state.fieldErrors?.distributionMethod?.[0]}
+            </FieldError>
           </div>
           <div className="md:col-span-2">
-            <Label htmlFor={`document-${asset.id}`}>Document or location reference</Label>
+            <Label htmlFor={`document-${asset.id}`}>
+              Document or location reference
+            </Label>
             <Input
               id={`document-${asset.id}`}
               name="documentReference"
@@ -263,7 +283,9 @@ function DirectiveForm({ asset }: { asset: Asset }) {
             <FieldError>{state.fieldErrors?.documentReference?.[0]}</FieldError>
           </div>
           <div className="md:col-span-2">
-            <Label htmlFor={`directive-notes-${asset.id}`}>Planning notes</Label>
+            <Label htmlFor={`directive-notes-${asset.id}`}>
+              Planning notes
+            </Label>
             <Textarea
               id={`directive-notes-${asset.id}`}
               name="notes"
@@ -292,11 +314,16 @@ function AssetCard({
   baseCurrency: string;
   reviewItems: EstateWorkspace["reviewItems"];
 }) {
-  const accountReviewItems = reviewItems.filter((item) => item.accountId === asset.id);
+  const accountReviewItems = reviewItems.filter(
+    (item) => item.accountId === asset.id,
+  );
   return (
     <Card
       id={`asset-${asset.id}`}
-      className={cn("scroll-mt-24", highlighted && "ring-2 ring-emerald-400/50")}
+      className={cn(
+        "scroll-mt-24",
+        highlighted && "ring-2 ring-emerald-400/50",
+      )}
     >
       <CardHeader className="flex-col gap-3 border-b border-white/[0.06] pb-4 sm:flex-row">
         <div className="min-w-0">
@@ -307,17 +334,28 @@ function AssetCard({
             {asset.archivedAt ? <Badge tone="warning">Archived</Badge> : null}
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            {[asset.institutionName, asset.currency].filter(Boolean).join(" · ")}
+            {[asset.institutionName, asset.currency]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         </div>
         <div className="text-left sm:text-right">
-          <p className="text-xs uppercase text-slate-500">Indicative estate share</p>
-          <p className="mt-1 font-semibold text-slate-100">
-            <MoneyValue amount={BigInt(asset.estateValueMinor)} currency={asset.currency} />
+          <p className="text-xs uppercase text-slate-500">
+            Indicative estate share
           </p>
-          {asset.currency !== baseCurrency && asset.estateValueBaseMinor !== null ? (
+          <p className="mt-1 font-semibold text-slate-100">
+            <MoneyValue
+              amount={BigInt(asset.estateValueMinor)}
+              currency={asset.currency}
+            />
+          </p>
+          {asset.currency !== baseCurrency &&
+          asset.estateValueBaseMinor !== null ? (
             <p className="text-xs text-slate-500">
-              <MoneyValue amount={BigInt(asset.estateValueBaseMinor)} currency={baseCurrency} />
+              <MoneyValue
+                amount={BigInt(asset.estateValueBaseMinor)}
+                currency={baseCurrency}
+              />
             </p>
           ) : null}
         </div>
@@ -354,27 +392,37 @@ function AssetCard({
           <section className="space-y-3 border-t border-white/[0.06] pt-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-semibold text-slate-100">Specific allocations</h3>
+                <h3 className="text-sm font-semibold text-slate-100">
+                  Specific allocations
+                </h3>
                 <p className="mt-1 text-xs text-slate-500">
-                  Primary {percent(asset.primaryAllocatedBps)}% · Remaining {percent(asset.unallocatedBps)}%
+                  Primary {percent(asset.primaryAllocatedBps)}% · Remaining{" "}
+                  {percent(asset.unallocatedBps)}%
                 </p>
               </div>
               {asset.unallocatedBps === 0 ? (
                 <Badge tone="positive">Fully allocated</Badge>
               ) : (
-                <Badge tone="warning">{percent(asset.unallocatedBps)}% remaining</Badge>
+                <Badge tone="warning">
+                  {percent(asset.unallocatedBps)}% remaining
+                </Badge>
               )}
             </div>
             <AllocationRows asset={asset} />
             {beneficiaries.length ? (
               <AllocationForm
-                action={upsertEstateAllocationAction.bind(null, asset.directiveId)}
+                action={upsertEstateAllocationAction.bind(
+                  null,
+                  asset.directiveId,
+                )}
                 beneficiaries={beneficiaries}
                 label={`Add allocation to ${asset.name}`}
               />
             ) : (
               <Button asChild variant="secondary" size="sm">
-                <Link href="/estate/beneficiaries">Add a beneficiary first</Link>
+                <Link href="/estate/beneficiaries">
+                  Add a beneficiary first
+                </Link>
               </Button>
             )}
           </section>
@@ -403,21 +451,29 @@ export function EstateDistributionWorkspace({
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs uppercase text-slate-500">Active assets</p>
-          <p className="mt-2 text-2xl font-semibold">{workspace.assets.filter((asset) => !asset.archivedAt).length}</p>
+          <p className="mt-2 text-2xl font-semibold">
+            {workspace.assets.filter((asset) => !asset.archivedAt).length}
+          </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs uppercase text-slate-500">Beneficiaries</p>
-          <p className="mt-2 text-2xl font-semibold">{activeBeneficiaries.length}</p>
+          <p className="mt-2 text-2xl font-semibold">
+            {activeBeneficiaries.length}
+          </p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase text-slate-500">Estimated net estate</p>
+          <p className="text-xs uppercase text-slate-500">
+            Estimated net estate
+          </p>
           <p className="mt-2 text-lg font-semibold">
             <MoneyValue
               amount={BigInt(workspace.totals.netEstateBaseMinor)}
               currency={workspace.baseCurrency}
             />
           </p>
-          {!workspace.totals.complete ? <p className="mt-1 text-xs text-amber-300">Incomplete rates</p> : null}
+          {!workspace.totals.complete ? (
+            <p className="mt-1 text-xs text-amber-300">Incomplete rates</p>
+          ) : null}
         </Card>
       </div>
 
@@ -435,7 +491,9 @@ export function EstateDistributionWorkspace({
       ) : (
         <Card className="p-8 text-center">
           <Landmark className="mx-auto text-slate-600" size={26} />
-          <p className="mt-3 text-sm text-slate-400">Add an asset account before planning its distribution.</p>
+          <p className="mt-3 text-sm text-slate-400">
+            Add an asset account before planning its distribution.
+          </p>
           <Button asChild className="mt-4" size="sm">
             <Link href="/accounts/new">Add account</Link>
           </Button>
@@ -449,7 +507,8 @@ export function EstateDistributionWorkspace({
               <Scale size={17} className="text-cyan-300" /> Residual estate
             </CardTitle>
             <p className="mt-1 text-sm text-slate-400">
-              Applies to unallocated portions and property not specifically listed.
+              Applies to unallocated portions and property not specifically
+              listed.
             </p>
           </div>
         </CardHeader>
@@ -462,15 +521,26 @@ export function EstateDistributionWorkspace({
                   className="grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-slate-100">{allocation.beneficiaryName}</p>
-                    <Badge tone={allocation.tier === "primary" ? "positive" : "info"}>
+                    <p className="font-medium text-slate-100">
+                      {allocation.beneficiaryName}
+                    </p>
+                    <Badge
+                      tone={allocation.tier === "primary" ? "positive" : "info"}
+                    >
                       {allocation.tier === "primary" ? "Primary" : "Contingent"}
                     </Badge>
-                    {allocation.beneficiaryArchivedAt ? <Badge tone="warning">Archived</Badge> : null}
+                    {allocation.beneficiaryArchivedAt ? (
+                      <Badge tone="warning">Archived</Badge>
+                    ) : null}
                   </div>
-                  <p className="font-semibold tabular-nums">{percent(allocation.allocationBps)}%</p>
+                  <p className="font-semibold tabular-nums">
+                    {percent(allocation.allocationBps)}%
+                  </p>
                   <MutationButton
-                    action={deleteResiduaryAllocationAction.bind(null, allocation.id)}
+                    action={deleteResiduaryAllocationAction.bind(
+                      null,
+                      allocation.id,
+                    )}
                     confirm={`Remove ${allocation.beneficiaryName} from the residual estate?`}
                     successMessage="Residual allocation removed."
                     variant="ghost"
@@ -501,7 +571,8 @@ export function EstateDistributionWorkspace({
         <CardHeader>
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldAlert size={17} className="text-amber-300" /> Liabilities and expenses
+              <ShieldAlert size={17} className="text-amber-300" /> Liabilities
+              and expenses
             </CardTitle>
             <p className="mt-1 text-sm text-slate-400">
               Debts reduce the estimate but are not assigned to beneficiaries.
@@ -512,21 +583,34 @@ export function EstateDistributionWorkspace({
           {workspace.liabilities.length ? (
             <div className="divide-y divide-white/[0.06]">
               {workspace.liabilities.map((liability) => (
-                <div key={liability.id} className="flex items-center justify-between gap-4 py-3">
+                <div
+                  key={liability.id}
+                  className="flex items-center justify-between gap-4 py-3"
+                >
                   <div>
-                    <p className="text-sm font-medium text-slate-100">{liability.name}</p>
-                    <p className="text-xs text-slate-500">{liability.categoryName}</p>
+                    <p className="text-sm font-medium text-slate-100">
+                      {liability.name}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {liability.categoryName}
+                    </p>
                   </div>
-                  <MoneyValue amount={BigInt(liability.valueMinor)} currency={liability.currency} />
+                  <MoneyValue
+                    amount={BigInt(liability.valueMinor)}
+                    currency={liability.currency}
+                  />
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-slate-500">No active liabilities are recorded.</p>
+            <p className="text-sm text-slate-500">
+              No active liabilities are recorded.
+            </p>
           )}
           <div className="mt-4 flex gap-2 rounded-lg bg-amber-400/10 p-3 text-xs text-amber-100">
             <AlertTriangle size={15} className="shrink-0" />
-            Actual debts, taxes, secured claims, administration costs, and liquidity needs may change distributions.
+            Actual debts, taxes, secured claims, administration costs, and
+            liquidity needs may change distributions.
           </div>
         </CardContent>
       </Card>

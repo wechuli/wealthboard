@@ -39,10 +39,7 @@ import {
   normalizeEnabledCurrencies,
   parseEnabledCurrencies,
 } from "@/lib/currencies";
-import {
-  isValidTimezone,
-  nowIso,
-} from "@/lib/dates";
+import { isValidTimezone, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import {
   canonicalizeInstitutionName,
@@ -429,7 +426,9 @@ const userArchiveV6Schema = userArchiveV5Schema
     estatePlans: z.array(estatePlanArchiveSchema).max(1),
     estateAccountDirectives: z.array(estateDirectiveArchiveSchema).max(10000),
     estateAllocations: z.array(estateAllocationArchiveSchema).max(100000),
-    estateResiduaryAllocations: z.array(estateResiduaryArchiveSchema).max(10000),
+    estateResiduaryAllocations: z
+      .array(estateResiduaryArchiveSchema)
+      .max(10000),
     estatePlanSnapshots: z.array(estateSnapshotArchiveSchema).max(1000),
   })
   .strict();
@@ -547,7 +546,8 @@ const userArchiveSchema = z
   .transform((archive) => {
     if (archive.version === 6) return archive;
     if (archive.version === 5) return upgradeV5Archive(archive);
-    if (archive.version === 4) return upgradeV5Archive(upgradeV4Archive(archive));
+    if (archive.version === 4)
+      return upgradeV5Archive(upgradeV4Archive(archive));
     return upgradeV5Archive(upgradeV4Archive(upgradeLegacyArchive(archive)));
   });
 
@@ -812,10 +812,23 @@ export function restoreUserData(userId: string, input: unknown) {
   );
   const allocationTotals = new Map<string, number>();
   for (const directive of archive.estateAccountDirectives) {
-    requiredMappedId(estatePlanIds, directive.estatePlanId, "estate directive plan");
-    requiredMappedId(accountIds, directive.accountId, "estate directive account");
-    if (accountById.get(directive.accountId)?.isLiability) {
-      throw new Error("The archive assigns a liability to estate beneficiaries.");
+    requiredMappedId(
+      estatePlanIds,
+      directive.estatePlanId,
+      "estate directive plan",
+    );
+    requiredMappedId(
+      accountIds,
+      directive.accountId,
+      "estate directive account",
+    );
+    if (
+      directive.isIncluded &&
+      accountById.get(directive.accountId)?.isLiability
+    ) {
+      throw new Error(
+        "The archive assigns a liability to estate beneficiaries.",
+      );
     }
   }
   for (const allocation of archive.estateAllocations) {
@@ -836,7 +849,9 @@ export function restoreUserData(userId: string, input: unknown) {
     );
     const directive = directiveById.get(allocation.directiveId)!;
     if (directive.estatePlanId !== allocation.estatePlanId) {
-      throw new Error("The archive contains an invalid estate allocation plan relationship.");
+      throw new Error(
+        "The archive contains an invalid estate allocation plan relationship.",
+      );
     }
     const key = `${allocation.directiveId}:${allocation.tier}`;
     const total = (allocationTotals.get(key) ?? 0) + allocation.allocationBps;
@@ -864,7 +879,11 @@ export function restoreUserData(userId: string, input: unknown) {
     allocationTotals.set(key, total);
   }
   for (const snapshot of archive.estatePlanSnapshots) {
-    requiredMappedId(estatePlanIds, snapshot.estatePlanId, "estate snapshot plan");
+    requiredMappedId(
+      estatePlanIds,
+      snapshot.estatePlanId,
+      "estate snapshot plan",
+    );
   }
 
   const db = getDatabase();
@@ -1091,7 +1110,11 @@ export function restoreUserData(userId: string, input: unknown) {
         .values(
           archive.estateAccountDirectives.map((row) => ({
             ...row,
-            id: requiredMappedId(estateDirectiveIds, row.id, "estate directive"),
+            id: requiredMappedId(
+              estateDirectiveIds,
+              row.id,
+              "estate directive",
+            ),
             userId,
             estatePlanId: requiredMappedId(
               estatePlanIds,
@@ -1112,7 +1135,11 @@ export function restoreUserData(userId: string, input: unknown) {
         .values(
           archive.estateAllocations.map((row) => ({
             ...row,
-            id: requiredMappedId(estateAllocationIds, row.id, "estate allocation"),
+            id: requiredMappedId(
+              estateAllocationIds,
+              row.id,
+              "estate allocation",
+            ),
             userId,
             estatePlanId: requiredMappedId(
               estatePlanIds,

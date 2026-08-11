@@ -17,10 +17,7 @@ import {
 } from "@/app/(app)/estate/actions";
 import { BeneficiaryManager } from "@/components/beneficiary-manager";
 import { EstateSummaryDocument } from "@/components/estate-summary-document";
-import {
-  PrivacyProvider,
-  PrivacyToggle,
-} from "@/components/privacy-provider";
+import { PrivacyProvider, PrivacyToggle } from "@/components/privacy-provider";
 import type { EstateSnapshotContent } from "@/lib/services/estate-planning";
 
 const timestamp = "2026-08-11T10:00:00.000Z";
@@ -156,10 +153,18 @@ describe("estate planning components", () => {
     render(<BeneficiaryManager beneficiaries={[beneficiary]} />);
 
     const addHeading = screen.getByRole("heading", { name: "Add beneficiary" });
-    const addCard = addHeading.closest("div.rounded-2xl")!;
-    await user.type(within(addCard).getByLabelText("Name"), "Future Foundation");
-    await user.selectOptions(within(addCard).getByLabelText("Type"), "organization");
-    await user.click(within(addCard).getByRole("button", { name: "Add beneficiary" }));
+    const addCard = addHeading.closest<HTMLElement>("div.rounded-2xl")!;
+    await user.type(
+      within(addCard).getByLabelText("Name"),
+      "Future Foundation",
+    );
+    await user.selectOptions(
+      within(addCard).getByLabelText("Type"),
+      "organization",
+    );
+    await user.click(
+      within(addCard).getByRole("button", { name: "Add beneficiary" }),
+    );
 
     expect(createBeneficiaryAction).toHaveBeenCalledOnce();
     const formData = vi.mocked(createBeneficiaryAction).mock.calls[0][0];
@@ -167,14 +172,19 @@ describe("estate planning components", () => {
     expect(formData.get("kind")).toBe("organization");
     expect(await screen.findByText("Beneficiary added.")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Archive Amina Example" }));
+    await user.click(
+      screen.getByRole("button", { name: "Archive Amina Example" }),
+    );
     expect(archiveBeneficiaryAction).toHaveBeenCalledWith(beneficiary.id, true);
   });
 
   it("keeps sensitive document fields excluded until explicitly revealed", async () => {
     const user = userEvent.setup();
     const print = vi.fn();
-    Object.defineProperty(window, "print", { configurable: true, value: print });
+    Object.defineProperty(window, "print", {
+      configurable: true,
+      value: print,
+    });
     render(
       <PrivacyProvider>
         <PrivacyToggle />
@@ -189,7 +199,9 @@ describe("estate planning components", () => {
     expect(screen.getAllByText("Value excluded").length).toBeGreaterThan(0);
     expect(screen.queryByText("amina@example.test")).not.toBeInTheDocument();
     expect(screen.queryByText(/TITLE-PRIVATE-001/)).not.toBeInTheDocument();
-    expect(screen.queryByText("Obtain a current valuation.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Obtain a current valuation."),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText("Include exact values"));
     expect(screen.getAllByText(/1,000\.00/).length).toBeGreaterThan(0);
@@ -200,7 +212,9 @@ describe("estate planning components", () => {
     expect(screen.getByText(/TITLE-PRIVATE-001/)).toBeVisible();
     expect(screen.getByText("Obtain a current valuation.")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Hide financial values" }));
+    await user.click(
+      screen.getByRole("button", { name: "Hide financial values" }),
+    );
     expect(screen.getAllByText("••••••").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Print or save PDF" }));
     expect(print).toHaveBeenCalledOnce();

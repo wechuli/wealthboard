@@ -12,8 +12,9 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { categories, estateAllocations } from "@/db/schema";
 import { registerUser } from "@/lib/auth/users";
 import { closeDatabase, getDatabase } from "@/lib/db";
-import { createAccount } from "@/lib/services/accounts";
+import { createAccount, updateAccount } from "@/lib/services/accounts";
 import {
+  apportionMinorUnits,
   createBeneficiary,
   createEstatePlanSnapshot,
   deleteEstatePlanSnapshot,
@@ -37,6 +38,7 @@ describe.sequential("estate planning", () => {
   let bobId = "";
   let aliceAssetId = "";
   let aliceLiabilityId = "";
+  let aliceLiabilityCategoryId = "";
   let alicePrimaryId = "";
   let aliceAlternateId = "";
   let directiveId = "";
@@ -49,7 +51,8 @@ describe.sequential("estate planning", () => {
     expect(sqlite.pragma("foreign_key_check")).toHaveLength(0);
     sqlite.close();
     process.env.DATABASE_PATH = databasePath;
-    process.env.SESSION_SECRET = "estate-test-session-secret-longer-than-32-characters";
+    process.env.SESSION_SECRET =
+      "estate-test-session-secret-longer-than-32-characters";
 
     aliceId = (
       await registerUser({
@@ -70,12 +73,16 @@ describe.sequential("estate planning", () => {
     const savingsCategoryId = db
       .select({ id: categories.id })
       .from(categories)
-      .where(and(eq(categories.userId, aliceId), eq(categories.slug, "savings")))
+      .where(
+        and(eq(categories.userId, aliceId), eq(categories.slug, "savings")),
+      )
       .get()!.id;
-    const liabilityCategoryId = db
+    aliceLiabilityCategoryId = db
       .select({ id: categories.id })
       .from(categories)
-      .where(and(eq(categories.userId, aliceId), eq(categories.slug, "liability")))
+      .where(
+        and(eq(categories.userId, aliceId), eq(categories.slug, "liability")),
+      )
       .get()!.id;
     aliceAssetId = createAccount(aliceId, {
       name: "Family savings",
@@ -87,7 +94,7 @@ describe.sequential("estate planning", () => {
     });
     aliceLiabilityId = createAccount(aliceId, {
       name: "Estate loan",
-      categoryId: liabilityCategoryId,
+      categoryId: aliceLiabilityCategoryId,
       currency: "KES",
       openingValue: "20.00",
       isIncludedInNetWorth: true,
@@ -119,10 +126,37 @@ describe.sequential("estate planning", () => {
       }),
     ).toThrow("Beneficiary not found");
     expect(getEstateWorkspace(bobId).beneficiaries).toEqual([]);
-    expect(getEstateWorkspace(aliceId).beneficiaries.map((row) => row.name)).toEqual([
-      "Amina Example",
-      "Education Trust",
-    ]);
+    expect(
+      getEstateWorkspace(aliceId).beneficiaries.map((row) => row.name),
+    ).toEqual(["Amina Example", "Education Trust"]);
+  });
+
+  test("apportions minor units without overstating split or residual gifts", () => {
+    const direct = apportionMinorUnits(
+      1n,
+      [
+        { key: "beneficiary-a", numerator: 5_000n },
+        { key: "beneficiary-b", numerator: 5_000n },
+      ],
+      10_000n,
+    );
+    expect([...direct.values()].sort()).toEqual([0n, 1n]);
+    expect([...direct.values()].reduce((sum, amount) => sum + amount, 0n)).toBe(
+      1n,
+    );
+
+    const primaryAndResidue = apportionMinorUnits(
+      1n,
+      [
+        { key: "primary", numerator: 50_000_000n },
+        { key: "residue", numerator: 50_000_000n },
+      ],
+      100_000_000n,
+    );
+    expect([...primaryAndResidue.values()].sort()).toEqual([0n, 1n]);
+    expect(
+      [...primaryAndResidue.values()].reduce((sum, amount) => sum + amount, 0n),
+    ).toBe(1n);
   });
 
   test("rejects liabilities and foreign accounts as estate directives", () => {
@@ -152,6 +186,14 @@ describe.sequential("estate planning", () => {
       distributionMethod: "sell_and_divide",
       reviewedAt: "2026-08-11",
     });
+    expect(() =>
+      updateAccount(aliceId, aliceAssetId, {
+        name: "Family savings",
+        categoryId: aliceLiabilityCategoryId,
+        currency: "KES",
+        isIncludedInNetWorth: true,
+      }),
+    ).toThrow("Exclude this account from the estate plan");
     upsertEstateAllocation(aliceId, directiveId, {
       beneficiaryId: alicePrimaryId,
       tier: "primary",
@@ -177,7 +219,10 @@ describe.sequential("estate planning", () => {
       tier: "primary",
       allocationBps: 4_000,
     });
-    const estate = getEstateWorkspace(aliceId, new Date("2026-08-11T10:00:00.000Z"));
+    const estate = getEstateWorkspace(
+      aliceId,
+      new Date("2026-08-11T10:00:00.000Z"),
+    );
     expect(estate.assets[0]).toMatchObject({
       estateValueMinor: "5000",
       primaryAllocatedBps: 10_000,
@@ -190,8 +235,14 @@ describe.sequential("estate planning", () => {
       complete: true,
     });
     expect(estate.beneficiaryTotals).toEqual([
-      expect.objectContaining({ beneficiaryId: alicePrimaryId, amountBaseMinor: "3000" }),
-      expect.objectContaining({ beneficiaryId: aliceAlternateId, amountBaseMinor: "2000" }),
+      expect.objectContaining({
+        beneficiaryId: alicePrimaryId,
+        amountBaseMinor: "3000",
+      }),
+      expect.objectContaining({
+        beneficiaryId: aliceAlternateId,
+        amountBaseMinor: "2000",
+      }),
     ]);
     expect(estate.mathematicallyComplete).toBe(true);
   });
@@ -207,7 +258,10 @@ describe.sequential("estate planning", () => {
       tier: "primary",
       allocationBps: 10_000,
     });
-    const estate = getEstateWorkspace(aliceId, new Date("2026-08-11T10:00:00.000Z"));
+    const estate = getEstateWorkspace(
+      aliceId,
+      new Date("2026-08-11T10:00:00.000Z"),
+    );
     expect(estate.assets[0].unallocatedBps).toBe(1_000);
     expect(estate.assets[0].residualAllocations[0]).toMatchObject({
       beneficiaryId: aliceAlternateId,
@@ -216,6 +270,17 @@ describe.sequential("estate planning", () => {
     });
 
     setBeneficiaryArchived(aliceId, aliceAlternateId, true);
+    const archivedRecipientPlan = getEstateWorkspace(
+      aliceId,
+      new Date("2026-08-11T10:00:00.000Z"),
+    );
+    expect(archivedRecipientPlan.reviewItems).toContainEqual(
+      expect.objectContaining({
+        code: "archived-residual-beneficiary",
+        severity: "blocking",
+      }),
+    );
+    expect(archivedRecipientPlan.mathematicallyComplete).toBe(false);
     expect(() =>
       upsertEstateAllocation(aliceId, directiveId, {
         beneficiaryId: aliceAlternateId,
@@ -242,9 +307,10 @@ describe.sequential("estate planning", () => {
       transferContext: "estate",
       distributionMethod: "sell_and_divide",
     });
-    expect(getEstatePlanSnapshot(aliceId, snapshotId)!.content.assets[0].estateValueMinor).toBe(
-      "5000",
-    );
+    expect(
+      getEstatePlanSnapshot(aliceId, snapshotId)!.content.assets[0]
+        .estateValueMinor,
+    ).toBe("5000");
     expect(() => deleteEstatePlanSnapshot(bobId, snapshotId)).toThrow(
       "Estate summary not found",
     );

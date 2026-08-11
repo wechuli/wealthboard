@@ -72,11 +72,25 @@ separate API service. One optional OIDC provider may authenticate internal users
   Milestones are owner-scoped source records with status derived from current
   progress and due date. Behind-plan reminders are computed on authenticated
   reads; owner-scoped dismissals suppress one goal for one user-calendar month.
+- **Estate planning:** `lib/services/estate-planning.ts` owns one private plan
+  per user, beneficiaries, account directives, primary/contingent basis-point
+  allocations, residue, converted indicative values, deterministic review
+  items, and immutable SHA-256 snapshots. It never changes account ownership,
+  balances, sessions, or institution-held designations. Liabilities remain a
+  separate estimate rather than inheritable allocations.
+- **Estate documents:** The print surface renders a minimized retained snapshot,
+  not live mutable data. Exact values, contacts, references, and notes are
+  independent opt-ins, and the global privacy setting remains authoritative.
+  The document identifies itself as planning information rather than a legal
+  will. No death trigger, executor access, notification, custody, or transfer
+  automation exists.
 - **Portability:** JSON and CSV routes operate only on the authenticated user's
   records. A per-user JSON restore replaces only that user's portfolio in one
-  transaction. Export version 5 includes transaction external IDs; versions 2
-  through 4 remain restorable and receive null external IDs during conversion.
-  Legacy account institution strings are normalized into owner-scoped records.
+  transaction. Export version 6 includes transaction external IDs and estate
+  plans with retained snapshot integrity hashes. Versions 2 through 5 remain
+  restorable; legacy transactions receive null external IDs and pre-v6 archives
+  begin with an empty estate plan. Legacy account institution strings are
+  normalized into owner-scoped records.
   Account history import uses stateless account-scoped preview and atomic commit
   routes with a strict CSV/JSON v1 contract and SHA-256 confirmation. Raw
   SQLite backup and offline restore are deployment-operator commands, never
@@ -110,7 +124,8 @@ separate API service. One optional OIDC provider may authenticate internal users
 - Same-owner relationships are enforced with composite foreign keys where
   practical and are always validated inside the mutation transaction. This
   applies to account/category, account/institution, transaction/account, valuation/account,
-  goal/account, plan/goal, milestone/goal, alert-dismissal/goal, and both sides
+  goal/account, plan/goal, milestone/goal, alert-dismissal/goal,
+  estate-plan/directive/account/beneficiary/allocation/snapshot, and both sides
   of a transfer.
 - Owner-scoped uniqueness covers category slugs, exchange-rate pair/date,
   linked goal accounts, and idempotency keys. Private cache keys include
@@ -120,25 +135,31 @@ separate API service. One optional OIDC provider may authenticate internal users
 
 ## Database schema
 
-| Table                     | Purpose                                                                  |
-| ------------------------- | ------------------------------------------------------------------------ |
-| `users`                   | Login identity, password hash, status, and session version               |
-| `oidc_identities`         | Internal-user mapping for one canonical issuer and opaque subject        |
-| `user_settings`           | One user's locale, display, dashboard, and goal preferences              |
-| `categories`              | One user's seeded and custom classifications                             |
-| `institutions`            | One user's financial-provider directory and reference details            |
-| `accounts`                | One user's holdings and liabilities with replayed values                 |
-| `transactions`            | User-owned cash flows, returns, transfers, and account-scoped source IDs |
-| `valuation_snapshots`     | User-owned absolute valuations, separate from cash flow                  |
-| `exchange_rates`          | One user's effective-dated decimal exchange rates                        |
-| `goals`                   | One user's targets, links, status, priority, and return assumptions      |
-| `goal_contribution_plans` | User-owned planned contribution amounts and frequency                    |
-| `goal_milestones`         | Optional owner-scoped amount and date checkpoints                        |
-| `goal_alert_dismissals`   | Monthly owner-scoped suppression of derived goal reminders               |
-| `login_attempts`          | Bounded rate limiting by normalized username and client key              |
-| `idempotency_keys`        | User-scoped duplicate-submission protection                              |
-| `ai_provider_settings`    | Owner-scoped provider, sharing defaults, limits, encrypted key           |
-| `ai_usage_events`         | Owner-scoped request status, latency, model, and token metadata          |
+| Table                          | Purpose                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `users`                        | Login identity, password hash, status, and session version                |
+| `oidc_identities`              | Internal-user mapping for one canonical issuer and opaque subject         |
+| `user_settings`                | One user's locale, display, dashboard, and goal preferences               |
+| `categories`                   | One user's seeded and custom classifications                              |
+| `institutions`                 | One user's financial-provider directory and reference details             |
+| `accounts`                     | One user's holdings and liabilities with replayed values                  |
+| `transactions`                 | User-owned cash flows, returns, transfers, and account-scoped source IDs  |
+| `valuation_snapshots`          | User-owned absolute valuations, separate from cash flow                   |
+| `exchange_rates`               | One user's effective-dated decimal exchange rates                         |
+| `goals`                        | One user's targets, links, status, priority, and return assumptions       |
+| `goal_contribution_plans`      | User-owned planned contribution amounts and frequency                     |
+| `goal_milestones`              | Optional owner-scoped amount and date checkpoints                         |
+| `goal_alert_dismissals`        | Monthly owner-scoped suppression of derived goal reminders                |
+| `beneficiaries`                | Private people, organizations, and trusts referenced by one user's plan   |
+| `estate_plans`                 | One user's current estate-plan metadata                                   |
+| `estate_account_directives`    | Estate inclusion, ownership share, transfer context, and method per asset |
+| `estate_allocations`           | Primary or contingent beneficiary basis-point shares per asset            |
+| `estate_residuary_allocations` | Primary or contingent shares of otherwise unallocated property            |
+| `estate_plan_snapshots`        | Immutable versioned summary JSON with as-of date and SHA-256 hash         |
+| `login_attempts`               | Bounded rate limiting by normalized username and client key               |
+| `idempotency_keys`             | User-scoped duplicate-submission protection                               |
+| `ai_provider_settings`         | Owner-scoped provider, sharing defaults, limits, encrypted key            |
+| `ai_usage_events`              | Owner-scoped request status, latency, model, and token metadata           |
 
 Every table except `login_attempts` is either the identity table or is owned by
 one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
@@ -159,9 +180,11 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
   `/accounts/[id]/import`
 - `/transactions`, `/transactions/new`, `/transactions/[id]/edit`
 - `/goals`, `/goals/new`, `/goals/[id]`, `/goals/[id]/edit`
+- `/estate/{beneficiaries,distribution,summary}` and
+  `/estate/snapshots/[id]` — private estate planning and retained print views
 - `/reports`, `/categories`, `/institutions`, `/settings`
 - `/api/export/*`, `/api/accounts/[id]/history-import/{preview,commit}`, `/api/restore/user`,
-  `/api/ai/review`, `/api/health/{live,ready}`
+  `/api/estate/snapshots/[id]`, `/api/ai/review`, `/api/health/{live,ready}`
 - `/review` — on-demand, evidence-linked AI portfolio critique
 - `/offline`, `/manifest.webmanifest`, `/sw.js`
 
@@ -194,6 +217,9 @@ own authorization decisions.
 - Application users are independent tenants. There are no administrator roles,
   invitations, shared portfolios, or cross-user transfers. Filesystem-level
   deployment operators are outside the application authorization model.
+- Estate beneficiaries are planning records, never application identities,
+  account owners, or authorized viewers. Matching by username, email, OIDC
+  claims, or another mutable identity attribute is prohibited.
 - Every application identity originates from local signup or a validated OIDC
   first login. No environment variable, default credential, invitation, or
   unauthenticated ownership claim can create a user.

@@ -20,6 +20,7 @@ import {
 import {
   accounts,
   categories,
+  estateAccountDirectives,
   idempotencyKeys,
   institutions,
   transactions,
@@ -623,6 +624,23 @@ export function updateAccount(
       throw new Error(
         "Unlink this account from its goal before making it a liability.",
       );
+    }
+    if (category.assetOrLiability === "liability" && !existing.isLiability) {
+      const activeEstateDirective = tx.query.estateAccountDirectives
+        .findFirst({
+          where: and(
+            eq(estateAccountDirectives.userId, userId),
+            eq(estateAccountDirectives.accountId, id),
+            eq(estateAccountDirectives.isIncluded, true),
+          ),
+          columns: { id: true },
+        })
+        .sync();
+      if (activeEstateDirective) {
+        throw new Error(
+          "Exclude this account from the estate plan before making it a liability.",
+        );
+      }
     }
     tx.update(accounts)
       .set({

@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useRef,
-  useState,
-  useTransition,
-  type ReactNode,
-} from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import { LoaderCircle, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -59,14 +54,20 @@ export function EstateManagedForm({
       {state.message ? (
         <p
           role={state.ok ? "status" : "alert"}
-          className={state.ok ? "text-sm text-slate-400" : "text-sm text-red-300"}
+          className={
+            state.ok ? "text-sm text-slate-400" : "text-sm text-red-300"
+          }
         >
           {state.message}
         </p>
       ) : null}
       <div className="flex justify-end">
         <Button type="submit" size="sm" disabled={pending}>
-          {pending ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}
+          {pending ? (
+            <LoaderCircle size={15} className="animate-spin" />
+          ) : (
+            <Save size={15} />
+          )}
           {submitLabel}
         </Button>
       </div>

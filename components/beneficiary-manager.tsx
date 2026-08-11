@@ -26,11 +26,7 @@ const kindOptions = [
   { value: "trust", label: "Trust" },
 ] as const;
 
-function BeneficiaryEditor({
-  beneficiary,
-}: {
-  beneficiary?: Beneficiary;
-}) {
+function BeneficiaryEditor({ beneficiary }: { beneficiary?: Beneficiary }) {
   const suffix = beneficiary?.id ?? "new";
   return (
     <EstateManagedForm
@@ -143,8 +139,16 @@ export function BeneficiaryManager({
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-medium text-slate-100">{beneficiary.name}</h2>
-              <Badge>{kindOptions.find((option) => option.value === beneficiary.kind)?.label}</Badge>
-              {beneficiary.archivedAt ? <Badge tone="warning">Archived</Badge> : null}
+              <Badge>
+                {
+                  kindOptions.find(
+                    (option) => option.value === beneficiary.kind,
+                  )?.label
+                }
+              </Badge>
+              {beneficiary.archivedAt ? (
+                <Badge tone="warning">Archived</Badge>
+              ) : null}
             </div>
             <MutationButton
               action={archiveBeneficiaryAction.bind(
@@ -170,7 +174,11 @@ export function BeneficiaryManager({
                   : `Archive ${beneficiary.name}`
               }
             >
-              {beneficiary.archivedAt ? <RotateCcw size={16} /> : <Archive size={16} />}
+              {beneficiary.archivedAt ? (
+                <RotateCcw size={16} />
+              ) : (
+                <Archive size={16} />
+              )}
             </MutationButton>
           </div>
           <BeneficiaryEditor beneficiary={beneficiary} />

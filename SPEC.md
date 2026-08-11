@@ -295,6 +295,64 @@ Examples:
 - 2028 Car Fund
 - Cash Savings
 
+## Estate planning
+
+Provide a private inheritance-planning overlay on the authenticated user's
+portfolio at `/estate`. It records intent without changing financial account
+ownership, application authorization, account balances, or provider-held
+beneficiary designations.
+
+Support one current estate plan per user with:
+
+- An owner-scoped beneficiary directory for people, organizations, and trusts.
+- Optional relationship, contact summary, and private notes; do not collect
+  government identifiers, identity-document images, medical details, or bank
+  instructions.
+- Per-asset inclusion, ownership share, transfer context, distribution method,
+  document reference, notes, and review date.
+- Separate primary and contingent allocations stored as integer basis points,
+  where 10,000 equals 100%.
+- Plan-wide primary and contingent residual allocations for portions not
+  specifically assigned.
+- Exact allocated and remaining percentages, indicative source/base-currency
+  values, and deterministic data-quality and completion warnings.
+
+Validate every beneficiary, plan, account, directive, allocation, residual
+allocation, snapshot, aggregate, and download by session-derived `userId`.
+Primary or contingent allocations within one asset or residue tier must never
+exceed 100%. Archived beneficiaries cannot receive new allocations. Archived
+or foreign assets cannot receive a new directive, and liabilities must remain
+visible separately rather than being assigned as gifts.
+
+Calculate indicative estate values from the authoritative replayed account
+balance multiplied by the user's asserted ownership share. Derive beneficiary
+values from allocation basis points with `bigint` and Decimal.js. Percentages
+are authoritative planning inputs; calculated currency values are estimates and
+must report missing effective-dated exchange rates rather than silently omit
+holdings. Liabilities reduce the estimated net estate but do not automatically
+reduce or transfer an individual beneficiary's gift.
+
+Allow users to create immutable, owner-scoped Estate Planning Summary snapshots
+with an as-of date, version, SHA-256 content hash, and minimized document
+contract. Later portfolio edits do not rewrite retained snapshots. The HTML
+print view supports browser Print/Save as PDF and excludes exact values,
+beneficiary contacts, account/document references, and notes until each is
+explicitly selected. Global privacy mode continues to mask values even after
+the document control is enabled. Snapshot downloads use `Cache-Control:
+no-store` and return not found for another user's ID.
+
+Every summary must state that it is an Estate Planning Summary or Will
+Preparation Worksheet, not a legally executed will. It does not transfer
+ownership or determine jurisdiction-specific witnessing, capacity, probate,
+guardianship, trust, tax, debt, or provider-designation rules. Do not implement
+death detection, inactivity triggers, beneficiary notifications, executor
+access, credential handoff, automatic disclosure, custody, or asset transfers.
+
+Per-user JSON portability version 6 includes beneficiaries, plans, directives,
+allocations, residue, and retained snapshots with relationship validation,
+owner-field rejection, integrity checks, and ID remapping. Versions 2 through 5
+remain restorable and begin with an empty estate plan.
+
 ### Transactions
 
 Transactions should describe changes to an account or asset.

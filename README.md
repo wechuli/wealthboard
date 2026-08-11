@@ -24,6 +24,8 @@ local or use one operator-configured OpenID Connect provider.
 - Net-worth history, portfolio analytics, and linked-goal forecasting
 - Non-persistent goal scenario comparisons, milestones, and dismissible
   behind-plan dashboard reminders
+- Private beneficiary and estate-distribution planning with printable,
+  privacy-controlled as-of summaries
 - Per-user JSON portability and account/transaction CSV export
 - Operator-only full SQLite backup and offline restore
 - Installable PWA shell with explicit offline safety
@@ -31,6 +33,20 @@ local or use one operator-configured OpenID Connect provider.
 
 Money is stored as integer minor units. Exchange rates are effective-dated
 decimal strings, and calculations use `bigint` or Decimal.js.
+
+### Estate planning
+
+Open `/estate` to maintain private beneficiaries, describe how each active asset
+is held, allocate primary and contingent percentages, cover unallocated property
+through residual beneficiaries, and review recorded liabilities separately.
+Percentages use exact basis points and indicative values follow the same
+effective-dated currency rules as reports.
+
+The Summary view creates immutable, hashed Estate Planning Summary snapshots.
+Its print/Save as PDF controls exclude exact values, contacts, account/document
+references, and notes until you deliberately include them; the global privacy
+toggle can still mask all values. These documents are planning worksheets, not
+legally executed wills, and do not grant beneficiary access or transfer assets.
 
 ## Requirements
 
@@ -334,10 +350,11 @@ confirming the import.
 Exports contain no credentials, AI provider settings or usage, login attempts,
 session data, idempotency records, or another user's rows. Restore downloads a pre-restore user export,
 validates the archive, rejects owner fields and invalid relationships, remaps
-record IDs, and rolls back completely on failure. Current exports use version 5
-and include transaction external IDs, institutions, goal milestones, and
-reminder dismissals. Versions 2 through 4 remain restorable; legacy institution
-names are normalized and legacy transactions receive null external IDs.
+record IDs, and rolls back completely on failure. Current exports use version 6
+and include transaction external IDs, institutions, goal milestones, reminder
+dismissals, estate plans, and retained estate summaries. Versions 2 through 5
+remain restorable; legacy institution names are normalized, legacy transactions
+receive null external IDs, and pre-v6 archives restore with an empty estate plan.
 
 Account History Import v1 CSV uses this exact header:
 

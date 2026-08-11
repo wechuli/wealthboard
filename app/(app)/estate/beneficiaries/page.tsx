@@ -17,8 +17,8 @@ export default async function EstateBeneficiariesPage() {
       />
       <EstateNavigation />
       <div className="mb-5 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.07] p-4 text-sm text-cyan-100">
-        Beneficiaries are private planning records. They do not become Wealthboard users,
-        account owners, or authorized viewers.
+        Beneficiaries are private planning records. They do not become
+        Wealthboard users, account owners, or authorized viewers.
       </div>
       <BeneficiaryManager beneficiaries={workspace.beneficiaries} />
     </>

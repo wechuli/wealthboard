@@ -39,10 +39,7 @@ import {
   listGoalMilestones,
   listGoals,
 } from "@/lib/services/goals";
-import {
-  exportData,
-  restoreUserData,
-} from "@/lib/services/portability";
+import { exportData, restoreUserData } from "@/lib/services/portability";
 import { previewAccountHistory } from "@/lib/services/account-history-import";
 import {
   addExchangeRate,

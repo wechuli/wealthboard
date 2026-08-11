@@ -281,9 +281,14 @@ export const categorySchema = z.object({
 const estatePercentageBps = z
   .string()
   .trim()
-  .regex(/^\d{1,3}(?:\.\d{1,2})?$/, "Use a percentage with at most two decimal places.")
+  .regex(
+    /^\d{1,3}(?:\.\d{1,2})?$/,
+    "Use a percentage with at most two decimal places.",
+  )
   .refine(
-    (value) => new Decimal(value).greaterThan(0) && new Decimal(value).lessThanOrEqualTo(100),
+    (value) =>
+      new Decimal(value).greaterThan(0) &&
+      new Decimal(value).lessThanOrEqualTo(100),
     "Enter a percentage greater than 0 and no more than 100.",
   )
   .transform((value) => new Decimal(value).mul(100).toNumber());
@@ -291,14 +296,29 @@ const estatePercentageBps = z
 export const beneficiarySchema = z.object({
   kind: z.enum(beneficiaryKinds),
   name: z.string().trim().min(1, "Enter a beneficiary name.").max(120),
-  relationship: z.string().trim().max(80).optional().transform((value) => value || undefined),
-  contactSummary: z.string().trim().max(300).optional().transform((value) => value || undefined),
+  relationship: z
+    .string()
+    .trim()
+    .max(80)
+    .optional()
+    .transform((value) => value || undefined),
+  contactSummary: z
+    .string()
+    .trim()
+    .max(300)
+    .optional()
+    .transform((value) => value || undefined),
   notes: optionalText,
 });
 
 export const estatePlanSchema = z.object({
   title: z.string().trim().min(1, "Enter a plan title.").max(120),
-  jurisdiction: z.string().trim().max(120).optional().transform((value) => value || undefined),
+  jurisdiction: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .transform((value) => value || undefined),
   lastReviewedDate: z.string().date().optional().or(z.literal("")),
   reviewReminderDate: z.string().date().optional().or(z.literal("")),
 });
@@ -308,7 +328,12 @@ export const estateDirectiveSchema = z.object({
   ownershipShareBps: estatePercentageBps,
   transferContext: z.enum(estateTransferContexts),
   distributionMethod: z.enum(estateDistributionMethods),
-  documentReference: z.string().trim().max(300).optional().transform((value) => value || undefined),
+  documentReference: z
+    .string()
+    .trim()
+    .max(300)
+    .optional()
+    .transform((value) => value || undefined),
   notes: optionalText,
   reviewedAt: z.string().date().optional().or(z.literal("")),
 });

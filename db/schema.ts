@@ -807,7 +807,8 @@ export type Goal = typeof goals.$inferSelect;
 export type GoalMilestone = typeof goalMilestones.$inferSelect;
 export type Beneficiary = typeof beneficiaries.$inferSelect;
 export type EstatePlan = typeof estatePlans.$inferSelect;
-export type EstateAccountDirective = typeof estateAccountDirectives.$inferSelect;
+export type EstateAccountDirective =
+  typeof estateAccountDirectives.$inferSelect;
 export type EstateAllocation = typeof estateAllocations.$inferSelect;
 export type EstateResiduaryAllocation =
   typeof estateResiduaryAllocations.$inferSelect;
