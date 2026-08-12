@@ -95,9 +95,13 @@ separate API service. One optional OIDC provider may authenticate internal users
   routes with a strict CSV/JSON v1 contract and SHA-256 confirmation. Raw
   SQLite backup and offline restore are deployment-operator commands, never
   ordinary authenticated routes.
-- **Offline:** The service worker caches only the shell and static assets.
-  Financial responses and mutations remain server-only. Logout clears
-  user-specific client state before another user can sign in on the device.
+- **Offline and updates:** Service workers are production-only; development
+  unregisters Wealthboard's worker and removes only Wealthboard caches. The
+  production worker precaches the offline shell and uses network-first static
+  application assets with cached offline fallback so stale code cannot hydrate
+  against newer server HTML. It never caches authenticated financial responses
+  or queues mutations. Logout clears user-specific client state before another
+  user can sign in on the device.
 - **AI review:** Optional on-demand reviews use a versioned, owner-scoped,
   read-only snapshot calculated by Wealthboard. The model never receives SQL or
   mutation tools and cannot become authoritative for balances, conversions,

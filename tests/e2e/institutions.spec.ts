@@ -113,7 +113,12 @@ test("institutions can be created, linked, filtered, and renamed", async ({
       ).toBeLessThanOrEqual(dimensions.clientWidth);
       if (route === "/accounts") {
         for (const label of ["Sort accounts", "Table view"]) {
-          const box = await page.getByLabel(label).boundingBox();
+          const control = page.getByLabel(label);
+          await expect(
+            control,
+            `${label} is missing at ${width}px`,
+          ).toBeVisible();
+          const box = await control.boundingBox();
           expect(box, `${label} is missing at ${width}px`).not.toBeNull();
           expect(
             box!.x,
@@ -130,13 +135,19 @@ test("institutions can be created, linked, filtered, and renamed", async ({
 
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto("/accounts/new");
-  await page.getByLabel("Institution", { exact: true }).focus();
-  await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("dialog", { name: "Choose institution" }),
-  ).toBeVisible();
+  const institutionTrigger = page.getByLabel("Institution", { exact: true });
+  const institutionDialog = page.getByRole("dialog", {
+    name: "Choose institution",
+  });
+  await institutionTrigger.click();
+  await expect(institutionDialog).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("dialog", { name: "Choose institution" }),
-  ).toBeHidden();
+  await expect(institutionDialog).toBeHidden();
+
+  await institutionTrigger.focus();
+  await expect(institutionTrigger).toBeFocused();
+  await institutionTrigger.press("Enter");
+  await expect(institutionDialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(institutionDialog).toBeHidden();
 });

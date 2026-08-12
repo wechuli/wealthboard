@@ -11,43 +11,74 @@ interface InstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+async function clearDevelopmentServiceWorkers() {
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations
+      .filter((registration) =>
+        [
+          registration.active,
+          registration.waiting,
+          registration.installing,
+        ].some(
+          (worker) => worker && new URL(worker.scriptURL).pathname === "/sw.js",
+        ),
+      )
+      .map((registration) => registration.unregister()),
+  );
+  if (!("caches" in window)) return;
+  const keys = await caches.keys();
+  await Promise.all(
+    keys
+      .filter((key) => key.startsWith("wealthboard-"))
+      .map((key) => caches.delete(key)),
+  );
+}
+
 export function PwaManager() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(
     null,
   );
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker
-      .register("/sw.js")
-      .then((registration) => {
-        if (registration.waiting) {
-          toast.info("A Wealthboard update is available.", {
-            action: {
-              label: "Reload",
-              onClick: () => window.location.reload(),
-            },
-          });
-        }
-        registration.addEventListener("updatefound", () => {
-          const worker = registration.installing;
-          worker?.addEventListener("statechange", () => {
-            if (
-              worker.state === "installed" &&
-              navigator.serviceWorker.controller
-            ) {
-              toast.info("A Wealthboard update is ready.", {
+    if ("serviceWorker" in navigator) {
+      if (process.env.NODE_ENV !== "production") {
+        void clearDevelopmentServiceWorkers().catch(() => {
+          // Development remains usable if browser storage cannot be cleared.
+        });
+      } else {
+        navigator.serviceWorker
+          .register("/sw.js", { updateViaCache: "none" })
+          .then((registration) => {
+            if (registration.waiting) {
+              toast.info("A Wealthboard update is available.", {
                 action: {
                   label: "Reload",
                   onClick: () => window.location.reload(),
                 },
               });
             }
+            registration.addEventListener("updatefound", () => {
+              const worker = registration.installing;
+              worker?.addEventListener("statechange", () => {
+                if (
+                  worker.state === "installed" &&
+                  navigator.serviceWorker.controller
+                ) {
+                  toast.info("A Wealthboard update is ready.", {
+                    action: {
+                      label: "Reload",
+                      onClick: () => window.location.reload(),
+                    },
+                  });
+                }
+              });
+            });
+          })
+          .catch(() => {
+            // The application remains usable without service-worker registration.
           });
-        });
-      })
-      .catch(() => {
-        // The application remains fully usable without service-worker registration.
-      });
+      }
+    }
 
     const syncOnlineState = () => {
       document.documentElement.dataset.offline = String(!navigator.onLine);

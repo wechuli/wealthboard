@@ -401,10 +401,15 @@ and retain an external copy before destructive maintenance.
 Use the browser install action or Wealthboard's **Install app** prompt. On iOS,
 use **Share → Add to Home Screen**.
 
-The service worker caches only the offline shell and static assets. It does not
-cache authenticated financial responses or queue mutations. Financial submits
-are blocked while offline, and logout clears Wealthboard client state before a
-different user signs in on the same device.
+Production registers the service worker; development automatically unregisters
+Wealthboard workers and clears Wealthboard caches so stale development chunks
+cannot hydrate against newer server HTML. The production worker precaches only
+the offline shell and static assets. Application chunks and icons are
+network-first with cached offline fallback, which prevents an older bundle from
+overriding a deployed update. It does not cache authenticated financial
+responses or queue mutations. Financial submits are blocked while offline, and
+logout clears Wealthboard client state before a different user signs in on the
+same device.
 
 ## Verification
 

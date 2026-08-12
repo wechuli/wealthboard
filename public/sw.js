@@ -1,4 +1,4 @@
-const CACHE_NAME = "wealthboard-shell-v1";
+const CACHE_NAME = "wealthboard-shell-v2";
 const SHELL = [
   "/offline",
   "/shell",
@@ -19,7 +19,9 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_NAME)
+            .filter(
+              (key) => key.startsWith("wealthboard-") && key !== CACHE_NAME,
+            )
             .map((key) => caches.delete(key)),
         ),
       ),
@@ -42,17 +44,19 @@ self.addEventListener("fetch", (event) => {
     url.pathname.startsWith("/icons/")
   ) {
     event.respondWith(
-      caches.match(event.request).then(
-        (cached) =>
-          cached ||
-          fetch(event.request).then((response) => {
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
             const copy = response.clone();
-            caches
+            void caches
               .open(CACHE_NAME)
               .then((cache) => cache.put(event.request, copy));
-            return response;
-          }),
-      ),
+          }
+          return response;
+        })
+        .catch(
+          async () => (await caches.match(event.request)) ?? Response.error(),
+        ),
     );
   }
 });
