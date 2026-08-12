@@ -9,6 +9,8 @@ export default defineConfig([
     ".next/**",
     ".next-e2e/**",
     ".next-verification/**",
+    "**/.vitepress/cache/**",
+    "**/.vitepress/dist/**",
     "coverage/**",
     "playwright-report/**",
     "test-results/**",

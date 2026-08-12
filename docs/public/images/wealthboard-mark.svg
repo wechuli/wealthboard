@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Wealthboard">
+  <rect width="48" height="48" rx="10" fill="#087f5b"/>
+  <circle cx="24" cy="24" r="14" fill="none" stroke="#d8fff0" stroke-width="3"/>
+  <path d="M18 28c2.6 2.8 9.4 2.8 12 0M19 19h10M24 15v18" fill="none" stroke="#d8fff0" stroke-linecap="round" stroke-width="3"/>
+</svg>

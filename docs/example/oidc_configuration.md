@@ -575,7 +575,7 @@ requires an explicit linking step.
 3. Change to `AUTH_METHODS=local,oidc` and restart Wealthboard.
 4. Sign in locally as an existing user.
 5. Open **Settings > Authentication methods**.
-6. Confirm the local password and complete **Link <provider>**.
+6. Confirm the local password and complete **Link the provider**.
 7. Repeat for every active user who must keep the existing portfolio.
 8. Verify provider login returns each user to the existing portfolio.
 9. Only after every active user is linked, change to `AUTH_METHODS=oidc` and
@@ -633,7 +633,7 @@ invalid.
 
 1. Use a private browser window.
 2. Open `https://wealthboard.example.com/login`.
-3. Select **Continue with <provider>**.
+3. Select **Continue with the provider**.
 4. Authenticate at the provider.
 5. Confirm the provider returns to the exact Wealthboard callback host.
 6. Confirm Wealthboard opens the Overview page.

@@ -6,9 +6,8 @@ portable exports. The Next.js application reads SQLite directly and requires no
 separate backend or financial integration. Authentication can remain fully
 local or use one operator-configured OpenID Connect provider.
 
-> **Screenshot placeholder:** add desktop dashboard, account detail, goal
-> projection, signup, and 390 px mobile screenshots after deployment branding
-> is finalized.
+See the [product guide](https://wechuliprojects.github.io/wealthboard/) for
+annotated desktop and mobile walkthroughs built from fictional portfolio data.
 
 ## Features
 
@@ -33,6 +32,30 @@ local or use one operator-configured OpenID Connect provider.
 
 Money is stored as integer minor units. Exchange rates are effective-dated
 decimal strings, and calculations use `bigint` or Decimal.js.
+
+## Product guide
+
+The user and operator guide is published at
+<https://wechuliprojects.github.io/wealthboard/>. It covers first setup,
+accounts, activity, goals, reports, estate planning, portability, deployment,
+authentication, backups, and troubleshooting with fictional product screenshots.
+
+Documentation source lives under `docs/` and is built with VitePress:
+
+```bash
+npm run docs:dev
+DOCS_BASE=/wealthboard/ npm run docs:build
+npm run docs:preview
+```
+
+Regenerate product screenshots from a disposable database with:
+
+```bash
+npm run docs:capture
+```
+
+The capture workflow creates only fictional data and writes the reviewed images
+to `docs/public/images/screenshots/`.
 
 ### Estate planning
 
