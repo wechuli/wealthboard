@@ -36,6 +36,7 @@ import {
   percentage,
 } from "@/lib/money";
 import { requireEnabledCurrency } from "@/lib/services/settings";
+import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
 
 type GoalInput = {
   idempotencyKey?: string;
@@ -65,6 +66,7 @@ export async function listGoals(userId: string, now = new Date()) {
       accountName: accounts.name,
       accountCurrency: accounts.currency,
       accountValueMinor: accounts.currentValueMinor,
+      accountTrackingMode: accounts.trackingMode,
       planId: goalContributionPlans.id,
       plannedContributionMinor: goalContributionPlans.plannedContributionMinor,
       frequency: goalContributionPlans.frequency,
@@ -95,11 +97,24 @@ export async function listGoals(userId: string, now = new Date()) {
 
   return rows.map((goal) => {
     let missingExchangeRate = false;
+    let missingPositionData = false;
+    let stalePositionData = false;
     let current = BigInt(goal.currentAmountMinor);
     if (goal.accountValueMinor !== null && goal.accountCurrency) {
+      if (goal.linkedAccountId && goal.accountTrackingMode === "positions") {
+        const snapshot = calculatePositionAccountSnapshot(
+          userId,
+          db,
+          goal.linkedAccountId,
+          endOfUtcDay(now).toISOString(),
+        );
+        missingPositionData = !snapshot.complete;
+        stalePositionData = snapshot.staleInstrumentIds.length > 0;
+        current = snapshot.totalMinor;
+      }
       try {
         current = convertMinor(
-          goal.accountValueMinor,
+          current,
           goal.accountCurrency,
           goal.currency,
           rates,
@@ -111,6 +126,8 @@ export async function listGoals(userId: string, now = new Date()) {
         current = 0n;
       }
     }
+    const valueIncomplete = missingExchangeRate || missingPositionData;
+    if (valueIncomplete) current = 0n;
     const plannedMonthly = goal.plannedContributionMinor
       ? monthlyPlanAmount(
           goal.plannedContributionMinor,
@@ -171,6 +188,9 @@ export async function listGoals(userId: string, now = new Date()) {
       tracking,
       progressPercent: percentage(current, goal.targetAmountMinor),
       missingExchangeRate,
+      missingPositionData,
+      stalePositionData,
+      valueIncomplete,
     };
   });
 }
@@ -203,7 +223,7 @@ export async function listGoalMilestones(
 
   return rows.map((milestone) => {
     const target = BigInt(milestone.targetAmountMinor);
-    if (goal.missingExchangeRate) {
+    if (goal.valueIncomplete) {
       return {
         ...milestone,
         status: "rate_needed" as const,
@@ -328,7 +348,7 @@ export async function listGoalAlerts(userId: string, now = new Date()) {
       (goal) =>
         goal.status === "active" &&
         goal.tracking === "behind" &&
-        !goal.missingExchangeRate &&
+        !goal.valueIncomplete &&
         !dismissedGoalIds.has(goal.id),
     )
     .map((goal) => ({

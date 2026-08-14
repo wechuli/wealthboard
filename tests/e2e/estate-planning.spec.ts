@@ -176,7 +176,7 @@ test.describe.serial("estate planning", () => {
       estateAllocations: unknown[];
       estatePlanSnapshots: Array<{ content: string }>;
     };
-    expect(archive.version).toBe(6);
+    expect(archive.version).toBe(7);
     expect(archive.beneficiaries.map((row) => row.name)).toEqual([
       "Amina Example",
       "Future Education Trust",

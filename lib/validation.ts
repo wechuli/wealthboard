@@ -9,6 +9,9 @@ import {
   estateTransferContexts,
   goalStatuses,
   institutionTypes,
+  investmentAssetTypes,
+  investmentIdentifierTypes,
+  positionEventTypes,
   transactionTypes,
 } from "@/db/schema";
 import {
@@ -33,6 +36,16 @@ const optionalText = z
 
 const optionalUuid = z
   .union([z.literal(""), z.string().uuid()])
+  .optional()
+  .transform((value) => value || undefined);
+
+const optionalCurrencyCodeSchema = z
+  .union([z.literal(""), currencyCodeSchema])
+  .optional()
+  .transform((value) => value || undefined);
+
+const optionalDateSchema = z
+  .union([z.literal(""), z.string().date()])
   .optional()
   .transform((value) => value || undefined);
 
@@ -111,11 +124,70 @@ export const accountSchema = z.object({
   institutionId: optionalUuid,
   accountReference: z.string().trim().max(50).optional(),
   currency: currencyCodeSchema,
+  trackingMode: z.enum(["balance", "positions"]).optional(),
   openingValue: z.string().trim().min(1),
   costBasis: z.string().trim().optional(),
   isIncludedInNetWorth: z.boolean(),
   notes: optionalText,
   openedAt: z.string().date().optional(),
+});
+
+const decimalInput = (label: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, `Enter ${label}.`)
+    .max(100)
+    .regex(/^-?\d+(?:\.\d+)?$/, `Enter a valid ${label}.`);
+
+export const investmentInstrumentSchema = z.object({
+  externalId: z.string().trim().max(200).optional(),
+  name: z.string().trim().min(1, "Enter an instrument name.").max(100),
+  symbol: z.string().trim().max(30).optional(),
+  identifierType: z.enum(investmentIdentifierTypes),
+  identifier: z.string().trim().max(100).optional(),
+  exchangeMic: z.string().trim().max(20).optional(),
+  assetType: z.enum(investmentAssetTypes),
+  quoteCurrency: currencyCodeSchema,
+});
+
+export const positionEventSchema = z.object({
+  accountId: z.string().uuid(),
+  instrumentId: z.string().uuid(),
+  type: z.enum(positionEventTypes),
+  quantity: decimalInput("a quantity"),
+  unitPrice: z.string().trim().max(100).optional(),
+  tradeCurrency: currencyCodeSchema,
+  feeAmount: z.string().trim().max(100).optional(),
+  feeCurrency: optionalCurrencyCodeSchema,
+  cashEffect: z.string().trim().max(100).optional(),
+  appliedExchangeRate: z.string().trim().max(100).optional(),
+  openingCostBasis: z.string().trim().max(100).optional(),
+  tradeDate: z.string().date(),
+  settlementDate: optionalDateSchema,
+  externalId: z.string().trim().max(200).optional(),
+  eventGroupId: z.string().uuid().optional(),
+  idempotencyKey: z.string().uuid(),
+  description: z.string().trim().max(200).optional(),
+  notes: optionalText,
+});
+
+export const securityPriceSchema = z.object({
+  accountId: z.string().uuid(),
+  instrumentId: z.string().uuid(),
+  externalId: z.string().trim().max(200).optional(),
+  price: decimalInput("a unit price"),
+  effectiveDate: z.string().date(),
+  source: z.string().trim().min(1).max(100).default("manual"),
+  provenance: z.string().trim().max(500).optional(),
+});
+
+export const positionReconciliationSchema = z.object({
+  accountId: z.string().uuid(),
+  observationDate: z.string().date(),
+  reportedCash: z.string().trim().max(100).optional(),
+  reportedTotal: decimalInput("a reported total"),
+  notes: optionalText,
 });
 
 const optionalInstitutionText = (maximum: number) =>

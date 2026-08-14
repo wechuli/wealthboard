@@ -50,6 +50,7 @@ export default async function EditAccountPage({
               institutionId: account.institutionId || "",
               accountReference: account.accountReference || "",
               currency: account.currency,
+              trackingMode: account.trackingMode,
               costBasis:
                 account.costBasisMinor == null
                   ? ""

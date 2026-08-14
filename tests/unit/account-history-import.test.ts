@@ -457,9 +457,9 @@ describe.sequential("account history import", () => {
     ).toThrow("10,000");
   });
 
-  test("round-trips external IDs in v6 and restores v4 with null IDs", async () => {
+  test("round-trips external IDs in v7 and restores v4 with null IDs", async () => {
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(6);
+    expect(archive.version).toBe(7);
     expect(archive.transactions).toContainEqual(
       expect.objectContaining({ externalId: "equivalent-1" }),
     );
@@ -473,15 +473,25 @@ describe.sequential("account history import", () => {
     ).toContainEqual({ externalId: "equivalent-1" });
 
     const versionFour = structuredClone(archive) as Record<string, unknown> & {
+      accounts: Array<Record<string, unknown>>;
       transactions: Array<Record<string, unknown>>;
     };
     versionFour.version = 4;
+    delete versionFour.investmentInstruments;
+    delete versionFour.positionEvents;
+    delete versionFour.securityPrices;
+    delete versionFour.positionReconciliations;
     delete versionFour.beneficiaries;
     delete versionFour.estatePlans;
     delete versionFour.estateAccountDirectives;
     delete versionFour.estateAllocations;
     delete versionFour.estateResiduaryAllocations;
     delete versionFour.estatePlanSnapshots;
+    versionFour.accounts = versionFour.accounts.map((account) => {
+      const legacyAccount = { ...account };
+      delete legacyAccount.trackingMode;
+      return legacyAccount;
+    });
     versionFour.transactions = versionFour.transactions.map((transaction) => {
       const legacyTransaction = { ...transaction };
       delete legacyTransaction.externalId;

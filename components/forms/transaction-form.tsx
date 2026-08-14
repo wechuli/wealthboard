@@ -40,6 +40,16 @@ const availableTypes = Object.entries(TRANSACTION_LABELS).filter(
   ([type]) => type !== "opening_balance",
 ) as Array<[TransactionType, string]>;
 
+const POSITION_ACCOUNT_TYPES = new Set<TransactionType>([
+  "deposit",
+  "withdrawal",
+  "interest",
+  "dividend",
+  "fee",
+  "manual_adjustment",
+  "transfer",
+]);
+
 export function TransactionForm({
   accounts,
   action,
@@ -75,6 +85,19 @@ export function TransactionForm({
   const toAccountId = useWatch({ control, name: "toAccountId" });
   const source = accounts.find((account) => account.id === accountId);
   const destination = accounts.find((account) => account.id === toAccountId);
+  const selectableTypes =
+    source?.trackingMode === "positions"
+      ? availableTypes.filter(([value]) => POSITION_ACCOUNT_TYPES.has(value))
+      : availableTypes;
+
+  useEffect(() => {
+    if (
+      source?.trackingMode === "positions" &&
+      !POSITION_ACCOUNT_TYPES.has(type as TransactionType)
+    ) {
+      setValue("type", "deposit");
+    }
+  }, [setValue, source?.trackingMode, type]);
 
   useEffect(() => {
     if (initial) return;
@@ -123,7 +146,7 @@ export function TransactionForm({
             defaultValue={initial?.type ?? "deposit"}
             {...register("type")}
           >
-            {availableTypes.map(([value, label]) => (
+            {selectableTypes.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>

@@ -1,0 +1,46 @@
+{
+  "format": "wealthboard-investment-history",
+  "version": 1,
+  "instruments": [
+    {
+      "external_id": "instrument:example-etf",
+      "name": "Example World ETF",
+      "symbol": "EWLD",
+      "identifier_type": "ticker_exchange",
+      "identifier": "EWLD",
+      "exchange_mic": "XNAS",
+      "asset_type": "etf",
+      "quote_currency": "USD"
+    }
+  ],
+  "position_events": [
+    {
+      "external_id": "event:opening:example-etf",
+      "instrument_external_id": "instrument:example-etf",
+      "type": "opening_position",
+      "quantity": "10.5",
+      "unit_price": null,
+      "trade_currency": "USD",
+      "fee_amount": null,
+      "fee_currency": null,
+      "cash_effect": null,
+      "applied_exchange_rate": null,
+      "opening_cost_basis": "1450.00",
+      "trade_date": "2026-01-01",
+      "settlement_date": null,
+      "description": "Opening holding",
+      "notes": null
+    }
+  ],
+  "cash_transactions": [],
+  "prices": [
+    {
+      "external_id": "price:example-etf:2026-01-01",
+      "instrument_external_id": "instrument:example-etf",
+      "price": "145.67",
+      "effective_date": "2026-01-01",
+      "source": "statement",
+      "provenance": "Opening statement"
+    }
+  ]
+}

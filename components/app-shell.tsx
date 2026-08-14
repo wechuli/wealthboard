@@ -11,6 +11,7 @@ import {
   BarChart3,
   ChevronLeft,
   CircleDollarSign,
+  CandlestickChart,
   FileBarChart,
   FolderCog,
   Goal,
@@ -39,6 +40,7 @@ const navigation = [
   { href: "/transactions", label: "Transactions", icon: ReceiptText },
   { href: "/goals", label: "Goals", icon: Goal },
   { href: "/reports", label: "Reports", icon: FileBarChart },
+  { href: "/instruments", label: "Instruments", icon: CandlestickChart },
   { href: "/review", label: "Review", icon: Sparkles },
   { href: "/estate", label: "Estate", icon: ScrollText },
   { href: "/categories", label: "Categories", icon: FolderCog },
@@ -320,6 +322,7 @@ function MobileMore() {
   const items = [
     { href: "/review", label: "Portfolio review", icon: Sparkles },
     { href: "/reports", label: "Reports", icon: FileBarChart },
+    { href: "/instruments", label: "Instruments", icon: CandlestickChart },
     { href: "/estate", label: "Estate planning", icon: ScrollText },
     { href: "/categories", label: "Categories", icon: FolderCog },
     { href: "/settings", label: "Settings", icon: Settings },

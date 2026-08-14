@@ -1,0 +1,2 @@
+external_id,instrument_external_id,type,quantity,unit_price,trade_currency,fee_amount,fee_currency,cash_effect,applied_exchange_rate,trade_date,settlement_date,description,notes
+trade:example-etf:buy:1,instrument:example-etf,buy,1.25,150.00,USD,1.00,USD,,,2026-02-01,2026-02-03,Example buy,

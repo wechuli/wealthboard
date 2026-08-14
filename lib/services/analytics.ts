@@ -1,13 +1,24 @@
 import "server-only";
 
-import { and, asc, desc, eq, getTableColumns, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+} from "drizzle-orm";
 
 import {
   accounts,
   categories,
   exchangeRates,
   goals,
+  investmentInstruments,
   institutions,
+  positionEvents,
+  securityPrices,
   transactions,
   userSettings,
   valuationSnapshots,
@@ -25,12 +36,15 @@ import {
   type FinancialEvent,
 } from "@/lib/finance";
 import { getDatabase } from "@/lib/db";
+import { TRANSACTION_LABELS } from "@/lib/constants";
 import {
   convertMinor,
   MissingExchangeRateError,
   safeChartNumber,
 } from "@/lib/money";
 import Decimal from "decimal.js";
+import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
+import { calculateQuoteValueMinor } from "@/lib/investments";
 
 type HistoryRange = "1m" | "3m" | "6m" | "1y" | "all";
 
@@ -98,9 +112,21 @@ export async function getNetWorthHistory(
   });
   if (!settings) throw new Error("Settings unavailable.");
   const events = eventMap(userId);
-  const allDates = [...events.values()]
-    .flat()
-    .map((event) => new Date(event.date));
+  const [positionDateRows, priceDateRows] = await Promise.all([
+    db
+      .select({ date: positionEvents.tradeDate })
+      .from(positionEvents)
+      .where(eq(positionEvents.userId, userId)),
+    db
+      .select({ date: securityPrices.effectiveDate })
+      .from(securityPrices)
+      .where(eq(securityPrices.userId, userId)),
+  ]);
+  const allDates = [
+    ...[...events.values()].flat().map((event) => event.date),
+    ...positionDateRows.map((row) => row.date),
+    ...priceDateRows.map((row) => row.date),
+  ].map((date) => new Date(date));
   const currentTime = new Date();
   const today = startOfUtcDay(currentTime);
   const earliest = allDates.length
@@ -124,6 +150,7 @@ export async function getNetWorthHistory(
     const evaluationDate = endOfUtcDay(cursor);
     points.push(
       getHistoricalPoint(
+        userId,
         evaluationDate,
         accountRows,
         events,
@@ -140,6 +167,7 @@ export async function getNetWorthHistory(
   ) {
     points.push(
       getHistoricalPoint(
+        userId,
         endOfUtcDay(currentTime),
         accountRows,
         events,
@@ -152,6 +180,7 @@ export async function getNetWorthHistory(
 }
 
 function getHistoricalPoint(
+  userId: string,
   date: Date,
   accountRows: Array<typeof accounts.$inferSelect>,
   events: Map<string, FinancialEvent[]>,
@@ -161,13 +190,32 @@ function getHistoricalPoint(
   let assetTotal = 0n;
   let liabilityTotal = 0n;
   const missingCurrencies = new Set<string>();
+  const missingPrices = new Set<string>();
+  const stalePrices = new Set<string>();
   for (const account of accountRows) {
     if (account.archivedAt && account.archivedAt <= date.toISOString())
       continue;
-    const localValue = replayBalance(
-      events.get(account.id) ?? [],
-      date.toISOString(),
-    );
+    const positionSnapshot =
+      account.trackingMode === "positions"
+        ? calculatePositionAccountSnapshot(
+            userId,
+            getDatabase(),
+            account.id,
+            date.toISOString(),
+          )
+        : null;
+    const localValue = positionSnapshot
+      ? positionSnapshot.totalMinor
+      : replayBalance(events.get(account.id) ?? [], date.toISOString());
+    for (const instrumentId of positionSnapshot?.missingPrices ?? []) {
+      missingPrices.add(instrumentId);
+    }
+    for (const currency of positionSnapshot?.missingCurrencies ?? []) {
+      missingCurrencies.add(currency);
+    }
+    for (const instrumentId of positionSnapshot?.staleInstrumentIds ?? []) {
+      stalePrices.add(instrumentId);
+    }
     if (localValue === 0n) continue;
     try {
       const converted = convertMinor(
@@ -189,8 +237,10 @@ function getHistoricalPoint(
     assets: safeChartNumber(assetTotal),
     liabilities: safeChartNumber(liabilityTotal),
     netWorth: safeChartNumber(assetTotal - liabilityTotal),
-    complete: missingCurrencies.size === 0,
+    complete: missingCurrencies.size === 0 && missingPrices.size === 0,
     missingCurrencies: [...missingCurrencies],
+    missingPrices: [...missingPrices],
+    stalePrices: [...stalePrices],
   };
 }
 
@@ -208,6 +258,7 @@ export async function getNetWorthAt(userId: string, date: Date) {
   ]);
   if (!settings) throw new Error("Settings unavailable.");
   return getHistoricalPoint(
+    userId,
     endOfUtcDay(date),
     accountRows,
     eventMap(userId),
@@ -291,23 +342,103 @@ export async function getDashboardData(
       desc(valuationSnapshots.valuationDate),
       desc(valuationSnapshots.createdAt),
     );
+  const positionActivityRows = await db
+    .select({
+      ...getTableColumns(positionEvents),
+      accountName: accounts.name,
+      accountCurrency: accounts.currency,
+      instrumentName: investmentInstruments.name,
+      instrumentSymbol: investmentInstruments.symbol,
+    })
+    .from(positionEvents)
+    .innerJoin(
+      accounts,
+      and(
+        eq(positionEvents.accountId, accounts.id),
+        eq(positionEvents.userId, accounts.userId),
+      ),
+    )
+    .innerJoin(
+      investmentInstruments,
+      and(
+        eq(positionEvents.instrumentId, investmentInstruments.id),
+        eq(positionEvents.userId, investmentInstruments.userId),
+      ),
+    )
+    .where(and(eq(positionEvents.userId, userId), isNull(accounts.archivedAt)))
+    .orderBy(desc(positionEvents.tradeDate), desc(positionEvents.createdAt));
+  const securityPriceActivityRows = await db
+    .select({
+      ...getTableColumns(securityPrices),
+      instrumentName: investmentInstruments.name,
+      instrumentSymbol: investmentInstruments.symbol,
+    })
+    .from(securityPrices)
+    .innerJoin(
+      investmentInstruments,
+      and(
+        eq(securityPrices.instrumentId, investmentInstruments.id),
+        eq(securityPrices.userId, investmentInstruments.userId),
+      ),
+    )
+    .where(eq(securityPrices.userId, userId))
+    .orderBy(
+      desc(securityPrices.effectiveDate),
+      desc(securityPrices.createdAt),
+    );
 
   let assetsTotal = 0n;
   let liabilitiesTotal = 0n;
   let liquidTotal = 0n;
   let investibleTotal = 0n;
   const missingRates = new Set<string>();
+  const missingPrices = new Set<string>();
+  const stalePrices = new Set<string>();
   const currentAsOf = endOfUtcDay(new Date()).toISOString();
   const allocationMap = new Map<string, bigint>();
   const investibleAllocationMap = new Map<string, bigint>();
   const institutionMap = new Map<string, bigint>();
   const currencyMap = new Map<string, bigint>();
+  const instrumentAllocationMap = new Map<string, bigint>();
 
   for (const account of accountRows) {
     if (!account.isIncludedInNetWorth) continue;
     try {
+      const positionSnapshot =
+        account.trackingMode === "positions"
+          ? calculatePositionAccountSnapshot(
+              userId,
+              db,
+              account.id,
+              currentAsOf,
+            )
+          : null;
+      for (const instrumentId of positionSnapshot?.missingPrices ?? []) {
+        missingPrices.add(instrumentId);
+      }
+      for (const currency of positionSnapshot?.missingCurrencies ?? []) {
+        missingRates.add(currency);
+      }
+      for (const instrumentId of positionSnapshot?.staleInstrumentIds ?? []) {
+        stalePrices.add(instrumentId);
+      }
+      for (const position of positionSnapshot?.positions ?? []) {
+        if (position.accountValueMinor == null) continue;
+        const positionBaseValue = convertMinor(
+          position.accountValueMinor,
+          account.currency,
+          settings.baseCurrency,
+          rateRows,
+          currentAsOf,
+        );
+        const label = position.instrument.symbol || position.instrument.name;
+        instrumentAllocationMap.set(
+          label,
+          (instrumentAllocationMap.get(label) ?? 0n) + positionBaseValue,
+        );
+      }
       const value = convertMinor(
-        account.currentValueMinor,
+        positionSnapshot?.totalMinor ?? account.currentValueMinor,
         account.currency,
         settings.baseCurrency,
         rateRows,
@@ -422,6 +553,7 @@ export async function getDashboardData(
       currency: row.currency,
       date: row.transactionDate,
       description: row.description,
+      label: TRANSACTION_LABELS[row.type],
     })),
     ...valuationRows.slice(0, 12).map((row) => ({
       id: row.id,
@@ -432,6 +564,39 @@ export async function getDashboardData(
       currency: row.currency,
       date: row.valuationDate,
       description: row.notes,
+      label: "Valuation update",
+    })),
+    ...positionActivityRows.slice(0, 12).map((row) => ({
+      id: row.id,
+      kind: "position" as const,
+      type: row.type,
+      accountName: row.accountName,
+      amountMinor: row.cashEffectMinor,
+      currency: row.accountCurrency,
+      date: row.tradeDate,
+      description: row.description,
+      label: `${
+        row.type === "opening_position"
+          ? "Opening position"
+          : row.type === "quantity_adjustment"
+            ? "Quantity adjustment"
+            : row.type === "buy"
+              ? "Buy"
+              : "Sell"
+      } · ${row.instrumentSymbol || row.instrumentName}`,
+    })),
+    ...securityPriceActivityRows.slice(0, 12).map((row) => ({
+      id: row.id,
+      kind: "price" as const,
+      type: "security_price" as const,
+      accountName: row.instrumentSymbol || row.instrumentName,
+      amountMinor: safeChartNumber(
+        calculateQuoteValueMinor("1", row.price, row.currency),
+      ),
+      currency: row.currency,
+      date: row.effectiveDate,
+      description: row.provenance,
+      label: "Security price update",
     })),
   ]
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -469,11 +634,14 @@ export async function getDashboardData(
     investibleAllocation: toAllocation(investibleAllocationMap),
     institutionAllocation: toAllocation(institutionMap),
     currencyAllocation: toAllocation(currencyMap),
+    instrumentAllocation: toAllocation(instrumentAllocationMap),
     history,
     historyComplete: history.every((point) => point.complete),
     historicalMissingRates,
     recentActivity,
     missingRates: [...missingRates],
+    missingPrices: [...missingPrices],
+    stalePrices: [...stalePrices],
     accountCount: accountRows.length,
     goalCount: goalsCount.length,
   };
@@ -512,6 +680,48 @@ export async function getAccountAnalytics(userId: string, accountId: string) {
     metrics.transfersIn +
     metrics.withdrawals +
     metrics.transfersOut;
+  if (account.trackingMode === "positions") {
+    const positionRows = await db.query.positionEvents.findMany({
+      where: and(
+        eq(positionEvents.userId, userId),
+        eq(positionEvents.accountId, accountId),
+      ),
+      orderBy: [asc(positionEvents.tradeDate)],
+    });
+    const instrumentIds = [
+      ...new Set(positionRows.map((row) => row.instrumentId)),
+    ];
+    const priceRows = instrumentIds.length
+      ? await db
+          .select()
+          .from(securityPrices)
+          .where(
+            and(
+              eq(securityPrices.userId, userId),
+              inArray(securityPrices.instrumentId, instrumentIds),
+            ),
+          )
+      : [];
+    const sourceDates = [
+      ...rows.map((row) => row.transactionDate),
+      ...positionRows.map((row) => row.tradeDate),
+      ...priceRows.map((row) => row.effectiveDate),
+    ].sort();
+    const history = [...new Set(sourceDates)].map((date) => ({
+      date,
+      value: safeChartNumber(
+        calculatePositionAccountSnapshot(userId, db, accountId, date)
+          .totalMinor,
+      ),
+    }));
+    return {
+      account,
+      metrics,
+      estimatedGain,
+      history,
+      positionSnapshot: calculatePositionAccountSnapshot(userId, db, accountId),
+    };
+  }
   const events: FinancialEvent[] = [
     ...rows.map((row) => ({
       kind: "transaction" as const,
@@ -592,7 +802,7 @@ export async function getAccountComparisons(userId: string) {
     );
     let simpleAnnualized: string | null = null;
     let effectiveAnnualized: string | null = null;
-    if (start > 0n && days >= 30) {
+    if (account.trackingMode === "balance" && start > 0n && days >= 30) {
       const gain = ending - start - netFlows;
       const periodReturn = new Decimal(gain.toString()).div(start.toString());
       simpleAnnualized = periodReturn

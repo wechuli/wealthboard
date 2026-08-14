@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/ui/page";
-import { TRANSACTION_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/dates";
 import { safeChartNumber } from "@/lib/money";
 import {
@@ -107,6 +106,16 @@ export default async function DashboardPage({
           Current or historical totals are incomplete. Add effective-dated
           exchange rates for {data.missingRates.join(", ")} in Settings;
           affected holdings are excluded where conversion is unavailable.
+        </div>
+      ) : null}
+      {data.missingPrices.length || data.stalePrices.length ? (
+        <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
+          Position values need review. {data.missingPrices.length} instrument
+          {data.missingPrices.length === 1 ? " is" : "s are"} missing a price
+          {data.stalePrices.length
+            ? ` and ${data.stalePrices.length} use stale prices`
+            : ""}
+          . Affected totals and history are marked incomplete.
         </div>
       ) : null}
 
@@ -249,7 +258,7 @@ export default async function DashboardPage({
                   <p className="mt-1 text-xs text-slate-500">
                     {data.historyComplete
                       ? "Assets less liabilities over time"
-                      : `Incomplete history: missing ${data.historicalMissingRates.join(", ")} rates`}
+                      : "Incomplete history: one or more prices or exchange rates are unavailable"}
                   </p>
                 </div>
               </CardHeader>
@@ -376,9 +385,9 @@ export default async function DashboardPage({
                       label={`${goal.name} progress`}
                       className="mt-3"
                     />
-                    {goal.missingExchangeRate ? (
+                    {goal.valueIncomplete ? (
                       <p className="mt-2 text-xs text-amber-300">
-                        Exchange rate needed
+                        Price or exchange rate needed
                       </p>
                     ) : null}
                     <div className="mt-2 flex justify-between text-xs text-slate-500">
@@ -418,9 +427,7 @@ export default async function DashboardPage({
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
-                        {activity.kind === "valuation"
-                          ? "Valuation update"
-                          : TRANSACTION_LABELS[activity.type]}
+                        {activity.label}
                       </p>
                       <p className="truncate text-xs text-slate-500">
                         {activity.accountName} ·{" "}

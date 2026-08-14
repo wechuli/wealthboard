@@ -34,6 +34,9 @@ export type AccountListItem = {
   archivedAt: string | null;
   updatedAt: string;
   goalName: string | null;
+  trackingMode: "balance" | "positions";
+  positionCount: number;
+  priceState: "not_applicable" | "complete" | "missing" | "stale";
 };
 
 export function AccountsList({
@@ -53,6 +56,8 @@ export function AccountsList({
   const [institution, setInstitution] = useState("all");
   const [status, setStatus] = useState("active");
   const [kind, setKind] = useState("all");
+  const [tracking, setTracking] = useState("all");
+  const [priceState, setPriceState] = useState("all");
   const [sort, setSort] = useState("value");
   const [view, setView] = useState<"cards" | "table">("cards");
   const categories = [
@@ -95,7 +100,9 @@ export function AccountsList({
           (kind === "all" ||
             (kind === "liability"
               ? account.isLiability
-              : !account.isLiability)),
+              : !account.isLiability)) &&
+          (tracking === "all" || account.trackingMode === tracking) &&
+          (priceState === "all" || account.priceState === priceState),
       )
       .sort((a, b) => {
         if (sort === "name") return a.name.localeCompare(b.name);
@@ -106,7 +113,18 @@ export function AccountsList({
         if (sort === "updated") return b.updatedAt.localeCompare(a.updatedAt);
         return (b.convertedValueMinor ?? 0) - (a.convertedValueMinor ?? 0);
       });
-  }, [accounts, category, currency, institution, kind, query, sort, status]);
+  }, [
+    accounts,
+    category,
+    currency,
+    institution,
+    kind,
+    priceState,
+    query,
+    sort,
+    status,
+    tracking,
+  ]);
 
   return (
     <>
@@ -133,6 +151,25 @@ export function AccountsList({
           {categories.map((value) => (
             <option key={value}>{value}</option>
           ))}
+        </Select>
+        <Select
+          value={tracking}
+          onChange={(event) => setTracking(event.target.value)}
+          aria-label="Filter by tracking method"
+        >
+          <option value="all">All tracking methods</option>
+          <option value="balance">Account value</option>
+          <option value="positions">Units and prices</option>
+        </Select>
+        <Select
+          value={priceState}
+          onChange={(event) => setPriceState(event.target.value)}
+          aria-label="Filter by price state"
+        >
+          <option value="all">All price states</option>
+          <option value="complete">Complete prices</option>
+          <option value="missing">Missing prices</option>
+          <option value="stale">Stale prices</option>
         </Select>
         <Select
           value={currency}
@@ -243,6 +280,17 @@ export function AccountsList({
                     <Badge>Archived</Badge>
                   ) : account.isLiability ? (
                     <Badge tone="negative">Liability</Badge>
+                  ) : account.trackingMode === "positions" ? (
+                    <Badge
+                      tone={
+                        account.priceState === "complete"
+                          ? "positive"
+                          : "warning"
+                      }
+                    >
+                      {account.positionCount} position
+                      {account.positionCount === 1 ? "" : "s"}
+                    </Badge>
                   ) : null}
                 </div>
                 <div className="mt-7">
@@ -296,6 +344,13 @@ export function AccountsList({
                   </div>
                   <div className="text-right text-slate-500">
                     <p>{account.goalName || account.categoryName}</p>
+                    {account.trackingMode === "positions" ? (
+                      <p className="mt-1 capitalize">
+                        {account.priceState === "not_applicable"
+                          ? ""
+                          : `${account.priceState} prices`}
+                      </p>
+                    ) : null}
                     <p className="mt-1">
                       {formatDate(account.updatedAt, timezone, dateFormat)}
                     </p>

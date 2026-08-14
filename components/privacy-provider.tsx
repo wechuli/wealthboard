@@ -77,3 +77,20 @@ export function MoneyValue({
     </span>
   );
 }
+
+export function SensitiveValue({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  const { hidden } = usePrivacy();
+  return (
+    <span
+      className={cn("tabular-nums", hidden && "tracking-[0.2em]", className)}
+    >
+      {hidden ? "••••••" : children}
+    </span>
+  );
+}

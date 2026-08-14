@@ -24,7 +24,7 @@ export default async function NewAccountPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Add an account or asset"
-        description="Start with its current value. You can add detailed history later."
+        description="Track one monetary value or use units and prices for an investment account."
       />
       <Card>
         <CardHeader>

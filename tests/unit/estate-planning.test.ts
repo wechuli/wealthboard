@@ -318,14 +318,14 @@ describe.sequential("estate planning", () => {
     expect(getEstatePlanSnapshot(aliceId, snapshotId)).toBeUndefined();
   });
 
-  test("round-trips estate relationships in v6 and upgrades v5 with an empty plan", async () => {
+  test("round-trips estate relationships in v7 and upgrades v5 with an empty plan", async () => {
     setBeneficiaryArchived(aliceId, aliceAlternateId, false);
     const snapshotId = createEstatePlanSnapshot(
       aliceId,
       new Date("2026-08-11T11:00:00.000Z"),
     );
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(6);
+    expect(archive.version).toBe(7);
     expect(archive.beneficiaries).toHaveLength(2);
     expect(archive.estateAccountDirectives).toHaveLength(1);
     expect(archive.estateAllocations).toHaveLength(2);
@@ -344,14 +344,25 @@ describe.sequential("estate planning", () => {
     expect(restored.assets[0].allocations).toHaveLength(2);
     expect(restored.snapshots).toHaveLength(1);
 
-    const versionFive = structuredClone(archive) as Record<string, unknown>;
+    const versionFive = structuredClone(archive) as Record<string, unknown> & {
+      accounts: Array<Record<string, unknown>>;
+    };
     versionFive.version = 5;
+    delete versionFive.investmentInstruments;
+    delete versionFive.positionEvents;
+    delete versionFive.securityPrices;
+    delete versionFive.positionReconciliations;
     delete versionFive.beneficiaries;
     delete versionFive.estatePlans;
     delete versionFive.estateAccountDirectives;
     delete versionFive.estateAllocations;
     delete versionFive.estateResiduaryAllocations;
     delete versionFive.estatePlanSnapshots;
+    versionFive.accounts = versionFive.accounts.map((account) => {
+      const legacyAccount = { ...account };
+      delete legacyAccount.trackingMode;
+      return legacyAccount;
+    });
     restoreUserData(aliceId, versionFive);
     const upgraded = getEstateWorkspace(aliceId);
     expect(upgraded.beneficiaries).toEqual([]);

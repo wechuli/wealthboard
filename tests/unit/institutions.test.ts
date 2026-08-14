@@ -228,9 +228,9 @@ describe.sequential("institution directory and account linking", () => {
     expect(csv).toContain("KCB Group");
   });
 
-  test("round-trips v6 and upgrades normalized v3 institution strings", async () => {
+  test("round-trips v7 and upgrades normalized v3 institution strings", async () => {
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(6);
+    expect(archive.version).toBe(7);
     expect(archive.institutions).toMatchObject([
       {
         name: "KCB Group",
@@ -275,6 +275,10 @@ describe.sequential("institution directory and account linking", () => {
       ]),
     );
     legacy.version = 3;
+    delete legacy.investmentInstruments;
+    delete legacy.positionEvents;
+    delete legacy.securityPrices;
+    delete legacy.positionReconciliations;
     delete legacy.institutions;
     delete legacy.beneficiaries;
     delete legacy.estatePlans;
@@ -286,6 +290,7 @@ describe.sequential("institution directory and account linking", () => {
       const institutionIdValue = account.institutionId;
       const legacyAccount = { ...account };
       delete legacyAccount.institutionId;
+      delete legacyAccount.trackingMode;
       return {
         ...legacyAccount,
         institution:

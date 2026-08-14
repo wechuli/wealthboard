@@ -481,6 +481,7 @@ function accountForImport(client: Client, userId: string, accountId: string) {
       name: accounts.name,
       institution: institutions.name,
       currency: accounts.currency,
+      trackingMode: accounts.trackingMode,
       currentValueMinor: accounts.currentValueMinor,
     })
     .from(accounts)
@@ -495,6 +496,7 @@ function accountForImport(client: Client, userId: string, accountId: string) {
       and(
         eq(accounts.userId, userId),
         eq(accounts.id, accountId),
+        eq(accounts.trackingMode, "balance"),
         isNull(accounts.archivedAt),
       ),
     )

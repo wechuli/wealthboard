@@ -146,10 +146,16 @@ export default async function GoalDetailPage({
           icon={<TrendingUp size={17} />}
         />
       </div>
-      {goal.missingExchangeRate ? (
+      {goal.valueIncomplete ? (
         <div className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
-          Configure an exchange rate between the linked account and goal
-          currencies before relying on progress or forecasts.
+          Add the missing security price or exchange rate before relying on
+          linked progress or forecasts.
+        </div>
+      ) : null}
+      {goal.stalePositionData ? (
+        <div className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
+          This goal uses one or more stale security prices. Review their as-of
+          dates before relying on the forecast.
         </div>
       ) : null}
 
@@ -235,7 +241,7 @@ export default async function GoalDetailPage({
         </Card>
       </div>
 
-      {!goal.missingExchangeRate ? (
+      {!goal.valueIncomplete ? (
         <GoalScenarioComparison
           currentMinor={goal.currentAmountCalculated.toString()}
           targetMinor={goal.targetAmountMinor.toString()}

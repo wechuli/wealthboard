@@ -148,9 +148,9 @@ export default async function GoalsPage() {
                     label={`${goal.name} progress`}
                     className="mt-4"
                   />
-                  {goal.missingExchangeRate ? (
+                  {goal.valueIncomplete ? (
                     <p className="mt-2 text-xs text-amber-300">
-                      Add an exchange rate to calculate linked progress.
+                      Add a price or exchange rate to calculate linked progress.
                     </p>
                   ) : null}
                   <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-4 text-xs">

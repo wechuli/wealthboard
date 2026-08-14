@@ -1,0 +1,2 @@
+instrument_external_id,event_external_id,price_external_id,instrument_name,symbol,identifier_type,identifier,exchange_mic,asset_type,quote_currency,quantity,unit_price,price_date,opening_cost_basis,notes
+instrument:example-etf,event:opening:example-etf,price:example-etf:2026-01-01,Example World ETF,EWLD,ticker_exchange,EWLD,XNAS,etf,USD,10.5,145.67,2026-01-01,1450.00,Opening holding

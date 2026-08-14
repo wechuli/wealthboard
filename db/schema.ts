@@ -29,6 +29,20 @@ export const transactionTypes = [
   "transfer",
 ] as const;
 
+export const accountTrackingModes = ["balance", "positions"] as const;
+export const investmentIdentifierTypes = [
+  "isin",
+  "ticker_exchange",
+  "custom",
+] as const;
+export const investmentAssetTypes = ["stock", "etf", "fund"] as const;
+export const positionEventTypes = [
+  "opening_position",
+  "buy",
+  "sell",
+  "quantity_adjustment",
+] as const;
+
 export const goalStatuses = [
   "active",
   "paused",
@@ -235,6 +249,9 @@ export const accounts = sqliteTable(
     institutionId: text("institution_id"),
     accountReference: text("account_reference"),
     currency: text("currency").notNull(),
+    trackingMode: text("tracking_mode", { enum: accountTrackingModes })
+      .notNull()
+      .default("balance"),
     currentValueMinor: integer("current_value_minor").notNull().default(0),
     costBasisMinor: integer("cost_basis_minor"),
     isLiability: integer("is_liability", { mode: "boolean" })
@@ -265,6 +282,185 @@ export const accounts = sqliteTable(
       columns: [table.userId, table.institutionId],
       foreignColumns: [institutions.userId, institutions.id],
     }).onDelete("restrict"),
+  ],
+);
+
+export const investmentInstruments = sqliteTable(
+  "investment_instruments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    externalId: text("external_id"),
+    name: text("name").notNull(),
+    symbol: text("symbol"),
+    identifierType: text("identifier_type", {
+      enum: investmentIdentifierTypes,
+    }).notNull(),
+    identifier: text("identifier"),
+    exchangeMic: text("exchange_mic"),
+    assetType: text("asset_type", { enum: investmentAssetTypes }).notNull(),
+    quoteCurrency: text("quote_currency").notNull(),
+    archivedAt: text("archived_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("investment_instruments_user_id_unique").on(
+      table.userId,
+      table.id,
+    ),
+    uniqueIndex("investment_instruments_user_external_unique").on(
+      table.userId,
+      table.externalId,
+    ),
+    uniqueIndex("investment_instruments_user_identifier_unique").on(
+      table.userId,
+      table.identifierType,
+      table.identifier,
+      table.exchangeMic,
+    ),
+    index("investment_instruments_user_archived_idx").on(
+      table.userId,
+      table.archivedAt,
+    ),
+  ],
+);
+
+export const positionEvents = sqliteTable(
+  "position_events",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull(),
+    instrumentId: text("instrument_id").notNull(),
+    type: text("type", { enum: positionEventTypes }).notNull(),
+    quantity: text("quantity").notNull(),
+    unitPrice: text("unit_price"),
+    tradeCurrency: text("trade_currency").notNull(),
+    grossAmountMinor: integer("gross_amount_minor"),
+    feeAmountMinor: integer("fee_amount_minor"),
+    feeCurrency: text("fee_currency"),
+    cashEffectMinor: integer("cash_effect_minor").notNull().default(0),
+    appliedExchangeRate: text("applied_exchange_rate"),
+    openingCostBasisMinor: integer("opening_cost_basis_minor"),
+    tradeDate: text("trade_date").notNull(),
+    settlementDate: text("settlement_date"),
+    externalId: text("external_id"),
+    eventGroupId: text("event_group_id"),
+    idempotencyKey: text("idempotency_key"),
+    description: text("description"),
+    notes: text("notes"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("position_events_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("position_events_user_account_external_unique").on(
+      table.userId,
+      table.accountId,
+      table.externalId,
+    ),
+    uniqueIndex("position_events_user_idempotency_unique").on(
+      table.userId,
+      table.idempotencyKey,
+    ),
+    index("position_events_user_account_date_idx").on(
+      table.userId,
+      table.accountId,
+      table.tradeDate,
+      table.createdAt,
+      table.id,
+    ),
+    index("position_events_user_instrument_date_idx").on(
+      table.userId,
+      table.instrumentId,
+      table.tradeDate,
+    ),
+    foreignKey({
+      columns: [table.userId, table.accountId],
+      foreignColumns: [accounts.userId, accounts.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.userId, table.instrumentId],
+      foreignColumns: [investmentInstruments.userId, investmentInstruments.id],
+    }).onDelete("restrict"),
+  ],
+);
+
+export const securityPrices = sqliteTable(
+  "security_prices",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    instrumentId: text("instrument_id").notNull(),
+    externalId: text("external_id"),
+    price: text("price").notNull(),
+    currency: text("currency").notNull(),
+    effectiveDate: text("effective_date").notNull(),
+    source: text("source").notNull().default("manual"),
+    provenance: text("provenance"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("security_prices_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("security_prices_user_instrument_date_unique").on(
+      table.userId,
+      table.instrumentId,
+      table.effectiveDate,
+    ),
+    uniqueIndex("security_prices_user_instrument_external_unique").on(
+      table.userId,
+      table.instrumentId,
+      table.externalId,
+    ),
+    index("security_prices_user_instrument_lookup_idx").on(
+      table.userId,
+      table.instrumentId,
+      table.effectiveDate,
+    ),
+    foreignKey({
+      columns: [table.userId, table.instrumentId],
+      foreignColumns: [investmentInstruments.userId, investmentInstruments.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const positionReconciliations = sqliteTable(
+  "position_reconciliations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull(),
+    observationDate: text("observation_date").notNull(),
+    reportedCashMinor: integer("reported_cash_minor"),
+    reportedTotalMinor: integer("reported_total_minor").notNull(),
+    notes: text("notes"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("position_reconciliations_user_id_unique").on(
+      table.userId,
+      table.id,
+    ),
+    index("position_reconciliations_user_account_date_idx").on(
+      table.userId,
+      table.accountId,
+      table.observationDate,
+    ),
+    foreignKey({
+      columns: [table.userId, table.accountId],
+      foreignColumns: [accounts.userId, accounts.id],
+    }).onDelete("cascade"),
   ],
 );
 
@@ -801,6 +997,11 @@ export const aiUsageEvents = sqliteTable(
 export type Account = typeof accounts.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Institution = typeof institutions.$inferSelect;
+export type InvestmentInstrument = typeof investmentInstruments.$inferSelect;
+export type PositionEvent = typeof positionEvents.$inferSelect;
+export type SecurityPrice = typeof securityPrices.$inferSelect;
+export type PositionReconciliation =
+  typeof positionReconciliations.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;
 export type ValuationSnapshot = typeof valuationSnapshots.$inferSelect;
 export type Goal = typeof goals.$inferSelect;
@@ -817,6 +1018,11 @@ export type User = typeof users.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type AiProviderSettings = typeof aiProviderSettings.$inferSelect;
 export type TransactionType = (typeof transactionTypes)[number];
+export type AccountTrackingMode = (typeof accountTrackingModes)[number];
+export type InvestmentIdentifierType =
+  (typeof investmentIdentifierTypes)[number];
+export type InvestmentAssetType = (typeof investmentAssetTypes)[number];
+export type PositionEventType = (typeof positionEventTypes)[number];
 export type GoalStatus = (typeof goalStatuses)[number];
 export type InstitutionType = (typeof institutionTypes)[number];
 export type AiProvider = (typeof aiProviders)[number];

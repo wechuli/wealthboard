@@ -7,10 +7,12 @@ import {
   ArrowUpFromLine,
   Edit3,
   Landmark,
+  CandlestickChart,
   FileInput,
   Plus,
   ScrollText,
   Sparkles,
+  Scale,
   Trash2,
   TrendingUp,
 } from "lucide-react";
@@ -22,6 +24,7 @@ import {
 } from "@/app/(app)/actions";
 import { AccountHistoryChart } from "@/components/charts";
 import { MoneyValue } from "@/components/privacy-provider";
+import { PositionAccountDetails } from "@/components/position-account-details";
 import { MutationButton } from "@/components/mutation-button";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Badge } from "@/components/ui/badge";
@@ -82,38 +85,56 @@ export default async function AccountDetailPage({
               </Link>
             </Button>
             <Button asChild>
-              <Link href={`/transactions/new?accountId=${id}&type=deposit`}>
+              <Link
+                href={
+                  account.trackingMode === "positions"
+                    ? `/accounts/${id}/positions/new?type=buy`
+                    : `/transactions/new?accountId=${id}&type=deposit`
+                }
+              >
                 <Plus size={16} />
-                Add activity
+                {account.trackingMode === "positions"
+                  ? "Add trade"
+                  : "Add activity"}
               </Link>
             </Button>
           </>
         }
       />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric
-          label={account.isLiability ? "Amount owed" : "Current value"}
-          value={account.currentValueMinor}
+      {account.trackingMode === "positions" ? (
+        <PositionAccountDetails
+          userId={userId}
+          accountId={id}
           currency={account.currency}
-          primary
+          timezone={settings.timezone}
+          dateFormat={settings.preferredDateFormat}
         />
-        <Metric
-          label="Contributions"
-          value={analytics.metrics.contributions}
-          currency={account.currency}
-        />
-        <Metric
-          label="Income"
-          value={analytics.metrics.interest + analytics.metrics.dividends}
-          currency={account.currency}
-        />
-        <Metric
-          label={manualAsset ? "Valuation change" : "Estimated gain/loss"}
-          value={analytics.estimatedGain}
-          currency={account.currency}
-          tone={analytics.estimatedGain >= 0 ? "positive" : "negative"}
-        />
-      </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric
+            label={account.isLiability ? "Amount owed" : "Current value"}
+            value={account.currentValueMinor}
+            currency={account.currency}
+            primary
+          />
+          <Metric
+            label="Contributions"
+            value={analytics.metrics.contributions}
+            currency={account.currency}
+          />
+          <Metric
+            label="Income"
+            value={analytics.metrics.interest + analytics.metrics.dividends}
+            currency={account.currency}
+          />
+          <Metric
+            label={manualAsset ? "Valuation change" : "Estimated gain/loss"}
+            value={analytics.estimatedGain}
+            currency={account.currency}
+            tone={analytics.estimatedGain >= 0 ? "positive" : "negative"}
+          />
+        </div>
+      )}
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,.7fr)]">
         <Card>
@@ -123,7 +144,9 @@ export default async function AccountDetailPage({
               <p className="mt-1 text-xs text-slate-500">
                 {manualAsset
                   ? "Valuations and recorded cash flows"
-                  : "Balance reconstructed from all activity"}
+                  : account.trackingMode === "positions"
+                    ? "Cash, quantities, and effective-dated prices"
+                    : "Balance reconstructed from all activity"}
               </p>
             </div>
           </CardHeader>
@@ -139,6 +162,30 @@ export default async function AccountDetailPage({
             <CardTitle>Quick actions</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
+            {account.trackingMode === "positions" ? (
+              <>
+                <Quick
+                  href={`/accounts/${id}/positions/new?type=buy`}
+                  icon={<CandlestickChart size={17} />}
+                  label="Buy"
+                />
+                <Quick
+                  href={`/accounts/${id}/positions/new?type=sell`}
+                  icon={<CandlestickChart size={17} />}
+                  label="Sell"
+                />
+                <Quick
+                  href={`/accounts/${id}/prices/new`}
+                  icon={<TrendingUp size={17} />}
+                  label="Price"
+                />
+                <Quick
+                  href={`/accounts/${id}/reconcile`}
+                  icon={<Scale size={17} />}
+                  label="Reconcile"
+                />
+              </>
+            ) : null}
             <Quick
               href={`/transactions/new?accountId=${id}&type=deposit`}
               icon={<ArrowDownToLine size={17} />}
@@ -159,11 +206,13 @@ export default async function AccountDetailPage({
               icon={<ArrowLeftRight size={17} />}
               label="Transfer"
             />
-            <Quick
-              href={`/accounts/${id}/valuation`}
-              icon={<Sparkles size={17} />}
-              label="Value"
-            />
+            {account.trackingMode === "balance" ? (
+              <Quick
+                href={`/accounts/${id}/valuation`}
+                icon={<Sparkles size={17} />}
+                label="Value"
+              />
+            ) : null}
             <Quick
               href={`/transactions/new?accountId=${id}&type=fee`}
               icon={<Landmark size={17} />}
@@ -181,81 +230,83 @@ export default async function AccountDetailPage({
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Transactions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {activity.transactions.length === 0 ? (
-              <p className="py-10 text-center text-sm text-slate-500">
-                No transactions recorded.
-              </p>
-            ) : (
-              <div className="divide-y divide-white/[0.06]">
-                {activity.transactions.map((transaction) => (
-                  <div
-                    key={transaction.id}
-                    className="flex items-center justify-between gap-3 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-200">
-                        {TRANSACTION_LABELS[transaction.type]}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {formatDate(
-                          transaction.transactionDate,
-                          settings.timezone,
-                          settings.preferredDateFormat,
-                        )}
-                        {transaction.description
-                          ? ` · ${transaction.description}`
-                          : ""}
-                        {transaction.externalId
-                          ? ` · External ID: ${transaction.externalId}`
-                          : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MoneyValue
-                        amount={transaction.amountMinor}
-                        currency={transaction.currency}
-                        className="text-sm"
-                      />
-                      {transaction.type !== "opening_balance" &&
-                      transaction.type !== "transfer" ? (
-                        <Button
-                          asChild
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Edit transaction"
-                        >
-                          <Link href={`/transactions/${transaction.id}/edit`}>
-                            <Edit3 size={15} />
-                          </Link>
-                        </Button>
-                      ) : null}
-                      {transaction.type !== "opening_balance" ? (
-                        <MutationButton
-                          action={deleteTransactionAction.bind(
-                            null,
-                            transaction.id,
+        {account.trackingMode === "balance" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activity.transactions.length === 0 ? (
+                <p className="py-10 text-center text-sm text-slate-500">
+                  No transactions recorded.
+                </p>
+              ) : (
+                <div className="divide-y divide-white/[0.06]">
+                  {activity.transactions.map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className="flex items-center justify-between gap-3 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-200">
+                          {TRANSACTION_LABELS[transaction.type]}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {formatDate(
+                            transaction.transactionDate,
+                            settings.timezone,
+                            settings.preferredDateFormat,
                           )}
-                          confirm="Delete this transaction? The account balance will be recalculated."
-                          successMessage="Transaction deleted."
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Delete transaction"
-                        >
-                          <Trash2 size={15} />
-                        </MutationButton>
-                      ) : null}
+                          {transaction.description
+                            ? ` · ${transaction.description}`
+                            : ""}
+                          {transaction.externalId
+                            ? ` · External ID: ${transaction.externalId}`
+                            : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MoneyValue
+                          amount={transaction.amountMinor}
+                          currency={transaction.currency}
+                          className="text-sm"
+                        />
+                        {transaction.type !== "opening_balance" &&
+                        transaction.type !== "transfer" ? (
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Edit transaction"
+                          >
+                            <Link href={`/transactions/${transaction.id}/edit`}>
+                              <Edit3 size={15} />
+                            </Link>
+                          </Button>
+                        ) : null}
+                        {transaction.type !== "opening_balance" ? (
+                          <MutationButton
+                            action={deleteTransactionAction.bind(
+                              null,
+                              transaction.id,
+                            )}
+                            confirm="Delete this transaction? The account balance will be recalculated."
+                            successMessage="Transaction deleted."
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Delete transaction"
+                          >
+                            <Trash2 size={15} />
+                          </MutationButton>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>
@@ -314,22 +365,32 @@ export default async function AccountDetailPage({
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <Detail label="Category" value={account.categoryName} />
+            <Detail
+              label="Tracking method"
+              value={
+                account.trackingMode === "positions"
+                  ? "Units and prices"
+                  : "Account value"
+              }
+            />
             <Detail label="Institution" value={institutionLabel || "Not set"} />
             <Detail
               label="Reference"
               value={account.accountReference || "Not set"}
             />
-            <Detail
-              label="Cost basis"
-              value={
-                account.costBasisMinor == null
-                  ? "Not set"
-                  : minorToDecimalString(
-                      account.costBasisMinor,
-                      account.currency,
-                    )
-              }
-            />
+            {account.trackingMode === "balance" ? (
+              <Detail
+                label="Cost basis"
+                value={
+                  account.costBasisMinor == null
+                    ? "Not set"
+                    : minorToDecimalString(
+                        account.costBasisMinor,
+                        account.currency,
+                      )
+                }
+              />
+            ) : null}
             <Detail
               label="Included in net worth"
               value={account.isIncludedInNetWorth ? "Yes" : "No"}

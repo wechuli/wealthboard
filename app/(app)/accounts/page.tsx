@@ -14,6 +14,7 @@ import {
   safeChartNumber,
 } from "@/lib/money";
 import { accountBalanceAt, listAccounts } from "@/lib/services/accounts";
+import { getPositionAccountSnapshot } from "@/lib/services/investments";
 import { requireSession } from "@/lib/auth/session";
 import { eq } from "drizzle-orm";
 
@@ -40,6 +41,10 @@ export default async function AccountsPage() {
   const items = accountRows.map((account) => {
     let convertedValueMinor: number | null = null;
     let monthlyChangeMinor: number | null = null;
+    const positionSnapshot =
+      account.trackingMode === "positions"
+        ? getPositionAccountSnapshot(userId, account.id)
+        : null;
     try {
       const converted = convertMinor(
         account.currentValueMinor,
@@ -76,6 +81,15 @@ export default async function AccountsPage() {
       archivedAt: account.archivedAt,
       updatedAt: account.updatedAt,
       goalName: account.goalId ? (goalNames.get(account.goalId) ?? null) : null,
+      trackingMode: account.trackingMode,
+      positionCount: positionSnapshot?.positions.length ?? 0,
+      priceState: positionSnapshot
+        ? !positionSnapshot.complete
+          ? ("missing" as const)
+          : positionSnapshot.staleInstrumentIds.length
+            ? ("stale" as const)
+            : ("complete" as const)
+        : ("not_applicable" as const),
     };
   });
   return (

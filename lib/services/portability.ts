@@ -28,6 +28,13 @@ import {
   idempotencyKeys,
   institutions,
   institutionTypes,
+  investmentAssetTypes,
+  investmentIdentifierTypes,
+  investmentInstruments,
+  positionEventTypes,
+  positionEvents,
+  positionReconciliations,
+  securityPrices,
   transactions,
   transactionTypes,
   userSettings,
@@ -48,8 +55,10 @@ import {
 } from "@/lib/institutions";
 import {
   listTransactionsForExport,
+  recalculateAccountBalance,
   type TransactionFilters,
 } from "@/lib/services/accounts";
+import { replayPositionQuantities } from "@/lib/investments";
 
 const safeInteger = z
   .number()
@@ -146,6 +155,87 @@ const legacyAccountArchiveSchema = z
 const accountArchiveV4Schema = legacyAccountArchiveSchema
   .omit({ institution: true })
   .extend({ institutionId: z.string().min(1).nullable() })
+  .strict();
+
+const accountArchiveV7Schema = accountArchiveV4Schema
+  .extend({ trackingMode: z.enum(["balance", "positions"]) })
+  .strict();
+
+const investmentInstrumentArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    externalId: z.string().min(1).max(200).nullable(),
+    name: z.string().min(1).max(100),
+    symbol: z.string().max(30).nullable(),
+    identifierType: z.enum(investmentIdentifierTypes),
+    identifier: z.string().max(100).nullable(),
+    exchangeMic: z.string().max(20).nullable(),
+    assetType: z.enum(investmentAssetTypes),
+    quoteCurrency: isoCurrency,
+    archivedAt: timestamp.nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const signedDecimal = z
+  .string()
+  .regex(/^-?\d+(?:\.\d+)?$/)
+  .refine((value) => !new Decimal(value).isZero(), "Quantity cannot be zero.");
+
+const positionEventArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    accountId: z.string().min(1),
+    instrumentId: z.string().min(1),
+    type: z.enum(positionEventTypes),
+    quantity: signedDecimal,
+    unitPrice: positiveDecimal.nullable(),
+    tradeCurrency: isoCurrency,
+    grossAmountMinor: safeInteger.nullable(),
+    feeAmountMinor: safeInteger.nullable(),
+    feeCurrency: isoCurrency.nullable(),
+    cashEffectMinor: safeInteger,
+    appliedExchangeRate: positiveDecimal.nullable(),
+    openingCostBasisMinor: safeInteger.nullable(),
+    tradeDate: timestamp,
+    settlementDate: timestamp.nullable(),
+    externalId: z.string().min(1).max(200).nullable(),
+    eventGroupId: z.string().nullable(),
+    idempotencyKey: z.string().nullable(),
+    description: z.string().max(200).nullable(),
+    notes: nullableText,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const securityPriceArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    instrumentId: z.string().min(1),
+    externalId: z.string().min(1).max(200).nullable(),
+    price: positiveDecimal,
+    currency: isoCurrency,
+    effectiveDate: timestamp,
+    source: z.string().min(1).max(100),
+    provenance: z.string().max(500).nullable(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .strict();
+
+const positionReconciliationArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    accountId: z.string().min(1),
+    observationDate: timestamp,
+    reportedCashMinor: safeInteger.nullable(),
+    reportedTotalMinor: safeInteger,
+    notes: nullableText,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
   .strict();
 
 const institutionArchiveSchema = z
@@ -433,6 +523,21 @@ const userArchiveV6Schema = userArchiveV5Schema
   })
   .strict();
 
+const userArchiveV7Schema = userArchiveV6Schema
+  .extend({
+    version: z.literal(7),
+    accounts: z.array(accountArchiveV7Schema).max(10000),
+    investmentInstruments: z
+      .array(investmentInstrumentArchiveSchema)
+      .max(10000),
+    positionEvents: z.array(positionEventArchiveSchema).max(100000),
+    securityPrices: z.array(securityPriceArchiveSchema).max(100000),
+    positionReconciliations: z
+      .array(positionReconciliationArchiveSchema)
+      .max(10000),
+  })
+  .strict();
+
 function upgradeLegacyArchive(
   archive: z.infer<typeof userArchiveV2Schema | typeof userArchiveV3Schema>,
 ) {
@@ -535,8 +640,24 @@ function upgradeV5Archive(archive: z.infer<typeof userArchiveV5Schema>) {
   };
 }
 
+function upgradeV6Archive(archive: z.infer<typeof userArchiveV6Schema>) {
+  return {
+    ...archive,
+    version: 7 as const,
+    accounts: archive.accounts.map((account) => ({
+      ...account,
+      trackingMode: "balance" as const,
+    })),
+    investmentInstruments: [],
+    positionEvents: [],
+    securityPrices: [],
+    positionReconciliations: [],
+  };
+}
+
 const userArchiveSchema = z
   .union([
+    userArchiveV7Schema,
     userArchiveV6Schema,
     userArchiveV5Schema,
     userArchiveV4Schema,
@@ -544,11 +665,15 @@ const userArchiveSchema = z
     userArchiveV2Schema,
   ])
   .transform((archive) => {
-    if (archive.version === 6) return archive;
-    if (archive.version === 5) return upgradeV5Archive(archive);
+    if (archive.version === 7) return archive;
+    if (archive.version === 6) return upgradeV6Archive(archive);
+    if (archive.version === 5)
+      return upgradeV6Archive(upgradeV5Archive(archive));
     if (archive.version === 4)
-      return upgradeV5Archive(upgradeV4Archive(archive));
-    return upgradeV5Archive(upgradeV4Archive(upgradeLegacyArchive(archive)));
+      return upgradeV6Archive(upgradeV5Archive(upgradeV4Archive(archive)));
+    return upgradeV6Archive(
+      upgradeV5Archive(upgradeV4Archive(upgradeLegacyArchive(archive))),
+    );
   });
 
 function csvCell(value: unknown) {
@@ -597,6 +722,10 @@ export async function exportData(userId: string) {
     estateAllocationRows,
     estateResiduaryRows,
     estateSnapshotRows,
+    instrumentRows,
+    positionEventRows,
+    securityPriceRows,
+    positionReconciliationRows,
   ] = await Promise.all([
     db.select().from(categories).where(eq(categories.userId, userId)),
     db.select().from(accounts).where(eq(accounts.userId, userId)),
@@ -635,11 +764,21 @@ export async function exportData(userId: string) {
       .select()
       .from(estatePlanSnapshots)
       .where(eq(estatePlanSnapshots.userId, userId)),
+    db
+      .select()
+      .from(investmentInstruments)
+      .where(eq(investmentInstruments.userId, userId)),
+    db.select().from(positionEvents).where(eq(positionEvents.userId, userId)),
+    db.select().from(securityPrices).where(eq(securityPrices.userId, userId)),
+    db
+      .select()
+      .from(positionReconciliations)
+      .where(eq(positionReconciliations.userId, userId)),
   ]);
 
   return {
     format: "wealthboard-user-json" as const,
-    version: 6 as const,
+    version: 7 as const,
     exportedAt: nowIso(),
     settings: {
       displayName: settings.displayName,
@@ -679,6 +818,10 @@ export async function exportData(userId: string) {
     estateAllocations: estateAllocationRows.map(stripOwner),
     estateResiduaryAllocations: estateResiduaryRows.map(stripOwner),
     estatePlanSnapshots: estateSnapshotRows.map(stripOwner),
+    investmentInstruments: instrumentRows.map(stripOwner),
+    positionEvents: positionEventRows.map(stripOwner),
+    securityPrices: securityPriceRows.map(stripOwner),
+    positionReconciliations: positionReconciliationRows.map(stripOwner),
   };
 }
 
@@ -717,6 +860,13 @@ export function restoreUserData(userId: string, input: unknown) {
       row.quoteCurrency,
     ]),
     ...archive.goals.map((row) => row.currency),
+    ...archive.investmentInstruments.map((row) => row.quoteCurrency),
+    ...archive.positionEvents.flatMap((row) =>
+      [row.tradeCurrency, row.feeCurrency].filter(
+        (currency): currency is string => Boolean(currency),
+      ),
+    ),
+    ...archive.securityPrices.map((row) => row.currency),
   ]);
   const restoredSettings = {
     ...archive.settings,
@@ -758,6 +908,31 @@ export function restoreUserData(userId: string, input: unknown) {
     archive.estatePlanSnapshots,
     "estate snapshot",
   );
+  const instrumentIds = uniqueIdMap(
+    archive.investmentInstruments,
+    "investment instrument",
+  );
+  const positionEventIds = uniqueIdMap(
+    archive.positionEvents,
+    "position event",
+  );
+  const securityPriceIds = uniqueIdMap(
+    archive.securityPrices,
+    "security price",
+  );
+  const positionReconciliationIds = uniqueIdMap(
+    archive.positionReconciliations,
+    "position reconciliation",
+  );
+  const eventGroupIds = new Map(
+    [
+      ...new Set(
+        archive.positionEvents
+          .map((row) => row.eventGroupId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ].map((id) => [id, crypto.randomUUID()]),
+  );
 
   const normalizedInstitutionNames = new Set<string>();
   for (const institution of archive.institutions) {
@@ -767,6 +942,7 @@ export function restoreUserData(userId: string, input: unknown) {
     }
     normalizedInstitutionNames.add(normalizedName);
   }
+  const accountById = new Map(archive.accounts.map((row) => [row.id, row]));
 
   for (const account of archive.accounts) {
     requiredMappedId(categoryIds, account.categoryId, "account category");
@@ -785,6 +961,11 @@ export function restoreUserData(userId: string, input: unknown) {
   }
   for (const valuation of archive.valuations) {
     requiredMappedId(accountIds, valuation.accountId, "valuation account");
+    if (accountById.get(valuation.accountId)?.trackingMode === "positions") {
+      throw new Error(
+        "The archive contains an absolute valuation for a position account.",
+      );
+    }
   }
   const linkedAccounts = new Set<string>();
   for (const goal of archive.goals) {
@@ -806,7 +987,6 @@ export function restoreUserData(userId: string, input: unknown) {
   for (const dismissal of archive.goalAlertDismissals) {
     requiredMappedId(goalIds, dismissal.goalId, "alert-dismissal goal");
   }
-  const accountById = new Map(archive.accounts.map((row) => [row.id, row]));
   const directiveById = new Map(
     archive.estateAccountDirectives.map((row) => [row.id, row]),
   );
@@ -885,6 +1065,57 @@ export function restoreUserData(userId: string, input: unknown) {
       "estate snapshot plan",
     );
   }
+  const instrumentById = new Map(
+    archive.investmentInstruments.map((row) => [row.id, row]),
+  );
+  for (const event of archive.positionEvents) {
+    requiredMappedId(accountIds, event.accountId, "position-event account");
+    requiredMappedId(
+      instrumentIds,
+      event.instrumentId,
+      "position-event instrument",
+    );
+    if (accountById.get(event.accountId)?.trackingMode !== "positions") {
+      throw new Error(
+        "The archive links a position event to a balance account.",
+      );
+    }
+    if (
+      event.type !== "quantity_adjustment" &&
+      new Decimal(event.quantity).isNegative()
+    ) {
+      throw new Error("The archive contains a negative position quantity.");
+    }
+  }
+  replayPositionQuantities(archive.positionEvents);
+  for (const price of archive.securityPrices) {
+    requiredMappedId(
+      instrumentIds,
+      price.instrumentId,
+      "security-price instrument",
+    );
+    if (
+      instrumentById.get(price.instrumentId)?.quoteCurrency !== price.currency
+    ) {
+      throw new Error(
+        "The archive contains a price in the wrong instrument currency.",
+      );
+    }
+  }
+  for (const reconciliation of archive.positionReconciliations) {
+    requiredMappedId(
+      accountIds,
+      reconciliation.accountId,
+      "position-reconciliation account",
+    );
+    if (
+      accountById.get(reconciliation.accountId)?.trackingMode !== "positions"
+    ) {
+      throw new Error(
+        "The archive links a reconciliation to a balance account.",
+      );
+    }
+  }
 
   const db = getDatabase();
   db.transaction((tx) => {
@@ -910,6 +1141,14 @@ export function restoreUserData(userId: string, input: unknown) {
       .run();
     tx.delete(estatePlans).where(eq(estatePlans.userId, userId)).run();
     tx.delete(beneficiaries).where(eq(beneficiaries.userId, userId)).run();
+    tx.delete(positionReconciliations)
+      .where(eq(positionReconciliations.userId, userId))
+      .run();
+    tx.delete(securityPrices).where(eq(securityPrices.userId, userId)).run();
+    tx.delete(positionEvents).where(eq(positionEvents.userId, userId)).run();
+    tx.delete(investmentInstruments)
+      .where(eq(investmentInstruments.userId, userId))
+      .run();
     tx.delete(goalAlertDismissals)
       .where(eq(goalAlertDismissals.userId, userId))
       .run();
@@ -979,6 +1218,21 @@ export function restoreUserData(userId: string, input: unknown) {
         )
         .run();
     }
+    if (archive.investmentInstruments.length) {
+      tx.insert(investmentInstruments)
+        .values(
+          archive.investmentInstruments.map((row) => ({
+            ...row,
+            id: requiredMappedId(
+              instrumentIds,
+              row.id,
+              "investment instrument",
+            ),
+            userId,
+          })),
+        )
+        .run();
+    }
     if (archive.goals.length) {
       tx.insert(goals)
         .values(
@@ -1024,6 +1278,66 @@ export function restoreUserData(userId: string, input: unknown) {
               accountIds,
               row.accountId,
               "valuation account",
+            ),
+          })),
+        )
+        .run();
+    }
+    if (archive.positionEvents.length) {
+      tx.insert(positionEvents)
+        .values(
+          archive.positionEvents.map((row) => ({
+            ...row,
+            id: requiredMappedId(positionEventIds, row.id, "position event"),
+            userId,
+            accountId: requiredMappedId(
+              accountIds,
+              row.accountId,
+              "position-event account",
+            ),
+            instrumentId: requiredMappedId(
+              instrumentIds,
+              row.instrumentId,
+              "position-event instrument",
+            ),
+            eventGroupId: row.eventGroupId
+              ? eventGroupIds.get(row.eventGroupId)!
+              : null,
+          })),
+        )
+        .run();
+    }
+    if (archive.securityPrices.length) {
+      tx.insert(securityPrices)
+        .values(
+          archive.securityPrices.map((row) => ({
+            ...row,
+            id: requiredMappedId(securityPriceIds, row.id, "security price"),
+            userId,
+            instrumentId: requiredMappedId(
+              instrumentIds,
+              row.instrumentId,
+              "security-price instrument",
+            ),
+          })),
+        )
+        .run();
+    }
+    if (archive.positionReconciliations.length) {
+      tx.insert(positionReconciliations)
+        .values(
+          archive.positionReconciliations.map((row) => ({
+            ...row,
+            id: requiredMappedId(
+              positionReconciliationIds,
+              row.id,
+              "position reconciliation",
+            ),
+            userId,
+            accountId: requiredMappedId(
+              accountIds,
+              row.accountId,
+              "position-reconciliation account",
             ),
           })),
         )
@@ -1201,6 +1515,13 @@ export function restoreUserData(userId: string, input: unknown) {
         )
         .run();
     }
+    for (const account of archive.accounts) {
+      recalculateAccountBalance(
+        userId,
+        tx,
+        requiredMappedId(accountIds, account.id, "account"),
+      );
+    }
   });
 
   return {
@@ -1212,6 +1533,10 @@ export function restoreUserData(userId: string, input: unknown) {
     beneficiaries: archive.beneficiaries.length,
     estatePlans: archive.estatePlans.length,
     estateSnapshots: archive.estatePlanSnapshots.length,
+    investmentInstruments: archive.investmentInstruments.length,
+    positionEvents: archive.positionEvents.length,
+    securityPrices: archive.securityPrices.length,
+    positionReconciliations: archive.positionReconciliations.length,
   };
 }
 

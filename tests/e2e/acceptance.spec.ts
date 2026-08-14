@@ -337,7 +337,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     goalMilestones: Array<{ name: string }>;
     goalAlertDismissals: unknown[];
   };
-  expect(exportedPortfolio.version).toBe(6);
+  expect(exportedPortfolio.version).toBe(7);
   expect(exportedPortfolio.institutions).toEqual([]);
   expect(exportedPortfolio.goalMilestones).toContainEqual(
     expect.objectContaining({ name: "Halfway funded" }),

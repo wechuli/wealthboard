@@ -1,0 +1,2 @@
+external_id,instrument_external_id,price,effective_date,source,provenance
+price:example-etf:2026-02-28,instrument:example-etf,152.40,2026-02-28,statement,February statement

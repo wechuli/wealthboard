@@ -14,9 +14,13 @@ import {
   goalMilestoneSchema,
   goalSchema,
   institutionSchema,
+  investmentInstrumentSchema,
   localCredentialSchema,
   passwordConfirmationSchema,
   passwordChangeSchema,
+  positionEventSchema,
+  positionReconciliationSchema,
+  securityPriceSchema,
   transactionSchema,
   transactionUpdateSchema,
   transferSchema,
@@ -28,6 +32,7 @@ import {
   createAccount,
   deleteTransaction,
   deleteValuation,
+  getAccount,
   recordTransaction,
   recordValuation,
   setAccountArchived,
@@ -95,6 +100,18 @@ import {
   disconnectAiProvider,
   saveAiProviderSettings,
 } from "@/lib/services/ai-provider";
+import {
+  createInvestmentInstrument,
+  deletePositionEvent,
+  deletePositionReconciliation,
+  deleteSecurityPrice,
+  recordPositionEvent,
+  recordPositionReconciliation,
+  setInvestmentInstrumentArchived,
+  setSecurityPrice,
+  updatePositionEvent,
+  updateInvestmentInstrument,
+} from "@/lib/services/investments";
 
 function mutationError(error: unknown): ActionState {
   console.error(
@@ -237,6 +254,165 @@ export async function archiveAccountAction(id: string, archived: boolean) {
   revalidatePath(`/accounts/${id}`);
   revalidatePath("/estate");
   redirect("/accounts");
+}
+
+export async function createInvestmentInstrumentAction(
+  accountId: string,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const account = await getAccount(userId, accountId);
+  if (!account || account.trackingMode !== "positions" || account.archivedAt) {
+    return { message: "Position account not found." };
+  }
+  const parsed = investmentInstrumentSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  let instrumentId: string;
+  try {
+    instrumentId = createInvestmentInstrument(userId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath(`/accounts/${accountId}`);
+  redirect(`/accounts/${accountId}/positions/new?instrumentId=${instrumentId}`);
+}
+
+export async function updateInvestmentInstrumentAction(
+  instrumentId: string,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = investmentInstrumentSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    updateInvestmentInstrument(userId, instrumentId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  revalidatePath("/instruments");
+  revalidatePath("/reports");
+  redirect("/instruments?updated=1");
+}
+
+export async function recordPositionEventAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = positionEventSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    recordPositionEvent(userId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${parsed.data.accountId}`);
+  revalidatePath("/reports");
+  revalidatePath("/estate");
+  redirect(`/accounts/${parsed.data.accountId}?position=updated`);
+}
+
+export async function updatePositionEventAction(
+  eventId: string,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = positionEventSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    updatePositionEvent(userId, eventId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${parsed.data.accountId}`);
+  revalidatePath("/reports");
+  revalidatePath("/estate");
+  redirect(`/accounts/${parsed.data.accountId}?position=updated`);
+}
+
+export async function deletePositionEventAction(eventId: string) {
+  const { userId } = await requireSession();
+  deletePositionEvent(userId, eventId);
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  revalidatePath("/reports");
+  revalidatePath("/estate");
+}
+
+export async function setSecurityPriceAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = securityPriceSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    setSecurityPrice(userId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  revalidatePath(`/accounts/${parsed.data.accountId}`);
+  revalidatePath("/reports");
+  revalidatePath("/estate");
+  redirect(`/accounts/${parsed.data.accountId}?price=updated`);
+}
+
+export async function deleteSecurityPriceAction(priceId: string) {
+  const { userId } = await requireSession();
+  deleteSecurityPrice(userId, priceId);
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  revalidatePath("/reports");
+  revalidatePath("/estate");
+}
+
+export async function archiveInvestmentInstrumentAction(
+  instrumentId: string,
+  archived: boolean,
+) {
+  const { userId } = await requireSession();
+  try {
+    setInvestmentInstrumentArchived(userId, instrumentId, archived);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/accounts");
+  revalidatePath("/instruments");
+  return {
+    ok: true,
+    message: archived ? "Instrument archived." : "Instrument restored.",
+  };
+}
+
+export async function recordPositionReconciliationAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = positionReconciliationSchema.safeParse(
+    formDataObject(formData),
+  );
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    recordPositionReconciliation(userId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath(`/accounts/${parsed.data.accountId}`);
+  redirect(`/accounts/${parsed.data.accountId}?reconciliation=created`);
+}
+
+export async function deletePositionReconciliationAction(
+  reconciliationId: string,
+) {
+  const { userId } = await requireSession();
+  deletePositionReconciliation(userId, reconciliationId);
+  revalidatePath("/accounts");
 }
 
 export async function transactionAction(

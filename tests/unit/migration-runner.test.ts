@@ -58,7 +58,7 @@ describe("migration runner", () => {
     expect(migrationCount.count).toBe(journal.entries.length);
   });
 
-  test("upgrades local users and adds OIDC identity invariants", () => {
+  test("upgrades existing users and accounts through the latest invariants", () => {
     const databasePath = createDatabasePath();
     const migrations = readMigrationFiles({
       migrationsFolder: path.join(projectRoot, "db/migrations"),
@@ -90,6 +90,14 @@ describe("migration runner", () => {
           (id, username, password_hash, status, session_version, created_at, updated_at)
         VALUES
           ('local-user', 'existing-local', 'preserved-password-hash', 'active', 7, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+        INSERT INTO categories
+          (id, user_id, name, slug, icon, display_order, asset_or_liability, is_liquid, is_investible, is_archived, is_system, created_at, updated_at)
+        VALUES
+          ('category-existing', 'local-user', 'Securities', 'securities', 'Chart', 0, 'asset', 0, 1, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+        INSERT INTO accounts
+          (id, user_id, name, category_id, currency, current_value_minor, is_liability, is_included_in_net_worth, created_at, updated_at)
+        VALUES
+          ('account-existing', 'local-user', 'Existing investment', 'category-existing', 'USD', 12345, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
       `);
     })();
     sqlite.close();
@@ -131,6 +139,41 @@ describe("migration runner", () => {
       password_hash: "preserved-password-hash",
       session_version: 7,
     });
+    expect(
+      upgraded
+        .prepare(
+          "SELECT tracking_mode, current_value_minor FROM accounts WHERE id = ?",
+        )
+        .get("account-existing"),
+    ).toEqual({ tracking_mode: "balance", current_value_minor: 12345 });
+    expect(
+      [
+        "investment_instruments",
+        "position_events",
+        "security_prices",
+        "position_reconciliations",
+      ].every((table) =>
+        Boolean(
+          upgraded
+            .prepare(
+              "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .get(table),
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      (
+        upgraded.pragma("index_list(position_events)") as Array<{
+          name: string;
+        }>
+      ).map((index) => index.name),
+    ).toEqual(
+      expect.arrayContaining([
+        "position_events_user_account_external_unique",
+        "position_events_user_account_date_idx",
+      ]),
+    );
     upgraded.exec(`
       INSERT INTO users
         (id, username, password_hash, status, session_version, created_at, updated_at)

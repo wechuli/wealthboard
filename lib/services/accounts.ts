@@ -26,12 +26,14 @@ import {
   transactions,
   userSettings,
   valuationSnapshots,
+  type AccountTrackingMode,
   type TransactionType,
 } from "@/db/schema";
 import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { replayBalance, type FinancialEvent } from "@/lib/finance";
 import { parseMoney } from "@/lib/money";
+import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
 import { requireEnabledCurrency } from "@/lib/services/settings";
 import {
   transactionCursorSchema,
@@ -143,8 +145,16 @@ export function recalculateAccountBalance(
   client: Client,
   accountId: string,
 ) {
+  const account = client.query.accounts
+    .findFirst({
+      where: and(eq(accounts.userId, userId), eq(accounts.id, accountId)),
+    })
+    .sync();
+  if (!account) throw new Error("Account not found.");
   const value = checkedNumber(
-    replayBalance(accountEvents(client, userId, accountId)),
+    account.trackingMode === "positions"
+      ? calculatePositionAccountSnapshot(userId, client, accountId).totalMinor
+      : replayBalance(accountEvents(client, userId, accountId)),
   );
   client
     .update(accounts)
@@ -489,6 +499,7 @@ type AccountInput = {
   institutionId?: string;
   accountReference?: string;
   currency: string;
+  trackingMode?: AccountTrackingMode;
   openingValue: string;
   costBasis?: string;
   isIncludedInNetWorth: boolean;
@@ -536,6 +547,13 @@ export function createAccount(userId: string, input: AccountInput) {
       })
       .sync();
     if (!category) throw new Error("The selected category is unavailable.");
+    const trackingMode = input.trackingMode ?? "balance";
+    if (
+      trackingMode === "positions" &&
+      category.assetOrLiability === "liability"
+    ) {
+      throw new Error("Liability accounts cannot track positions.");
+    }
     requireAvailableInstitution(tx, userId, input.institutionId);
 
     tx.insert(accounts)
@@ -548,8 +566,9 @@ export function createAccount(userId: string, input: AccountInput) {
         institutionId: input.institutionId || null,
         accountReference: input.accountReference || null,
         currency,
+        trackingMode,
         currentValueMinor: openingValueMinor,
-        costBasisMinor,
+        costBasisMinor: trackingMode === "balance" ? costBasisMinor : null,
         isLiability: category.assetOrLiability === "liability",
         isIncludedInNetWorth: input.isIncludedInNetWorth,
         notes: input.notes,
@@ -601,6 +620,9 @@ export function updateAccount(
       })
       .sync();
     if (!existing) throw new Error("Account not found.");
+    if (input.trackingMode && input.trackingMode !== existing.trackingMode) {
+      throw new Error("Account tracking mode cannot be changed.");
+    }
     const category = tx.query.categories
       .findFirst({
         where: and(
@@ -713,6 +735,21 @@ export function recordTransaction(userId: string, input: TransactionInput) {
       })
       .sync();
     if (!account) throw new Error("Account not found.");
+    if (account.archivedAt)
+      throw new Error("Archived accounts cannot be changed.");
+    if (
+      account.trackingMode === "positions" &&
+      ![
+        "deposit",
+        "withdrawal",
+        "interest",
+        "dividend",
+        "fee",
+        "manual_adjustment",
+      ].includes(input.type)
+    ) {
+      throw new Error("Use the position workflow for this activity.");
+    }
     const amountMinor = parseMoney(input.amount, account.currency);
     if (input.type !== "manual_adjustment" && amountMinor <= 0) {
       throw new Error("Amount must be greater than zero.");
@@ -781,6 +818,21 @@ export function updateTransaction(
       })
       .sync();
     if (!account) throw new Error("Account not found.");
+    if (account.archivedAt)
+      throw new Error("Archived accounts cannot be changed.");
+    if (
+      account.trackingMode === "positions" &&
+      ![
+        "deposit",
+        "withdrawal",
+        "interest",
+        "dividend",
+        "fee",
+        "manual_adjustment",
+      ].includes(input.type)
+    ) {
+      throw new Error("Use the position workflow for this activity.");
+    }
     const amountMinor = parseMoney(input.amount, account.currency);
     if (input.type !== "manual_adjustment" && amountMinor <= 0) {
       throw new Error("Amount must be greater than zero.");
@@ -875,6 +927,11 @@ export function recordValuation(userId: string, input: ValuationInput) {
       })
       .sync();
     if (!account) throw new Error("Account not found.");
+    if (account.archivedAt)
+      throw new Error("Archived accounts cannot be changed.");
+    if (account.trackingMode === "positions") {
+      throw new Error("Update instrument prices for a position account.");
+    }
     const valueMinor = parseMoney(input.value, account.currency);
     if (valueMinor < 0) throw new Error("Valuation cannot be negative.");
     const timestamp = nowIso();
@@ -933,8 +990,15 @@ export function accountBalanceAt(
   accountId: string,
   throughDate: string,
 ) {
-  return replayBalance(
-    accountEvents(getDatabase(), userId, accountId),
-    throughDate,
-  );
+  const db = getDatabase();
+  const account = db.query.accounts
+    .findFirst({
+      where: and(eq(accounts.userId, userId), eq(accounts.id, accountId)),
+    })
+    .sync();
+  if (!account) throw new Error("Account not found.");
+  return account.trackingMode === "positions"
+    ? calculatePositionAccountSnapshot(userId, db, accountId, throughDate)
+        .totalMinor
+    : replayBalance(accountEvents(db, userId, accountId), throughDate);
 }

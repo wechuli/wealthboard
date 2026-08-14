@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { LoaderCircle, Save } from "lucide-react";
 
 import {
@@ -29,6 +29,7 @@ type AccountValues = {
   institutionId?: string;
   accountReference?: string;
   currency: string;
+  trackingMode?: "balance" | "positions";
   openingValue: string;
   costBasis?: string;
   isIncludedInNetWorth: boolean;
@@ -66,6 +67,7 @@ export function AccountForm({
     resolver: zodResolver(accountSchema),
     defaultValues: {
       currency: baseCurrency,
+      trackingMode: "balance",
       openingValue: "0.00",
       isIncludedInNetWorth: true,
       openedAt: today,
@@ -75,6 +77,7 @@ export function AccountForm({
   const availableCurrencies = currencyOptions(currencies).filter((currency) =>
     currencies.includes(currency.code),
   );
+  const trackingMode = useWatch({ control, name: "trackingMode" });
 
   const submit = handleSubmit((_values, event) => {
     const formData = new FormData(event?.target as HTMLFormElement);
@@ -163,9 +166,41 @@ export function AccountForm({
             {errors.currency?.message || serverState.fieldErrors?.currency?.[0]}
           </FieldError>
         </div>
+        <div>
+          <Label htmlFor="trackingMode">Tracking method</Label>
+          {initial ? (
+            <>
+              <Select
+                id="trackingMode"
+                value={initial.trackingMode ?? "balance"}
+                disabled
+              >
+                <option value="balance">Account value</option>
+                <option value="positions">Units and prices</option>
+              </Select>
+              <input
+                type="hidden"
+                name="trackingMode"
+                value={initial.trackingMode ?? "balance"}
+              />
+            </>
+          ) : (
+            <Select id="trackingMode" {...register("trackingMode")}>
+              <option value="balance">Account value</option>
+              <option value="positions">Units and prices</option>
+            </Select>
+          )}
+          <p className="mt-1 text-xs text-slate-500">
+            {trackingMode === "positions"
+              ? "Track brokerage cash plus long-only stocks, ETFs, and funds."
+              : "Track one replayed monetary balance with optional valuations."}
+          </p>
+        </div>
         {!initial ? (
           <div>
-            <Label htmlFor="openingValue">Opening value</Label>
+            <Label htmlFor="openingValue">
+              {trackingMode === "positions" ? "Opening cash" : "Opening value"}
+            </Label>
             <Input
               id="openingValue"
               inputMode="decimal"
@@ -181,15 +216,17 @@ export function AccountForm({
         ) : (
           <input type="hidden" name="openingValue" value="0" />
         )}
-        <div>
-          <Label htmlFor="costBasis">Cost basis</Label>
-          <Input
-            id="costBasis"
-            inputMode="decimal"
-            placeholder="Optional"
-            {...register("costBasis")}
-          />
-        </div>
+        {trackingMode === "balance" ? (
+          <div>
+            <Label htmlFor="costBasis">Cost basis</Label>
+            <Input
+              id="costBasis"
+              inputMode="decimal"
+              placeholder="Optional"
+              {...register("costBasis")}
+            />
+          </div>
+        ) : null}
         {!initial ? (
           <div>
             <Label htmlFor="openedAt">Opened or acquired</Label>

@@ -53,6 +53,16 @@ export default async function ReportsPage() {
           excluded where conversion is unavailable.
         </div>
       ) : null}
+      {data.missingPrices.length || data.stalePrices.length ? (
+        <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
+          Position reporting needs review. {data.missingPrices.length} missing
+          price{data.missingPrices.length === 1 ? "" : "s"}
+          {data.stalePrices.length
+            ? ` and ${data.stalePrices.length} stale price${data.stalePrices.length === 1 ? "" : "s"}`
+            : ""}{" "}
+          affect these results.
+        </div>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ReportStat
           label="Highest net worth"
@@ -92,7 +102,7 @@ export default async function ReportsPage() {
             <p className="mt-1 text-xs text-slate-500">
               {data.historyComplete
                 ? "Monthly history across all tracked accounts"
-                : `Incomplete history: missing ${data.historicalMissingRates.join(", ")} rates`}
+                : "Incomplete history: one or more prices or exchange rates are unavailable"}
             </p>
           </div>
         </CardHeader>
@@ -145,6 +155,26 @@ export default async function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {data.instrumentAllocation.length ? (
+        <Card className="mt-5">
+          <CardHeader>
+            <div>
+              <CardTitle>Investment instruments</CardTitle>
+              <p className="mt-1 text-xs text-slate-500">
+                Current position value by instrument in {currency}
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <AllocationChart
+              total={data.instrumentAllocation}
+              investible={data.instrumentAllocation}
+              currency={currency}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <AllocationList

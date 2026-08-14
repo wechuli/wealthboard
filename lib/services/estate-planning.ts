@@ -26,6 +26,7 @@ import {
 import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { convertMinor, MissingExchangeRateError } from "@/lib/money";
+import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
 
 const FULL_ALLOCATION_BPS = 10_000;
 const STALE_AFTER_DAYS = 365;
@@ -755,27 +756,52 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
         (!account.archivedAt && account.isIncludedInNetWorth);
       const ownershipShareBps =
         directive?.ownershipShareBps ?? FULL_ALLOCATION_BPS;
+      const positionSnapshot =
+        account.trackingMode === "positions"
+          ? calculatePositionAccountSnapshot(userId, db, account.id, rateAsOf)
+          : null;
+      const accountValueMinor = positionSnapshot
+        ? positionSnapshot.totalMinor
+        : BigInt(account.currentValueMinor);
       const estateValueMinor = isIncluded
-        ? scaleByBasisPoints(account.currentValueMinor, ownershipShareBps)
+        ? scaleByBasisPoints(accountValueMinor, ownershipShareBps)
         : 0n;
       let estateValueBaseMinor: bigint | null = null;
       if (isIncluded) {
-        try {
-          estateValueBaseMinor = convertMinor(
-            estateValueMinor,
-            account.currency,
-            settings.baseCurrency,
-            rateRows,
-            rateAsOf,
-          );
-          grossAssetsBaseMinor += estateValueBaseMinor;
-        } catch (error) {
-          if (!(error instanceof MissingExchangeRateError)) throw error;
+        if (positionSnapshot && !positionSnapshot.complete) {
           totalsComplete = false;
           reviewItems.push({
-            code: "missing-rate",
-            message: `Add an exchange rate for ${account.currency}/${settings.baseCurrency} to value ${account.name}.`,
+            code: "missing-position-data",
+            message: `Add missing security prices or exchange rates to value ${account.name}.`,
             severity: "blocking",
+            accountId: account.id,
+          });
+        } else {
+          try {
+            estateValueBaseMinor = convertMinor(
+              estateValueMinor,
+              account.currency,
+              settings.baseCurrency,
+              rateRows,
+              rateAsOf,
+            );
+            grossAssetsBaseMinor += estateValueBaseMinor;
+          } catch (error) {
+            if (!(error instanceof MissingExchangeRateError)) throw error;
+            totalsComplete = false;
+            reviewItems.push({
+              code: "missing-rate",
+              message: `Add an exchange rate for ${account.currency}/${settings.baseCurrency} to value ${account.name}.`,
+              severity: "blocking",
+              accountId: account.id,
+            });
+          }
+        }
+        if (positionSnapshot?.staleInstrumentIds.length) {
+          reviewItems.push({
+            code: "stale-security-price",
+            message: `${account.name} uses one or more stale security prices.`,
+            severity: "warning",
             accountId: account.id,
           });
         }
@@ -939,7 +965,7 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
           accountId: account.id,
         });
       }
-      if (isIncluded && account.currentValueMinor === 0) {
+      if (isIncluded && accountValueMinor === 0n) {
         reviewItems.push({
           code: "zero-value",
           message: `${account.name} currently has a zero value.`,
@@ -949,7 +975,11 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
       }
       const latestActivityAt =
         activityByAccount.get(account.id) ?? account.createdAt;
-      if (isIncluded && new Date(latestActivityAt) < staleCutoff) {
+      if (
+        isIncluded &&
+        account.trackingMode === "balance" &&
+        new Date(latestActivityAt) < staleCutoff
+      ) {
         reviewItems.push({
           code: "stale-value",
           message: `Review the value of ${account.name}; its latest financial activity is over one year old.`,
@@ -997,7 +1027,7 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
         institutionName: account.institutionName,
         accountReference: account.accountReference,
         currency: account.currency,
-        currentValueMinor: String(account.currentValueMinor),
+        currentValueMinor: accountValueMinor.toString(),
         archivedAt: account.archivedAt,
         latestActivityAt,
         directiveId: directive?.id ?? null,
