@@ -70,6 +70,17 @@ web_modules/
 .env.*
 !.env.example
 
+# Local secrets and credential material
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+credentials.*.json
+!credentials.example.json
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -147,6 +158,9 @@ vite.config.ts.timestamp-*
 # Wealthboard runtime data
 /data/
 /backups/
+/exports/
+/wealthboard-*.csv
+/wealthboard-*.json
 /playwright-report/
 /test-results/
 /.auth/
