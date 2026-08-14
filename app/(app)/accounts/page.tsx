@@ -45,6 +45,12 @@ export default async function AccountsPage() {
       account.trackingMode === "positions"
         ? getPositionAccountSnapshot(userId, account.id)
         : null;
+    const positionValueAsOf = positionSnapshot
+      ? (positionSnapshot.positions
+          .map((position) => position.price?.effectiveDate)
+          .filter((value): value is string => Boolean(value))
+          .sort()[0] ?? null)
+      : null;
     try {
       const converted = convertMinor(
         account.currentValueMinor,
@@ -83,6 +89,7 @@ export default async function AccountsPage() {
       goalName: account.goalId ? (goalNames.get(account.goalId) ?? null) : null,
       trackingMode: account.trackingMode,
       positionCount: positionSnapshot?.positions.length ?? 0,
+      positionValueAsOf,
       priceState: positionSnapshot
         ? !positionSnapshot.complete
           ? ("missing" as const)

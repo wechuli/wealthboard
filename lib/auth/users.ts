@@ -110,6 +110,9 @@ function createUserFoundation(
       defaultDashboardPeriod: "1y",
       sessionTimeoutMinutes: 10080,
       defaultGoalReturnBps: 800,
+      positionStaleDaysStock: 7,
+      positionStaleDaysEtf: 7,
+      positionStaleDaysFund: 31,
       createdAt: input.timestamp,
       updatedAt: input.timestamp,
     })

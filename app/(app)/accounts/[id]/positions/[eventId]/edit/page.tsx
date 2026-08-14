@@ -14,6 +14,19 @@ import {
 } from "@/lib/services/investments";
 import { getCurrencyConfiguration } from "@/lib/services/settings";
 
+const EDITABLE_EVENT_TYPES = [
+  "opening_position",
+  "buy",
+  "sell",
+  "quantity_adjustment",
+] as const;
+
+function isEditableEventType(
+  type: string,
+): type is (typeof EDITABLE_EVENT_TYPES)[number] {
+  return EDITABLE_EVENT_TYPES.some((candidate) => candidate === type);
+}
+
 export default async function EditPositionEventPage({
   params,
 }: {
@@ -32,7 +45,8 @@ export default async function EditPositionEventPage({
     account.trackingMode !== "positions" ||
     account.archivedAt ||
     !event ||
-    event.accountId !== id
+    event.accountId !== id ||
+    !isEditableEventType(event.type)
   ) {
     notFound();
   }

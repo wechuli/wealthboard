@@ -41,6 +41,12 @@ export const positionEventTypes = [
   "buy",
   "sell",
   "quantity_adjustment",
+  "transfer_in",
+  "transfer_out",
+  "split",
+  "spinoff",
+  "merger_in",
+  "merger_out",
 ] as const;
 
 export const goalStatuses = [
@@ -164,6 +170,15 @@ export const userSettings = sqliteTable(
     defaultGoalReturnBps: integer("default_goal_return_bps")
       .notNull()
       .default(800),
+    positionStaleDaysStock: integer("position_stale_days_stock")
+      .notNull()
+      .default(7),
+    positionStaleDaysEtf: integer("position_stale_days_etf")
+      .notNull()
+      .default(7),
+    positionStaleDaysFund: integer("position_stale_days_fund")
+      .notNull()
+      .default(31),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -328,6 +343,48 @@ export const investmentInstruments = sqliteTable(
   ],
 );
 
+export const accountConversions = sqliteTable(
+  "account_conversions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sourceAccountId: text("source_account_id").notNull(),
+    targetAccountId: text("target_account_id").notNull(),
+    conversionDate: text("conversion_date").notNull(),
+    sourceBalanceMinor: integer("source_balance_minor").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("account_conversions_user_id_unique").on(
+      table.userId,
+      table.id,
+    ),
+    uniqueIndex("account_conversions_user_source_unique").on(
+      table.userId,
+      table.sourceAccountId,
+    ),
+    uniqueIndex("account_conversions_user_target_unique").on(
+      table.userId,
+      table.targetAccountId,
+    ),
+    uniqueIndex("account_conversions_user_idempotency_unique").on(
+      table.userId,
+      table.idempotencyKey,
+    ),
+    foreignKey({
+      columns: [table.userId, table.sourceAccountId],
+      foreignColumns: [accounts.userId, accounts.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.userId, table.targetAccountId],
+      foreignColumns: [accounts.userId, accounts.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 export const positionEvents = sqliteTable(
   "position_events",
   {
@@ -337,6 +394,7 @@ export const positionEvents = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     accountId: text("account_id").notNull(),
     instrumentId: text("instrument_id").notNull(),
+    relatedInstrumentId: text("related_instrument_id"),
     type: text("type", { enum: positionEventTypes }).notNull(),
     quantity: text("quantity").notNull(),
     unitPrice: text("unit_price"),
@@ -347,7 +405,10 @@ export const positionEvents = sqliteTable(
     cashEffectMinor: integer("cash_effect_minor").notNull().default(0),
     appliedExchangeRate: text("applied_exchange_rate"),
     openingCostBasisMinor: integer("opening_cost_basis_minor"),
+    actionRatioNumerator: text("action_ratio_numerator"),
+    actionRatioDenominator: text("action_ratio_denominator"),
     tradeDate: text("trade_date").notNull(),
+    eventSequence: integer("event_sequence").notNull().default(0),
     settlementDate: text("settlement_date"),
     externalId: text("external_id"),
     eventGroupId: text("event_group_id"),
@@ -386,6 +447,10 @@ export const positionEvents = sqliteTable(
     }).onDelete("cascade"),
     foreignKey({
       columns: [table.userId, table.instrumentId],
+      foreignColumns: [investmentInstruments.userId, investmentInstruments.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.userId, table.relatedInstrumentId],
       foreignColumns: [investmentInstruments.userId, investmentInstruments.id],
     }).onDelete("restrict"),
   ],
@@ -480,6 +545,7 @@ export const transactions = sqliteTable(
     notes: text("notes"),
     externalId: text("external_id"),
     transferGroupId: text("transfer_group_id"),
+    eventGroupId: text("event_group_id"),
     idempotencyKey: text("idempotency_key"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
@@ -508,6 +574,10 @@ export const transactions = sqliteTable(
     index("transactions_user_transfer_group_idx").on(
       table.userId,
       table.transferGroupId,
+    ),
+    index("transactions_user_event_group_idx").on(
+      table.userId,
+      table.eventGroupId,
     ),
     uniqueIndex("transactions_user_idempotency_unique").on(
       table.userId,

@@ -9,6 +9,7 @@ import {
   positionEvents,
   securityPrices,
   transactions,
+  userSettings,
 } from "@/db/schema";
 import { replayBalance, type FinancialEvent } from "@/lib/finance";
 import {
@@ -25,8 +26,18 @@ type TransactionClient = Parameters<
 >[0];
 export type InvestmentClient = DatabaseClient | TransactionClient;
 
-function staleAfterDays(assetType: "stock" | "etf" | "fund") {
-  return assetType === "fund" ? 31 : 7;
+type FreshnessSettings = Pick<
+  typeof userSettings.$inferSelect,
+  "positionStaleDaysStock" | "positionStaleDaysEtf" | "positionStaleDaysFund"
+>;
+
+function staleAfterDays(
+  settings: FreshnessSettings,
+  assetType: "stock" | "etf" | "fund",
+) {
+  if (assetType === "stock") return settings.positionStaleDaysStock;
+  if (assetType === "etf") return settings.positionStaleDaysEtf;
+  return settings.positionStaleDaysFund;
 }
 
 function isStale(priceDate: string, asOf: string, days: number) {
@@ -35,6 +46,24 @@ function isStale(priceDate: string, asOf: string, days: number) {
     days * 24 * 60 * 60 * 1000
   );
 }
+
+function addDays(value: string, days: number) {
+  return new Date(new Date(value).getTime() + days * 86_400_000).toISOString();
+}
+
+export type PositionDataIssue = {
+  type: "missing_price" | "missing_rate" | "stale_price";
+  instrumentId: string;
+  instrumentName: string;
+  instrumentSymbol: string | null;
+  currency: string;
+  affectedFrom: string;
+  affectedTo: string;
+  lastPriceDate: string | null;
+  source: string | null;
+  provenance: string | null;
+  thresholdDays: number | null;
+};
 
 export function calculatePositionAccountSnapshot(
   userId: string,
@@ -51,6 +80,17 @@ export function calculatePositionAccountSnapshot(
   if (account.trackingMode !== "positions") {
     throw new Error("This account does not track positions.");
   }
+  const freshness = client.query.userSettings
+    .findFirst({
+      where: eq(userSettings.userId, userId),
+      columns: {
+        positionStaleDaysStock: true,
+        positionStaleDaysEtf: true,
+        positionStaleDaysFund: true,
+      },
+    })
+    .sync();
+  if (!freshness) throw new Error("User settings are unavailable.");
 
   const transactionRows = client
     .select({
@@ -127,8 +167,19 @@ export function calculatePositionAccountSnapshot(
   let positionsMinor = 0n;
   const missingPrices: string[] = [];
   const missingCurrencies = new Set<string>();
+  const issues: PositionDataIssue[] = [];
   const positions = instrumentRows.map((instrument) => {
     const quantity = quantities.get(instrument.id) ?? "0";
+    const exposureFrom =
+      eventRows
+        .filter((row) => row.instrumentId === instrument.id)
+        .sort(
+          (left, right) =>
+            left.tradeDate.localeCompare(right.tradeDate) ||
+            left.eventSequence - right.eventSequence ||
+            left.createdAt.localeCompare(right.createdAt) ||
+            left.id.localeCompare(right.id),
+        )[0]?.tradeDate ?? throughDate;
     const price = priceRows
       .filter((row) => row.instrumentId === instrument.id)
       .sort((left, right) =>
@@ -136,6 +187,19 @@ export function calculatePositionAccountSnapshot(
       )[0];
     if (!price) {
       missingPrices.push(instrument.id);
+      issues.push({
+        type: "missing_price",
+        instrumentId: instrument.id,
+        instrumentName: instrument.name,
+        instrumentSymbol: instrument.symbol,
+        currency: instrument.quoteCurrency,
+        affectedFrom: exposureFrom,
+        affectedTo: throughDate,
+        lastPriceDate: null,
+        source: null,
+        provenance: null,
+        thresholdDays: null,
+      });
       return {
         instrument,
         quantity,
@@ -163,6 +227,36 @@ export function calculatePositionAccountSnapshot(
     } catch (error) {
       if (!(error instanceof MissingExchangeRateError)) throw error;
       missingCurrencies.add(price.currency);
+      issues.push({
+        type: "missing_rate",
+        instrumentId: instrument.id,
+        instrumentName: instrument.name,
+        instrumentSymbol: instrument.symbol,
+        currency: price.currency,
+        affectedFrom: exposureFrom,
+        affectedTo: throughDate,
+        lastPriceDate: price.effectiveDate,
+        source: price.source,
+        provenance: price.provenance,
+        thresholdDays: null,
+      });
+    }
+    const thresholdDays = staleAfterDays(freshness, instrument.assetType);
+    const stale = isStale(price.effectiveDate, throughDate, thresholdDays);
+    if (stale) {
+      issues.push({
+        type: "stale_price",
+        instrumentId: instrument.id,
+        instrumentName: instrument.name,
+        instrumentSymbol: instrument.symbol,
+        currency: price.currency,
+        affectedFrom: addDays(price.effectiveDate, thresholdDays),
+        affectedTo: throughDate,
+        lastPriceDate: price.effectiveDate,
+        source: price.source,
+        provenance: price.provenance,
+        thresholdDays,
+      });
     }
     return {
       instrument,
@@ -170,11 +264,7 @@ export function calculatePositionAccountSnapshot(
       price,
       quoteValueMinor,
       accountValueMinor,
-      stale: isStale(
-        price.effectiveDate,
-        throughDate,
-        staleAfterDays(instrument.assetType),
-      ),
+      stale,
     };
   });
 
@@ -187,6 +277,7 @@ export function calculatePositionAccountSnapshot(
     complete: missingPrices.length === 0 && missingCurrencies.size === 0,
     missingPrices,
     missingCurrencies: [...missingCurrencies],
+    issues,
     staleInstrumentIds: positions
       .filter((position) => position.stale)
       .map((position) => position.instrument.id),

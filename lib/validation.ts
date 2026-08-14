@@ -190,6 +190,129 @@ export const positionReconciliationSchema = z.object({
   notes: optionalText,
 });
 
+export const accountConversionHoldingSchema = z.object({
+  instrumentId: z.string().uuid(),
+  quantity: decimalInput("a quantity"),
+  price: decimalInput("a unit price"),
+  openingCostBasis: z.string().trim().max(100).optional(),
+  priceSource: z.string().trim().min(1).max(100).default("conversion"),
+  priceProvenance: z.string().trim().max(500).optional(),
+});
+
+export function parseAccountConversionHoldings(value: string) {
+  return z
+    .array(accountConversionHoldingSchema)
+    .min(1)
+    .max(1000)
+    .parse(JSON.parse(value) as unknown);
+}
+
+export const accountConversionSchema = z.object({
+  sourceAccountId: z.string().uuid(),
+  targetName: z.string().trim().min(1).max(100),
+  conversionDate: z.string().date(),
+  openingCash: decimalInput("opening cash"),
+  holdingsJson: z.string().superRefine((value, context) => {
+    try {
+      const parsed = z
+        .array(accountConversionHoldingSchema)
+        .min(1)
+        .max(1000)
+        .safeParse(JSON.parse(value) as unknown);
+      if (!parsed.success) {
+        context.addIssue({
+          code: "custom",
+          message:
+            parsed.error.issues[0]?.message ?? "Opening holdings are invalid.",
+        });
+      }
+    } catch {
+      context.addIssue({
+        code: "custom",
+        message: "Opening holdings are invalid.",
+      });
+    }
+  }),
+  idempotencyKey: z.string().uuid(),
+  confirmDifference: z.boolean().default(false),
+});
+
+export const investmentCommandSchema = z
+  .object({
+    command: z.enum([
+      "reinvestment",
+      "in_kind_transfer",
+      "split",
+      "spinoff",
+      "merger",
+    ]),
+    accountId: z.string().uuid(),
+    instrumentId: z.string().uuid().optional(),
+    destinationAccountId: z.string().uuid().optional(),
+    destinationInstrumentId: z.string().uuid().optional(),
+    dividendAmount: z.string().trim().max(100).optional(),
+    quantity: z.string().trim().max(100).optional(),
+    unitPrice: z.string().trim().max(100).optional(),
+    tradeCurrency: optionalCurrencyCodeSchema,
+    feeAmount: z.string().trim().max(100).optional(),
+    feeCurrency: optionalCurrencyCodeSchema,
+    cashEffect: z.string().trim().max(100).optional(),
+    appliedExchangeRate: z.string().trim().max(100).optional(),
+    numerator: z.string().trim().max(100).optional(),
+    denominator: z.string().trim().max(100).optional(),
+    activityDate: z.string().date(),
+    idempotencyKey: z.string().uuid(),
+    notes: optionalText,
+  })
+  .superRefine((value, context) => {
+    const requireField = (
+      field:
+        | "instrumentId"
+        | "destinationAccountId"
+        | "destinationInstrumentId"
+        | "dividendAmount"
+        | "quantity"
+        | "unitPrice"
+        | "numerator"
+        | "denominator",
+      message: string,
+    ) => {
+      if (!value[field]) {
+        context.addIssue({ code: "custom", path: [field], message });
+      }
+    };
+    if (value.command === "reinvestment") {
+      requireField("instrumentId", "Choose an instrument.");
+      requireField("dividendAmount", "Enter the dividend amount.");
+      requireField("quantity", "Enter the purchased quantity.");
+      requireField("unitPrice", "Enter the execution price.");
+    }
+    if (value.command === "in_kind_transfer") {
+      requireField("instrumentId", "Choose an instrument.");
+      requireField("destinationAccountId", "Choose a destination account.");
+      requireField("quantity", "Enter the transferred quantity.");
+    }
+    if (value.command === "split") {
+      requireField("instrumentId", "Choose an instrument.");
+      requireField("numerator", "Enter the new-share ratio.");
+      requireField("denominator", "Enter the old-share ratio.");
+    }
+    if (value.command === "spinoff" || value.command === "merger") {
+      requireField("instrumentId", "Choose the source instrument.");
+      requireField(
+        "destinationInstrumentId",
+        "Choose the resulting instrument.",
+      );
+      requireField("numerator", "Enter the resulting-share ratio.");
+      requireField("denominator", "Enter the source-share ratio.");
+    }
+  });
+
+export type AccountConversionFormInput = z.input<
+  typeof accountConversionSchema
+>;
+export type InvestmentCommandInput = z.input<typeof investmentCommandSchema>;
+
 const optionalInstitutionText = (maximum: number) =>
   z
     .string()

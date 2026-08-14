@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { LoaderCircle, Upload } from "lucide-react";
 
-import { MoneyValue } from "@/components/privacy-provider";
+import { MoneyValue, SensitiveValue } from "@/components/privacy-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/form-controls";
@@ -16,11 +16,49 @@ type Preview = {
     positionsMinor: string | number;
     totalMinor: string | number;
     complete: boolean;
+    issues: PreviewIssue[];
   };
   projected: Preview["current"] & {
     missingPrices: string[];
     missingCurrencies: string[];
+    staleInstrumentIds: string[];
+    issues: PreviewIssue[];
   };
+  netChangeMinor: string | number;
+  dateRange: { from: string; to: string } | null;
+  instrumentChanges: Array<{
+    instrumentId: string;
+    externalId: string | null;
+    name: string;
+    symbol: string | null;
+    resolution: "existing" | "new";
+    currentQuantity: string;
+    projectedQuantity: string;
+    quantityChange: string;
+  }>;
+  eventChanges: Array<{
+    externalId: string | null;
+    instrumentId: string;
+    instrumentName: string;
+    instrumentSymbol: string | null;
+    type: string;
+    tradeDate: string;
+    eventSequence: number;
+    beforeQuantity: string;
+    afterQuantity: string;
+  }>;
+  priceChanges: Array<{
+    externalId: string | null;
+    instrumentId: string;
+    instrumentName: string;
+    instrumentSymbol: string | null;
+    price: string;
+    currency: string;
+    source: string;
+    affectedFrom: string;
+    affectedTo: string;
+    affectedToExclusive: boolean;
+  }>;
   summary: {
     records: number;
     ready: number;
@@ -34,6 +72,20 @@ type Preview = {
     externalId: string | null;
     message: string;
   }>;
+};
+
+type PreviewIssue = {
+  type: "missing_price" | "missing_rate" | "stale_price";
+  instrumentId: string;
+  instrumentName: string;
+  instrumentSymbol: string | null;
+  currency: string;
+  affectedFrom: string;
+  affectedTo: string;
+  lastPriceDate: string | null;
+  source: string | null;
+  provenance: string | null;
+  thresholdDays: number | null;
 };
 
 async function sha256(file: File) {
@@ -170,6 +222,9 @@ export function InvestmentHistoryImport({ accountId }: { accountId: string }) {
               <p className="mt-1 text-sm text-slate-400">
                 {preview.account.name} · {preview.summary.records} source
                 records
+                {preview.dateRange
+                  ? ` · ${preview.dateRange.from} to ${preview.dateRange.to}`
+                  : ""}
               </p>
             </div>
           </CardHeader>
@@ -199,17 +254,151 @@ export function InvestmentHistoryImport({ accountId }: { accountId: string }) {
                   currency={preview.account.currency}
                 />
               </Summary>
+              <Summary label="Net change">
+                <MoneyValue
+                  amount={BigInt(preview.netChangeMinor)}
+                  currency={preview.account.currency}
+                />
+              </Summary>
             </dl>
             <p className="text-sm text-slate-400">
               {preview.summary.ready} ready ·{" "}
               {preview.summary.skippedDuplicates} duplicates ·{" "}
               {preview.summary.failed} failed
             </p>
-            {!preview.projected.complete ? (
-              <p className="text-sm text-amber-300">
-                The projected value is incomplete because prices or exchange
-                rates are missing.
-              </p>
+            {preview.instrumentChanges.length ? (
+              <div className="overflow-x-auto rounded-lg border border-white/10">
+                <table className="w-full min-w-[680px] text-left text-sm">
+                  <thead className="bg-white/[0.03] text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="p-3 font-medium">Instrument</th>
+                      <th className="p-3 font-medium">Resolution</th>
+                      <th className="p-3 text-right font-medium">Before</th>
+                      <th className="p-3 text-right font-medium">After</th>
+                      <th className="p-3 text-right font-medium">Change</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.06]">
+                    {preview.instrumentChanges.map((instrument) => (
+                      <tr key={instrument.instrumentId}>
+                        <td className="p-3 font-medium text-slate-200">
+                          {instrument.symbol || instrument.name}
+                        </td>
+                        <td className="p-3 capitalize text-slate-400">
+                          {instrument.resolution}
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          <SensitiveValue>
+                            {instrument.currentQuantity}
+                          </SensitiveValue>
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          <SensitiveValue>
+                            {instrument.projectedQuantity}
+                          </SensitiveValue>
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          <SensitiveValue>
+                            {instrument.quantityChange}
+                          </SensitiveValue>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            {preview.eventChanges.length ? (
+              <div className="overflow-x-auto rounded-lg border border-white/10">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-white/[0.03] text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="p-3 font-medium">Event</th>
+                      <th className="p-3 font-medium">Instrument</th>
+                      <th className="p-3 font-medium">Date / order</th>
+                      <th className="p-3 text-right font-medium">Before</th>
+                      <th className="p-3 text-right font-medium">After</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.06]">
+                    {preview.eventChanges.map((event, index) => (
+                      <tr
+                        key={
+                          event.externalId ?? `${event.instrumentId}-${index}`
+                        }
+                      >
+                        <td className="p-3 capitalize text-slate-300">
+                          {event.type.replaceAll("_", " ")}
+                        </td>
+                        <td className="p-3 font-medium text-slate-200">
+                          {event.instrumentSymbol || event.instrumentName}
+                        </td>
+                        <td className="p-3 text-slate-400">
+                          {event.tradeDate.slice(0, 10)} · #
+                          {event.eventSequence}
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          <SensitiveValue>
+                            {event.beforeQuantity}
+                          </SensitiveValue>
+                        </td>
+                        <td className="p-3 text-right tabular-nums">
+                          <SensitiveValue>{event.afterQuantity}</SensitiveValue>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            {preview.priceChanges.length ? (
+              <div className="space-y-2">
+                {preview.priceChanges.map((price) => (
+                  <div
+                    key={
+                      price.externalId ??
+                      `${price.instrumentId}-${price.affectedFrom}`
+                    }
+                    className="rounded-lg border border-white/10 p-3 text-sm"
+                  >
+                    <p className="font-medium text-slate-200">
+                      {price.instrumentSymbol || price.instrumentName} ·{" "}
+                      <SensitiveValue>
+                        {price.currency} {price.price}
+                      </SensitiveValue>
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {price.source} · affects {price.affectedFrom.slice(0, 10)}{" "}
+                      to {price.affectedToExclusive ? "before " : ""}
+                      {price.affectedTo.slice(0, 10)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {preview.projected.issues.length ? (
+              <div className="space-y-2">
+                {preview.projected.issues.map((issue) => (
+                  <div
+                    key={`${issue.type}-${issue.instrumentId}`}
+                    className="rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-sm"
+                  >
+                    <p className="font-medium text-amber-200">
+                      {issue.instrumentSymbol || issue.instrumentName} ·{" "}
+                      {issue.type.replaceAll("_", " ")}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {issue.currency} · affected{" "}
+                      {issue.affectedFrom.slice(0, 10)} to{" "}
+                      {issue.affectedTo.slice(0, 10)}
+                      {issue.lastPriceDate
+                        ? ` · last price ${issue.lastPriceDate.slice(0, 10)}`
+                        : ""}
+                      {issue.source ? ` · ${issue.source}` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
             ) : null}
             {preview.errors.length ? (
               <div className="max-h-72 overflow-auto rounded-lg border border-red-400/20">

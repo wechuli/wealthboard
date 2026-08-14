@@ -370,14 +370,25 @@ statement, or generated file to an AI provider. Use only an AI provider you
 trust, then preview and validate the generated file in Wealthboard before
 confirming the import.
 
+Position-tracked investment accounts instead use strict Investment History v1
+JSON or dedicated holdings, trades, cash, and price CSV templates. Preview
+shows instrument resolution, before/after quantities, projected cash/value,
+date range, net change, duplicate/conflict outcomes, oversells, and detailed
+missing or stale price/rate ranges. Confirmation commits the complete
+interdependent sequence atomically. Optional JSON event groups represent one
+dividend plus its same-date reinvestment buys.
+
 Exports contain no credentials, AI provider settings or usage, login attempts,
 session data, idempotency records, or another user's rows. Restore downloads a pre-restore user export,
 validates the archive, rejects owner fields and invalid relationships, remaps
-record IDs, and rolls back completely on failure. Current exports use version 6
+record IDs, and rolls back completely on failure. Current exports use version 8
 and include transaction external IDs, institutions, goal milestones, reminder
-dismissals, estate plans, and retained estate summaries. Versions 2 through 5
-remain restorable; legacy institution names are normalized, legacy transactions
-receive null external IDs, and pre-v6 archives restore with an empty estate plan.
+dismissals, estate plans, retained estate summaries, instruments, ordered
+position events, prices, reconciliations, grouped cash links, conversion
+provenance, and freshness settings. Versions 2 through 8 remain restorable;
+version 7 position data upgrades deterministically, legacy institution names are
+normalized, legacy transactions receive null external IDs, and pre-v6 archives
+restore with an empty estate plan and no inferred positions.
 
 Account History Import v1 CSV uses this exact header:
 

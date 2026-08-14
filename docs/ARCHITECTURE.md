@@ -115,17 +115,20 @@ separate API service. One optional OIDC provider may authenticate internal users
   and provider keys are not retained. Custom endpoints require an exact
   operator allowlist and redirects are disabled.
 
-## Planned position-account extension
+## Position-account architecture
 
-> **Status:** Planned under backlog item F17; this extension is not part of the
-> current database schema or runtime behavior.
+> **Status:** Implemented under backlog item F17. Position source records,
+> derived values, conversion, imports, advanced actions, portability, and
+> downstream completeness are part of the current runtime contract.
 
 - Existing accounts retain `balance` tracking, where transactions and absolute
   valuation snapshots replay to one monetary value. An opt-in `positions`
   tracking mode will represent an investment account containing a cash
   subledger and one or more long-only instruments. A tracking mode cannot be
   toggled after financial activity; conversion requires an explicit as-of
-  workflow that preserves the earlier account history.
+  workflow that archives the source effective on the conversion date, creates
+  a linked replacement, and preserves the earlier account history without
+  inferring units.
 - Position-account value at a date is derived from replayed cash plus each
   replayed instrument quantity multiplied by its latest effective-dated price,
   with effective-dated currency conversion when the quote and account
@@ -149,24 +152,37 @@ separate API service. One optional OIDC provider may authenticate internal users
   reinvestment is a grouped income event plus buy committed atomically.
   Existing `Purchase` and `Sale` retain their current balance-account meanings
   and are not reinterpreted as trades.
+- In-kind transfers write paired owner-scoped `transfer_out` and `transfer_in`
+  events. Selected corporate actions use explicit split, spin-off, and merger
+  source records with positive ratios and related-instrument relationships.
+  Every grouped edit or deletion replays all affected accounts in one SQLite
+  transaction. Same-date events use an explicit per-account sequence before
+  timestamp and ID tie-breakers.
 - Position accounts use price snapshots rather than account valuations to
   change market value. An optional owner/account-scoped broker reconciliation
   may retain its observation date and reported cash/total, but it cannot
   overwrite instrument quantities, prices, or derived values. Retaining or
   deleting it changes no financial source record. Missing prices or exchange
   rates make affected current and historical totals incomplete; stale prices
-  remain visible with their as-of date and provenance.
+  remain visible with their as-of date and provenance. Stock, ETF, and fund
+  freshness thresholds are user-configurable. Detailed issues carry the
+  affected range, instrument, currency, last price, source, and provenance to
+  account, goal, estate, dashboard, report, and import-preview consumers.
 - Account History Import v1 remains unchanged. Position accounts receive a
   separate versioned investment-history contract for instruments, opening
   holdings, trades, cash activity, and prices. Identical external IDs are
   skipped, conflicts fail, and interdependent investment activity commits only
   when the complete remaining event sequence is valid. Each account mode
   rejects the other mode's format before parsing financial rows.
-- The position release bumps user portability to version 7 and adds instruments,
-  position events, linked cash relationships, security prices, and optional
-  reconciliation observations with owner-field rejection, relationship
-  validation, and ID remapping. Versions 2 through 6 restore as balance-mode
-  accounts with empty position collections.
+- User portability version 8 adds conversion provenance, grouped cash links,
+  explicit event ordering, selected corporate actions, and freshness settings
+  to the version 7 position collections. Version 7 upgrades deterministically;
+  versions 2 through 6 restore as balance-mode accounts with empty position
+  collections. Every relationship and group ID is owner-validated and remapped.
+- Movement attribution uses a deterministic position bridge separating
+  external cash, income, fees, adjustments, internal trade cash, quantity,
+  price, and currency movement. Annualized position returns remain explicitly
+  unavailable until A3 supplies validated cash-flow-aware TWR methodology.
 - Privacy mode masks quantities, unit prices, cash, reference cost basis, and
   derived values. Instrument names and symbols remain visible for account
   identification; raw identifiers and private notes follow their existing

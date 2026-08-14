@@ -9,7 +9,9 @@ import {
   Landmark,
   CandlestickChart,
   FileInput,
+  GitBranch,
   Plus,
+  RefreshCw,
   ScrollText,
   Sparkles,
   Scale,
@@ -60,6 +62,7 @@ export default async function AccountDetailPage({
   const institutionLabel = account.institutionName
     ? `${account.institutionName}${account.institutionArchivedAt ? " (archived)" : ""}`
     : null;
+  const movementAttribution = analytics.movementAttribution;
 
   return (
     <>
@@ -136,6 +139,58 @@ export default async function AccountDetailPage({
         </div>
       )}
 
+      {account.trackingMode === "positions" && movementAttribution ? (
+        <Card className="mt-5">
+          <CardHeader>
+            <div>
+              <CardTitle>Movement attribution</CardTitle>
+              <p className="mt-1 text-xs text-slate-500">
+                Exact bridge from recorded cash, quantities, prices, and
+                currencies.
+              </p>
+            </div>
+            <Badge tone={movementAttribution.complete ? "positive" : "warning"}>
+              {movementAttribution.complete ? "Complete" : "Incomplete"}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ["External cash", movementAttribution.externalCashMinor],
+                ["Income", movementAttribution.incomeMinor],
+                ["Fees", movementAttribution.feesMinor],
+                [
+                  "Internal trade cash",
+                  movementAttribution.internalTradeCashMinor,
+                ],
+                ["Quantity changes", movementAttribution.quantityMovementMinor],
+                ["Price movement", movementAttribution.priceMovementMinor],
+                [
+                  "Currency movement",
+                  movementAttribution.currencyMovementMinor,
+                ],
+                ["Unattributed", movementAttribution.unattributedMinor],
+              ].map(([label, amount]) => (
+                <div
+                  key={String(label)}
+                  className="rounded-lg border border-white/10 p-3"
+                >
+                  <p className="text-xs text-slate-500">{String(label)}</p>
+                  <MoneyValue
+                    amount={amount as bigint}
+                    currency={account.currency}
+                    className="mt-1 font-semibold"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-amber-200">
+              {movementAttribution.returnMessage}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,.7fr)]">
         <Card>
           <CardHeader>
@@ -184,6 +239,21 @@ export default async function AccountDetailPage({
                   icon={<Scale size={17} />}
                   label="Reconcile"
                 />
+                <Quick
+                  href={`/accounts/${id}/investment-actions?command=reinvestment`}
+                  icon={<RefreshCw size={17} />}
+                  label="Reinvest"
+                />
+                <Quick
+                  href={`/accounts/${id}/investment-actions?command=in_kind_transfer`}
+                  icon={<ArrowLeftRight size={17} />}
+                  label="Move units"
+                />
+                <Quick
+                  href={`/accounts/${id}/investment-actions?command=split`}
+                  icon={<GitBranch size={17} />}
+                  label="Corp action"
+                />
               </>
             ) : null}
             <Quick
@@ -207,11 +277,22 @@ export default async function AccountDetailPage({
               label="Transfer"
             />
             {account.trackingMode === "balance" ? (
-              <Quick
-                href={`/accounts/${id}/valuation`}
-                icon={<Sparkles size={17} />}
-                label="Value"
-              />
+              <>
+                <Quick
+                  href={`/accounts/${id}/valuation`}
+                  icon={<Sparkles size={17} />}
+                  label="Value"
+                />
+                {!account.archivedAt &&
+                !account.isLiability &&
+                account.categoryIsInvestible ? (
+                  <Quick
+                    href={`/accounts/${id}/convert`}
+                    icon={<RefreshCw size={17} />}
+                    label="Convert"
+                  />
+                ) : null}
+              </>
             ) : null}
             <Quick
               href={`/transactions/new?accountId=${id}&type=fee`}

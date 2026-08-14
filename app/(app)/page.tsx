@@ -108,7 +108,7 @@ export default async function DashboardPage({
           affected holdings are excluded where conversion is unavailable.
         </div>
       ) : null}
-      {data.missingPrices.length || data.stalePrices.length ? (
+      {data.positionIssues.length ? (
         <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
           Position values need review. {data.missingPrices.length} instrument
           {data.missingPrices.length === 1 ? " is" : "s are"} missing a price
@@ -116,6 +116,29 @@ export default async function DashboardPage({
             ? ` and ${data.stalePrices.length} use stale prices`
             : ""}
           . Affected totals and history are marked incomplete.
+          <ul className="mt-2 space-y-1 text-xs text-slate-300">
+            {data.positionIssues.slice(0, 5).map((issue) => (
+              <li
+                key={`${issue.accountId}-${issue.type}-${issue.instrumentId}`}
+              >
+                {issue.accountName} ·{" "}
+                {issue.instrumentSymbol || issue.instrumentName} ·{" "}
+                {issue.currency} ·{" "}
+                {formatDate(
+                  issue.affectedFrom,
+                  data.settings.timezone,
+                  data.settings.preferredDateFormat,
+                )}{" "}
+                to{" "}
+                {formatDate(
+                  issue.affectedTo,
+                  data.settings.timezone,
+                  data.settings.preferredDateFormat,
+                )}
+                {issue.source ? ` · ${issue.source}` : ""}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

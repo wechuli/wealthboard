@@ -18,11 +18,13 @@ import {
 } from "drizzle-orm";
 
 import {
+  accountConversions,
   accounts,
   categories,
   estateAccountDirectives,
   idempotencyKeys,
   institutions,
+  positionEvents,
   transactions,
   userSettings,
   valuationSnapshots,
@@ -34,6 +36,7 @@ import { getDatabase } from "@/lib/db";
 import { replayBalance, type FinancialEvent } from "@/lib/finance";
 import { parseMoney } from "@/lib/money";
 import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
+import { replayPositionQuantities } from "@/lib/investments";
 import { requireEnabledCurrency } from "@/lib/services/settings";
 import {
   transactionCursorSchema,
@@ -689,12 +692,34 @@ export function setAccountArchived(
   id: string,
   archived: boolean,
 ) {
-  const result = getDatabase()
-    .update(accounts)
-    .set({ archivedAt: archived ? nowIso() : null, updatedAt: nowIso() })
-    .where(and(eq(accounts.userId, userId), eq(accounts.id, id)))
-    .run();
-  if (result.changes === 0) throw new Error("Account not found.");
+  const db = getDatabase();
+  db.transaction((tx) => {
+    const account = tx.query.accounts
+      .findFirst({
+        where: and(eq(accounts.userId, userId), eq(accounts.id, id)),
+      })
+      .sync();
+    if (!account) throw new Error("Account not found.");
+    if (!archived) {
+      const conversion = tx.query.accountConversions
+        .findFirst({
+          where: and(
+            eq(accountConversions.userId, userId),
+            eq(accountConversions.sourceAccountId, id),
+          ),
+        })
+        .sync();
+      if (conversion) {
+        throw new Error(
+          "A converted source account remains archived while its replacement exists.",
+        );
+      }
+    }
+    tx.update(accounts)
+      .set({ archivedAt: archived ? nowIso() : null, updatedAt: nowIso() })
+      .where(and(eq(accounts.userId, userId), eq(accounts.id, id)))
+      .run();
+  });
 }
 
 type TransactionInput = {
@@ -809,6 +834,11 @@ export function updateTransaction(
         "Opening balances and transfers cannot be edited individually.",
       );
     }
+    if (existing.eventGroupId) {
+      throw new Error(
+        "Use the dedicated workflow for grouped investment activity.",
+      );
+    }
     const account = tx.query.accounts
       .findFirst({
         where: and(
@@ -864,7 +894,70 @@ export function deleteTransaction(userId: string, id: string) {
     if (!existing) throw new Error("Transaction not found.");
     if (existing.type === "opening_balance")
       throw new Error("The opening balance cannot be deleted.");
-    if (existing.transferGroupId) {
+    if (existing.eventGroupId) {
+      const groupedCash = tx
+        .select({ accountId: transactions.accountId })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.eventGroupId, existing.eventGroupId),
+          ),
+        )
+        .all();
+      const groupedEvents = tx
+        .select({ accountId: positionEvents.accountId })
+        .from(positionEvents)
+        .where(
+          and(
+            eq(positionEvents.userId, userId),
+            eq(positionEvents.eventGroupId, existing.eventGroupId),
+          ),
+        )
+        .all();
+      const affectedAccountIds = new Set([
+        ...groupedCash.map((row) => row.accountId),
+        ...groupedEvents.map((row) => row.accountId),
+      ]);
+      tx.delete(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.eventGroupId, existing.eventGroupId),
+          ),
+        )
+        .run();
+      tx.delete(positionEvents)
+        .where(
+          and(
+            eq(positionEvents.userId, userId),
+            eq(positionEvents.eventGroupId, existing.eventGroupId),
+          ),
+        )
+        .run();
+      for (const accountId of affectedAccountIds) {
+        const account = tx.query.accounts
+          .findFirst({
+            where: and(eq(accounts.userId, userId), eq(accounts.id, accountId)),
+          })
+          .sync();
+        if (account?.trackingMode === "positions") {
+          replayPositionQuantities(
+            tx
+              .select()
+              .from(positionEvents)
+              .where(
+                and(
+                  eq(positionEvents.userId, userId),
+                  eq(positionEvents.accountId, accountId),
+                ),
+              )
+              .all(),
+          );
+        }
+        recalculateAccountBalance(userId, tx, accountId);
+      }
+    } else if (existing.transferGroupId) {
       const transferRows = tx
         .select({ accountId: transactions.accountId })
         .from(transactions)

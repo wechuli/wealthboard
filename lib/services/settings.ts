@@ -147,10 +147,17 @@ export function updateSettings(
     defaultDashboardPeriod: string;
     sessionTimeoutMinutes: number;
     defaultGoalReturnBps: number;
+    positionStaleDaysStock?: number;
+    positionStaleDaysEtf?: number;
+    positionStaleDaysFund?: number;
   },
 ) {
   const db = getDatabase();
   const current = getCurrencyConfiguration(userId, db);
+  const currentSettings = db.query.userSettings
+    .findFirst({ where: eq(userSettings.userId, userId) })
+    .sync();
+  if (!currentSettings) throw new Error("User settings are unavailable.");
   const baseCurrency = normalizeCurrencyCode(input.baseCurrency);
   const requested = input.supportedCurrencies.map(normalizeCurrencyCode);
   const legacyCurrencies = new Set(
@@ -183,6 +190,12 @@ export function updateSettings(
       ...input,
       baseCurrency,
       supportedCurrencies: JSON.stringify(supportedCurrencies),
+      positionStaleDaysStock:
+        input.positionStaleDaysStock ?? currentSettings.positionStaleDaysStock,
+      positionStaleDaysEtf:
+        input.positionStaleDaysEtf ?? currentSettings.positionStaleDaysEtf,
+      positionStaleDaysFund:
+        input.positionStaleDaysFund ?? currentSettings.positionStaleDaysFund,
       updatedAt: nowIso(),
     })
     .where(eq(userSettings.userId, userId))

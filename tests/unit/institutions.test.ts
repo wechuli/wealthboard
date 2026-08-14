@@ -228,9 +228,9 @@ describe.sequential("institution directory and account linking", () => {
     expect(csv).toContain("KCB Group");
   });
 
-  test("round-trips v7 and upgrades normalized v3 institution strings", async () => {
+  test("round-trips v8 and upgrades normalized v3 institution strings", async () => {
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(7);
+    expect(archive.version).toBe(8);
     expect(archive.institutions).toMatchObject([
       {
         name: "KCB Group",
@@ -267,6 +267,7 @@ describe.sequential("institution directory and account linking", () => {
     const legacy = structuredClone(archive) as Record<string, unknown> & {
       accounts: Array<Record<string, unknown>>;
       transactions: Array<Record<string, unknown>>;
+      settings: Record<string, unknown>;
     };
     const institutionNameById = new Map(
       archive.institutions.map((institution) => [
@@ -275,6 +276,10 @@ describe.sequential("institution directory and account linking", () => {
       ]),
     );
     legacy.version = 3;
+    delete legacy.accountConversions;
+    delete legacy.settings.positionStaleDaysStock;
+    delete legacy.settings.positionStaleDaysEtf;
+    delete legacy.settings.positionStaleDaysFund;
     delete legacy.investmentInstruments;
     delete legacy.positionEvents;
     delete legacy.securityPrices;
@@ -302,6 +307,7 @@ describe.sequential("institution directory and account linking", () => {
     legacy.transactions = legacy.transactions.map((transaction) => {
       const legacyTransaction = { ...transaction };
       delete legacyTransaction.externalId;
+      delete legacyTransaction.eventGroupId;
       return legacyTransaction;
     });
 

@@ -263,18 +263,18 @@ Each category should include:
 - icon
 - displayOrder
 - assetOrLiability
-- optional description
+- description
+- isLiquid
+- isInvestible
+- isArchived
+- isSystem
 - createdAt
 - updatedAt
 
 Allow each user to create, rename, reorder, archive, and assign icons to their
 own categories. Category slugs are unique only within one user.
-
-### Accounts and assets
-
 Treat bank accounts, investments, vehicles, and land as trackable holdings under
 one flexible account model with explicit balance or position tracking.
-
 Institutions are optional, owner-scoped reference records. Each institution has
 a normalized unique name per user, a controlled provider type, optional website,
 country, address, and notes, plus archive timestamps. Archived institutions keep
@@ -325,6 +325,12 @@ positions, and prices on an explicit as-of date and preserves the earlier
 balance-tracked account history; it must never infer quantities from historical
 money-only purchases, sales, or valuations.
 
+Guided conversion archives the source effective on the conversion date and
+creates a linked position replacement with explicit opening cash, holdings,
+prices, and optional reference basis. The date cannot precede later source
+activity. Existing goal and estate links move atomically to the replacement,
+while source history remains unchanged and visible as archived history.
+
 ### Investment instruments, position events, and security prices
 
 Investment instruments are owner-scoped reference records. Fields should
@@ -355,8 +361,10 @@ Fields should include:
 - userId
 - accountId
 - instrumentId
-- type: `opening_position`, `buy`, `sell`, `quantity_adjustment`, or a supported
-  corporate action
+- relatedInstrumentId, optional for spin-offs and mergers
+- type: `opening_position`, `buy`, `sell`, `quantity_adjustment`,
+  `transfer_in`, `transfer_out`, `split`, `spinoff`, `merger_in`, or
+  `merger_out`
 - quantity as a positive canonical decimal string, with direction supplied by
   the event type
 - unitPrice as a canonical decimal string when the event is priced
@@ -369,7 +377,9 @@ Fields should include:
   account currencies differ
 - openingCostBasisMinor, optional only for an `opening_position` event and
   excluded from market-value calculations
+- actionRatioNumerator and actionRatioDenominator for ratio-based actions
 - tradeDate
+- eventSequence for deterministic same-date replay
 - settlementDate, optional
 - externalId, optional
 - eventGroupId, optional linkage for one compound economic event
@@ -382,6 +392,12 @@ authoritative field. Long-only accounts reject a sale or correction that makes
 quantity negative at that date or any later date. Edits, deletions, and
 backdated corrections replay all affected quantities, cash, and account values
 atomically.
+
+An in-kind transfer writes paired transfer-out and transfer-in quantity events
+with no contribution or withdrawal. Optional source-account fees use the same
+group. Supported stock splits, spin-offs, and mergers use explicit positive
+ratios and grouped related-instrument records. Deleting any grouped member
+deletes and replays the complete group atomically or changes nothing.
 
 Security prices are effective-dated, owner-scoped source records. Fields should
 include:
@@ -422,7 +438,8 @@ authoritative aggregate. An optional `openingCostBasisMinor` on each opening
 position may be retained as reference metadata. Do not claim tax-grade cost
 basis, realized gain, or lot selection until purchase lots, corporate actions,
 and an explicit jurisdiction-neutral disposal method are implemented and
-tested.
+tested. Supported split, spin-off, and merger quantity events do not claim to
+calculate tax basis.
 
 ## Estate planning
 
@@ -1014,6 +1031,13 @@ Security buys and sells must not appear as external contributions or
 withdrawals. Do not present tax-grade realized gains or lot-based returns until
 the required lot and corporate-action model is implemented.
 
+Position movement attribution uses a deterministic bridge that separates
+external cash, income, fees, cash adjustments, internal trade cash, quantity
+changes, price movement, and currency movement. The bridge reports
+completeness and any residual explicitly. Until A3 implements validated
+cash-flow-aware TWR, position-account annualized returns display an explicit
+unavailable methodology state rather than a generic insufficient-history value.
+
 ### Account comparison
 
 Allow comparison of accounts such as:
@@ -1120,6 +1144,11 @@ referenced instrument, positive unit price, currency, effective date, and
 source. Decimal quantities, prices, rates, and user-facing amounts are strings
 rather than JSON numbers.
 
+An optional external `event_group_id` links one dividend cash row to one or
+more same-date buy rows for a reinvestment. The importer remaps that external
+identifier to one internal group UUID, rejects malformed or orphaned groups,
+and preserves whole-file atomicity.
+
 An opening-holdings template may combine instrument metadata, opening quantity,
 opening reference cost basis, effective unit price, and price date for initial
 setup. It creates explicit opening-position and price source records; it does
@@ -1156,14 +1185,15 @@ Import v1. It must require one output record per source record, prohibit guessed
 identifiers, quantities, prices, trades, currencies, and corporate actions, and
 still require deterministic preview before commit.
 
-The position-account release advances per-user JSON portability to version 7.
-Version 7 includes account tracking mode, instruments, position events, linked
-cash relationships, security prices, and reconciliation observations alongside
-all version 6 estate records. Restore validates and remaps every relationship,
-rejects owner fields, rebuilds quantities and account values, and verifies that
-no replayed position becomes negative. Versions 2 through 6 remain restorable
-as balance-tracked accounts with empty position collections. Export and restore
-must never infer position history from legacy monetary purchases or sales.
+Position-account source records first appeared in portability version 7.
+Version 8 adds conversion provenance, grouped cash links, explicit event
+ordering, selected corporate-action relationships, and freshness settings
+alongside every version 7 collection. Restore validates and remaps every
+relationship and group, rejects owner fields, rebuilds quantities and values,
+and verifies that no replayed position becomes negative. Version 7 upgrades
+deterministically; versions 2 through 6 remain restorable as balance-tracked
+accounts with empty position collections. Export and restore never infer
+position history from legacy monetary purchases or sales.
 
 Before a per-user restore:
 
@@ -1566,6 +1596,12 @@ Test at minimum:
   effective-dated exchange rates, missing prices, and stale prices
 - Investment-history preview, duplicate/conflict handling, atomic commit, and
   all-or-nothing rollback
+- Guided balance-to-position conversion with explicit discrepancy confirmation
+- Grouped dividend reinvestment and rollback-safe deletion
+- Atomic in-kind transfer and selected split, spin-off, and merger actions
+- Deterministic same-date event ordering and future-price exclusion
+- Configurable stock, ETF, and fund freshness thresholds with affected ranges
+- Position movement attribution and explicit unavailable-return methodology
 - Creating a goal
 - Linking a goal to an account
 - Transfer between accounts
@@ -1700,6 +1736,9 @@ The application is complete when:
 - I can record deposits, withdrawals, interest, fees, and transfers.
 - I can record buys and sells without classifying them as contributions or
   withdrawals, and their quantity and cash effects remain atomic.
+- I can convert an investment balance account without rewriting its earlier
+  history, reinvest dividends atomically, move units in kind, and record
+  supported split, spin-off, and merger actions.
 - I can see current net worth.
 - I can see historical net-worth changes.
 - Historical position values never use a future price and visibly report a
@@ -1717,7 +1756,8 @@ The application is complete when:
 - I can export and restore my own portfolio without receiving another user's
   records or credentials.
 - Position-account exports and restores preserve instruments, events, prices,
-  cash links, quantities, and owner isolation exactly.
+  cash links, conversion provenance, event ordering, quantities, and owner
+  isolation exactly.
 - A deployment operator can back up and restore the complete SQLite database
   outside ordinary user routes.
 - The dashboard looks like a premium financial application.

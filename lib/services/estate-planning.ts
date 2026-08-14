@@ -770,9 +770,16 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
       if (isIncluded) {
         if (positionSnapshot && !positionSnapshot.complete) {
           totalsComplete = false;
+          const details = positionSnapshot.issues
+            .filter((issue) => issue.type !== "stale_price")
+            .map(
+              (issue) =>
+                `${issue.instrumentSymbol || issue.instrumentName} (${issue.currency})`,
+            )
+            .join(", ");
           reviewItems.push({
             code: "missing-position-data",
-            message: `Add missing security prices or exchange rates to value ${account.name}.`,
+            message: `Add missing security prices or exchange rates to value ${account.name}${details ? `: ${details}` : ""}.`,
             severity: "blocking",
             accountId: account.id,
           });
@@ -798,9 +805,16 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
           }
         }
         if (positionSnapshot?.staleInstrumentIds.length) {
+          const details = positionSnapshot.issues
+            .filter((issue) => issue.type === "stale_price")
+            .map(
+              (issue) =>
+                `${issue.instrumentSymbol || issue.instrumentName}${issue.source ? ` (${issue.source})` : ""}`,
+            )
+            .join(", ");
           reviewItems.push({
             code: "stale-security-price",
-            message: `${account.name} uses one or more stale security prices.`,
+            message: `${account.name} uses stale security prices${details ? `: ${details}` : ""}.`,
             severity: "warning",
             accountId: account.id,
           });

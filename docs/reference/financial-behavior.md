@@ -47,6 +47,59 @@ flow. Transactions after that valuation apply normally.
 Edits and deletions replay all later events for the affected account. Paired
 transfer changes replay both accounts atomically.
 
+Position quantities replay by trade date, explicit event sequence, creation
+time, and ID. Buys, opening positions, transfer-ins, spin-offs, and merger-ins
+increase quantity. Sells, transfer-outs, and merger-outs decrease it. Signed
+quantity adjustments apply directly. A split multiplies the quantity held at
+that point by its positive ratio. Any intermediate negative quantity rejects
+the complete mutation.
+
+Grouped dividend reinvestments, in-kind transfers, mergers, and their linked
+fees are one economic event. Saving or deleting a member writes/deletes and
+replays the complete group in one transaction. A later oversell prevents group
+deletion and leaves every source record unchanged.
+
+## Position valuation
+
+At a requested date, each non-zero position uses the latest price effective on
+or before that date. Future prices are never used. Wealthboard multiplies the
+canonical Decimal.js quantity by the canonical unit price, rounds once to the
+quote currency's minor unit, converts with the effective-dated owned rate, and
+sums those integer values with replayed account cash.
+
+A missing price or exchange rate excludes that unresolved component and marks
+the result incomplete. Structured issues name the instrument, currency,
+affected range, last price, source, provenance, and configured stock/ETF/fund
+freshness threshold. Carrying an earlier price forward retains its as-of date
+and stale state.
+
+Buys and sells exchange account cash for units and are not external
+contributions. Cross-currency trades require either the actual account-currency
+settlement or an explicit applied settlement rate. A same-currency trade cannot
+apply an exchange rate.
+
+Guided conversion never rewrites a balance account. It calculates the source
+balance at an as-of date no earlier than the latest source activity, previews
+explicit opening cash plus holdings, archives the source effective on that
+date, and creates a linked position replacement. Non-zero differences require
+explicit confirmation.
+
+## Position movement attribution
+
+The `position_bridge_v1` read model reconciles start and end values into:
+
+- external cash;
+- income;
+- fees and cash adjustments;
+- internal trade cash;
+- quantity movement at the starting price;
+- price movement on ending quantity; and
+- currency movement as the remaining exact FX bridge.
+
+Completeness and residual are explicit. Position-account annualized return is
+unavailable until A3 introduces validated cash-flow-aware TWR; the movement
+bridge is attribution, not a return percentage or tax-gain calculation.
+
 ## Contribution classification
 
 Contributions, income, gains, fees, and withdrawals are derived from transaction

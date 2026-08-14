@@ -233,6 +233,53 @@ export function GeneralSettingsForm({
               defaultValue={settings.defaultGoalReturnBps / 100}
             />
           </div>
+          <fieldset className="grid gap-4 sm:col-span-2 sm:grid-cols-3">
+            <legend className="mb-1 text-sm font-medium text-slate-300 sm:col-span-3">
+              Price freshness thresholds
+            </legend>
+            <div>
+              <Label htmlFor="positionStaleDaysStock">Stocks (days)</Label>
+              <Input
+                id="positionStaleDaysStock"
+                name="positionStaleDaysStock"
+                type="number"
+                min="1"
+                max="3650"
+                defaultValue={settings.positionStaleDaysStock}
+              />
+              <FieldError>
+                {state.fieldErrors?.positionStaleDaysStock?.[0]}
+              </FieldError>
+            </div>
+            <div>
+              <Label htmlFor="positionStaleDaysEtf">ETFs (days)</Label>
+              <Input
+                id="positionStaleDaysEtf"
+                name="positionStaleDaysEtf"
+                type="number"
+                min="1"
+                max="3650"
+                defaultValue={settings.positionStaleDaysEtf}
+              />
+              <FieldError>
+                {state.fieldErrors?.positionStaleDaysEtf?.[0]}
+              </FieldError>
+            </div>
+            <div>
+              <Label htmlFor="positionStaleDaysFund">Funds (days)</Label>
+              <Input
+                id="positionStaleDaysFund"
+                name="positionStaleDaysFund"
+                type="number"
+                min="1"
+                max="3650"
+                defaultValue={settings.positionStaleDaysFund}
+              />
+              <FieldError>
+                {state.fieldErrors?.positionStaleDaysFund?.[0]}
+              </FieldError>
+            </div>
+          </fieldset>
           <div className="flex items-end justify-between gap-3 sm:col-span-2">
             <p
               role="status"

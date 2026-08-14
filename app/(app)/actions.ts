@@ -9,15 +9,18 @@ import { getAuthConfig } from "@/lib/auth/config";
 import { requireTrustedHeadersOrigin } from "@/lib/auth/origin";
 import {
   accountSchema,
+  accountConversionSchema,
   categorySchema,
   formDataObject,
   goalMilestoneSchema,
   goalSchema,
   institutionSchema,
   investmentInstrumentSchema,
+  investmentCommandSchema,
   localCredentialSchema,
   passwordConfirmationSchema,
   passwordChangeSchema,
+  parseAccountConversionHoldings,
   positionEventSchema,
   positionReconciliationSchema,
   securityPriceSchema,
@@ -107,11 +110,20 @@ import {
   deleteSecurityPrice,
   recordPositionEvent,
   recordPositionReconciliation,
+  recordDividendReinvestment,
+  recordInKindTransfer,
+  recordMerger,
+  recordSpinoff,
+  recordStockSplit,
   setInvestmentInstrumentArchived,
   setSecurityPrice,
   updatePositionEvent,
   updateInvestmentInstrument,
 } from "@/lib/services/investments";
+import {
+  convertAccountToPositions,
+  previewAccountConversion,
+} from "@/lib/services/account-conversion";
 
 function mutationError(error: unknown): ActionState {
   console.error(
@@ -139,6 +151,22 @@ function accountInput(formData: FormData) {
     ...values,
     isIncludedInNetWorth: formData.get("isIncludedInNetWorth") === "on",
   });
+}
+
+function conversionInput(formData: FormData) {
+  return accountConversionSchema.safeParse({
+    ...formDataObject(formData),
+    confirmDifference: formData.get("confirmDifference") === "on",
+  });
+}
+
+function revalidateInvestmentPaths(accountIds: string[]) {
+  revalidatePath("/");
+  revalidatePath("/accounts");
+  for (const accountId of accountIds) revalidatePath(`/accounts/${accountId}`);
+  revalidatePath("/goals");
+  revalidatePath("/reports");
+  revalidatePath("/estate");
 }
 
 export async function updateAiProviderSettingsAction(
@@ -246,6 +274,84 @@ export async function updateAccountAction(
   redirect(`/accounts/${id}?updated=1`);
 }
 
+export type AccountConversionPreviewState = ActionState & {
+  preview?: {
+    currency: string;
+    conversionDate: string;
+    sourceBalanceMinor: string;
+    openingCashMinor: string;
+    positionsMinor: string;
+    projectedTotalMinor: string;
+    differenceMinor: string;
+    holdings: Array<{
+      instrumentId: string;
+      name: string;
+      symbol: string | null;
+      quantity: string;
+      price: string;
+      quoteCurrency: string;
+    }>;
+  };
+};
+
+export async function previewAccountConversionAction(
+  formData: FormData,
+): Promise<AccountConversionPreviewState> {
+  const { userId } = await requireSession();
+  const parsed = conversionInput(formData);
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    const preview = previewAccountConversion(userId, {
+      sourceAccountId: parsed.data.sourceAccountId,
+      targetName: parsed.data.targetName,
+      conversionDate: parsed.data.conversionDate,
+      openingCash: parsed.data.openingCash,
+      holdings: parseAccountConversionHoldings(parsed.data.holdingsJson),
+      idempotencyKey: parsed.data.idempotencyKey,
+      confirmDifference: parsed.data.confirmDifference,
+    });
+    return {
+      ok: true,
+      preview: {
+        currency: preview.currency,
+        conversionDate: preview.conversionDate,
+        sourceBalanceMinor: preview.sourceBalanceMinor.toString(),
+        openingCashMinor: preview.openingCashMinor.toString(),
+        positionsMinor: preview.positionsMinor.toString(),
+        projectedTotalMinor: preview.projectedTotalMinor.toString(),
+        differenceMinor: preview.differenceMinor.toString(),
+        holdings: preview.holdings,
+      },
+    };
+  } catch (error) {
+    return mutationError(error);
+  }
+}
+
+export async function convertAccountToPositionsAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = conversionInput(formData);
+  if (!parsed.success) return zodActionError(parsed.error);
+  let targetAccountId: string;
+  try {
+    targetAccountId = convertAccountToPositions(userId, {
+      sourceAccountId: parsed.data.sourceAccountId,
+      targetName: parsed.data.targetName,
+      conversionDate: parsed.data.conversionDate,
+      openingCash: parsed.data.openingCash,
+      holdings: parseAccountConversionHoldings(parsed.data.holdingsJson),
+      idempotencyKey: parsed.data.idempotencyKey,
+      confirmDifference: parsed.data.confirmDifference,
+    });
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidateInvestmentPaths([parsed.data.sourceAccountId, targetAccountId]);
+  redirect(`/accounts/${targetAccountId}?converted=1`);
+}
+
 export async function archiveAccountAction(id: string, archived: boolean) {
   const { userId } = await requireSession();
   setAccountArchived(userId, id, archived);
@@ -262,8 +368,13 @@ export async function createInvestmentInstrumentAction(
 ): Promise<ActionState> {
   const { userId } = await requireSession();
   const account = await getAccount(userId, accountId);
-  if (!account || account.trackingMode !== "positions" || account.archivedAt) {
-    return { message: "Position account not found." };
+  if (
+    !account ||
+    account.archivedAt ||
+    account.isLiability ||
+    !account.categoryIsInvestible
+  ) {
+    return { message: "Investment account not found." };
   }
   const parsed = investmentInstrumentSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);
@@ -274,7 +385,11 @@ export async function createInvestmentInstrumentAction(
     return mutationError(error);
   }
   revalidatePath(`/accounts/${accountId}`);
-  redirect(`/accounts/${accountId}/positions/new?instrumentId=${instrumentId}`);
+  redirect(
+    account.trackingMode === "positions"
+      ? `/accounts/${accountId}/positions/new?instrumentId=${instrumentId}`
+      : `/accounts/${accountId}/convert?instrumentId=${instrumentId}`,
+  );
 }
 
 export async function updateInvestmentInstrumentAction(
@@ -313,6 +428,84 @@ export async function recordPositionEventAction(
   revalidatePath("/reports");
   revalidatePath("/estate");
   redirect(`/accounts/${parsed.data.accountId}?position=updated`);
+}
+
+export async function recordInvestmentCommandAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = investmentCommandSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  const input = parsed.data;
+  try {
+    if (input.command === "reinvestment") {
+      recordDividendReinvestment(userId, {
+        accountId: input.accountId,
+        instrumentId: input.instrumentId!,
+        dividendAmount: input.dividendAmount!,
+        quantity: input.quantity!,
+        unitPrice: input.unitPrice!,
+        tradeCurrency: input.tradeCurrency,
+        feeAmount: input.feeAmount,
+        feeCurrency: input.feeCurrency,
+        cashEffect: input.cashEffect,
+        appliedExchangeRate: input.appliedExchangeRate,
+        activityDate: input.activityDate,
+        idempotencyKey: input.idempotencyKey,
+        notes: input.notes,
+      });
+    } else if (input.command === "in_kind_transfer") {
+      recordInKindTransfer(userId, {
+        sourceAccountId: input.accountId,
+        destinationAccountId: input.destinationAccountId!,
+        instrumentId: input.instrumentId!,
+        quantity: input.quantity!,
+        feeAmount: input.feeAmount,
+        transferDate: input.activityDate,
+        idempotencyKey: input.idempotencyKey,
+        notes: input.notes,
+      });
+    } else if (input.command === "split") {
+      recordStockSplit(userId, {
+        accountId: input.accountId,
+        instrumentId: input.instrumentId!,
+        numerator: input.numerator!,
+        denominator: input.denominator!,
+        actionDate: input.activityDate,
+        idempotencyKey: input.idempotencyKey,
+        notes: input.notes,
+      });
+    } else if (input.command === "spinoff") {
+      recordSpinoff(userId, {
+        accountId: input.accountId,
+        sourceInstrumentId: input.instrumentId!,
+        newInstrumentId: input.destinationInstrumentId!,
+        numerator: input.numerator!,
+        denominator: input.denominator!,
+        actionDate: input.activityDate,
+        idempotencyKey: input.idempotencyKey,
+        notes: input.notes,
+      });
+    } else {
+      recordMerger(userId, {
+        accountId: input.accountId,
+        sourceInstrumentId: input.instrumentId!,
+        destinationInstrumentId: input.destinationInstrumentId!,
+        numerator: input.numerator!,
+        denominator: input.denominator!,
+        actionDate: input.activityDate,
+        idempotencyKey: input.idempotencyKey,
+        notes: input.notes,
+      });
+    }
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidateInvestmentPaths([
+    input.accountId,
+    ...(input.destinationAccountId ? [input.destinationAccountId] : []),
+  ]);
+  redirect(`/accounts/${input.accountId}?investment-command=saved`);
 }
 
 export async function updatePositionEventAction(
@@ -767,6 +960,9 @@ const settingsSchema = z.object({
   defaultDashboardPeriod: z.enum(["1m", "3m", "6m", "1y", "all"]),
   sessionTimeoutMinutes: z.coerce.number().int().min(15).max(525600),
   defaultGoalReturn: z.coerce.number().min(0).max(100),
+  positionStaleDaysStock: z.coerce.number().int().min(1).max(3650),
+  positionStaleDaysEtf: z.coerce.number().int().min(1).max(3650),
+  positionStaleDaysFund: z.coerce.number().int().min(1).max(3650),
 });
 
 export async function updateSettingsAction(

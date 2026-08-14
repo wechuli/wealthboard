@@ -2,10 +2,11 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq } from "drizzleorm";
 import { z } from "zod";
 
 import {
+  accountConversions,
   accounts,
   beneficiaries,
   beneficiaryKinds,
@@ -112,6 +113,14 @@ const settingsArchiveSchema = z
   })
   .strict();
 
+const settingsArchiveV8Schema = settingsArchiveSchema
+  .extend({
+    positionStaleDaysStock: z.number().int().min(1).max(3650),
+    positionStaleDaysEtf: z.number().int().min(1).max(3650),
+    positionStaleDaysFund: z.number().int().min(1).max(3650),
+  })
+  .strict();
+
 const categoryArchiveSchema = z
   .object({
     id: z.string().min(1),
@@ -183,12 +192,12 @@ const signedDecimal = z
   .regex(/^-?\d+(?:\.\d+)?$/)
   .refine((value) => !new Decimal(value).isZero(), "Quantity cannot be zero.");
 
-const positionEventArchiveSchema = z
+const positionEventArchiveV7Schema = z
   .object({
     id: z.string().min(1),
     accountId: z.string().min(1),
     instrumentId: z.string().min(1),
-    type: z.enum(positionEventTypes),
+    type: z.enum(["opening_position", "buy", "sell", "quantity_adjustment"]),
     quantity: signedDecimal,
     unitPrice: positiveDecimal.nullable(),
     tradeCurrency: isoCurrency,
@@ -207,6 +216,32 @@ const positionEventArchiveSchema = z
     notes: nullableText,
     createdAt: timestamp,
     updatedAt: timestamp,
+  })
+  .strict();
+
+const decimal = z.string().regex(/^-?\d+(?:\.\d+)?$/);
+
+const positionEventArchiveV8Schema = positionEventArchiveV7Schema
+  .omit({ type: true, quantity: true })
+  .extend({
+    relatedInstrumentId: z.string().min(1).nullable(),
+    type: z.enum(positionEventTypes),
+    quantity: decimal,
+    actionRatioNumerator: positiveDecimal.nullable(),
+    actionRatioDenominator: positiveDecimal.nullable(),
+    eventSequence: z.number().int().min(1),
+  })
+  .strict();
+
+const accountConversionArchiveSchema = z
+  .object({
+    id: z.string().min(1),
+    sourceAccountId: z.string().min(1),
+    targetAccountId: z.string().min(1),
+    conversionDate: timestamp,
+    sourceBalanceMinor: safeInteger,
+    idempotencyKey: z.string().min(1),
+    createdAt: timestamp,
   })
   .strict();
 
@@ -279,6 +314,10 @@ const transactionArchiveSchema = z
 
 const transactionArchiveV5Schema = transactionArchiveSchema
   .extend({ externalId: z.string().min(1).max(200).nullable() })
+  .strict();
+
+const transactionArchiveV8Schema = transactionArchiveV5Schema
+  .extend({ eventGroupId: z.string().nullable() })
   .strict();
 
 const valuationArchiveSchema = z
@@ -530,11 +569,21 @@ const userArchiveV7Schema = userArchiveV6Schema
     investmentInstruments: z
       .array(investmentInstrumentArchiveSchema)
       .max(10000),
-    positionEvents: z.array(positionEventArchiveSchema).max(100000),
+    positionEvents: z.array(positionEventArchiveV7Schema).max(100000),
     securityPrices: z.array(securityPriceArchiveSchema).max(100000),
     positionReconciliations: z
       .array(positionReconciliationArchiveSchema)
       .max(10000),
+  })
+  .strict();
+
+const userArchiveV8Schema = userArchiveV7Schema
+  .extend({
+    version: z.literal(8),
+    settings: settingsArchiveV8Schema,
+    transactions: z.array(transactionArchiveV8Schema).max(100000),
+    positionEvents: z.array(positionEventArchiveV8Schema).max(100000),
+    accountConversions: z.array(accountConversionArchiveSchema).max(10000),
   })
   .strict();
 
@@ -655,8 +704,49 @@ function upgradeV6Archive(archive: z.infer<typeof userArchiveV6Schema>) {
   };
 }
 
+function upgradeV7Archive(archive: z.infer<typeof userArchiveV7Schema>) {
+  const sequenceByAccountDate = new Map<string, number>();
+  const orderedEvents = [...archive.positionEvents].sort(
+    (left, right) =>
+      left.tradeDate.localeCompare(right.tradeDate) ||
+      left.createdAt.localeCompare(right.createdAt) ||
+      left.id.localeCompare(right.id),
+  );
+  const eventSequences = new Map<string, number>();
+  for (const event of orderedEvents) {
+    const key = `${event.accountId}:${event.tradeDate}`;
+    const sequence = (sequenceByAccountDate.get(key) ?? 0) + 1;
+    sequenceByAccountDate.set(key, sequence);
+    eventSequences.set(event.id, sequence);
+  }
+  return {
+    ...archive,
+    version: 8 as const,
+    settings: {
+      ...archive.settings,
+      positionStaleDaysStock: 7,
+      positionStaleDaysEtf: 7,
+      positionStaleDaysFund: 31,
+    },
+    transactions: archive.transactions.map((row) => ({
+      ...row,
+      eventGroupId: null,
+    })),
+    positionEvents: archive.positionEvents.map((row) => ({
+      ...row,
+      relatedInstrumentId: null,
+      actionRatioNumerator: null,
+      actionRatioDenominator: null,
+      eventSequence: eventSequences.get(row.id) ?? 0,
+      eventGroupId: null,
+    })),
+    accountConversions: [],
+  };
+}
+
 const userArchiveSchema = z
   .union([
+    userArchiveV8Schema,
     userArchiveV7Schema,
     userArchiveV6Schema,
     userArchiveV5Schema,
@@ -665,14 +755,20 @@ const userArchiveSchema = z
     userArchiveV2Schema,
   ])
   .transform((archive) => {
-    if (archive.version === 7) return archive;
-    if (archive.version === 6) return upgradeV6Archive(archive);
+    if (archive.version === 8) return archive;
+    if (archive.version === 7) return upgradeV7Archive(archive);
+    if (archive.version === 6)
+      return upgradeV7Archive(upgradeV6Archive(archive));
     if (archive.version === 5)
-      return upgradeV6Archive(upgradeV5Archive(archive));
+      return upgradeV7Archive(upgradeV6Archive(upgradeV5Archive(archive)));
     if (archive.version === 4)
-      return upgradeV6Archive(upgradeV5Archive(upgradeV4Archive(archive)));
-    return upgradeV6Archive(
-      upgradeV5Archive(upgradeV4Archive(upgradeLegacyArchive(archive))),
+      return upgradeV7Archive(
+        upgradeV6Archive(upgradeV5Archive(upgradeV4Archive(archive))),
+      );
+    return upgradeV7Archive(
+      upgradeV6Archive(
+        upgradeV5Archive(upgradeV4Archive(upgradeLegacyArchive(archive))),
+      ),
     );
   });
 
@@ -726,6 +822,7 @@ export async function exportData(userId: string) {
     positionEventRows,
     securityPriceRows,
     positionReconciliationRows,
+    accountConversionRows,
   ] = await Promise.all([
     db.select().from(categories).where(eq(categories.userId, userId)),
     db.select().from(accounts).where(eq(accounts.userId, userId)),
@@ -774,11 +871,15 @@ export async function exportData(userId: string) {
       .select()
       .from(positionReconciliations)
       .where(eq(positionReconciliations.userId, userId)),
+    db
+      .select()
+      .from(accountConversions)
+      .where(eq(accountConversions.userId, userId)),
   ]);
 
   return {
     format: "wealthboard-user-json" as const,
-    version: 7 as const,
+    version: 8 as const,
     exportedAt: nowIso(),
     settings: {
       displayName: settings.displayName,
@@ -790,6 +891,9 @@ export async function exportData(userId: string) {
       defaultDashboardPeriod: settings.defaultDashboardPeriod,
       sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
       defaultGoalReturnBps: settings.defaultGoalReturnBps,
+      positionStaleDaysStock: settings.positionStaleDaysStock,
+      positionStaleDaysEtf: settings.positionStaleDaysEtf,
+      positionStaleDaysFund: settings.positionStaleDaysFund,
     },
     categories: categoryRows.map(stripOwner),
     institutions: institutionRows.map((row) => ({
@@ -822,6 +926,7 @@ export async function exportData(userId: string) {
     positionEvents: positionEventRows.map(stripOwner),
     securityPrices: securityPriceRows.map(stripOwner),
     positionReconciliations: positionReconciliationRows.map(stripOwner),
+    accountConversions: accountConversionRows.map(stripOwner),
   };
 }
 
@@ -924,10 +1029,14 @@ export function restoreUserData(userId: string, input: unknown) {
     archive.positionReconciliations,
     "position reconciliation",
   );
+  const accountConversionIds = uniqueIdMap(
+    archive.accountConversions,
+    "account conversion",
+  );
   const eventGroupIds = new Map(
     [
       ...new Set(
-        archive.positionEvents
+        [...archive.positionEvents, ...archive.transactions]
           .map((row) => row.eventGroupId)
           .filter((id): id is string => Boolean(id)),
       ),
@@ -1068,6 +1177,7 @@ export function restoreUserData(userId: string, input: unknown) {
   const instrumentById = new Map(
     archive.investmentInstruments.map((row) => [row.id, row]),
   );
+  const eventSequences = new Set<string>();
   for (const event of archive.positionEvents) {
     requiredMappedId(accountIds, event.accountId, "position-event account");
     requiredMappedId(
@@ -1075,16 +1185,158 @@ export function restoreUserData(userId: string, input: unknown) {
       event.instrumentId,
       "position-event instrument",
     );
+    if (event.relatedInstrumentId) {
+      requiredMappedId(
+        instrumentIds,
+        event.relatedInstrumentId,
+        "position-event related instrument",
+      );
+    }
     if (accountById.get(event.accountId)?.trackingMode !== "positions") {
       throw new Error(
         "The archive links a position event to a balance account.",
       );
     }
+    const sequenceKey = `${event.accountId}:${event.tradeDate}:${event.eventSequence}`;
+    if (eventSequences.has(sequenceKey)) {
+      throw new Error(
+        "The archive contains duplicate same-date position-event sequences.",
+      );
+    }
+    eventSequences.add(sequenceKey);
+    const quantity = new Decimal(event.quantity);
     if (
-      event.type !== "quantity_adjustment" &&
-      new Decimal(event.quantity).isNegative()
+      event.type === "quantity_adjustment"
+        ? quantity.isZero()
+        : event.type === "split"
+          ? !quantity.isZero()
+          : !quantity.isPositive()
     ) {
       throw new Error("The archive contains a negative position quantity.");
+    }
+    if (
+      event.type === "split" &&
+      (!event.actionRatioNumerator || !event.actionRatioDenominator)
+    ) {
+      throw new Error("The archive contains a split without a valid ratio.");
+    }
+    if (
+      (event.type === "spinoff" ||
+        event.type === "merger_in" ||
+        event.type === "merger_out") &&
+      (!event.relatedInstrumentId ||
+        !event.actionRatioNumerator ||
+        !event.actionRatioDenominator ||
+        event.relatedInstrumentId === event.instrumentId)
+    ) {
+      throw new Error(
+        "The archive contains an invalid related-instrument action.",
+      );
+    }
+    if (
+      (event.type === "transfer_in" ||
+        event.type === "transfer_out" ||
+        event.type === "merger_in" ||
+        event.type === "merger_out") &&
+      !event.eventGroupId
+    ) {
+      throw new Error(
+        "The archive contains an ungrouped paired position event.",
+      );
+    }
+  }
+  const eventsByGroup = new Map<string, typeof archive.positionEvents>();
+  const cashByGroup = new Map<string, typeof archive.transactions>();
+  for (const event of archive.positionEvents) {
+    if (!event.eventGroupId) continue;
+    eventsByGroup.set(event.eventGroupId, [
+      ...(eventsByGroup.get(event.eventGroupId) ?? []),
+      event,
+    ]);
+  }
+  for (const transaction of archive.transactions) {
+    if (!transaction.eventGroupId) continue;
+    cashByGroup.set(transaction.eventGroupId, [
+      ...(cashByGroup.get(transaction.eventGroupId) ?? []),
+      transaction,
+    ]);
+  }
+  for (const groupId of new Set([
+    ...eventsByGroup.keys(),
+    ...cashByGroup.keys(),
+  ])) {
+    const groupEvents = eventsByGroup.get(groupId) ?? [];
+    const groupCash = cashByGroup.get(groupId) ?? [];
+    const groupDates = new Set([
+      ...groupEvents.map((event) => event.tradeDate),
+      ...groupCash.map((transaction) => transaction.transactionDate),
+    ]);
+    if (groupDates.size !== 1) {
+      throw new Error("The archive contains a group spanning multiple dates.");
+    }
+    const transferOut = groupEvents.filter(
+      (event) => event.type === "transfer_out",
+    );
+    const transferIn = groupEvents.filter(
+      (event) => event.type === "transfer_in",
+    );
+    if (transferOut.length || transferIn.length) {
+      if (
+        groupEvents.length !== 2 ||
+        transferOut.length !== 1 ||
+        transferIn.length !== 1 ||
+        transferOut[0].accountId === transferIn[0].accountId ||
+        transferOut[0].instrumentId !== transferIn[0].instrumentId ||
+        transferOut[0].quantity !== transferIn[0].quantity ||
+        groupCash.some((transaction) => transaction.type !== "fee")
+      ) {
+        throw new Error(
+          "The archive contains an invalid in-kind transfer group.",
+        );
+      }
+      continue;
+    }
+    const mergerOut = groupEvents.filter(
+      (event) => event.type === "merger_out",
+    );
+    const mergerIn = groupEvents.filter((event) => event.type === "merger_in");
+    if (mergerOut.length || mergerIn.length) {
+      if (
+        groupEvents.length !== 2 ||
+        mergerOut.length !== 1 ||
+        mergerIn.length !== 1 ||
+        mergerOut[0].accountId !== mergerIn[0].accountId ||
+        mergerOut[0].relatedInstrumentId !== mergerIn[0].instrumentId ||
+        mergerIn[0].relatedInstrumentId !== mergerOut[0].instrumentId ||
+        mergerOut[0].actionRatioNumerator !==
+          mergerIn[0].actionRatioNumerator ||
+        mergerOut[0].actionRatioDenominator !==
+          mergerIn[0].actionRatioDenominator ||
+        groupCash.length !== 0
+      ) {
+        throw new Error("The archive contains an invalid merger group.");
+      }
+      continue;
+    }
+    if (groupCash.length) {
+      if (
+        groupCash.length !== 1 ||
+        groupCash[0].type !== "dividend" ||
+        groupEvents.length < 1 ||
+        groupEvents.some(
+          (event) =>
+            event.type !== "buy" || event.accountId !== groupCash[0].accountId,
+        )
+      ) {
+        throw new Error("The archive contains an invalid reinvestment group.");
+      }
+      continue;
+    }
+    if (
+      groupEvents.length !== 1 ||
+      !["split", "spinoff"].includes(groupEvents[0].type)
+    ) {
+      throw new Error("The archive contains an incomplete position group.");
     }
   }
   replayPositionQuantities(archive.positionEvents);
@@ -1116,6 +1368,27 @@ export function restoreUserData(userId: string, input: unknown) {
       );
     }
   }
+  for (const conversion of archive.accountConversions) {
+    requiredMappedId(
+      accountIds,
+      conversion.sourceAccountId,
+      "account-conversion source",
+    );
+    requiredMappedId(
+      accountIds,
+      conversion.targetAccountId,
+      "account-conversion target",
+    );
+    if (
+      accountById.get(conversion.sourceAccountId)?.trackingMode !== "balance" ||
+      accountById.get(conversion.targetAccountId)?.trackingMode !==
+        "positions" ||
+      !accountById.get(conversion.sourceAccountId)?.archivedAt ||
+      conversion.sourceAccountId === conversion.targetAccountId
+    ) {
+      throw new Error("The archive contains an invalid account conversion.");
+    }
+  }
 
   const db = getDatabase();
   db.transaction((tx) => {
@@ -1127,6 +1400,9 @@ export function restoreUserData(userId: string, input: unknown) {
       .sync();
     if (!existingSettings) throw new Error("User settings are unavailable.");
 
+    tx.delete(accountConversions)
+      .where(eq(accountConversions.userId, userId))
+      .run();
     tx.delete(estatePlanSnapshots)
       .where(eq(estatePlanSnapshots.userId, userId))
       .run();
@@ -1218,6 +1494,31 @@ export function restoreUserData(userId: string, input: unknown) {
         )
         .run();
     }
+    if (archive.accountConversions.length) {
+      tx.insert(accountConversions)
+        .values(
+          archive.accountConversions.map((row) => ({
+            ...row,
+            id: requiredMappedId(
+              accountConversionIds,
+              row.id,
+              "account conversion",
+            ),
+            userId,
+            sourceAccountId: requiredMappedId(
+              accountIds,
+              row.sourceAccountId,
+              "account-conversion source",
+            ),
+            targetAccountId: requiredMappedId(
+              accountIds,
+              row.targetAccountId,
+              "account-conversion target",
+            ),
+          })),
+        )
+        .run();
+    }
     if (archive.investmentInstruments.length) {
       tx.insert(investmentInstruments)
         .values(
@@ -1263,6 +1564,9 @@ export function restoreUserData(userId: string, input: unknown) {
               row.accountId,
               "transaction account",
             ),
+            eventGroupId: row.eventGroupId
+              ? eventGroupIds.get(row.eventGroupId)!
+              : null,
           })),
         )
         .run();
@@ -1300,6 +1604,13 @@ export function restoreUserData(userId: string, input: unknown) {
               row.instrumentId,
               "position-event instrument",
             ),
+            relatedInstrumentId: row.relatedInstrumentId
+              ? requiredMappedId(
+                  instrumentIds,
+                  row.relatedInstrumentId,
+                  "position-event related instrument",
+                )
+              : null,
             eventGroupId: row.eventGroupId
               ? eventGroupIds.get(row.eventGroupId)!
               : null,

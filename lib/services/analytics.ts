@@ -45,6 +45,11 @@ import {
 import Decimal from "decimal.js";
 import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
 import { calculateQuoteValueMinor } from "@/lib/investments";
+import { getPositionMovementAttribution } from "@/lib/services/investment-attribution";
+
+type PositionIssue = ReturnType<
+  typeof calculatePositionAccountSnapshot
+>["issues"][number];
 
 type HistoryRange = "1m" | "3m" | "6m" | "1y" | "all";
 
@@ -394,6 +399,9 @@ export async function getDashboardData(
   const missingRates = new Set<string>();
   const missingPrices = new Set<string>();
   const stalePrices = new Set<string>();
+  const positionIssues: Array<
+    PositionIssue & { accountId: string; accountName: string }
+  > = [];
   const currentAsOf = endOfUtcDay(new Date()).toISOString();
   const allocationMap = new Map<string, bigint>();
   const investibleAllocationMap = new Map<string, bigint>();
@@ -421,6 +429,13 @@ export async function getDashboardData(
       }
       for (const instrumentId of positionSnapshot?.staleInstrumentIds ?? []) {
         stalePrices.add(instrumentId);
+      }
+      for (const issue of positionSnapshot?.issues ?? []) {
+        positionIssues.push({
+          ...issue,
+          accountId: account.id,
+          accountName: account.name,
+        });
       }
       for (const position of positionSnapshot?.positions ?? []) {
         if (position.accountValueMinor == null) continue;
@@ -642,6 +657,7 @@ export async function getDashboardData(
     missingRates: [...missingRates],
     missingPrices: [...missingPrices],
     stalePrices: [...stalePrices],
+    positionIssues,
     accountCount: accountRows.length,
     goalCount: goalsCount.length,
   };
@@ -714,12 +730,19 @@ export async function getAccountAnalytics(userId: string, accountId: string) {
           .totalMinor,
       ),
     }));
+    const attributionStart = sourceDates[0] ?? account.createdAt;
     return {
       account,
       metrics,
       estimatedGain,
       history,
       positionSnapshot: calculatePositionAccountSnapshot(userId, db, accountId),
+      movementAttribution: getPositionMovementAttribution(
+        userId,
+        accountId,
+        attributionStart,
+        new Date().toISOString(),
+      ),
     };
   }
   const events: FinancialEvent[] = [
@@ -771,6 +794,10 @@ export async function getAccountComparisons(userId: string) {
     .orderBy(asc(accounts.name));
   const output = [];
   for (const account of accountRows) {
+    const positionSnapshot =
+      account.trackingMode === "positions"
+        ? calculatePositionAccountSnapshot(userId, db, account.id)
+        : null;
     const rows = await db.query.transactions.findMany({
       where: and(
         eq(transactions.userId, userId),
@@ -830,6 +857,26 @@ export async function getAccountComparisons(userId: string) {
       days,
       simpleAnnualized,
       effectiveAnnualized,
+      trackingMode: account.trackingMode,
+      returnStatus:
+        account.trackingMode === "positions"
+          ? ("unavailable_cash_flow_methodology" as const)
+          : ("estimate" as const),
+      returnMessage:
+        account.trackingMode === "positions"
+          ? "Cash-flow-aware TWR is not yet available for position accounts."
+          : null,
+      valuationMethod:
+        account.trackingMode === "positions"
+          ? ("cash_plus_effective_prices" as const)
+          : ("balance_replay" as const),
+      valueAsOf:
+        positionSnapshot?.positions
+          .map((position) => position.price?.effectiveDate)
+          .filter((value): value is string => Boolean(value))
+          .sort()[0] ?? null,
+      valueComplete: positionSnapshot?.complete ?? true,
+      stalePriceCount: positionSnapshot?.staleInstrumentIds.length ?? 0,
     });
   }
   return output;

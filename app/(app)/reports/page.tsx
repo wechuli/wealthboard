@@ -10,19 +10,22 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page";
 import { safeChartNumber } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 import {
   getAccountComparisons,
   getDashboardData,
 } from "@/lib/services/analytics";
+import { getPortfolioPositionMovementAttribution } from "@/lib/services/investment-attribution";
 import { requireSession } from "@/lib/auth/session";
 
 export const metadata = { title: "Reports" };
 
 export default async function ReportsPage() {
   const { userId } = await requireSession();
-  const [data, comparisons] = await Promise.all([
+  const [data, comparisons, positionMovement] = await Promise.all([
     getDashboardData(userId, "all"),
     getAccountComparisons(userId),
+    getPortfolioPositionMovementAttribution(userId),
   ]);
   const currency = data.settings.baseCurrency;
   const highest = data.history.reduce(
@@ -53,7 +56,7 @@ export default async function ReportsPage() {
           excluded where conversion is unavailable.
         </div>
       ) : null}
-      {data.missingPrices.length || data.stalePrices.length ? (
+      {data.positionIssues.length ? (
         <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
           Position reporting needs review. {data.missingPrices.length} missing
           price{data.missingPrices.length === 1 ? "" : "s"}
@@ -61,6 +64,32 @@ export default async function ReportsPage() {
             ? ` and ${data.stalePrices.length} stale price${data.stalePrices.length === 1 ? "" : "s"}`
             : ""}{" "}
           affect these results.
+          <ul className="mt-2 space-y-1 text-xs text-slate-300">
+            {data.positionIssues.map((issue) => (
+              <li
+                key={`${issue.accountId}-${issue.type}-${issue.instrumentId}`}
+              >
+                {issue.accountName} ·{" "}
+                {issue.instrumentSymbol || issue.instrumentName} ·{" "}
+                {issue.currency} ·{" "}
+                {formatDate(
+                  issue.affectedFrom,
+                  data.settings.timezone,
+                  data.settings.preferredDateFormat,
+                )}{" "}
+                to{" "}
+                {formatDate(
+                  issue.affectedTo,
+                  data.settings.timezone,
+                  data.settings.preferredDateFormat,
+                )}
+                {issue.lastPriceDate
+                  ? ` · last price ${formatDate(issue.lastPriceDate, data.settings.timezone, data.settings.preferredDateFormat)}`
+                  : ""}
+                {issue.source ? ` · ${issue.source}` : ""}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -216,13 +245,79 @@ export default async function ReportsPage() {
         </Card>
       </div>
 
+      {positionMovement.accounts.length ? (
+        <Card className="mt-5">
+          <CardHeader>
+            <div>
+              <CardTitle>Position movement attribution</CardTitle>
+              <p className="mt-1 text-xs text-slate-500">
+                Deterministic bridge from {positionMovement.from.slice(0, 10)}{" "}
+                to {positionMovement.to.slice(0, 10)}. Internal buys and sells
+                are not contributions.
+              </p>
+            </div>
+            <Badge tone={positionMovement.complete ? "positive" : "warning"}>
+              {positionMovement.complete ? "Complete" : "Incomplete"}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MovementLine
+                label="External cash"
+                amount={positionMovement.externalCashMinor}
+                currency={currency}
+              />
+              <MovementLine
+                label="Income"
+                amount={positionMovement.incomeMinor}
+                currency={currency}
+              />
+              <MovementLine
+                label="Fees"
+                amount={positionMovement.feesMinor}
+                currency={currency}
+              />
+              <MovementLine
+                label="Cash adjustments"
+                amount={positionMovement.cashAdjustmentsMinor}
+                currency={currency}
+              />
+              <MovementLine
+                label="Internal trade cash"
+                amount={positionMovement.internalTradeCashMinor}
+                currency={currency}
+              />
+              <MovementLine
+                label="Quantity changes"
+                amount={positionMovement.quantityMovementMinor}
+                currency={currency}
+              />
+              <MovementLine
+                label="Price movement"
+                amount={positionMovement.priceMovementMinor}
+                currency={currency}
+              />
+              <MovementLine
+                label="Currency movement"
+                amount={positionMovement.currencyMovementMinor}
+                currency={currency}
+              />
+            </div>
+            <p className="mt-4 text-xs text-amber-200">
+              {positionMovement.returnMessage}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="mt-5">
         <CardHeader>
           <div>
             <CardTitle>Account comparison</CardTitle>
             <p className="mt-1 text-xs text-slate-500">
               Annualized figures exclude net deposits. Periods under one year
-              are marked as estimates.
+              are marked as estimates. Position accounts remain unavailable
+              until cash-flow-aware TWR is implemented.
             </p>
           </div>
         </CardHeader>
@@ -249,6 +344,23 @@ export default async function ReportsPage() {
                       <Badge tone="warning" className="ml-2">
                         Short period
                       </Badge>
+                    ) : null}
+                    {account.returnMessage ? (
+                      <p className="mt-1 max-w-64 text-xs font-normal text-amber-200">
+                        {account.returnMessage}
+                      </p>
+                    ) : null}
+                    {account.trackingMode === "positions" ? (
+                      <p className="mt-1 text-xs font-normal text-slate-500">
+                        Cash + effective prices
+                        {account.valueAsOf
+                          ? ` · value as of ${formatDate(account.valueAsOf, data.settings.timezone, data.settings.preferredDateFormat)}`
+                          : ""}
+                        {!account.valueComplete ? " · incomplete" : ""}
+                        {account.stalePriceCount
+                          ? ` · ${account.stalePriceCount} stale`
+                          : ""}
+                      </p>
                     ) : null}
                   </td>
                   <td className="p-4">
@@ -282,14 +394,20 @@ export default async function ReportsPage() {
                     />
                   </td>
                   <td className="p-4 tabular-nums">
-                    {account.simpleAnnualized
-                      ? `${account.simpleAnnualized}%`
-                      : "Insufficient history"}
+                    {account.returnStatus ===
+                    "unavailable_cash_flow_methodology"
+                      ? "Unavailable"
+                      : account.simpleAnnualized
+                        ? `${account.simpleAnnualized}%`
+                        : "Insufficient history"}
                   </td>
                   <td className="p-4 tabular-nums">
-                    {account.effectiveAnnualized
-                      ? `${account.effectiveAnnualized}%`
-                      : "Insufficient history"}
+                    {account.returnStatus ===
+                    "unavailable_cash_flow_methodology"
+                      ? "Unavailable"
+                      : account.effectiveAnnualized
+                        ? `${account.effectiveAnnualized}%`
+                        : "Insufficient history"}
                   </td>
                 </tr>
               ))}
@@ -318,6 +436,27 @@ function ReportStat({
       </div>
       <p className="mt-3 text-xl font-semibold">{value}</p>
     </Card>
+  );
+}
+
+function MovementLine({
+  label,
+  amount,
+  currency,
+}: {
+  label: string;
+  amount: bigint;
+  currency: string;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 p-3">
+      <p className="text-xs text-slate-500">{label}</p>
+      <MoneyValue
+        amount={amount}
+        currency={currency}
+        className="mt-1 font-semibold"
+      />
+    </div>
   );
 }
 

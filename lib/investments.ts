@@ -43,14 +43,57 @@ export type PositionEventLike = {
   type: PositionEventType;
   quantity: string;
   tradeDate: string;
+  eventSequence?: number;
+  actionRatioNumerator?: string | null;
+  actionRatioDenominator?: string | null;
   createdAt: string;
 };
 
 function quantityEffect(event: PositionEventLike) {
   const quantity = new Decimal(event.quantity);
-  if (event.type === "sell") return quantity.abs().negated();
+  if (
+    event.type === "sell" ||
+    event.type === "transfer_out" ||
+    event.type === "merger_out"
+  ) {
+    return quantity.abs().negated();
+  }
   if (event.type === "quantity_adjustment") return quantity;
+  if (event.type === "split") return new Decimal(0);
   return quantity.abs();
+}
+
+function splitQuantity(current: Decimal, event: PositionEventLike) {
+  const numerator = new Decimal(event.actionRatioNumerator ?? 0);
+  const denominator = new Decimal(event.actionRatioDenominator ?? 0);
+  if (!numerator.isPositive() || !denominator.isPositive()) {
+    throw new Error("A stock split requires a positive ratio.");
+  }
+  return current.mul(numerator).div(denominator);
+}
+
+export function orderPositionEvents<T extends PositionEventLike>(
+  events: T[],
+  throughDate?: string,
+) {
+  return [...events]
+    .filter((event) => !throughDate || event.tradeDate <= throughDate)
+    .sort(
+      (left, right) =>
+        left.tradeDate.localeCompare(right.tradeDate) ||
+        (left.eventSequence ?? 0) - (right.eventSequence ?? 0) ||
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.id.localeCompare(right.id),
+    );
+}
+
+export function applyPositionEventQuantity(
+  current: Decimal,
+  event: PositionEventLike,
+) {
+  return event.type === "split"
+    ? splitQuantity(current, event)
+    : current.add(quantityEffect(event));
 }
 
 export function replayPositionQuantities(
@@ -58,19 +101,11 @@ export function replayPositionQuantities(
   throughDate?: string,
 ) {
   const quantities = new Map<string, Decimal>();
-  const ordered = [...events]
-    .filter((event) => !throughDate || event.tradeDate <= throughDate)
-    .sort(
-      (left, right) =>
-        left.tradeDate.localeCompare(right.tradeDate) ||
-        left.createdAt.localeCompare(right.createdAt) ||
-        left.id.localeCompare(right.id),
-    );
+  const ordered = orderPositionEvents(events, throughDate);
 
   for (const event of ordered) {
-    const next = (quantities.get(event.instrumentId) ?? new Decimal(0)).add(
-      quantityEffect(event),
-    );
+    const current = quantities.get(event.instrumentId) ?? new Decimal(0);
+    const next = applyPositionEventQuantity(current, event);
     if (next.isNegative()) {
       throw new InvalidPositionSequenceError(
         event.instrumentId,

@@ -561,7 +561,7 @@ describe.sequential("multi-user persistence and isolation", () => {
 
   test("exports, restores, and imported owner fields cannot cross users", async () => {
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(7);
+    expect(archive.version).toBe(8);
     expect(archive.goalMilestones).toHaveLength(2);
     expect(archive.goalAlertDismissals).toHaveLength(1);
     const serialized = JSON.stringify(archive);
@@ -609,8 +609,13 @@ describe.sequential("multi-user persistence and isolation", () => {
     > & {
       accounts: Array<Record<string, unknown>>;
       transactions: Array<Record<string, unknown>>;
+      settings: Record<string, unknown>;
     };
     versionTwoArchive.version = 2;
+    delete versionTwoArchive.accountConversions;
+    delete versionTwoArchive.settings.positionStaleDaysStock;
+    delete versionTwoArchive.settings.positionStaleDaysEtf;
+    delete versionTwoArchive.settings.positionStaleDaysFund;
     delete versionTwoArchive.investmentInstruments;
     delete versionTwoArchive.positionEvents;
     delete versionTwoArchive.securityPrices;
@@ -634,6 +639,7 @@ describe.sequential("multi-user persistence and isolation", () => {
       (transaction) => {
         const legacyTransaction = { ...transaction };
         delete legacyTransaction.externalId;
+        delete legacyTransaction.eventGroupId;
         return legacyTransaction;
       },
     );

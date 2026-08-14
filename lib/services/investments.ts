@@ -10,6 +10,7 @@ import {
   positionEvents,
   positionReconciliations,
   securityPrices,
+  transactions,
   userSettings,
   type InvestmentAssetType,
   type InvestmentIdentifierType,
@@ -33,6 +34,13 @@ type TransactionClient = Parameters<
   Parameters<DatabaseClient["transaction"]>[0]
 >[0];
 type Client = DatabaseClient | TransactionClient;
+
+const ORDINARY_POSITION_EVENT_TYPES = new Set<PositionEventType>([
+  "opening_position",
+  "buy",
+  "sell",
+  "quantity_adjustment",
+]);
 
 function assertNotFutureDate(userId: string, value: string, client: Client) {
   const timezone =
@@ -274,16 +282,44 @@ export type PositionEventInput = {
   notes?: string;
 };
 
+function nextEventSequence(
+  tx: TransactionClient,
+  userId: string,
+  accountId: string,
+  tradeDate: string,
+) {
+  const rows = tx
+    .select({ eventSequence: positionEvents.eventSequence })
+    .from(positionEvents)
+    .where(
+      and(
+        eq(positionEvents.userId, userId),
+        eq(positionEvents.accountId, accountId),
+        eq(positionEvents.tradeDate, tradeDate),
+      ),
+    )
+    .all();
+  return (
+    rows.reduce((maximum, row) => Math.max(maximum, row.eventSequence), 0) + 1
+  );
+}
+
 function savePositionEvent(
   userId: string,
   input: PositionEventInput,
   eventId?: string,
+  transactionClient?: TransactionClient,
+  options: { eventGroupId?: string; allowGrouped?: boolean } = {},
 ) {
   const db = getDatabase();
-  assertNotFutureDate(userId, input.tradeDate, db);
+  if (!ORDINARY_POSITION_EVENT_TYPES.has(input.type)) {
+    throw new Error("Use the dedicated workflow for this position activity.");
+  }
+  const validationClient = transactionClient ?? db;
+  assertNotFutureDate(userId, input.tradeDate, validationClient);
   if (input.settlementDate)
-    assertNotFutureDate(userId, input.settlementDate, db);
-  return db.transaction((tx) => {
+    assertNotFutureDate(userId, input.settlementDate, validationClient);
+  const persist = (tx: TransactionClient) => {
     const existingEvent = eventId
       ? tx.query.positionEvents
           .findFirst({
@@ -295,6 +331,13 @@ function savePositionEvent(
           .sync()
       : undefined;
     if (eventId && !existingEvent) throw new Error("Position event not found.");
+    if (
+      existingEvent &&
+      (!ORDINARY_POSITION_EVENT_TYPES.has(existingEvent.type) ||
+        (existingEvent.eventGroupId && !options.allowGrouped))
+    ) {
+      throw new Error("Use the dedicated workflow for grouped activity.");
+    }
     if (existingEvent && existingEvent.accountId !== input.accountId) {
       throw new Error("A position event cannot move between accounts.");
     }
@@ -362,6 +405,15 @@ function savePositionEvent(
     const feeAmountMinor = input.feeAmount
       ? parseMoney(input.feeAmount, feeCurrency!)
       : null;
+    if (
+      (input.feeAmount || input.cashEffect) &&
+      input.type !== "buy" &&
+      input.type !== "sell"
+    ) {
+      throw new Error(
+        "Fees and settlement amounts apply only to buys and sells.",
+      );
+    }
     if (feeAmountMinor != null && feeAmountMinor < 0) {
       throw new Error("Fee cannot be negative.");
     }
@@ -433,10 +485,23 @@ function savePositionEvent(
     const openingCostBasisMinor = input.openingCostBasis
       ? parseMoney(input.openingCostBasis, account.currency)
       : null;
+    if (input.openingCostBasis && input.type !== "opening_position") {
+      throw new Error(
+        "Opening cost basis applies only to an opening position.",
+      );
+    }
+    if (openingCostBasisMinor != null && openingCostBasisMinor < 0) {
+      throw new Error("Opening cost basis cannot be negative.");
+    }
     const id = existingEvent?.id ?? crypto.randomUUID();
     const timestamp = nowIso();
+    const eventSequence =
+      existingEvent?.tradeDate === tradeDate
+        ? existingEvent.eventSequence
+        : nextEventSequence(tx, userId, account.id, tradeDate);
     const values = {
       instrumentId: instrument.id,
+      relatedInstrumentId: null,
       type: input.type,
       quantity,
       unitPrice,
@@ -447,12 +512,15 @@ function savePositionEvent(
       cashEffectMinor: checkedNumber(cashEffectMinor),
       appliedExchangeRate,
       openingCostBasisMinor,
+      actionRatioNumerator: null,
+      actionRatioDenominator: null,
       tradeDate,
+      eventSequence,
       settlementDate: input.settlementDate
         ? dateInputToUtc(input.settlementDate)
         : null,
       externalId: input.externalId?.trim() || null,
-      eventGroupId: input.eventGroupId || null,
+      eventGroupId: options.eventGroupId ?? existingEvent?.eventGroupId ?? null,
       description: input.description?.trim() || null,
       notes: input.notes?.trim() || null,
       updatedAt: timestamp,
@@ -493,7 +561,10 @@ function savePositionEvent(
     );
     recalculateAccountBalance(userId, tx, account.id);
     return id;
-  });
+  };
+  return transactionClient
+    ? persist(transactionClient)
+    : db.transaction(persist);
 }
 
 export function recordPositionEvent(userId: string, input: PositionEventInput) {
@@ -519,6 +590,182 @@ export function getPositionEvent(userId: string, eventId: string) {
     .sync();
 }
 
+function requirePositionAccount(
+  tx: TransactionClient,
+  userId: string,
+  accountId: string,
+) {
+  const account = tx.query.accounts
+    .findFirst({
+      where: and(
+        eq(accounts.userId, userId),
+        eq(accounts.id, accountId),
+        eq(accounts.trackingMode, "positions"),
+        isNull(accounts.archivedAt),
+      ),
+    })
+    .sync();
+  if (!account) throw new Error("Position account not found.");
+  return account;
+}
+
+function requireInstrument(
+  tx: TransactionClient,
+  userId: string,
+  instrumentId: string,
+) {
+  const instrument = tx.query.investmentInstruments
+    .findFirst({
+      where: and(
+        eq(investmentInstruments.userId, userId),
+        eq(investmentInstruments.id, instrumentId),
+        isNull(investmentInstruments.archivedAt),
+      ),
+    })
+    .sync();
+  if (!instrument) throw new Error("Instrument not found.");
+  return instrument;
+}
+
+function accountPositionEvents(
+  tx: TransactionClient,
+  userId: string,
+  accountId: string,
+) {
+  return tx
+    .select()
+    .from(positionEvents)
+    .where(
+      and(
+        eq(positionEvents.userId, userId),
+        eq(positionEvents.accountId, accountId),
+      ),
+    )
+    .all();
+}
+
+function validateAndRecalculatePositionAccount(
+  tx: TransactionClient,
+  userId: string,
+  accountId: string,
+) {
+  replayPositionQuantities(accountPositionEvents(tx, userId, accountId));
+  recalculateAccountBalance(userId, tx, accountId);
+}
+
+function idempotentPositionEvent(
+  tx: TransactionClient,
+  userId: string,
+  idempotencyKey: string,
+) {
+  return tx.query.positionEvents
+    .findFirst({
+      where: and(
+        eq(positionEvents.userId, userId),
+        eq(positionEvents.idempotencyKey, idempotencyKey),
+      ),
+    })
+    .sync();
+}
+
+function existingGroupOrConflict(
+  event: typeof positionEvents.$inferSelect,
+  matchesOperation: boolean,
+) {
+  if (!event.eventGroupId || !matchesOperation) {
+    throw new Error("This request key was already used for another operation.");
+  }
+  return event.eventGroupId;
+}
+
+function positionQuantityAt(
+  tx: TransactionClient,
+  userId: string,
+  accountId: string,
+  instrumentId: string,
+  throughDate: string,
+) {
+  return new Decimal(
+    replayPositionQuantities(
+      accountPositionEvents(tx, userId, accountId),
+      throughDate,
+    ).get(instrumentId) ?? "0",
+  );
+}
+
+function positiveRatio(numeratorInput: string, denominatorInput: string) {
+  const numerator = canonicalDecimal(numeratorInput, {
+    label: "ratio numerator",
+  });
+  const denominator = canonicalDecimal(denominatorInput, {
+    label: "ratio denominator",
+  });
+  return { numerator, denominator };
+}
+
+function insertSpecialPositionEvent(
+  tx: TransactionClient,
+  input: {
+    userId: string;
+    accountId: string;
+    instrumentId: string;
+    relatedInstrumentId?: string;
+    type: Exclude<
+      PositionEventType,
+      "opening_position" | "buy" | "sell" | "quantity_adjustment"
+    >;
+    quantity: string;
+    tradeCurrency: string;
+    tradeDate: string;
+    eventGroupId: string;
+    idempotencyKey?: string;
+    actionRatioNumerator?: string;
+    actionRatioDenominator?: string;
+    description: string;
+    notes?: string;
+  },
+) {
+  const id = crypto.randomUUID();
+  const timestamp = nowIso();
+  tx.insert(positionEvents)
+    .values({
+      id,
+      userId: input.userId,
+      accountId: input.accountId,
+      instrumentId: input.instrumentId,
+      relatedInstrumentId: input.relatedInstrumentId ?? null,
+      type: input.type,
+      quantity: input.quantity,
+      unitPrice: null,
+      tradeCurrency: input.tradeCurrency,
+      grossAmountMinor: null,
+      feeAmountMinor: null,
+      feeCurrency: null,
+      cashEffectMinor: 0,
+      appliedExchangeRate: null,
+      openingCostBasisMinor: null,
+      actionRatioNumerator: input.actionRatioNumerator ?? null,
+      actionRatioDenominator: input.actionRatioDenominator ?? null,
+      tradeDate: input.tradeDate,
+      eventSequence: nextEventSequence(
+        tx,
+        input.userId,
+        input.accountId,
+        input.tradeDate,
+      ),
+      settlementDate: null,
+      externalId: null,
+      eventGroupId: input.eventGroupId,
+      idempotencyKey: input.idempotencyKey ?? null,
+      description: input.description,
+      notes: input.notes?.trim() || null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .run();
+  return id;
+}
+
 export function deletePositionEvent(userId: string, eventId: string) {
   const db = getDatabase();
   db.transaction((tx) => {
@@ -531,24 +778,467 @@ export function deletePositionEvent(userId: string, eventId: string) {
       })
       .sync();
     if (!event) throw new Error("Position event not found.");
-    tx.delete(positionEvents)
-      .where(
-        and(eq(positionEvents.userId, userId), eq(positionEvents.id, eventId)),
-      )
-      .run();
-    replayPositionQuantities(
-      tx
-        .select()
-        .from(positionEvents)
+    const groupedEvents = event.eventGroupId
+      ? tx
+          .select()
+          .from(positionEvents)
+          .where(
+            and(
+              eq(positionEvents.userId, userId),
+              eq(positionEvents.eventGroupId, event.eventGroupId),
+            ),
+          )
+          .all()
+      : [event];
+    const affectedAccountIds = new Set(
+      groupedEvents.map((row) => row.accountId),
+    );
+    if (event.eventGroupId) {
+      const groupedCash = tx
+        .select({ accountId: transactions.accountId })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.eventGroupId, event.eventGroupId),
+          ),
+        )
+        .all();
+      for (const row of groupedCash) affectedAccountIds.add(row.accountId);
+      tx.delete(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.eventGroupId, event.eventGroupId),
+          ),
+        )
+        .run();
+      tx.delete(positionEvents)
         .where(
           and(
             eq(positionEvents.userId, userId),
-            eq(positionEvents.accountId, event.accountId),
+            eq(positionEvents.eventGroupId, event.eventGroupId),
           ),
         )
-        .all(),
+        .run();
+    } else {
+      tx.delete(positionEvents)
+        .where(
+          and(
+            eq(positionEvents.userId, userId),
+            eq(positionEvents.id, eventId),
+          ),
+        )
+        .run();
+    }
+    for (const accountId of affectedAccountIds) {
+      validateAndRecalculatePositionAccount(tx, userId, accountId);
+    }
+  });
+}
+
+export function recordDividendReinvestment(
+  userId: string,
+  input: {
+    accountId: string;
+    instrumentId: string;
+    dividendAmount: string;
+    quantity: string;
+    unitPrice: string;
+    tradeCurrency?: string;
+    feeAmount?: string;
+    feeCurrency?: string;
+    cashEffect?: string;
+    appliedExchangeRate?: string;
+    activityDate: string;
+    idempotencyKey: string;
+    notes?: string;
+  },
+) {
+  const db = getDatabase();
+  assertNotFutureDate(userId, input.activityDate, db);
+  return db.transaction((tx) => {
+    const duplicate = idempotentPositionEvent(tx, userId, input.idempotencyKey);
+    if (duplicate) {
+      return existingGroupOrConflict(
+        duplicate,
+        duplicate.type === "buy" &&
+          duplicate.accountId === input.accountId &&
+          duplicate.instrumentId === input.instrumentId,
+      );
+    }
+    const account = requirePositionAccount(tx, userId, input.accountId);
+    const dividendAmountMinor = parseMoney(
+      input.dividendAmount,
+      account.currency,
     );
-    recalculateAccountBalance(userId, tx, event.accountId);
+    if (dividendAmountMinor <= 0) {
+      throw new Error("Dividend amount must be greater than zero.");
+    }
+    const eventGroupId = crypto.randomUUID();
+    const activityDate = dateInputToUtc(input.activityDate);
+    const timestamp = nowIso();
+    tx.insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        userId,
+        accountId: account.id,
+        type: "dividend",
+        amountMinor: dividendAmountMinor,
+        currency: account.currency,
+        transactionDate: activityDate,
+        description: "Dividend reinvestment income",
+        notes: input.notes?.trim() || null,
+        externalId: null,
+        transferGroupId: null,
+        eventGroupId,
+        idempotencyKey: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+    savePositionEvent(
+      userId,
+      {
+        accountId: account.id,
+        instrumentId: input.instrumentId,
+        type: "buy",
+        quantity: input.quantity,
+        unitPrice: input.unitPrice,
+        tradeCurrency: input.tradeCurrency,
+        feeAmount: input.feeAmount,
+        feeCurrency: input.feeCurrency,
+        cashEffect: input.cashEffect,
+        appliedExchangeRate: input.appliedExchangeRate,
+        tradeDate: input.activityDate,
+        idempotencyKey: input.idempotencyKey,
+        description: "Dividend reinvestment purchase",
+        notes: input.notes,
+      },
+      undefined,
+      tx,
+      { eventGroupId, allowGrouped: true },
+    );
+    return eventGroupId;
+  });
+}
+
+export function recordInKindTransfer(
+  userId: string,
+  input: {
+    sourceAccountId: string;
+    destinationAccountId: string;
+    instrumentId: string;
+    quantity: string;
+    transferDate: string;
+    feeAmount?: string;
+    idempotencyKey: string;
+    notes?: string;
+  },
+) {
+  if (input.sourceAccountId === input.destinationAccountId) {
+    throw new Error("Choose two different position accounts.");
+  }
+  const db = getDatabase();
+  assertNotFutureDate(userId, input.transferDate, db);
+  return db.transaction((tx) => {
+    const duplicate = idempotentPositionEvent(tx, userId, input.idempotencyKey);
+    if (duplicate) {
+      return existingGroupOrConflict(
+        duplicate,
+        duplicate.type === "transfer_out" &&
+          duplicate.accountId === input.sourceAccountId &&
+          duplicate.instrumentId === input.instrumentId,
+      );
+    }
+    const source = requirePositionAccount(tx, userId, input.sourceAccountId);
+    const destination = requirePositionAccount(
+      tx,
+      userId,
+      input.destinationAccountId,
+    );
+    const instrument = requireInstrument(tx, userId, input.instrumentId);
+    const quantity = canonicalDecimal(input.quantity, { label: "quantity" });
+    const transferDate = dateInputToUtc(input.transferDate);
+    const eventGroupId = crypto.randomUUID();
+    insertSpecialPositionEvent(tx, {
+      userId,
+      accountId: source.id,
+      instrumentId: instrument.id,
+      type: "transfer_out",
+      quantity,
+      tradeCurrency: instrument.quoteCurrency,
+      tradeDate: transferDate,
+      eventGroupId,
+      idempotencyKey: input.idempotencyKey,
+      description: `In-kind transfer to ${destination.name}`,
+      notes: input.notes,
+    });
+    insertSpecialPositionEvent(tx, {
+      userId,
+      accountId: destination.id,
+      instrumentId: instrument.id,
+      type: "transfer_in",
+      quantity,
+      tradeCurrency: instrument.quoteCurrency,
+      tradeDate: transferDate,
+      eventGroupId,
+      description: `In-kind transfer from ${source.name}`,
+      notes: input.notes,
+    });
+    if (input.feeAmount) {
+      const feeAmountMinor = parseMoney(input.feeAmount, source.currency);
+      if (feeAmountMinor <= 0)
+        throw new Error("Fee must be greater than zero.");
+      const timestamp = nowIso();
+      tx.insert(transactions)
+        .values({
+          id: crypto.randomUUID(),
+          userId,
+          accountId: source.id,
+          type: "fee",
+          amountMinor: feeAmountMinor,
+          currency: source.currency,
+          transactionDate: transferDate,
+          description: "In-kind transfer fee",
+          notes: input.notes?.trim() || null,
+          externalId: null,
+          transferGroupId: null,
+          eventGroupId,
+          idempotencyKey: null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .run();
+    }
+    validateAndRecalculatePositionAccount(tx, userId, source.id);
+    validateAndRecalculatePositionAccount(tx, userId, destination.id);
+    return eventGroupId;
+  });
+}
+
+export function recordStockSplit(
+  userId: string,
+  input: {
+    accountId: string;
+    instrumentId: string;
+    numerator: string;
+    denominator: string;
+    actionDate: string;
+    idempotencyKey: string;
+    notes?: string;
+  },
+) {
+  const db = getDatabase();
+  assertNotFutureDate(userId, input.actionDate, db);
+  return db.transaction((tx) => {
+    const duplicate = idempotentPositionEvent(tx, userId, input.idempotencyKey);
+    if (duplicate) {
+      return existingGroupOrConflict(
+        duplicate,
+        duplicate.type === "split" &&
+          duplicate.accountId === input.accountId &&
+          duplicate.instrumentId === input.instrumentId,
+      );
+    }
+    const account = requirePositionAccount(tx, userId, input.accountId);
+    const instrument = requireInstrument(tx, userId, input.instrumentId);
+    const { numerator, denominator } = positiveRatio(
+      input.numerator,
+      input.denominator,
+    );
+    const actionDate = dateInputToUtc(input.actionDate);
+    if (
+      !positionQuantityAt(
+        tx,
+        userId,
+        account.id,
+        instrument.id,
+        actionDate,
+      ).isPositive()
+    ) {
+      throw new Error("The account has no position to split on that date.");
+    }
+    const eventGroupId = crypto.randomUUID();
+    insertSpecialPositionEvent(tx, {
+      userId,
+      accountId: account.id,
+      instrumentId: instrument.id,
+      type: "split",
+      quantity: "0",
+      tradeCurrency: instrument.quoteCurrency,
+      tradeDate: actionDate,
+      eventGroupId,
+      idempotencyKey: input.idempotencyKey,
+      actionRatioNumerator: numerator,
+      actionRatioDenominator: denominator,
+      description: `${numerator}:${denominator} stock split`,
+      notes: input.notes,
+    });
+    validateAndRecalculatePositionAccount(tx, userId, account.id);
+    return eventGroupId;
+  });
+}
+
+export function recordSpinoff(
+  userId: string,
+  input: {
+    accountId: string;
+    sourceInstrumentId: string;
+    newInstrumentId: string;
+    numerator: string;
+    denominator: string;
+    actionDate: string;
+    idempotencyKey: string;
+    notes?: string;
+  },
+) {
+  if (input.sourceInstrumentId === input.newInstrumentId) {
+    throw new Error("Choose a different spin-off instrument.");
+  }
+  const db = getDatabase();
+  assertNotFutureDate(userId, input.actionDate, db);
+  return db.transaction((tx) => {
+    const duplicate = idempotentPositionEvent(tx, userId, input.idempotencyKey);
+    if (duplicate) {
+      return existingGroupOrConflict(
+        duplicate,
+        duplicate.type === "spinoff" &&
+          duplicate.accountId === input.accountId &&
+          duplicate.instrumentId === input.newInstrumentId &&
+          duplicate.relatedInstrumentId === input.sourceInstrumentId,
+      );
+    }
+    const account = requirePositionAccount(tx, userId, input.accountId);
+    const source = requireInstrument(tx, userId, input.sourceInstrumentId);
+    const destination = requireInstrument(tx, userId, input.newInstrumentId);
+    const { numerator, denominator } = positiveRatio(
+      input.numerator,
+      input.denominator,
+    );
+    const actionDate = dateInputToUtc(input.actionDate);
+    const sourceQuantity = positionQuantityAt(
+      tx,
+      userId,
+      account.id,
+      source.id,
+      actionDate,
+    );
+    if (!sourceQuantity.isPositive()) {
+      throw new Error("The source position is unavailable on that date.");
+    }
+    const quantity = sourceQuantity.mul(numerator).div(denominator).toString();
+    const eventGroupId = crypto.randomUUID();
+    insertSpecialPositionEvent(tx, {
+      userId,
+      accountId: account.id,
+      instrumentId: destination.id,
+      relatedInstrumentId: source.id,
+      type: "spinoff",
+      quantity,
+      tradeCurrency: destination.quoteCurrency,
+      tradeDate: actionDate,
+      eventGroupId,
+      idempotencyKey: input.idempotencyKey,
+      actionRatioNumerator: numerator,
+      actionRatioDenominator: denominator,
+      description: `Spin-off from ${source.name}`,
+      notes: input.notes,
+    });
+    validateAndRecalculatePositionAccount(tx, userId, account.id);
+    return eventGroupId;
+  });
+}
+
+export function recordMerger(
+  userId: string,
+  input: {
+    accountId: string;
+    sourceInstrumentId: string;
+    destinationInstrumentId: string;
+    numerator: string;
+    denominator: string;
+    actionDate: string;
+    idempotencyKey: string;
+    notes?: string;
+  },
+) {
+  if (input.sourceInstrumentId === input.destinationInstrumentId) {
+    throw new Error("Choose a different merger instrument.");
+  }
+  const db = getDatabase();
+  assertNotFutureDate(userId, input.actionDate, db);
+  return db.transaction((tx) => {
+    const duplicate = idempotentPositionEvent(tx, userId, input.idempotencyKey);
+    if (duplicate) {
+      return existingGroupOrConflict(
+        duplicate,
+        duplicate.type === "merger_out" &&
+          duplicate.accountId === input.accountId &&
+          duplicate.instrumentId === input.sourceInstrumentId &&
+          duplicate.relatedInstrumentId === input.destinationInstrumentId,
+      );
+    }
+    const account = requirePositionAccount(tx, userId, input.accountId);
+    const source = requireInstrument(tx, userId, input.sourceInstrumentId);
+    const destination = requireInstrument(
+      tx,
+      userId,
+      input.destinationInstrumentId,
+    );
+    const { numerator, denominator } = positiveRatio(
+      input.numerator,
+      input.denominator,
+    );
+    const actionDate = dateInputToUtc(input.actionDate);
+    const sourceQuantity = positionQuantityAt(
+      tx,
+      userId,
+      account.id,
+      source.id,
+      actionDate,
+    );
+    if (!sourceQuantity.isPositive()) {
+      throw new Error("The source position is unavailable on that date.");
+    }
+    const destinationQuantity = sourceQuantity
+      .mul(numerator)
+      .div(denominator)
+      .toString();
+    const eventGroupId = crypto.randomUUID();
+    insertSpecialPositionEvent(tx, {
+      userId,
+      accountId: account.id,
+      instrumentId: source.id,
+      relatedInstrumentId: destination.id,
+      type: "merger_out",
+      quantity: sourceQuantity.toString(),
+      tradeCurrency: source.quoteCurrency,
+      tradeDate: actionDate,
+      eventGroupId,
+      idempotencyKey: input.idempotencyKey,
+      actionRatioNumerator: numerator,
+      actionRatioDenominator: denominator,
+      description: `Surrendered in merger with ${destination.name}`,
+      notes: input.notes,
+    });
+    insertSpecialPositionEvent(tx, {
+      userId,
+      accountId: account.id,
+      instrumentId: destination.id,
+      relatedInstrumentId: source.id,
+      type: "merger_in",
+      quantity: destinationQuantity,
+      tradeCurrency: destination.quoteCurrency,
+      tradeDate: actionDate,
+      eventGroupId,
+      actionRatioNumerator: numerator,
+      actionRatioDenominator: denominator,
+      description: `Received in merger from ${source.name}`,
+      notes: input.notes,
+    });
+    validateAndRecalculatePositionAccount(tx, userId, account.id);
+    return eventGroupId;
   });
 }
 
@@ -696,6 +1386,22 @@ export function listPositionEvents(userId: string, accountId: string) {
       and(
         eq(positionEvents.userId, userId),
         eq(positionEvents.accountId, accountId),
+      ),
+    )
+    .all();
+}
+
+export function listPositionCashTransactions(
+  userId: string,
+  accountId: string,
+) {
+  return getDatabase()
+    .select()
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userId, userId),
+        eq(transactions.accountId, accountId),
       ),
     )
     .all();

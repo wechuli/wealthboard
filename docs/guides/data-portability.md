@@ -27,13 +27,17 @@ Wealthboard backup.
 
 ## Complete user export
 
-Open **Settings → Data portability** and download the JSON export. Version 6
+Open **Settings → Data portability** and download the JSON export. Version 8
 contains the current user's settings and source records, including:
 
 - categories, institutions, accounts, transactions, and valuations;
 - exchange rates, goals, contribution plans, milestones, and alert dismissals;
 - beneficiaries, estate directives, allocations, residue, and retained estate
-  summary snapshots.
+  summary snapshots;
+- account tracking modes, investment instruments, ordered position events,
+  effective security prices, and reconciliation observations; and
+- grouped cash links, balance-to-position conversion provenance, selected
+  corporate-action relationships, and price-freshness settings.
 
 It excludes passwords, password hashes, sessions, OIDC identity mappings, AI
 credentials, and every other user's data.
@@ -56,8 +60,11 @@ Wealthboard validates archive version, every field, relationship, percentage
 limit, and retained snapshot hash before replacement. IDs are remapped to the
 current user. Any failure rolls back the complete restore.
 
-Archives from versions 2 through 5 remain restorable. Older formats receive the
-appropriate compatibility defaults, such as an empty estate plan before version 6.
+Archives from versions 2 through 8 remain restorable. Version 7 position data
+upgrades deterministically. Versions 2 through 6 restore accounts in balance
+mode with empty position collections rather than inferring quantities from
+money-only history. Older formats also receive the appropriate institution,
+transaction-ID, goal, and estate compatibility defaults.
 
 ::: danger A user export is not a deployment backup
 A JSON restore cannot recover login identities, OIDC mappings, or another user's

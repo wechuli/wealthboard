@@ -26,13 +26,42 @@
       "cash_effect": null,
       "applied_exchange_rate": null,
       "opening_cost_basis": "1450.00",
+      "event_group_id": null,
       "trade_date": "2026-01-01",
       "settlement_date": null,
       "description": "Opening holding",
       "notes": null
+    },
+    {
+      "external_id": "event:reinvestment:example-etf:buy",
+      "instrument_external_id": "instrument:example-etf",
+      "type": "buy",
+      "quantity": "0.5",
+      "unit_price": "150.00",
+      "trade_currency": "USD",
+      "fee_amount": null,
+      "fee_currency": null,
+      "cash_effect": "75.00",
+      "applied_exchange_rate": null,
+      "opening_cost_basis": null,
+      "event_group_id": "group:reinvestment:example-etf:2026-02-01",
+      "trade_date": "2026-02-01",
+      "settlement_date": "2026-02-01",
+      "description": "Dividend reinvestment purchase",
+      "notes": null
     }
   ],
-  "cash_transactions": [],
+  "cash_transactions": [
+    {
+      "external_id": "cash:reinvestment:example-etf:dividend",
+      "type": "dividend",
+      "amount": "75.00",
+      "date": "2026-02-01",
+      "event_group_id": "group:reinvestment:example-etf:2026-02-01",
+      "description": "Dividend reinvestment income",
+      "notes": null
+    }
+  ],
   "prices": [
     {
       "external_id": "price:example-etf:2026-01-01",

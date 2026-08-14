@@ -36,6 +36,7 @@ export type AccountListItem = {
   goalName: string | null;
   trackingMode: "balance" | "positions";
   positionCount: number;
+  positionValueAsOf: string | null;
   priceState: "not_applicable" | "complete" | "missing" | "stale";
 };
 
@@ -351,6 +352,16 @@ export function AccountsList({
                           : `${account.priceState} prices`}
                       </p>
                     ) : null}
+                    {account.positionValueAsOf ? (
+                      <p className="mt-1">
+                        Value as of{" "}
+                        {formatDate(
+                          account.positionValueAsOf,
+                          timezone,
+                          dateFormat,
+                        )}
+                      </p>
+                    ) : null}
                     <p className="mt-1">
                       {formatDate(account.updatedAt, timezone, dateFormat)}
                     </p>
@@ -424,7 +435,24 @@ export function AccountsList({
                     )}
                   </td>
                   <td className="p-4 text-slate-500">
-                    {formatDate(account.updatedAt, timezone, dateFormat)}
+                    {account.positionValueAsOf ? (
+                      <>
+                        <span className="block">
+                          Value as of{" "}
+                          {formatDate(
+                            account.positionValueAsOf,
+                            timezone,
+                            dateFormat,
+                          )}
+                        </span>
+                        <span className="mt-1 block text-xs">
+                          Updated{" "}
+                          {formatDate(account.updatedAt, timezone, dateFormat)}
+                        </span>
+                      </>
+                    ) : (
+                      formatDate(account.updatedAt, timezone, dateFormat)
+                    )}
                   </td>
                 </tr>
               ))}

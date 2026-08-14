@@ -457,9 +457,9 @@ describe.sequential("account history import", () => {
     ).toThrow("10,000");
   });
 
-  test("round-trips external IDs in v7 and restores v4 with null IDs", async () => {
+  test("round-trips external IDs in v8 and restores v4 with null IDs", async () => {
     const archive = await exportData(aliceId);
-    expect(archive.version).toBe(7);
+    expect(archive.version).toBe(8);
     expect(archive.transactions).toContainEqual(
       expect.objectContaining({ externalId: "equivalent-1" }),
     );
@@ -475,8 +475,13 @@ describe.sequential("account history import", () => {
     const versionFour = structuredClone(archive) as Record<string, unknown> & {
       accounts: Array<Record<string, unknown>>;
       transactions: Array<Record<string, unknown>>;
+      settings: Record<string, unknown>;
     };
     versionFour.version = 4;
+    delete versionFour.accountConversions;
+    delete versionFour.settings.positionStaleDaysStock;
+    delete versionFour.settings.positionStaleDaysEtf;
+    delete versionFour.settings.positionStaleDaysFund;
     delete versionFour.investmentInstruments;
     delete versionFour.positionEvents;
     delete versionFour.securityPrices;
@@ -495,6 +500,7 @@ describe.sequential("account history import", () => {
     versionFour.transactions = versionFour.transactions.map((transaction) => {
       const legacyTransaction = { ...transaction };
       delete legacyTransaction.externalId;
+      delete legacyTransaction.eventGroupId;
       return legacyTransaction;
     });
     restoreUserData(aliceId, versionFour);

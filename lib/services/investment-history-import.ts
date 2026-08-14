@@ -22,9 +22,11 @@ import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { transactionEffect } from "@/lib/finance";
 import {
+  applyPositionEventQuantity,
   calculateQuoteValueMinor,
   canonicalDecimal,
   convertMinorWithAppliedRate,
+  orderPositionEvents,
   replayPositionQuantities,
 } from "@/lib/investments";
 import {
@@ -33,7 +35,10 @@ import {
   parseMoney,
 } from "@/lib/money";
 import { recalculateAccountBalance } from "@/lib/services/accounts";
-import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
+import {
+  calculatePositionAccountSnapshot,
+  type PositionDataIssue,
+} from "@/lib/services/investment-valuation";
 import { requireEnabledCurrency } from "@/lib/services/settings";
 
 export const INVESTMENT_HISTORY_MAX_BYTES = 5 * 1024 * 1024;
@@ -75,6 +80,7 @@ const sourceEventSchema = z
     cash_effect: decimalString.nullable().optional(),
     applied_exchange_rate: decimalString.nullable().optional(),
     opening_cost_basis: decimalString.nullable().optional(),
+    event_group_id: optionalString(200),
     trade_date: z.string().date(),
     settlement_date: z.string().date().nullable().optional(),
     description: optionalString(200),
@@ -95,6 +101,7 @@ const sourceCashSchema = z
     ]),
     amount: decimalString,
     date: z.string().date(),
+    event_group_id: optionalString(200),
     description: optionalString(200),
     notes: nullableText,
   })
@@ -125,6 +132,7 @@ const envelopeSchema = z
 type SourceEnvelope = z.infer<typeof envelopeSchema>;
 type SourceInstrument = z.infer<typeof sourceInstrumentSchema>;
 type SourceEvent = z.infer<typeof sourceEventSchema>;
+type SourceCash = z.infer<typeof sourceCashSchema>;
 type SourcePrice = z.infer<typeof sourcePriceSchema>;
 
 const HOLDINGS_HEADERS = [
@@ -196,6 +204,40 @@ type PreparedInvestment = {
   errors: InvestmentImportError[];
   skippedDuplicates: number;
   sourceRecords: number;
+  dateRange: { from: string; to: string } | null;
+  instrumentChanges: Array<{
+    instrumentId: string;
+    externalId: string | null;
+    name: string;
+    symbol: string | null;
+    resolution: "existing" | "new";
+    currentQuantity: string;
+    projectedQuantity: string;
+    quantityChange: string;
+  }>;
+  eventChanges: Array<{
+    externalId: string | null;
+    instrumentId: string;
+    instrumentName: string;
+    instrumentSymbol: string | null;
+    type: string;
+    tradeDate: string;
+    eventSequence: number;
+    beforeQuantity: string;
+    afterQuantity: string;
+  }>;
+  priceChanges: Array<{
+    externalId: string | null;
+    instrumentId: string;
+    instrumentName: string;
+    instrumentSymbol: string | null;
+    price: string;
+    currency: string;
+    source: string;
+    affectedFrom: string;
+    affectedTo: string;
+    affectedToExclusive: boolean;
+  }>;
   projected: {
     cashMinor: bigint;
     positionsMinor: bigint;
@@ -203,6 +245,8 @@ type PreparedInvestment = {
     complete: boolean;
     missingPrices: string[];
     missingCurrencies: string[];
+    staleInstrumentIds: string[];
+    issues: PositionDataIssue[];
   };
 };
 
@@ -269,6 +313,7 @@ function parseCsvEnvelope(content: string): SourceEnvelope {
           cash_effect: null,
           applied_exchange_rate: null,
           opening_cost_basis: emptyToNull(row.opening_cost_basis),
+          event_group_id: undefined,
           trade_date: row.price_date,
           settlement_date: null,
           description: "Imported opening position",
@@ -305,6 +350,7 @@ function parseCsvEnvelope(content: string): SourceEnvelope {
         cash_effect: emptyToNull(row.cash_effect),
         applied_exchange_rate: emptyToNull(row.applied_exchange_rate),
         opening_cost_basis: null,
+        event_group_id: undefined,
         trade_date: row.trade_date,
         settlement_date: emptyToNull(row.settlement_date),
         description: emptyToNull(row.description),
@@ -325,6 +371,7 @@ function parseCsvEnvelope(content: string): SourceEnvelope {
         type: row.type,
         amount: row.amount,
         date: row.date,
+        event_group_id: undefined,
         description: emptyToNull(row.description),
         notes: emptyToNull(row.notes),
       })),
@@ -429,12 +476,61 @@ function prepareInvestmentHistory(
 ): PreparedInvestment {
   const db = getDatabase();
   const account = accountForImport(userId)(accountId);
-  const timezone =
-    db.query.userSettings
-      .findFirst({ where: eq(userSettings.userId, userId) })
-      .sync()?.timezone ?? "UTC";
-  const today = dateInputForTimezone(timezone);
+  const settings = db.query.userSettings
+    .findFirst({ where: eq(userSettings.userId, userId) })
+    .sync();
+  if (!settings) throw new Error("User settings are unavailable.");
+  const today = dateInputForTimezone(settings.timezone);
   const errors: InvestmentImportError[] = [];
+  const groupedEvents = new Map<string, SourceEvent[]>();
+  const groupedCash = new Map<string, SourceCash[]>();
+  for (const event of envelope.position_events) {
+    if (!event.event_group_id) continue;
+    groupedEvents.set(event.event_group_id, [
+      ...(groupedEvents.get(event.event_group_id) ?? []),
+      event,
+    ]);
+  }
+  for (const cash of envelope.cash_transactions) {
+    if (!cash.event_group_id) continue;
+    groupedCash.set(cash.event_group_id, [
+      ...(groupedCash.get(cash.event_group_id) ?? []),
+      cash,
+    ]);
+  }
+  const externalGroupIds = new Set([
+    ...groupedEvents.keys(),
+    ...groupedCash.keys(),
+  ]);
+  const eventGroupIds = new Map(
+    [...externalGroupIds].map((externalId) => [
+      externalId,
+      crypto.randomUUID(),
+    ]),
+  );
+  for (const externalId of externalGroupIds) {
+    const eventRows = groupedEvents.get(externalId) ?? [];
+    const cashRows = groupedCash.get(externalId) ?? [];
+    const dates = new Set([
+      ...eventRows.map((row) => row.trade_date),
+      ...cashRows.map((row) => row.date),
+    ]);
+    if (
+      eventRows.length < 1 ||
+      eventRows.some((row) => row.type !== "buy") ||
+      cashRows.length !== 1 ||
+      cashRows[0].type !== "dividend" ||
+      dates.size !== 1
+    ) {
+      errors.push({
+        collection: "event_groups",
+        row: 0,
+        externalId,
+        message:
+          "A reinvestment group requires one dividend and one or more buys on the same date.",
+      });
+    }
+  }
   let skippedDuplicates = 0;
   const timestampBase = Date.now();
   const existingInstruments = db
@@ -541,6 +637,13 @@ function prepareInvestmentHistory(
     .where(eq(exchangeRates.userId, userId))
     .all();
   const events: Array<typeof positionEvents.$inferInsert> = [];
+  const sequenceByDate = new Map<string, number>();
+  for (const event of existingEvents) {
+    sequenceByDate.set(
+      event.tradeDate,
+      Math.max(sequenceByDate.get(event.tradeDate) ?? 0, event.eventSequence),
+    );
+  }
 
   envelope.position_events.forEach((source, index) => {
     if (eventDuplicates.has(source.external_id)) {
@@ -598,6 +701,15 @@ function prepareInvestmentHistory(
       const feeAmountMinor = source.fee_amount
         ? parseMoney(source.fee_amount, feeCurrency!)
         : null;
+      if (
+        (source.fee_amount || source.cash_effect) &&
+        source.type !== "buy" &&
+        source.type !== "sell"
+      ) {
+        throw new Error(
+          "Fees and settlement amounts apply only to buys and sells.",
+        );
+      }
       if (feeAmountMinor != null && feeAmountMinor < 0)
         throw new Error("Fee cannot be negative.");
       const appliedExchangeRate = source.applied_exchange_rate
@@ -685,6 +797,19 @@ function prepareInvestmentHistory(
       const createdAt = new Date(
         timestampBase + envelope.instruments.length + index,
       ).toISOString();
+      const eventSequence = (sequenceByDate.get(tradeDate) ?? 0) + 1;
+      sequenceByDate.set(tradeDate, eventSequence);
+      if (source.opening_cost_basis && source.type !== "opening_position") {
+        throw new Error(
+          "Opening cost basis applies only to an opening position.",
+        );
+      }
+      const openingCostBasisMinor = source.opening_cost_basis
+        ? parseMoney(source.opening_cost_basis, account.currency)
+        : null;
+      if (openingCostBasisMinor != null && openingCostBasisMinor < 0) {
+        throw new Error("Opening cost basis cannot be negative.");
+      }
       events.push({
         id: crypto.randomUUID(),
         userId,
@@ -699,14 +824,16 @@ function prepareInvestmentHistory(
         feeCurrency,
         cashEffectMinor: checkedNumber(cashEffectMinor),
         appliedExchangeRate,
-        openingCostBasisMinor: source.opening_cost_basis
-          ? parseMoney(source.opening_cost_basis, account.currency)
-          : null,
+        openingCostBasisMinor,
         tradeDate,
+        eventSequence,
         settlementDate: source.settlement_date
           ? dateInputToUtc(source.settlement_date)
           : null,
         externalId: source.external_id,
+        eventGroupId: source.event_group_id
+          ? eventGroupIds.get(source.event_group_id)
+          : null,
         description: source.description ?? null,
         notes: source.notes ?? null,
         createdAt,
@@ -723,8 +850,10 @@ function prepareInvestmentHistory(
     }
   });
 
+  const currentQuantities = replayPositionQuantities(existingEvents);
+  let quantities = currentQuantities;
   try {
-    replayPositionQuantities([
+    quantities = replayPositionQuantities([
       ...existingEvents,
       ...(events as PositionEvent[]),
     ]);
@@ -809,6 +938,9 @@ function prepareInvestmentHistory(
         amountMinor,
         currency: account.currency,
         transactionDate,
+        eventGroupId: source.event_group_id
+          ? eventGroupIds.get(source.event_group_id)
+          : null,
         description: source.description ?? null,
         notes: source.notes ?? null,
         createdAt,
@@ -826,6 +958,55 @@ function prepareInvestmentHistory(
       });
     }
   });
+
+  for (const externalGroupId of externalGroupIds) {
+    const sourceEvents = groupedEvents.get(externalGroupId) ?? [];
+    const sourceCash = groupedCash.get(externalGroupId) ?? [];
+    const existingGroupValues = [
+      ...sourceEvents.map((source) =>
+        existingEventByExternal.get(source.external_id),
+      ),
+      ...sourceCash.map((source) =>
+        existingCashByExternal.get(source.external_id),
+      ),
+    ]
+      .filter((row): row is PositionEvent | typeof transactions.$inferSelect =>
+        Boolean(row),
+      )
+      .map((row) => row.eventGroupId);
+    if (!existingGroupValues.length) continue;
+    const existingGroupIds = new Set(existingGroupValues.filter(Boolean));
+    if (
+      existingGroupValues.some((value) => !value) ||
+      existingGroupIds.size !== 1
+    ) {
+      errors.push({
+        collection: "event_groups",
+        row: 0,
+        externalId: externalGroupId,
+        message:
+          "Existing reinvestment records do not share one valid event group.",
+      });
+      continue;
+    }
+    const internalGroupId = [...existingGroupIds][0]!;
+    const sourceEventIds = new Set(
+      sourceEvents.map((source) => source.external_id),
+    );
+    const sourceCashIds = new Set(
+      sourceCash.map((source) => source.external_id),
+    );
+    for (const event of events) {
+      if (event.externalId && sourceEventIds.has(event.externalId)) {
+        event.eventGroupId = internalGroupId;
+      }
+    }
+    for (const row of cash) {
+      if (row.externalId && sourceCashIds.has(row.externalId)) {
+        row.eventGroupId = internalGroupId;
+      }
+    }
+  }
 
   const involvedInstrumentIds = [
     ...new Set([...instrumentByExternal.values()].map((row) => row.id)),
@@ -935,7 +1116,6 @@ function prepareInvestmentHistory(
       0n,
     );
   const allEvents = [...existingEvents, ...(events as PositionEvent[])];
-  const quantities = replayPositionQuantities(allEvents);
   const allPrices = [...existingPrices, ...(prices as SecurityPrice[])];
   const allInstruments = new Map(
     [...existingInstruments, ...(instruments as InvestmentInstrument[])].map(
@@ -945,10 +1125,23 @@ function prepareInvestmentHistory(
   let projectedPositionsMinor = 0n;
   const missingPrices: string[] = [];
   const missingCurrencies = new Set<string>();
+  const staleInstrumentIds: string[] = [];
+  const issues: PositionDataIssue[] = [];
+  const projectionAsOf = nowIso();
   for (const [instrumentId, quantity] of quantities) {
     if (quantity === "0") continue;
     const instrument = allInstruments.get(instrumentId);
     if (!instrument) continue;
+    const exposureFrom =
+      allEvents
+        .filter((event) => event.instrumentId === instrumentId)
+        .sort(
+          (left, right) =>
+            left.tradeDate.localeCompare(right.tradeDate) ||
+            (left.eventSequence ?? 0) - (right.eventSequence ?? 0) ||
+            left.createdAt.localeCompare(right.createdAt) ||
+            left.id.localeCompare(right.id),
+        )[0]?.tradeDate ?? projectionAsOf;
     const price = allPrices
       .filter((row) => row.instrumentId === instrumentId)
       .sort((left, right) =>
@@ -956,6 +1149,19 @@ function prepareInvestmentHistory(
       )[0];
     if (!price) {
       missingPrices.push(instrumentId);
+      issues.push({
+        type: "missing_price",
+        instrumentId,
+        instrumentName: instrument.name,
+        instrumentSymbol: instrument.symbol,
+        currency: instrument.quoteCurrency,
+        affectedFrom: exposureFrom,
+        affectedTo: projectionAsOf,
+        lastPriceDate: null,
+        source: null,
+        provenance: null,
+        thresholdDays: null,
+      });
       continue;
     }
     try {
@@ -969,8 +1175,134 @@ function prepareInvestmentHistory(
     } catch (error) {
       if (!(error instanceof MissingExchangeRateError)) throw error;
       missingCurrencies.add(price.currency);
+      issues.push({
+        type: "missing_rate",
+        instrumentId,
+        instrumentName: instrument.name,
+        instrumentSymbol: instrument.symbol,
+        currency: price.currency,
+        affectedFrom: exposureFrom,
+        affectedTo: projectionAsOf,
+        lastPriceDate: price.effectiveDate,
+        source: price.source,
+        provenance: price.provenance,
+        thresholdDays: null,
+      });
+    }
+    const thresholdDays =
+      instrument.assetType === "stock"
+        ? settings.positionStaleDaysStock
+        : instrument.assetType === "etf"
+          ? settings.positionStaleDaysEtf
+          : settings.positionStaleDaysFund;
+    if (
+      new Date(projectionAsOf).getTime() -
+        new Date(price.effectiveDate).getTime() >
+      thresholdDays * 86_400_000
+    ) {
+      staleInstrumentIds.push(instrumentId);
+      issues.push({
+        type: "stale_price",
+        instrumentId,
+        instrumentName: instrument.name,
+        instrumentSymbol: instrument.symbol,
+        currency: price.currency,
+        affectedFrom: new Date(
+          new Date(price.effectiveDate).getTime() + thresholdDays * 86_400_000,
+        ).toISOString(),
+        affectedTo: projectionAsOf,
+        lastPriceDate: price.effectiveDate,
+        source: price.source,
+        provenance: price.provenance,
+        thresholdDays,
+      });
     }
   }
+
+  const involvedQuantityIds = new Set([
+    ...currentQuantities.keys(),
+    ...quantities.keys(),
+    ...instrumentByExternal.values().map((instrument) => instrument.id),
+  ]);
+  const newInstrumentIds = new Set(
+    instruments.map((instrument) => instrument.id!),
+  );
+  const instrumentChanges = [...involvedQuantityIds]
+    .map((instrumentId) => {
+      const instrument = allInstruments.get(instrumentId);
+      if (!instrument) return null;
+      const currentQuantity = currentQuantities.get(instrumentId) ?? "0";
+      const projectedQuantity = quantities.get(instrumentId) ?? "0";
+      return {
+        instrumentId,
+        externalId: instrument.externalId,
+        name: instrument.name,
+        symbol: instrument.symbol,
+        resolution: newInstrumentIds.has(instrumentId)
+          ? ("new" as const)
+          : ("existing" as const),
+        currentQuantity,
+        projectedQuantity,
+        quantityChange: new Decimal(projectedQuantity)
+          .minus(currentQuantity)
+          .toString(),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const importedEventIds = new Set(events.map((event) => event.id!));
+  const quantityState = new Map<string, Decimal>();
+  const eventChanges: PreparedInvestment["eventChanges"] = [];
+  for (const event of orderPositionEvents(allEvents)) {
+    const before = quantityState.get(event.instrumentId) ?? new Decimal(0);
+    const after = applyPositionEventQuantity(before, event);
+    quantityState.set(event.instrumentId, after);
+    if (!importedEventIds.has(event.id)) continue;
+    const instrument = allInstruments.get(event.instrumentId);
+    if (!instrument) continue;
+    eventChanges.push({
+      externalId: event.externalId,
+      instrumentId: event.instrumentId,
+      instrumentName: instrument.name,
+      instrumentSymbol: instrument.symbol,
+      type: event.type,
+      tradeDate: event.tradeDate,
+      eventSequence: event.eventSequence,
+      beforeQuantity: before.toString(),
+      afterQuantity: after.toString(),
+    });
+  }
+  const priceChanges: PreparedInvestment["priceChanges"] = prices
+    .map((price) => {
+      const instrument = allInstruments.get(price.instrumentId!);
+      if (!instrument) return null;
+      const nextPrice = allPrices
+        .filter(
+          (candidate) =>
+            candidate.instrumentId === price.instrumentId &&
+            candidate.effectiveDate > price.effectiveDate!,
+        )
+        .sort((left, right) =>
+          left.effectiveDate.localeCompare(right.effectiveDate),
+        )[0];
+      return {
+        externalId: price.externalId ?? null,
+        instrumentId: instrument.id,
+        instrumentName: instrument.name,
+        instrumentSymbol: instrument.symbol,
+        price: price.price!,
+        currency: price.currency!,
+        source: price.source!,
+        affectedFrom: price.effectiveDate!,
+        affectedTo: nextPrice?.effectiveDate ?? projectionAsOf,
+        affectedToExclusive: Boolean(nextPrice),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const sourceDates = [
+    ...envelope.position_events.map((row) => row.trade_date),
+    ...envelope.cash_transactions.map((row) => row.date),
+    ...envelope.prices.map((row) => row.effective_date),
+  ].sort();
 
   return {
     account,
@@ -980,6 +1312,12 @@ function prepareInvestmentHistory(
     prices,
     errors,
     skippedDuplicates,
+    dateRange: sourceDates.length
+      ? { from: sourceDates[0], to: sourceDates.at(-1)! }
+      : null,
+    instrumentChanges,
+    eventChanges,
+    priceChanges,
     sourceRecords:
       envelope.instruments.length +
       envelope.position_events.length +
@@ -992,6 +1330,8 @@ function prepareInvestmentHistory(
       complete: missingPrices.length === 0 && missingCurrencies.size === 0,
       missingPrices,
       missingCurrencies: [...missingCurrencies],
+      staleInstrumentIds,
+      issues,
     },
   };
 }
@@ -1023,6 +1363,7 @@ export function previewInvestmentHistory(
       positionsMinor: checkedNumber(current.positionsMinor),
       totalMinor: checkedNumber(current.totalMinor),
       complete: current.complete,
+      issues: current.issues,
     },
     projected: {
       ...prepared.projected,
@@ -1030,6 +1371,13 @@ export function previewInvestmentHistory(
       positionsMinor: checkedNumber(prepared.projected.positionsMinor),
       totalMinor: checkedNumber(prepared.projected.totalMinor),
     },
+    netChangeMinor: checkedNumber(
+      prepared.projected.totalMinor - current.totalMinor,
+    ),
+    dateRange: prepared.dateRange,
+    instrumentChanges: prepared.instrumentChanges,
+    eventChanges: prepared.eventChanges,
+    priceChanges: prepared.priceChanges,
     summary: {
       records: prepared.sourceRecords,
       ready:

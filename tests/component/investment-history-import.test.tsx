@@ -37,6 +37,7 @@ describe("investment history import workflow", () => {
             positionsMinor: 2_000,
             totalMinor: 3_000,
             complete: true,
+            issues: [],
           },
           projected: {
             cashMinor: 2_000,
@@ -45,7 +46,50 @@ describe("investment history import workflow", () => {
             complete: true,
             missingPrices: [],
             missingCurrencies: [],
+            staleInstrumentIds: [],
+            issues: [],
           },
+          netChangeMinor: 3_000,
+          dateRange: { from: "2026-01-01", to: "2026-01-31" },
+          instrumentChanges: [
+            {
+              instrumentId: "instrument-1",
+              externalId: "instrument:1",
+              name: "Example ETF",
+              symbol: "EXMP",
+              resolution: "existing",
+              currentQuantity: "1",
+              projectedQuantity: "2",
+              quantityChange: "1",
+            },
+          ],
+          eventChanges: [
+            {
+              externalId: "event:1",
+              instrumentId: "instrument-1",
+              instrumentName: "Example ETF",
+              instrumentSymbol: "EXMP",
+              type: "buy",
+              tradeDate: "2026-01-15T12:00:00.000Z",
+              eventSequence: 1,
+              beforeQuantity: "1",
+              afterQuantity: "2",
+            },
+          ],
+          priceChanges: [
+            {
+              externalId: "price:1",
+              instrumentId: "instrument-1",
+              instrumentName: "Example ETF",
+              instrumentSymbol: "EXMP",
+              price: "10",
+              currency: "USD",
+              source: "statement",
+              affectedFrom: "2026-01-01T12:00:00.000Z",
+              affectedTo: "2026-01-31T12:00:00.000Z",
+              affectedToExclusive: false,
+            },
+          ],
           summary: { records: 4, ready: 4, skippedDuplicates: 0, failed: 0 },
           canCommit: true,
           errors: [],
@@ -76,15 +120,17 @@ describe("investment history import workflow", () => {
     await user.click(screen.getByRole("button", { name: "Preview file" }));
 
     expect(
-      await screen.findByText("Brokerage · 4 source records"),
+      await screen.findByText(/Brokerage · 4 source records/),
     ).toBeVisible();
+    expect(screen.getByText("existing")).toBeVisible();
+    expect(screen.getAllByText(/2026-01-01 to 2026-01-31/)).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Confirm atomic import" }),
     ).toBeEnabled();
     await user.click(
       screen.getByRole("button", { name: "Hide financial values" }),
     );
-    expect(screen.getAllByText("••••••")).toHaveLength(4);
+    expect(screen.getAllByText("••••••")).toHaveLength(11);
     await user.click(
       screen.getByRole("button", { name: "Confirm atomic import" }),
     );
@@ -113,6 +159,7 @@ describe("investment history import workflow", () => {
             positionsMinor: 0,
             totalMinor: 0,
             complete: true,
+            issues: [],
           },
           projected: {
             cashMinor: 0,
@@ -121,7 +168,28 @@ describe("investment history import workflow", () => {
             complete: false,
             missingPrices: ["instrument-1"],
             missingCurrencies: [],
+            staleInstrumentIds: [],
+            issues: [
+              {
+                type: "missing_price",
+                instrumentId: "instrument-1",
+                instrumentName: "Missing Price Fund",
+                instrumentSymbol: "MISS",
+                currency: "USD",
+                affectedFrom: "2026-01-01T12:00:00.000Z",
+                affectedTo: "2026-01-31T12:00:00.000Z",
+                lastPriceDate: null,
+                source: null,
+                provenance: null,
+                thresholdDays: null,
+              },
+            ],
           },
+          netChangeMinor: 0,
+          dateRange: { from: "2026-01-01", to: "2026-01-01" },
+          instrumentChanges: [],
+          eventChanges: [],
+          priceChanges: [],
           summary: { records: 1, ready: 0, skippedDuplicates: 0, failed: 1 },
           canCommit: false,
           errors: [

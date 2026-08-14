@@ -19,13 +19,18 @@ export default async function NewInstrumentPage({
     getAccount(userId, id),
     getCurrencyConfiguration(userId),
   ]);
-  if (!account || account.trackingMode !== "positions" || account.archivedAt)
+  if (
+    !account ||
+    account.archivedAt ||
+    account.isLiability ||
+    !account.categoryIsInvestible
+  )
     notFound();
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Add instrument"
-        description={`Create a security reference for ${account.name}.`}
+        description={`Create a security reference for ${account.name}${account.trackingMode === "balance" ? " before conversion" : ""}.`}
       />
       <Card>
         <CardHeader>

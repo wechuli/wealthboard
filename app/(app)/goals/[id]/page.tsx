@@ -158,6 +158,33 @@ export default async function GoalDetailPage({
           dates before relying on the forecast.
         </div>
       ) : null}
+      {goal.positionIssues.length ? (
+        <div className="mt-3 space-y-2">
+          {goal.positionIssues.map((issue) => (
+            <div
+              key={`${issue.type}-${issue.instrumentId}`}
+              className="rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-xs text-slate-300"
+            >
+              <span className="font-medium text-amber-200">
+                {issue.instrumentSymbol || issue.instrumentName}
+              </span>{" "}
+              · {issue.currency} · affected{" "}
+              {formatDate(
+                issue.affectedFrom,
+                settings.timezone,
+                settings.preferredDateFormat,
+              )}{" "}
+              to{" "}
+              {formatDate(
+                issue.affectedTo,
+                settings.timezone,
+                settings.preferredDateFormat,
+              )}
+              {issue.source ? ` · ${issue.source}` : ""}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <Card className="mt-5">
         <CardContent className="p-5">

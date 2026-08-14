@@ -94,10 +94,25 @@ describe("migration runner", () => {
           (id, user_id, name, slug, icon, display_order, asset_or_liability, is_liquid, is_investible, is_archived, is_system, created_at, updated_at)
         VALUES
           ('category-existing', 'local-user', 'Securities', 'securities', 'Chart', 0, 'asset', 0, 1, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+        INSERT INTO user_settings
+          (id, user_id, display_name, created_at, updated_at)
+        VALUES
+          ('settings-existing', 'local-user', 'Existing Local', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
         INSERT INTO accounts
           (id, user_id, name, category_id, currency, current_value_minor, is_liability, is_included_in_net_worth, created_at, updated_at)
         VALUES
-          ('account-existing', 'local-user', 'Existing investment', 'category-existing', 'USD', 12345, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+          ('account-existing', 'local-user', 'Existing investment', 'category-existing', 'USD', 12345, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z'),
+          ('account-position', 'local-user', 'Existing positions', 'category-existing', 'USD', 0, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+        UPDATE accounts SET tracking_mode = 'positions' WHERE id = 'account-position';
+        INSERT INTO investment_instruments
+          (id, user_id, external_id, name, symbol, identifier_type, identifier, exchange_mic, asset_type, quote_currency, created_at, updated_at)
+        VALUES
+          ('instrument-existing', 'local-user', 'instrument:existing', 'Existing ETF', 'OLD', 'ticker_exchange', 'OLD', 'XNAS', 'etf', 'USD', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+        INSERT INTO position_events
+          (id, user_id, account_id, instrument_id, type, quantity, trade_currency, cash_effect_minor, trade_date, created_at, updated_at)
+        VALUES
+          ('z-opening', 'local-user', 'account-position', 'instrument-existing', 'opening_position', '5', 'USD', 0, '2026-01-01T12:00:00.000Z', '2026-01-01T12:00:00.000Z', '2026-01-01T12:00:00.000Z'),
+          ('a-sell', 'local-user', 'account-position', 'instrument-existing', 'sell', '2', 'USD', 200, '2026-01-01T12:00:00.000Z', '2026-01-01T12:00:01.000Z', '2026-01-01T12:00:01.000Z');
       `);
     })();
     sqlite.close();
@@ -148,6 +163,7 @@ describe("migration runner", () => {
     ).toEqual({ tracking_mode: "balance", current_value_minor: 12345 });
     expect(
       [
+        "account_conversions",
         "investment_instruments",
         "position_events",
         "security_prices",
@@ -174,6 +190,27 @@ describe("migration runner", () => {
         "position_events_user_account_date_idx",
       ]),
     );
+    expect(
+      upgraded
+        .prepare(
+          "SELECT id, event_sequence FROM position_events WHERE account_id = ? ORDER BY event_sequence",
+        )
+        .all("account-position"),
+    ).toEqual([
+      { id: "z-opening", event_sequence: 1 },
+      { id: "a-sell", event_sequence: 2 },
+    ]);
+    expect(
+      upgraded
+        .prepare(
+          "SELECT position_stale_days_stock, position_stale_days_etf, position_stale_days_fund FROM user_settings WHERE user_id = ?",
+        )
+        .get("local-user"),
+    ).toEqual({
+      position_stale_days_stock: 7,
+      position_stale_days_etf: 7,
+      position_stale_days_fund: 31,
+    });
     upgraded.exec(`
       INSERT INTO users
         (id, username, password_hash, status, session_version, created_at, updated_at)

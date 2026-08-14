@@ -36,7 +36,10 @@ import {
   percentage,
 } from "@/lib/money";
 import { requireEnabledCurrency } from "@/lib/services/settings";
-import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
+import {
+  calculatePositionAccountSnapshot,
+  type PositionDataIssue,
+} from "@/lib/services/investment-valuation";
 
 type GoalInput = {
   idempotencyKey?: string;
@@ -100,6 +103,7 @@ export async function listGoals(userId: string, now = new Date()) {
     let missingExchangeRate = false;
     let missingPositionData = false;
     let stalePositionData = false;
+    let positionIssues: PositionDataIssue[] = [];
     let current = BigInt(goal.currentAmountMinor);
     if (goal.accountValueMinor !== null && goal.accountCurrency) {
       if (goal.linkedAccountId && goal.accountTrackingMode === "positions") {
@@ -111,6 +115,7 @@ export async function listGoals(userId: string, now = new Date()) {
         );
         missingPositionData = !snapshot.complete;
         stalePositionData = snapshot.staleInstrumentIds.length > 0;
+        positionIssues = snapshot.issues;
         current = snapshot.totalMinor;
       }
       try {
@@ -191,6 +196,7 @@ export async function listGoals(userId: string, now = new Date()) {
       missingExchangeRate,
       missingPositionData,
       stalePositionData,
+      positionIssues,
       valueIncomplete,
     };
   });

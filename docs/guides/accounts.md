@@ -39,6 +39,58 @@ Common actions include:
 - **Import:** load prepared history into this account.
 - **Estate plan:** define inheritance intent for an asset.
 
+## Track investment positions
+
+Choose **Units and prices** when creating an active investment account that
+contains brokerage cash plus long-only stocks, ETFs, or directly priced funds.
+Position accounts derive value from:
+
+- replayed account-currency cash;
+- instrument quantities replayed in explicit same-date order;
+- the latest price effective on or before the value date; and
+- effective-dated exchange rates when quote and account currencies differ.
+
+Use **Buy** and **Sell** for trades, **Price** for effective unit prices, and
+**Reconcile** to compare a broker statement with calculated cash and positions.
+Reconciliation observations never overwrite quantities, prices, or values.
+
+The **Reinvest**, **Move units**, and **Corp action** quick actions record
+grouped dividend reinvestments, paired in-kind transfers, and explicit stock
+splits, spin-offs, or mergers. Grouped records save, delete, and replay
+atomically. Corporate-action quantities are planning records, not tax-lot or
+tax-basis calculations.
+
+Missing prices or rates make totals incomplete rather than treating exposure as
+zero. Price rows retain their date, source, and provenance. Configure separate
+stock, ETF, and fund freshness thresholds under **Settings**; account, goal,
+estate, dashboard, report, and import views show affected date ranges.
+
+## Convert an existing investment account
+
+For an active balance-tracked investment account, choose **Convert**. Select an
+as-of date at or after its latest activity, enter explicit opening cash,
+holdings, unit prices, and optional reference cost basis, then preview the
+source balance against the replacement total. A non-zero difference requires
+explicit confirmation.
+
+Confirmation archives the source effective on the conversion date and creates
+a linked position replacement. Earlier balance history remains unchanged;
+Wealthboard never infers units from monetary purchase descriptions or
+valuations. Existing goal and estate links move to the replacement atomically.
+
+## Import investment history
+
+Position accounts use **Investment History v1**, separate from Account History
+Import v1. JSON supports bounded instruments, position events, cash activity,
+prices, and optional grouped dividend reinvestments. Separate CSV templates are
+available for opening holdings, trades, cash, and prices.
+
+Preview shows existing/new instrument resolution, before/after quantities,
+date range, net change, missing/stale price or rate issues, duplicates,
+conflicts, and oversells. Confirmation reparses the SHA-256-confirmed file and
+commits the complete valid sequence in one transaction; one invalid dependent
+record blocks the whole investment import.
+
 ## Edit account metadata
 
 Select **Edit** to change the name, description, category, institution, masked
