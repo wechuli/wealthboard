@@ -606,6 +606,15 @@ function prepareInvestmentHistory(
           })
         : null;
       if (
+        appliedExchangeRate &&
+        ((source.type !== "buy" && source.type !== "sell") ||
+          tradeCurrency === account.currency)
+      ) {
+        throw new Error(
+          "An applied settlement rate is only valid for cross-currency trades.",
+        );
+      }
+      if (
         (source.type === "buy" || source.type === "sell") &&
         tradeCurrency !== account.currency &&
         !source.cash_effect &&
@@ -616,27 +625,6 @@ function prepareInvestmentHistory(
         );
       }
       const tradeDate = dateInputToUtc(source.trade_date);
-      const convertToAccount = (amountMinor: number, fromCurrency: string) =>
-        appliedExchangeRate && fromCurrency === tradeCurrency
-          ? convertMinorWithAppliedRate(
-              amountMinor,
-              fromCurrency,
-              account.currency,
-              appliedExchangeRate,
-            )
-          : convertMinor(
-              amountMinor,
-              fromCurrency,
-              account.currency,
-              rates,
-              tradeDate,
-            );
-      const grossAccountMinor = grossAmountMinor
-        ? convertToAccount(grossAmountMinor, tradeCurrency)
-        : 0n;
-      const feeAccountMinor = feeAmountMinor
-        ? convertToAccount(feeAmountMinor, feeCurrency!)
-        : 0n;
       let cashEffectMinor = 0n;
       if (source.type === "buy" || source.type === "sell") {
         if (source.cash_effect) {
@@ -647,6 +635,30 @@ function prepareInvestmentHistory(
             throw new Error("Cash effect must be greater than zero.");
           cashEffectMinor = source.type === "buy" ? -actual : actual;
         } else {
+          const convertToAccount = (
+            amountMinor: number,
+            fromCurrency: string,
+          ) =>
+            appliedExchangeRate && fromCurrency === tradeCurrency
+              ? convertMinorWithAppliedRate(
+                  amountMinor,
+                  fromCurrency,
+                  account.currency,
+                  appliedExchangeRate,
+                )
+              : convertMinor(
+                  amountMinor,
+                  fromCurrency,
+                  account.currency,
+                  rates,
+                  tradeDate,
+                );
+          const grossAccountMinor = grossAmountMinor
+            ? convertToAccount(grossAmountMinor, tradeCurrency)
+            : 0n;
+          const feeAccountMinor = feeAmountMinor
+            ? convertToAccount(feeAmountMinor, feeCurrency!)
+            : 0n;
           cashEffectMinor =
             source.type === "buy"
               ? -(grossAccountMinor + feeAccountMinor)

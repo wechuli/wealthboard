@@ -60,6 +60,7 @@ type GoalInput = {
 export async function listGoals(userId: string, now = new Date()) {
   const db = getDatabase();
   const today = dateInputForTimezone(getUserTimezone(userId), now);
+  const evaluationDate = endOfUtcDay(now).toISOString();
   const rows = await db
     .select({
       ...getTableColumns(goals),
@@ -106,7 +107,7 @@ export async function listGoals(userId: string, now = new Date()) {
           userId,
           db,
           goal.linkedAccountId,
-          endOfUtcDay(now).toISOString(),
+          evaluationDate,
         );
         missingPositionData = !snapshot.complete;
         stalePositionData = snapshot.staleInstrumentIds.length > 0;
@@ -118,7 +119,7 @@ export async function listGoals(userId: string, now = new Date()) {
           goal.accountCurrency,
           goal.currency,
           rates,
-          endOfUtcDay(new Date()).toISOString(),
+          evaluationDate,
         );
       } catch (error) {
         if (!(error instanceof MissingExchangeRateError)) throw error;

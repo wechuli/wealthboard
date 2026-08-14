@@ -370,33 +370,26 @@ function savePositionEvent(
           label: "applied exchange rate",
         })
       : null;
-    const rates = tx
-      .select()
-      .from(exchangeRates)
-      .where(eq(exchangeRates.userId, userId))
-      .all();
+    if (
+      appliedExchangeRate &&
+      ((input.type !== "buy" && input.type !== "sell") ||
+        tradeCurrency === account.currency)
+    ) {
+      throw new Error(
+        "An applied settlement rate is only valid for cross-currency trades.",
+      );
+    }
+    if (
+      (input.type === "buy" || input.type === "sell") &&
+      tradeCurrency !== account.currency &&
+      !input.cashEffect &&
+      !appliedExchangeRate
+    ) {
+      throw new Error(
+        "Cross-currency trades require an actual cash effect or applied settlement rate.",
+      );
+    }
     const tradeDate = dateInputToUtc(input.tradeDate);
-    const convertToAccount = (amountMinor: number, fromCurrency: string) =>
-      appliedExchangeRate && fromCurrency === tradeCurrency
-        ? convertMinorWithAppliedRate(
-            amountMinor,
-            fromCurrency,
-            account.currency,
-            appliedExchangeRate,
-          )
-        : convertMinor(
-            amountMinor,
-            fromCurrency,
-            account.currency,
-            rates,
-            tradeDate,
-          );
-    const grossAccountMinor = grossAmountMinor
-      ? convertToAccount(grossAmountMinor, tradeCurrency)
-      : 0n;
-    const feeAccountMinor = feeAmountMinor
-      ? convertToAccount(feeAmountMinor, feeCurrency!)
-      : 0n;
     let cashEffectMinor = 0n;
     if (input.type === "buy" || input.type === "sell") {
       if (input.cashEffect) {
@@ -405,6 +398,32 @@ function savePositionEvent(
           throw new Error("Cash effect must be greater than zero.");
         cashEffectMinor = input.type === "buy" ? -actual : actual;
       } else {
+        const rates = tx
+          .select()
+          .from(exchangeRates)
+          .where(eq(exchangeRates.userId, userId))
+          .all();
+        const convertToAccount = (amountMinor: number, fromCurrency: string) =>
+          appliedExchangeRate && fromCurrency === tradeCurrency
+            ? convertMinorWithAppliedRate(
+                amountMinor,
+                fromCurrency,
+                account.currency,
+                appliedExchangeRate,
+              )
+            : convertMinor(
+                amountMinor,
+                fromCurrency,
+                account.currency,
+                rates,
+                tradeDate,
+              );
+        const grossAccountMinor = grossAmountMinor
+          ? convertToAccount(grossAmountMinor, tradeCurrency)
+          : 0n;
+        const feeAccountMinor = feeAmountMinor
+          ? convertToAccount(feeAmountMinor, feeCurrency!)
+          : 0n;
         cashEffectMinor =
           input.type === "buy"
             ? -(grossAccountMinor + feeAccountMinor)

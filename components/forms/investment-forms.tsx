@@ -209,6 +209,7 @@ export function PositionEventForm({
     },
   });
   const type = useWatch({ control, name: "type" });
+  const tradeCurrency = useWatch({ control, name: "tradeCurrency" });
   const submit = handleSubmit((_values, event) => {
     const formData = new FormData(event?.target as HTMLFormElement);
     startTransition(async () => setState(await action(formData)));
@@ -312,17 +313,19 @@ export function PositionEventForm({
                 {...register("cashEffect")}
               />
             </div>
-            <div>
-              <Label htmlFor="appliedExchangeRate">
-                Applied settlement rate
-              </Label>
-              <Input
-                id="appliedExchangeRate"
-                inputMode="decimal"
-                placeholder="Optional"
-                {...register("appliedExchangeRate")}
-              />
-            </div>
+            {tradeCurrency !== accountCurrency ? (
+              <div>
+                <Label htmlFor="appliedExchangeRate">
+                  Applied settlement rate
+                </Label>
+                <Input
+                  id="appliedExchangeRate"
+                  inputMode="decimal"
+                  placeholder="Optional"
+                  {...register("appliedExchangeRate")}
+                />
+              </div>
+            ) : null}
           </>
         ) : (
           <input type="hidden" {...register("tradeCurrency")} />

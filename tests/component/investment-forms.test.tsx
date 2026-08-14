@@ -87,6 +87,15 @@ describe("investment forms", () => {
     expect(screen.getByLabelText("Trade currency")).toBeVisible();
     expect(screen.getByLabelText(/Actual settlement amount/)).toBeVisible();
     expect(
+      screen.queryByLabelText("Applied settlement rate"),
+    ).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Trade currency"), "KES");
+    expect(screen.getByLabelText("Applied settlement rate")).toBeVisible();
+    await user.selectOptions(screen.getByLabelText("Trade currency"), "USD");
+    expect(
+      screen.queryByLabelText("Applied settlement rate"),
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByLabelText(/Reference opening cost basis/),
     ).not.toBeInTheDocument();
   });

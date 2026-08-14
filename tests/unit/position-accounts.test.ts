@@ -32,6 +32,11 @@ import {
 import { exportData, restoreUserData } from "@/lib/services/portability";
 import { getDashboardData, getNetWorthAt } from "@/lib/services/analytics";
 import { getEstateWorkspace } from "@/lib/services/estate-planning";
+import { createGoal, listGoals } from "@/lib/services/goals";
+import {
+  addExchangeRate,
+  listReferencedCurrencies,
+} from "@/lib/services/settings";
 
 const migrationsFolder = path.resolve("db/migrations");
 const workspace = fs.mkdtempSync(
@@ -44,6 +49,16 @@ describe.sequential("position account valuation", () => {
   let categoryId = "";
   let otherUserId = "";
   let otherCategoryId = "";
+
+  function currentCategoryId() {
+    return getDatabase()
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(eq(categories.userId, userId), eq(categories.slug, "securities")),
+      )
+      .get()!.id;
+  }
 
   beforeAll(async () => {
     process.env.SESSION_SECRET =
@@ -439,5 +454,335 @@ describe.sequential("position account valuation", () => {
     expect(
       getPositionAccountSnapshot(userId, restoredAccount.id).totalMinor,
     ).toBe(30_063n);
+  });
+
+  test("requires explicit settlement data for cross-currency trades", () => {
+    const accountId = createAccount(userId, {
+      name: "KES Brokerage",
+      categoryId: currentCategoryId(),
+      currency: "KES",
+      trackingMode: "positions",
+      openingValue: "20000.00",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    const instrumentId = createInvestmentInstrument(userId, {
+      name: "US Equity",
+      symbol: "USEQ",
+      identifierType: "ticker_exchange",
+      identifier: "USEQ",
+      exchangeMic: "XNAS",
+      assetType: "stock",
+      quoteCurrency: "USD",
+    });
+    addExchangeRate(userId, {
+      baseCurrency: "USD",
+      quoteCurrency: "KES",
+      rate: "130",
+      effectiveDate: "2026-01-01",
+    });
+
+    expect(() =>
+      recordPositionEvent(userId, {
+        accountId,
+        instrumentId,
+        type: "buy",
+        quantity: "1",
+        unitPrice: "100",
+        tradeCurrency: "USD",
+        tradeDate: "2026-01-01",
+      }),
+    ).toThrow(
+      "Cross-currency trades require an actual cash effect or applied settlement rate.",
+    );
+    expect(getPositionAccountSnapshot(userId, accountId)).toMatchObject({
+      cashMinor: 2_000_000n,
+      positions: [],
+    });
+
+    recordPositionEvent(userId, {
+      accountId,
+      instrumentId,
+      type: "buy",
+      quantity: "1",
+      unitPrice: "100",
+      tradeCurrency: "USD",
+      feeAmount: "1",
+      appliedExchangeRate: "130",
+      tradeDate: "2026-01-01",
+    });
+    expect(getPositionAccountSnapshot(userId, accountId)).toMatchObject({
+      cashMinor: 687_000n,
+      positions: [expect.objectContaining({ quantity: "1" })],
+    });
+  });
+
+  test("rejects settlement rates for same-currency trades", () => {
+    const accountId = createAccount(userId, {
+      name: "Same Currency Brokerage",
+      categoryId: currentCategoryId(),
+      currency: "USD",
+      trackingMode: "positions",
+      openingValue: "200.00",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    const instrumentId = createInvestmentInstrument(userId, {
+      externalId: "instrument:scue:manual",
+      name: "Same Currency Equity",
+      symbol: "SCUE",
+      identifierType: "ticker_exchange",
+      identifier: "SCUE",
+      exchangeMic: "XNAS",
+      assetType: "stock",
+      quoteCurrency: "USD",
+    });
+
+    expect(() =>
+      recordPositionEvent(userId, {
+        accountId,
+        instrumentId,
+        type: "buy",
+        quantity: "1",
+        unitPrice: "100",
+        tradeCurrency: "USD",
+        appliedExchangeRate: "130",
+        tradeDate: "2026-01-01",
+      }),
+    ).toThrow(
+      "An applied settlement rate is only valid for cross-currency trades.",
+    );
+    expect(getPositionAccountSnapshot(userId, accountId)).toMatchObject({
+      cashMinor: 20_000n,
+      positions: [],
+    });
+
+    const preview = previewInvestmentHistory(
+      userId,
+      accountId,
+      JSON.stringify({
+        format: "wealthboard-investment-history",
+        version: 1,
+        instruments: [],
+        position_events: [
+          {
+            external_id: "event:scue:invalid-rate",
+            instrument_external_id: "instrument:scue:manual",
+            type: "buy",
+            quantity: "1",
+            unit_price: "100",
+            trade_currency: "USD",
+            applied_exchange_rate: "130",
+            trade_date: "2026-01-01",
+          },
+        ],
+        cash_transactions: [],
+        prices: [],
+      }),
+      "json",
+    );
+    expect(preview.canCommit).toBe(false);
+    expect(preview.errors).toContainEqual(
+      expect.objectContaining({
+        message:
+          "An applied settlement rate is only valid for cross-currency trades.",
+      }),
+    );
+  });
+
+  test("uses an actual cash effect without a reporting exchange rate", () => {
+    const accountId = createAccount(userId, {
+      name: "TZS Brokerage",
+      categoryId: currentCategoryId(),
+      currency: "TZS",
+      trackingMode: "positions",
+      openingValue: "1000.00",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    const instrumentId = createInvestmentInstrument(userId, {
+      name: "Uganda Equity",
+      symbol: "UGEQ",
+      identifierType: "ticker_exchange",
+      identifier: "UGEQ",
+      exchangeMic: "XUGA",
+      assetType: "stock",
+      quoteCurrency: "UGX",
+    });
+
+    recordPositionEvent(userId, {
+      accountId,
+      instrumentId,
+      type: "buy",
+      quantity: "1",
+      unitPrice: "1000",
+      tradeCurrency: "UGX",
+      cashEffect: "50.00",
+      tradeDate: "2026-01-01",
+    });
+
+    expect(listReferencedCurrencies(userId)).toContain("UGX");
+    expect(getPositionAccountSnapshot(userId, accountId)).toMatchObject({
+      cashMinor: 95_000n,
+      positions: [expect.objectContaining({ quantity: "1" })],
+    });
+  });
+
+  test("imports actual cash effects without a reporting exchange rate", () => {
+    const accountId = createAccount(userId, {
+      name: "Imported TZS Brokerage",
+      categoryId: currentCategoryId(),
+      currency: "TZS",
+      trackingMode: "positions",
+      openingValue: "1000.00",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    const archive = JSON.stringify({
+      format: "wealthboard-investment-history",
+      version: 1,
+      instruments: [
+        {
+          external_id: "instrument:ugeq:import",
+          name: "Imported Uganda Equity",
+          symbol: "IUGE",
+          identifier_type: "ticker_exchange",
+          identifier: "IUGE",
+          exchange_mic: "XUGA",
+          asset_type: "stock",
+          quote_currency: "UGX",
+        },
+      ],
+      position_events: [
+        {
+          external_id: "event:ugeq:buy",
+          instrument_external_id: "instrument:ugeq:import",
+          type: "buy",
+          quantity: "1",
+          unit_price: "1000",
+          trade_currency: "UGX",
+          cash_effect: "50.00",
+          trade_date: "2026-01-01",
+        },
+      ],
+      cash_transactions: [],
+      prices: [],
+    });
+
+    const preview = previewInvestmentHistory(
+      userId,
+      accountId,
+      archive,
+      "json",
+    );
+    expect(preview.canCommit).toBe(true);
+    expect(preview.projected.cashMinor).toBe(95_000);
+
+    commitInvestmentHistory(userId, accountId, archive, "json");
+    expect(getPositionAccountSnapshot(userId, accountId)).toMatchObject({
+      cashMinor: 95_000n,
+      positions: [expect.objectContaining({ quantity: "1" })],
+    });
+  });
+
+  test("rebuilds position account caches when exchange rates change", async () => {
+    const accountId = createAccount(userId, {
+      name: "Rate Rebuild Brokerage",
+      categoryId: currentCategoryId(),
+      currency: "TZS",
+      trackingMode: "positions",
+      openingValue: "1000.00",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    const instrumentId = createInvestmentInstrument(userId, {
+      name: "Rate Rebuild Equity",
+      symbol: "RBUE",
+      identifierType: "ticker_exchange",
+      identifier: "RBUE",
+      exchangeMic: "XUGA",
+      assetType: "stock",
+      quoteCurrency: "UGX",
+    });
+    recordPositionEvent(userId, {
+      accountId,
+      instrumentId,
+      type: "opening_position",
+      quantity: "2",
+      tradeCurrency: "UGX",
+      tradeDate: "2026-01-01",
+    });
+    setSecurityPrice(userId, {
+      instrumentId,
+      price: "1000",
+      effectiveDate: "2026-01-01",
+    });
+
+    expect(getPositionAccountSnapshot(userId, accountId).complete).toBe(false);
+    expect((await getAccount(userId, accountId))?.currentValueMinor).toBe(
+      100_000,
+    );
+
+    addExchangeRate(userId, {
+      baseCurrency: "UGX",
+      quoteCurrency: "TZS",
+      rate: "0.7",
+      effectiveDate: "2026-01-01",
+    });
+
+    expect(getPositionAccountSnapshot(userId, accountId)).toMatchObject({
+      complete: true,
+      positionsMinor: 140_000n,
+      totalMinor: 240_000n,
+    });
+    expect((await getAccount(userId, accountId))?.currentValueMinor).toBe(
+      240_000,
+    );
+  });
+
+  test("uses the evaluation date for linked position goal exchange rates", async () => {
+    const accountId = createAccount(userId, {
+      name: "Historical Goal Brokerage",
+      categoryId: currentCategoryId(),
+      currency: "KES",
+      trackingMode: "positions",
+      openingValue: "10000.00",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    addExchangeRate(userId, {
+      baseCurrency: "TZS",
+      quoteCurrency: "KES",
+      rate: "10",
+      effectiveDate: "2026-01-01",
+    });
+    addExchangeRate(userId, {
+      baseCurrency: "TZS",
+      quoteCurrency: "KES",
+      rate: "20",
+      effectiveDate: "2026-02-01",
+    });
+    const goalId = createGoal(userId, {
+      idempotencyKey: crypto.randomUUID(),
+      name: "Historical linked goal",
+      targetAmount: "2000.00",
+      currentAmount: "0",
+      currency: "TZS",
+      targetDate: "2027-01-01",
+      linkedAccountId: accountId,
+      icon: "target",
+      status: "active",
+      priority: 1,
+      assumedAnnualReturn: 0,
+      plannedContribution: "0",
+      frequency: "monthly",
+      planStartDate: "2026-01-01",
+    });
+
+    const goal = (
+      await listGoals(userId, new Date("2026-01-15T12:00:00.000Z"))
+    ).find((item) => item.id === goalId);
+    expect(goal?.valueIncomplete).toBe(false);
+    expect(goal?.currentAmountCalculated).toBe(100_000n);
   });
 });

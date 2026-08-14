@@ -1,12 +1,15 @@
 import "server-only";
 
 import Decimal from "decimal.js";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import {
   accounts,
   exchangeRates,
   goals,
+  investmentInstruments,
+  positionEvents,
+  securityPrices,
   transactions,
   userSettings,
   valuationSnapshots,
@@ -20,6 +23,7 @@ import {
 } from "@/lib/currencies";
 import { dateInputToUtc, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
+import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
 
 type DatabaseClient = ReturnType<typeof getDatabase>;
 type TransactionClient = Parameters<
@@ -66,6 +70,30 @@ export function listReferencedCurrencies(
       .selectDistinct({ currency: exchangeRates.quoteCurrency })
       .from(exchangeRates)
       .where(eq(exchangeRates.userId, userId))
+      .all()
+      .map((row) => row.currency),
+    ...client
+      .selectDistinct({ currency: investmentInstruments.quoteCurrency })
+      .from(investmentInstruments)
+      .where(eq(investmentInstruments.userId, userId))
+      .all()
+      .map((row) => row.currency),
+    ...client
+      .selectDistinct({ currency: positionEvents.tradeCurrency })
+      .from(positionEvents)
+      .where(eq(positionEvents.userId, userId))
+      .all()
+      .map((row) => row.currency),
+    ...client
+      .selectDistinct({ currency: positionEvents.feeCurrency })
+      .from(positionEvents)
+      .where(eq(positionEvents.userId, userId))
+      .all()
+      .flatMap((row) => (row.currency ? [row.currency] : [])),
+    ...client
+      .selectDistinct({ currency: securityPrices.currency })
+      .from(securityPrices)
+      .where(eq(securityPrices.userId, userId))
       .all()
       .map((row) => row.currency),
   ];
@@ -180,27 +208,55 @@ export function addExchangeRate(
     throw new Error("Enter a positive decimal exchange rate.");
   }
   const timestamp = nowIso();
-  db.insert(exchangeRates)
-    .values({
-      id: crypto.randomUUID(),
-      userId,
-      baseCurrency,
-      quoteCurrency,
-      rate: input.rate,
-      effectiveDate: dateInputToUtc(input.effectiveDate),
-      source: "manual",
-      createdAt: timestamp,
-    })
-    .onConflictDoUpdate({
-      target: [
-        exchangeRates.userId,
-        exchangeRates.baseCurrency,
-        exchangeRates.quoteCurrency,
-        exchangeRates.effectiveDate,
-      ],
-      set: { rate: input.rate, source: "manual", createdAt: timestamp },
-    })
-    .run();
+  db.transaction((tx) => {
+    tx.insert(exchangeRates)
+      .values({
+        id: crypto.randomUUID(),
+        userId,
+        baseCurrency,
+        quoteCurrency,
+        rate: input.rate,
+        effectiveDate: dateInputToUtc(input.effectiveDate),
+        source: "manual",
+        createdAt: timestamp,
+      })
+      .onConflictDoUpdate({
+        target: [
+          exchangeRates.userId,
+          exchangeRates.baseCurrency,
+          exchangeRates.quoteCurrency,
+          exchangeRates.effectiveDate,
+        ],
+        set: { rate: input.rate, source: "manual", createdAt: timestamp },
+      })
+      .run();
+
+    const positionAccounts = tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.userId, userId),
+          eq(accounts.trackingMode, "positions"),
+        ),
+      )
+      .all();
+    for (const account of positionAccounts) {
+      const value = calculatePositionAccountSnapshot(
+        userId,
+        tx,
+        account.id,
+      ).totalMinor;
+      const currentValueMinor = Number(value);
+      if (!Number.isSafeInteger(currentValueMinor)) {
+        throw new Error("The calculated value is outside the supported range.");
+      }
+      tx.update(accounts)
+        .set({ currentValueMinor, updatedAt: timestamp })
+        .where(and(eq(accounts.userId, userId), eq(accounts.id, account.id)))
+        .run();
+    }
+  });
 }
 
 export async function listExchangeRates(userId: string) {

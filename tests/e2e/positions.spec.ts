@@ -18,9 +18,21 @@ async function signUp(
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 }
 
-test("position accounts flow through net worth, import, privacy, and isolation", async ({
-  page,
-}) => {
+async function signIn(
+  page: import("@playwright/test").Page,
+  username: string,
+) {
+  await page.goto("/login");
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill("position-e2e-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+}
+
+let accountId = "";
+
+test.describe.serial("position accounts", () => {
+test("flow through net worth, import, and privacy", async ({ page }) => {
   await signUp(page, "position-e2e");
   await page.goto("/accounts/new");
   await page.getByLabel("Account or asset name").fill("Position Brokerage");
@@ -33,7 +45,7 @@ test("position accounts flow through net worth, import, privacy, and isolation",
     page.getByRole("heading", { name: "Position Brokerage" }),
   ).toBeVisible();
   const accountUrl = new URL(page.url());
-  const accountId = accountUrl.pathname.split("/").at(-1)!;
+  accountId = accountUrl.pathname.split("/").at(-1)!;
 
   await page.getByRole("link", { name: "Add holding" }).click();
   await page.getByRole("link", { name: "Create instrument" }).click();
@@ -174,7 +186,11 @@ test("position accounts flow through net worth, import, privacy, and isolation",
   await expect(
     page.getByRole("heading", { name: "Investment instruments" }),
   ).toBeVisible();
+});
 
+test("fit position workflows at every supported viewport", async ({ page }) => {
+  await signIn(page, "position-e2e");
+  expect(accountId).toBeTruthy();
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: width < 768 ? 800 : 900 });
     for (const route of [
@@ -195,12 +211,14 @@ test("position accounts flow through net worth, import, privacy, and isolation",
       ).toBeLessThanOrEqual(dimensions.clientWidth);
     }
   }
+});
 
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("button", { name: "Log out" }).click();
+test("returns not found for another user's direct account URL", async ({ page }) => {
+  expect(accountId).toBeTruthy();
   await signUp(page, "position-other-e2e");
   await page.goto(`/accounts/${accountId}`);
   await expect(
     page.getByRole("heading", { name: "Page not found" }),
   ).toBeVisible();
+});
 });
