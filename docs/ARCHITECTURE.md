@@ -115,6 +115,68 @@ separate API service. One optional OIDC provider may authenticate internal users
   and provider keys are not retained. Custom endpoints require an exact
   operator allowlist and redirects are disabled.
 
+## Planned position-account extension
+
+> **Status:** Planned under backlog item F17; this extension is not part of the
+> current database schema or runtime behavior.
+
+- Existing accounts retain `balance` tracking, where transactions and absolute
+  valuation snapshots replay to one monetary value. An opt-in `positions`
+  tracking mode will represent an investment account containing a cash
+  subledger and one or more long-only instruments. A tracking mode cannot be
+  toggled after financial activity; conversion requires an explicit as-of
+  workflow that preserves the earlier account history.
+- Position-account value at a date is derived from replayed cash plus each
+  replayed instrument quantity multiplied by its latest effective-dated price,
+  with effective-dated currency conversion when the quote and account
+  currencies differ. `accounts.currentValueMinor` remains a rebuildable cache
+  for existing goals, estate planning, dashboards, and reports.
+- Owner-scoped instruments, immutable position events, and effective-dated
+  security prices are the source records. Current quantities are projections,
+  not independently editable authoritative balances. Same-owner relationships
+  use composite foreign keys and every lookup, aggregate, import, and cache key
+  includes `userId`.
+- Quantities and unit prices use canonical decimal strings and Decimal.js so
+  fractional units and sub-minor-unit quotes remain exact. Gross amounts, fee
+  amounts, cash effects, and derived account values remain integer minor units
+  with their currencies retained; an applied settlement rate is a canonical
+  decimal string. Rounding occurs only at a documented monetary boundary.
+- A buy atomically increases quantity and decreases account cash by settlement
+  amount plus fees. A sale decreases quantity and increases cash by proceeds
+  less fees. Cross-currency trades retain the actual account-currency cash
+  effect and applied settlement rate rather than substituting a later market
+  rate. Dividends and interest increase cash, fees reduce cash, and a
+  reinvestment is a grouped income event plus buy committed atomically.
+  Existing `Purchase` and `Sale` retain their current balance-account meanings
+  and are not reinterpreted as trades.
+- Position accounts use price snapshots rather than account valuations to
+  change market value. An optional owner/account-scoped broker reconciliation
+  may retain its observation date and reported cash/total, but it cannot
+  overwrite instrument quantities, prices, or derived values. Retaining or
+  deleting it changes no financial source record. Missing prices or exchange
+  rates make affected current and historical totals incomplete; stale prices
+  remain visible with their as-of date and provenance.
+- Account History Import v1 remains unchanged. Position accounts receive a
+  separate versioned investment-history contract for instruments, opening
+  holdings, trades, cash activity, and prices. Identical external IDs are
+  skipped, conflicts fail, and interdependent investment activity commits only
+  when the complete remaining event sequence is valid. Each account mode
+  rejects the other mode's format before parsing financial rows.
+- The position release bumps user portability to version 7 and adds instruments,
+  position events, linked cash relationships, security prices, and optional
+  reconciliation observations with owner-field rejection, relationship
+  validation, and ID remapping. Versions 2 through 6 restore as balance-mode
+  accounts with empty position collections.
+- Privacy mode masks quantities, unit prices, cash, reference cost basis, and
+  derived values. Instrument names and symbols remain visible for account
+  identification; raw identifiers and private notes follow their existing
+  explicit inclusion controls.
+- The first supported instruments are long-only stocks, ETFs, and directly
+  priced funds. Tax-lot accounting, tax-grade realized gains, bonds quoted as a
+  percentage of par, options, shorts, margin, derivatives, multi-leg trades,
+  automatic trading, and mandatory market-data providers remain outside the
+  initial extension.
+
 ## Isolation boundary
 
 - All user-owned tables carry a non-null `userId` foreign key even when

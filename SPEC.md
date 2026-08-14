@@ -2,15 +2,23 @@
 
 ## Status and terminology
 
-This document defines the implemented architecture for multiple independent
-application users. The current schema is the only supported schema; pre-release
-databases may be deleted and recreated rather than migrated.
+This document defines the product contract for the implemented multi-user
+baseline and accepted planned extensions. [backlog.md](backlog.md) is
+authoritative for implementation status. In particular, position-based
+investment accounts are planned under F17 and are not part of the current
+runtime schema. The current implemented schema remains the only supported
+runtime schema until an append-only migration delivers a planned extension;
+pre-release databases may be deleted and recreated rather than migrated.
 
 To avoid ambiguity:
 
 - **Application user** means a person who signs up and authenticates.
 - **Financial account** means a bank account, investment, property, vehicle,
   liability, or other tracked holding owned by one application user.
+- **Investment instrument** means one user-owned security reference, such as a
+  stock, ETF, or directly priced fund.
+- **Position** means the quantity of one investment instrument held in one
+  position-tracked financial account.
 
 Wealthboard is a polished, self-hosted, multi-user personal wealth and goals tracker.
 
@@ -21,7 +29,8 @@ The main user workflow should be:
 
 1. Sign up or sign in to a private portfolio.
 2. Add a financial account or asset.
-3. Enter its current value.
+3. Enter its current value, or add instruments with opening quantities and
+   prices when the account is position-tracked.
 4. Categorize it, for example:
    - Securities
    - Money market funds
@@ -32,7 +41,8 @@ The main user workflow should be:
    - Vehicles
    - Other assets
    - Liabilities
-5. Periodically update the value or record a deposit, withdrawal, gain, or loss.
+5. Periodically update the value or unit price, or record a deposit,
+   withdrawal, trade, gain, or loss.
 6. View total net worth and portfolio allocation through useful dashboards.
 7. Create financial goals and track contributions toward them.
 
@@ -90,6 +100,8 @@ The application should be suitable for deployment to a home server or Kubernetes
 - Keep business logic separate from UI components
 - Use decimal-safe money handling
 - Store monetary values as integer minor units where practical
+- Store fractional quantities and unit prices as canonical decimal strings and
+  calculate them with Decimal.js; round only when producing a monetary amount
 - Do not use JavaScript floating-point arithmetic for financial calculations
 - Use transactions when updating balances and financial records
 - All dates should be stored in UTC and shown in the user’s configured timezone
@@ -204,7 +216,8 @@ Fields should include:
 
 - Every user-owned table must have a non-null `userId` foreign key, including
   categories, financial accounts, transactions, valuations, exchange rates,
-  goals, goal contribution plans, and idempotency keys.
+  investment instruments, position events, security prices, goals, goal
+  contribution plans, and idempotency keys.
 - Derive `userId` exclusively from the verified session. Service functions
   should accept it explicitly as their first ownership argument.
 - Read, update, archive, and delete resources by both `userId` and resource ID.
@@ -212,9 +225,12 @@ Fields should include:
   disclose that the resource exists.
 - Validate that every relationship stays within one owner. A goal cannot link
   to another user's account, a transaction or valuation cannot target another
-  user's account, and a transfer cannot cross users.
+  user's account, a position event cannot use another user's instrument or
+  account, a security price cannot target another user's instrument, and a
+  transfer cannot cross users.
 - Scope unique constraints by user where appropriate, including category slugs,
-  linked goal accounts, transaction idempotency, and exchange-rate pair/date.
+  linked goal accounts, transaction and position-event idempotency, imported
+  external IDs, security-price instrument/date, and exchange-rate pair/date.
 - Include `userId` in database indexes and any server cache key used for private
   data. Do not use a process-global cache for user-specific settings or results.
 - Seed default categories and currency settings separately for each new user so
@@ -256,7 +272,8 @@ own categories. Category slugs are unique only within one user.
 
 ### Accounts and assets
 
-Treat bank accounts, investments, vehicles, and land as trackable holdings under one flexible model.
+Treat bank accounts, investments, vehicles, and land as trackable holdings under
+one flexible account model with explicit balance or position tracking.
 
 Institutions are optional, owner-scoped reference records. Each institution has
 a normalized unique name per user, a controlled provider type, optional website,
@@ -273,7 +290,8 @@ Fields:
 - institutionId, optional
 - accountReference or optional masked account number
 - currency
-- currentValueMinor
+- trackingMode: `balance` or `positions`
+- currentValueMinor, authoritative replay result or rebuildable derived cache
 - costBasisMinor, optional
 - isLiability
 - isIncludedInNetWorth
@@ -289,11 +307,122 @@ Examples:
 - Zimele Fixed Income Fund
 - Madison Money Market Fund
 - KCB Car Fund
-- Interactive Brokers VWRA
+- Interactive Brokers Brokerage, containing a VWRA position
 - Southern Bypass Land
 - Honda Fit
 - 2028 Car Fund
 - Cash Savings
+
+Balance tracking is the default and preserves the existing transaction and
+absolute-valuation replay. Use it for cash, property, vehicles, businesses,
+liabilities, manually valued funds, and any unsupported investment structure.
+
+Position tracking is opt-in for active, non-liability investment accounts. It
+contains an account-currency cash subledger plus one or more long-only
+investment positions. A normal account edit must not change `trackingMode`
+after financial activity exists. A guided conversion establishes opening cash,
+positions, and prices on an explicit as-of date and preserves the earlier
+balance-tracked account history; it must never infer quantities from historical
+money-only purchases, sales, or valuations.
+
+### Investment instruments, position events, and security prices
+
+Investment instruments are owner-scoped reference records. Fields should
+include:
+
+- id
+- userId
+- name
+- symbol, optional
+- identifierType: `isin`, `ticker_exchange`, or `custom`
+- identifier, optional
+- exchange or MIC, optional
+- assetType: `stock`, `etf`, or `fund` initially
+- quoteCurrency
+- archivedAt, optional
+- createdAt
+- updatedAt
+
+A symbol alone is not a globally unique identity. Use the internal instrument
+ID for relationships and preserve the supplied identifier and exchange as
+reference metadata. Archived instruments retain history but cannot receive new
+positions, trades, or prices until restored.
+
+Position events are immutable source records from which quantity is replayed.
+Fields should include:
+
+- id
+- userId
+- accountId
+- instrumentId
+- type: `opening_position`, `buy`, `sell`, `quantity_adjustment`, or a supported
+  corporate action
+- quantity as a positive canonical decimal string, with direction supplied by
+  the event type
+- unitPrice as a canonical decimal string when the event is priced
+- tradeCurrency
+- grossAmountMinor in the trade currency, optional when deterministically
+  derivable
+- feeAmountMinor and feeCurrency, optional
+- cashEffectMinor in the account currency
+- appliedExchangeRate as a canonical decimal string, optional when trade and
+  account currencies differ
+- openingCostBasisMinor, optional only for an `opening_position` event and
+  excluded from market-value calculations
+- tradeDate
+- settlementDate, optional
+- externalId, optional
+- eventGroupId, optional linkage for one compound economic event
+- description and notes, optional
+- createdAt
+- updatedAt
+
+Current position quantity is a projection over position events, not a mutable
+authoritative field. Long-only accounts reject a sale or correction that makes
+quantity negative at that date or any later date. Edits, deletions, and
+backdated corrections replay all affected quantities, cash, and account values
+atomically.
+
+Security prices are effective-dated, owner-scoped source records. Fields should
+include:
+
+- id
+- userId
+- instrumentId
+- price as a positive canonical decimal string
+- currency
+- effectiveDate
+- source and provenance
+- createdAt
+- updatedAt
+
+The price currency must match the instrument quote currency unless an explicit
+instrument-currency migration is performed. The current and historical price
+for a date is the latest price effective on or before that date; a future price
+must never be used. Manual entry and strict import work without an external
+provider. Any later automatic provider is optional, records provenance, never
+overwrites a user price silently, and leaves a manual fallback.
+
+For a position-tracked account, derive the value at a date from replayed cash
+plus every replayed quantity multiplied by its effective price and converted
+to the account currency when necessary. Calculate quantity times price with
+Decimal.js, round each quote value to that currency's minor unit, convert using
+the user's effective-dated exchange rate, and then sum integer minor units.
+`currentValueMinor` remains a rebuildable cache so goals, estate planning,
+dashboard totals, and existing account-level consumers share one value.
+
+Missing prices or exchange rates make the affected account and aggregate
+incomplete rather than silently treating a position as zero. Show the affected
+instrument, currency, missing date range, last price date, source, and freshness
+state. Carrying the latest earlier price forward is allowed only with its as-of
+date and stale status visible.
+
+Position mode does not use the account-level `costBasisMinor` as an
+authoritative aggregate. An optional `openingCostBasisMinor` on each opening
+position may be retained as reference metadata. Do not claim tax-grade cost
+basis, realized gain, or lot selection until purchase lots, corporate actions,
+and an explicit jurisdiction-neutral disposal method are implemented and
+tested.
 
 ## Estate planning
 
@@ -324,13 +453,14 @@ exceed 100%. Archived beneficiaries cannot receive new allocations. Archived
 or foreign assets cannot receive a new directive, and liabilities must remain
 visible separately rather than being assigned as gifts.
 
-Calculate indicative estate values from the authoritative replayed account
-balance multiplied by the user's asserted ownership share. Derive beneficiary
-values from allocation basis points with `bigint` and Decimal.js. Percentages
-are authoritative planning inputs; calculated currency values are estimates and
-must report missing effective-dated exchange rates rather than silently omit
-holdings. Liabilities reduce the estimated net estate but do not automatically
-reduce or transfer an individual beneficiary's gift.
+Calculate indicative estate values from the authoritative replayed balance or
+position-derived account value multiplied by the user's asserted ownership
+share. Derive beneficiary values from allocation basis points with `bigint` and
+Decimal.js. Percentages are authoritative planning inputs; calculated currency
+values are estimates and must report missing effective-dated prices and exchange
+rates rather than silently omit holdings. Liabilities reduce the estimated net
+estate but do not automatically reduce or transfer an individual beneficiary's
+gift.
 
 Allow users to create immutable, owner-scoped Estate Planning Summary snapshots
 with an as-of date, version, SHA-256 content hash, and minimized document
@@ -348,10 +478,11 @@ guardianship, trust, tax, debt, or provider-designation rules. Do not implement
 death detection, inactivity triggers, beneficiary notifications, executor
 access, credential handoff, automatic disclosure, custody, or asset transfers.
 
-Per-user JSON portability version 6 includes beneficiaries, plans, directives,
-allocations, residue, and retained snapshots with relationship validation,
-owner-field rejection, integrity checks, and ID remapping. Versions 2 through 5
-remain restorable and begin with an empty estate plan.
+Per-user JSON portability version 6 introduced beneficiaries, plans,
+directives, allocations, residue, and retained snapshots with relationship
+validation, owner-field rejection, integrity checks, and ID remapping. The
+position-account release must preserve those records while advancing the
+archive contract as described under import and export.
 
 ### Transactions
 
@@ -373,6 +504,17 @@ Supported transaction types:
 - Liability Payment
 - Liability Increase
 - Transfer
+
+These types retain their existing meanings for balance-tracked accounts.
+`Purchase` increases and `Sale` decreases a generic tracked holding; they must
+not be reinterpreted as security trades.
+
+For a position-tracked account, ordinary transactions describe its cash
+subledger. Deposits, withdrawals, interest, dividends, fees, transfers, and
+explicit cash adjustments affect cash. Generic purchase, sale, capital-gain,
+capital-loss, and liability transaction types are rejected at the service
+boundary. Security buys and sells use position events linked to their atomic
+cash effects.
 
 Fields:
 
@@ -399,7 +541,25 @@ Fees should reduce the balance and be counted as expenses.
 
 Transfers should move value between accounts without changing total net worth.
 
-Allow transactions to be edited or deleted, with balances recalculated correctly.
+A security buy increases quantity and decreases account cash by the settlement
+amount plus fees. A security sale decreases quantity and increases account cash
+by proceeds less fees. When trade and account currencies differ, store the
+actual settlement cash effect or an explicit applied exchange rate; never infer
+settlement with a later market rate. A dividend increases cash without changing
+quantity. A reinvested dividend is a linked dividend plus buy rather than an
+implicit quantity change. The dividend cash transaction and buy position event
+share an event group and commit in one database transaction; failure of either
+record rolls back both.
+
+Buys and sells are internal allocation changes inside a position-tracked
+account, not contributions or withdrawals. Ignoring price movement, a same-day
+buy or sale changes total account value only by explicit fees and any difference
+between execution and valuation prices.
+
+Allow ordinary transactions and supported position events to be corrected or
+deleted through their dedicated workflows, with cash, quantities, prices, and
+all later account values recalculated atomically. Reject a correction that
+would oversell a position or break a linked cash event.
 
 ### Valuation snapshots
 
@@ -417,6 +577,19 @@ Fields:
 - createdAt
 
 A valuation update should not automatically be treated as a cash contribution.
+
+Absolute valuation snapshots apply only to balance-tracked accounts. A
+position-tracked account changes market value through instrument price
+snapshots without changing quantity. A broker statement total may be stored as
+a reconciliation observation showing the difference from calculated cash plus
+positions, but it must not overwrite quantities, prices, or the derived value.
+
+An optional retained reconciliation observation contains `id`, `userId`,
+`accountId`, observation date, optional reported cash, reported total, notes,
+and timestamps. It is non-authoritative and owner-scoped. The service derives
+calculated cash, position value, and difference for the same date and visibly
+reports missing prices or rates; retaining or deleting an observation never
+changes financial source records.
 
 The app must distinguish:
 
@@ -454,6 +627,12 @@ All dashboard totals should be converted into the configured base currency.
 Changing that base must not rewrite source amounts. Current and historical
 aggregates must declare when a rate is missing and identify affected currencies
 instead of silently presenting an incomplete total as authoritative.
+
+Position valuation first resolves each instrument in its quote currency, then
+uses the user's most recent exchange rate effective on that valuation date to
+reach the account and base currencies. Changing an account or base currency
+must not rewrite quantities, historical prices, trade execution values, or
+actual stored settlement effects.
 
 Keep the design ready for an optional exchange-rate API later, but do not require one.
 
@@ -497,6 +676,10 @@ Goal contributions may either:
 2. Be calculated from deposits into a linked account.
 
 Prefer linked-account tracking so balances are not duplicated.
+
+A goal linked to a position-tracked account uses its complete derived account
+value. If a required price or exchange rate is missing, goal progress and
+forecast status must report incomplete data rather than use a partial balance.
 
 ### Goal contribution plan
 
@@ -577,7 +760,10 @@ Features:
 - Gracefully handle sparse historical data
 - Show a useful empty state when there is insufficient history
 
-The chart should use daily or monthly historical snapshots derived from transactions and valuations.
+The chart should use daily or monthly historical values derived from
+transactions and valuations for balance-tracked accounts and from cash,
+position events, effective-dated security prices, and exchange rates for
+position-tracked accounts.
 
 ### Asset allocation chart
 
@@ -598,6 +784,8 @@ Show:
 - Percentage of net worth
 - Clickable legend
 - Ability to exclude non-investment assets such as a personal vehicle
+- Optional position-level allocation by instrument for position-tracked
+  accounts
 
 Provide a toggle between:
 
@@ -619,6 +807,10 @@ Create a chart separating:
 - Fees
 
 This is important because the user should be able to see whether wealth increased through saving or investment performance.
+
+For position-tracked accounts, buys and sells are internal allocation changes,
+not contributions or withdrawals. Price movement contributes to market growth;
+dividends and interest remain income; explicit fees remain expenses.
 
 ### Goal cards
 
@@ -648,6 +840,8 @@ Show recent:
 - Valuation updates
 - Withdrawals
 - Transfers
+- Security buys and sells
+- Security price updates
 - Goal updates
 
 ## Accounts and assets page
@@ -661,6 +855,8 @@ Allow views by:
 - Currency
 - Active or archived
 - Asset or liability
+- Balance or position tracking mode
+- Complete, missing-price, or stale-price state
 
 Each card or row should show:
 
@@ -670,6 +866,8 @@ Each card or row should show:
 - Current value
 - Currency
 - Value converted to base currency
+- Tracking mode and position count when applicable
+- Value as-of and price-freshness state
 - Month-over-month change
 - Goal association
 - Last updated date
@@ -692,6 +890,9 @@ Allow sorting by:
 Each account should have a dedicated page with:
 
 - Current value
+- Cash balance and position market value when position-tracked
+- Positions with quantity, effective unit price, quote currency, as-of date,
+  source, and converted value
 - Total contributions
 - Total withdrawals
 - Total interest and dividends
@@ -699,6 +900,7 @@ Each account should have a dedicated page with:
 - Estimated gain or loss
 - Historical value chart
 - Transaction list
+- Position-event and price history when position-tracked
 - Valuation history
 - Linked goals
 - Notes
@@ -711,11 +913,27 @@ Actions:
 - Add dividend
 - Add fee
 - Update valuation
+- Add or edit an opening position
+- Buy or sell a security
+- Update a security price
+- Reconcile a position account to a broker statement total without overwriting
+  calculated holdings
 - Transfer money
 - Edit account
 - Archive account
 
 For manually valued assets such as land or vehicles, emphasize valuation history instead of investment-return metrics.
+
+For position-tracked accounts, emphasize current holdings, cash, price
+freshness, missing data, and a unified chronological activity feed. Show only
+actions valid for the account mode.
+
+Privacy mode masks position quantities, unit prices, cash balances, cost-basis
+references, and derived values on screen and in privacy-sensitive previews or
+print views. Authenticated portability exports retain exact source records and
+are not presentation surfaces. Instrument names and symbols remain visible for
+identification; raw identifiers, notes, and account references remain excluded
+unless an existing explicit inclusion control permits them.
 
 ## Goals page
 
@@ -779,6 +997,7 @@ Create a reports page with:
 - By category
 - By institution
 - By currency
+- By investment instrument within position-tracked accounts
 - Liquid versus illiquid
 - Investible versus lifestyle assets
 
@@ -787,8 +1006,13 @@ Create a reports page with:
 - Interest by account
 - Dividends
 - Capital growth
+- Position price movement when complete price history exists
 - Fees
 - Contributions
+
+Security buys and sells must not appear as external contributions or
+withdrawals. Do not present tax-grade realized gains or lot-based returns until
+the required lot and corporate-action model is implemented.
 
 ### Account comparison
 
@@ -807,8 +1031,12 @@ Show:
 - Net income
 - Simple annualized return
 - Effective annualized return, when enough data exists
+- Price and exchange-rate completeness, valuation method, and oldest effective
+  price used for position-tracked accounts
 
 Do not show misleading annualized performance for very short measurement periods without a warning.
+Do not annualize a position account when missing or stale prices make the
+selected period unreliable.
 
 ## Import, export, and deployment backup
 
@@ -821,6 +1049,8 @@ Support:
 - Export the current user's transactions as CSV.
 - Export the current user's financial accounts as CSV.
 - Import transactions only into a financial account owned by the current user.
+- Import instruments, holdings, trades, cash activity, and prices only into a
+  position-tracked account owned by the current user.
 - Restore a validated per-user JSON export by replacing only the current user's
   portfolio in one transaction.
 
@@ -830,6 +1060,13 @@ History Import v1. CSV files contain exactly
 `wealthboard-account-history` version 1 envelope. Files contain no owner,
 account, institution, or currency fields. The verified session and URL select
 one active owned account.
+
+Account History Import v1 remains unchanged for balance-tracked accounts. It
+must not create or mutate instruments, quantities, position events, or security
+prices, and it must not be expanded with loosely optional position columns. A
+position-tracked account rejects Account History Import v1, and a
+balance-tracked account rejects Investment History Import v1, before parsing
+financial rows.
 
 The import page may provide a copyable, currency-aware prompt for use with an
 external AI service. It must offer CSV and JSON output modes, require the exact
@@ -847,7 +1084,7 @@ stable IDs). Dates are non-future `YYYY-MM-DD` values and amounts are decimal
 strings with the target account currency's precision. Imports are limited to 5
 MB and 10,000 rows.
 
-Balance directions are:
+Balance directions for Account History Import v1 are:
 
 - `deposit`, `interest`, `dividend`, `capital_gain`, `purchase`, and
   `liability_increase` increase the replayed balance.
@@ -864,6 +1101,69 @@ rechecks ownership and duplicates, and atomically imports the currently valid
 subset before one balance replay. Existing identical external IDs are skipped;
 conflicting or in-file duplicate IDs fail and are never overwritten. Raw files
 and reports are not retained or logged.
+
+Position-tracked accounts use a separate strict
+`wealthboard-investment-history` version 1 contract. The JSON envelope contains
+bounded `instruments`, `position_events`, `cash_transactions`, and `prices`
+arrays. CSV uses separate published templates for opening holdings, trades,
+cash activity, and prices rather than mixing heterogeneous records in one row
+shape.
+
+Investment instrument records use a stable external instrument ID plus name,
+optional symbol, identifier type/value, exchange, asset type, and quote
+currency. Position-event records use a stable external event ID, referenced
+external instrument ID, event type, quantity, optional unit price, trade
+currency, gross amount, optional fee amount/currency, account-currency cash
+effect, optional applied settlement rate, trade date, optional settlement date,
+description, and notes. Price records use a stable external price ID,
+referenced instrument, positive unit price, currency, effective date, and
+source. Decimal quantities, prices, rates, and user-facing amounts are strings
+rather than JSON numbers.
+
+An opening-holdings template may combine instrument metadata, opening quantity,
+opening reference cost basis, effective unit price, and price date for initial
+setup. It creates explicit opening-position and price source records; it does
+not fabricate historical trades. Full activity import preserves separate cash,
+trade, and price records.
+
+Files never carry or override `userId`, internal account ID, institution ID,
+account name, account currency, or `trackingMode`. The verified session and URL
+select one active owned position account. Instrument quote and trade currencies
+must be enabled for that user. Same-currency trade gross and cash effects are
+derived and cross-checked after fees. A cross-currency trade requires the actual
+account-currency settlement effect or an explicit applied rate; a later market
+rate must not be silently substituted.
+
+Preview performs no writes and shows instrument resolution, new and existing
+instruments, quantities before and after every event, projected cash, projected
+position and account values, price and exchange-rate gaps, stale prices,
+oversells, duplicate IDs, conflicts, date range, and net change. Price updates
+must identify every current and historical date range they affect.
+
+Identical existing external IDs are skipped. Conflicting IDs, duplicate IDs in
+one file, invalid instrument relationships, unsupported currencies, oversells,
+or any event sequence that becomes invalid block confirmation. Because one
+failed trade can invalidate later events, investment-history commit is
+all-or-nothing for the complete remaining sequence, unlike the accepted-subset
+policy of Account History Import v1. Confirmation resends the file with its
+SHA-256 hash, reparses it, rechecks ownership and duplicates, and commits all
+instruments, events, linked cash effects, prices, and account caches in one
+database transaction. Limits begin at 5 MB and 10,000 total records.
+
+The investment import page may generate copyable, currency-aware CSV or JSON
+prompts entirely in the browser under the same privacy rules as Account History
+Import v1. It must require one output record per source record, prohibit guessed
+identifiers, quantities, prices, trades, currencies, and corporate actions, and
+still require deterministic preview before commit.
+
+The position-account release advances per-user JSON portability to version 7.
+Version 7 includes account tracking mode, instruments, position events, linked
+cash relationships, security prices, and reconciliation observations alongside
+all version 6 estate records. Restore validates and remaps every relationship,
+rejects owner fields, rebuilds quantities and account values, and verifies that
+no replayed position becomes negative. Versions 2 through 6 remain restorable
+as balance-tracked accounts with empty position collections. Export and restore
+must never infer position history from legacy monetary purchases or sales.
 
 Before a per-user restore:
 
@@ -888,6 +1188,10 @@ operator-approved OpenAI-compatible Chat Completions endpoint.
 - Wealthboard must first create a bounded, versioned snapshot from deterministic
   calculations. Models must not independently calculate authoritative balances,
   conversions, returns, or goal forecasts.
+- Raw position events, trade rows, prices, quantities, and instrument
+  identifiers are excluded from model input. Any later instrument-level derived
+  allocation follows the existing independent consent for exact values and
+  names.
 - Default snapshots use pseudonymous accounts and goals and omit exact amounts.
   Exact aggregate amounts and names require separate, explicit per-request
   consent. Never include notes, account references, raw transaction rows, or
@@ -994,6 +1298,8 @@ Quick-add options:
 - Add withdrawal
 - Add interest
 - Update asset value
+- Buy or sell a security
+- Update a security price
 - Transfer between accounts
 - Add a new account
 - Create a goal
@@ -1076,10 +1382,29 @@ Implement and test these calculations:
 - Monthly and yearly net-worth change
 - Liquid versus illiquid assets
 - Investible versus non-investible assets
+- Position quantity at a date
+- Position market value in quote, account, and base currencies
+- Position-account cash and total value
+- Price freshness and missing-price completeness
 
 Net worth:
 
 Net worth = total assets minus total liabilities
+
+Position quote value:
+
+Position quote value = replayed quantity multiplied by effective unit price
+
+Position-tracked account value:
+
+Account value = replayed cash plus the sum of converted position quote values
+
+Round each position quote value to its quote currency minor unit before
+effective-dated conversion and sum integer minor units. A missing price or
+exchange rate makes the result incomplete; never substitute zero or a future
+observation. Buys and sells change allocation between cash and positions, while
+external deposits, withdrawals, income, fees, and price movement retain their
+separate classifications.
 
 Goal required monthly contribution:
 
@@ -1124,10 +1449,14 @@ Example accounts:
    - Current value: KES 119,617
    - Linked goal: 2028 Family Car
 
-4. Interactive Brokers VWRA
+4. Interactive Brokers Brokerage
    - Category: Securities
    - Currency: USD
-   - Current value: USD 4,111
+
+- Tracking mode: Positions
+- Cash balance: USD 111
+- Position: VWRA, 40 units at USD 100 per unit
+- Derived current value: USD 4,111
 
 5. Southern Bypass Land
    - Category: Land and Real Estate
@@ -1223,11 +1552,20 @@ Test at minimum:
   accounts, transactions, goals, analytics, and settings
 - Direct URL and mutation attempts against another user's resource
 - Rejection of cross-user transfers, goal links, imports, and idempotency keys
+- Rejection of cross-user instrument, position-event, and security-price IDs
 - Per-user exports and restores that contain no other user's data
 - Creating an account
+- Creating a position-tracked account with multiple instruments
 - Recording a deposit
 - Recording interest
 - Updating a valuation
+- Recording a security buy and sale with atomic cash effects
+- Updating a unit price without changing quantity
+- Rejecting an oversell and a backdated correction that causes a later oversell
+- Position valuation with fractional quantities, sub-minor-unit prices,
+  effective-dated exchange rates, missing prices, and stale prices
+- Investment-history preview, duplicate/conflict handling, atomic commit, and
+  all-or-nothing rollback
 - Creating a goal
 - Linking a goal to an account
 - Transfer between accounts
@@ -1287,6 +1625,8 @@ Create a detailed README with:
 - Updating the application
 - PWA installation
 - CSV import format
+- Investment-history JSON and separate holdings, trade, cash, and price CSV
+  formats
 - Security considerations
 
 ## Scope exclusions for the first release
@@ -1297,7 +1637,11 @@ Do not implement these in version one:
 - Brokerage API integrations
 - Automatic trade execution
 - Live stock-price APIs
+- Mandatory market-data providers
 - Tax reporting
+- Tax-lot accounting and tax-grade realized gains
+- Bonds quoted as a percentage of par, options, shorts, margin, derivatives,
+  and multi-leg trades
 - Household budgeting
 - Expense categorization
 - Recurring bills
@@ -1343,15 +1687,23 @@ The application is complete when:
 - Usernames are unique case-insensitively and login failures do not reveal
   whether a username exists.
 - Each user can see and change only their own settings, categories, exchange
-  rates, financial accounts, transactions, valuations, goals, reports, imports,
-  exports, and idempotent operations.
+  rates, financial accounts, transactions, valuations, instruments, position
+  events, security prices, goals, reports, imports, exports, and idempotent
+  operations.
 - Guessing another user's URL or submitting another user's resource ID returns
   not found or a generic authorization failure without leaking data.
-- I can add Zimele, Madison, KCB, VWRA, land, a car, savings, and liabilities.
-- I can manually set or update each account’s value.
+- I can add Zimele, Madison, KCB, an Interactive Brokers account containing a
+  VWRA position, land, a car, savings, and liabilities.
+- I can manually set or update each balance-tracked account's value.
+- I can add multiple long-only positions, update their effective-dated prices,
+  and see the exact derived position-account value and data-freshness state.
 - I can record deposits, withdrawals, interest, fees, and transfers.
+- I can record buys and sells without classifying them as contributions or
+  withdrawals, and their quantity and cash effects remain atomic.
 - I can see current net worth.
 - I can see historical net-worth changes.
+- Historical position values never use a future price and visibly report a
+  missing or stale price or exchange rate.
 - I can see allocation by category and institution.
 - I can distinguish contributions from investment growth.
 - I can create a July 2028 car goal.
@@ -1364,6 +1716,8 @@ The application is complete when:
 - My SQLite data persists across application upgrades.
 - I can export and restore my own portfolio without receiving another user's
   records or credentials.
+- Position-account exports and restores preserve instruments, events, prices,
+  cash links, quantities, and owner isolation exactly.
 - A deployment operator can back up and restore the complete SQLite database
   outside ordinary user routes.
 - The dashboard looks like a premium financial application.
