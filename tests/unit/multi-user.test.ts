@@ -151,6 +151,18 @@ describe.sequential("multi-user persistence and isolation", () => {
     ).toHaveLength(11);
     expect(
       db
+        .select({ isLiquid: categories.isLiquid })
+        .from(categories)
+        .where(
+          and(
+            eq(categories.userId, aliceId),
+            eq(categories.slug, "fixed-income"),
+          ),
+        )
+        .get(),
+    ).toEqual({ isLiquid: true });
+    expect(
+      db
         .select()
         .from(exchangeRates)
         .where(eq(exchangeRates.userId, aliceId))

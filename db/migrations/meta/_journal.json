@@ -50,6 +50,13 @@
       "when": 1786718241941,
       "tag": "0006_supreme_riptide",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1786882084354,
+      "tag": "0007_fixed-income-liquid",
+      "breakpoints": true
     }
   ]
 }

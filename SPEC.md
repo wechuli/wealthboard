@@ -268,6 +268,12 @@ Each category should include:
 - isInvestible
 - isArchived
 - isSystem
+
+Money Market Fund, Fixed Income, Savings, and Cash seed with `isLiquid = true`.
+Every other default category seeds as non-liquid. The flag remains user-editable
+per category; dashboard and report liquid-asset totals use the current owned
+category setting and exclude liabilities.
+
 - createdAt
 - updatedAt
 

@@ -25,7 +25,7 @@ export const TRANSACTION_LABELS: Record<TransactionType, string> = {
 export const CATEGORY_SEEDS = [
   ["Securities", "securities", "ChartCandlestick", "asset", false, true],
   ["Money Market Fund", "money-market-fund", "Landmark", "asset", true, true],
-  ["Fixed Income", "fixed-income", "BadgeDollarSign", "asset", false, true],
+  ["Fixed Income", "fixed-income", "BadgeDollarSign", "asset", true, true],
   ["Savings", "savings", "PiggyBank", "asset", true, true],
   ["Cash", "cash", "WalletCards", "asset", true, true],
   ["Land and Real Estate", "land-real-estate", "House", "asset", false, false],

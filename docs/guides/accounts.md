@@ -129,6 +129,11 @@ Categories classify holdings as assets or liabilities and also describe
 liquidity and investibility. Manage them under **Categories**. Existing history
 keeps its account relationship when a category is renamed.
 
+By default, **Money Market Fund**, **Fixed Income**, **Savings**, and **Cash**
+are liquid. The dashboard's **Liquid assets** total includes active,
+net-worth-included asset accounts whose current category has the **Liquid** flag.
+You can change that flag for any owned category when your classification differs.
+
 Avoid creating categories for temporary statuses such as “needs review.” Use
 names that remain useful in long-term allocation reports.
 

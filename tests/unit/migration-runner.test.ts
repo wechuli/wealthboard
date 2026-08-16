@@ -63,8 +63,18 @@ describe("migration runner", () => {
     const migrations = readMigrationFiles({
       migrationsFolder: path.join(projectRoot, "db/migrations"),
     });
-    expect(migrations.length).toBeGreaterThanOrEqual(4);
-    const previous = migrations.slice(0, -1);
+    const journal = JSON.parse(
+      fs.readFileSync(
+        path.join(projectRoot, "db/migrations/meta/_journal.json"),
+        "utf8",
+      ),
+    ) as { entries: Array<{ tag: string }> };
+    const positionMigrationIndex = journal.entries.findIndex(
+      (entry) => entry.tag === "0006_supreme_riptide",
+    );
+    expect(positionMigrationIndex).toBeGreaterThan(0);
+    expect(migrations.length).toBeGreaterThan(positionMigrationIndex);
+    const previous = migrations.slice(0, positionMigrationIndex);
     const sqlite = new Database(databasePath);
     sqlite.pragma("foreign_keys = OFF");
     sqlite.transaction(() => {
@@ -93,7 +103,7 @@ describe("migration runner", () => {
         INSERT INTO categories
           (id, user_id, name, slug, icon, display_order, asset_or_liability, is_liquid, is_investible, is_archived, is_system, created_at, updated_at)
         VALUES
-          ('category-existing', 'local-user', 'Securities', 'securities', 'Chart', 0, 'asset', 0, 1, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+          ('category-existing', 'local-user', 'Fixed Income', 'fixed-income', 'BadgeDollarSign', 0, 'asset', 0, 1, 0, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
         INSERT INTO user_settings
           (id, user_id, display_name, created_at, updated_at)
         VALUES
@@ -161,6 +171,11 @@ describe("migration runner", () => {
         )
         .get("account-existing"),
     ).toEqual({ tracking_mode: "balance", current_value_minor: 12345 });
+    expect(
+      upgraded
+        .prepare("SELECT is_liquid FROM categories WHERE id = ?")
+        .get("category-existing"),
+    ).toEqual({ is_liquid: 1 });
     expect(
       [
         "account_conversions",
