@@ -1528,7 +1528,7 @@ Create settings for:
 - Current exchange rates
 - Timezone
 - Date format
-- Dark theme
+- System, light, or dark appearance theme
 - Default dashboard period
 - Password change
 - Session timeout
@@ -1537,7 +1537,10 @@ Create settings for:
 - Asset classification
 - Default goal return assumption
 
-The initial release can be dark-theme only, but structure the theme tokens so a light theme can be added later.
+Appearance is a browser-local device preference. System follows the operating
+system color scheme, while Light and Dark explicitly override it. Theme tokens
+keep every application surface readable in either resolved theme; printed
+documents remain deliberately white with dark text.
 
 ## Accessibility
 

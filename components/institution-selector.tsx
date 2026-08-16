@@ -104,8 +104,8 @@ export function InstitutionSelector({
           </Button>
         </Dialog.Trigger>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" />
-          <Dialog.Content className="fixed inset-x-3 top-1/2 z-[60] max-h-[85vh] -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 bg-[#121918] p-5 shadow-2xl outline-none sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2">
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--overlay)] backdrop-blur-sm" />
+          <Dialog.Content className="fixed inset-x-3 top-1/2 z-[60] max-h-[85vh] -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 bg-[var(--panel-raised)] p-5 shadow-2xl outline-none sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <Dialog.Title className="font-semibold text-slate-100">

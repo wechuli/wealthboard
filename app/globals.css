@@ -5,11 +5,22 @@
   --background: #090d0d;
   --panel: #111716;
   --panel-raised: #151d1b;
+  --surface-subtle: rgb(255 255 255 / 4%);
+  --surface-inset: rgb(0 0 0 / 20%);
+  --overlay: rgb(0 0 0 / 70%);
+  --text-primary: #e8efed;
+  --text-secondary: #b8c5c1;
   --muted: #8a9a96;
+  --border: rgb(255 255 255 / 10%);
+  --border-subtle: rgb(255 255 255 / 6%);
+  --shadow: rgb(0 0 0 / 18%);
+  --focus: #50d890;
   --positive: #50d890;
   --negative: #fb7185;
   --warning: #fbbf24;
   --info: #67e8f9;
+  --chart-grid: rgb(255 255 255 / 7%);
+  --chart-tooltip: #101716;
   --chart-1: #50d890;
   --chart-2: #67e8f9;
   --chart-3: #fbbf24;
@@ -18,6 +29,66 @@
   --chart-6: #60a5fa;
   --chart-7: #f472b6;
   --chart-8: #94a3b8;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #f4f7f6;
+  --panel: #ffffff;
+  --panel-raised: #f8faf9;
+  --surface-subtle: rgb(20 32 29 / 5%);
+  --surface-inset: rgb(20 32 29 / 4%);
+  --overlay: rgb(15 23 21 / 55%);
+  --text-primary: #14201d;
+  --text-secondary: #3d4f4a;
+  --muted: #5d706a;
+  --border: rgb(20 32 29 / 16%);
+  --border-subtle: rgb(20 32 29 / 10%);
+  --shadow: rgb(20 32 29 / 12%);
+  --focus: #087a46;
+  --positive: #087a46;
+  --negative: #b4233c;
+  --warning: #805400;
+  --info: #0b6574;
+  --chart-grid: rgb(20 32 29 / 12%);
+  --chart-tooltip: #ffffff;
+  --chart-1: #087a46;
+  --chart-2: #087081;
+  --chart-3: #946200;
+  --chart-4: #6d4ac7;
+  --chart-5: #b4233c;
+  --chart-6: #2463a6;
+  --chart-7: #a63d7d;
+  --chart-8: #52635e;
+
+  /* Existing feature utilities resolve through this semantic light palette. */
+  --color-white: var(--text-primary);
+  --color-black: #ffffff;
+  --color-slate-100: var(--text-primary);
+  --color-slate-200: var(--text-primary);
+  --color-slate-300: var(--text-secondary);
+  --color-slate-400: var(--text-secondary);
+  --color-slate-500: var(--muted);
+  --color-slate-600: var(--muted);
+  --color-emerald-100: var(--positive);
+  --color-emerald-200: var(--positive);
+  --color-emerald-300: var(--positive);
+  --color-emerald-400: var(--positive);
+  --color-emerald-950: #ffffff;
+  --color-red-100: var(--negative);
+  --color-red-200: var(--negative);
+  --color-red-300: var(--negative);
+  --color-red-400: var(--negative);
+  --color-red-500: var(--negative);
+  --color-amber-100: var(--warning);
+  --color-amber-200: var(--warning);
+  --color-amber-300: var(--warning);
+  --color-amber-400: var(--warning);
+  --color-amber-950: #ffffff;
+  --color-cyan-100: var(--info);
+  --color-cyan-200: var(--info);
+  --color-cyan-300: var(--info);
+  --color-cyan-400: var(--info);
 }
 
 * {
@@ -39,7 +110,7 @@ body {
       transparent 28rem
     ),
     var(--background);
-  color: #e8efed;
+  color: var(--text-primary);
   font-family:
     Inter,
     ui-sans-serif,
@@ -64,7 +135,7 @@ a {
 }
 
 ::selection {
-  background: rgb(80 216 144 / 30%);
+  background: color-mix(in srgb, var(--positive) 30%, transparent);
 }
 
 ::-webkit-scrollbar {
@@ -75,14 +146,14 @@ a {
 ::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 999px;
-  background: rgb(148 163 184 / 25%);
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
   background-clip: padding-box;
 }
 
 .financial-grid {
   background-image:
-    linear-gradient(rgb(255 255 255 / 2%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 2%) 1px, transparent 1px);
+    linear-gradient(var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
@@ -123,6 +194,18 @@ a {
   }
 
   .estate-print-document {
+    --color-white: #ffffff;
+    --color-black: #000000;
+    --color-slate-100: #f1f5f9;
+    --color-slate-200: #e2e8f0;
+    --color-slate-300: #cbd5e1;
+    --color-slate-400: #94a3b8;
+    --color-slate-500: #64748b;
+    --color-slate-600: #475569;
+    --color-slate-700: #334155;
+    --color-slate-900: #0f172a;
+    color: #0f172a;
+    background: white;
     position: absolute;
     inset: 0;
     width: 100%;

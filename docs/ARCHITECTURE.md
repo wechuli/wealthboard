@@ -308,8 +308,9 @@ own authorization decisions.
 - Usernames are local identifiers or collision-resistant generated handles.
   Email linking/recovery, SAML, multiple simultaneous issuers, and mandatory
   external services remain out of scope.
-- The initial release is dark-only; semantic CSS tokens make a future light
-  theme additive rather than a component rewrite.
+- Appearance is a non-sensitive browser-local preference with System, Light,
+  and Dark choices. A pre-hydration bootstrap resolves semantic CSS tokens;
+  appearance is not user settings, financial data, or portable state.
 - AI output remains explanatory, non-authoritative, and non-advisory. Reviews
   are never persisted, cannot execute financial changes, and omit unreliable
   annualized performance until deterministic cash-flow-aware metrics exist.

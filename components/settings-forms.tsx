@@ -18,6 +18,7 @@ import {
 } from "@/app/(app)/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ThemeControl } from "@/components/theme-provider";
 import {
   FieldError,
   Input,
@@ -209,6 +210,7 @@ export function GeneralSettingsForm({
               <option value="all">All time</option>
             </Select>
           </div>
+          <ThemeControl variant="settings" />
           <div>
             <Label htmlFor="sessionTimeoutMinutes">
               Session timeout (minutes)

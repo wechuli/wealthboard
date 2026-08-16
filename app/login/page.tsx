@@ -32,7 +32,7 @@ export default async function LoginPage({
   if (query.next) oidcHref.set("next", query.next);
   return (
     <main className="financial-grid flex min-h-screen items-center justify-center px-5 py-10">
-      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#101615]/95 p-7 shadow-2xl sm:p-9">
+      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[var(--panel)] p-7 shadow-2xl sm:p-9">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-400 text-emerald-950 shadow-lg shadow-emerald-950/40">
           <BarChart3 size={24} strokeWidth={2.4} />
         </div>
