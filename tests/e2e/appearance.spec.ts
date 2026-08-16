@@ -19,7 +19,7 @@ test("applies and persists appearance without a wrong-theme first render", async
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
-test("appearance works beside privacy controls at mobile width", async ({
+test("appearance works beside privacy controls at supported widths", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
@@ -46,6 +46,23 @@ test("appearance works beside privacy controls at mobile width", async ({
     .poll(() => page.evaluate(() => localStorage.getItem("wealthboard-theme")))
     .toBe("light");
 
+  for (const width of [360, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(
+      page.getByRole("button", { name: /appearance, resolved/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Hide financial values" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+  }
+
   await page.goto("/settings");
   await page.getByRole("button", { name: "Dark" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -53,5 +70,11 @@ test("appearance works beside privacy controls at mobile width", async ({
   await expect(page.getByRole("button", { name: "Dark" })).toHaveAttribute(
     "aria-pressed",
     "true",
+  );
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await page.evaluate(() => localStorage.getItem("wealthboard-theme"))).toBe(
+    "dark",
   );
 });
