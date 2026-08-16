@@ -54,6 +54,20 @@ npm install
 npm run dev
 ```
 
+## Dependency security and npm registry
+
+The repository pins the canonical public npm registry in `.npmrc` and disables
+registry-host rewriting so lockfile tarballs cannot be redirected through an
+incomplete proxy. Install with `npm ci` for reproducibility. Install scripts are
+reviewed and pinned through the `allowScripts` policy in `package.json`; do not
+approve every pending script automatically.
+
+Upgrade direct dependencies to maintained stable releases and resolve
+transitive advisories by upgrading their owning package. Do not use
+`npm audit fix --force` when it proposes a downgrade or unreviewed breaking
+change. The reviewed dependency baseline has zero findings from both
+`npm audit` and `npm audit --omit=dev`; rerun both after dependency changes.
+
 ## Docker Compose
 
 1. Copy `.env.example` to `.env`.
@@ -79,7 +93,7 @@ Verify readiness after migrations finish.
 
 ## Position-account migration
 
-The F17 schema is delivered through two append-only migrations. Migration
+The position-account schema is delivered through two append-only migrations. Migration
 `0005` introduces account tracking mode, instruments, position events, security
 prices, and reconciliation observations. Migration `0006` completes the epic
 with conversion provenance, advanced-action relationships, grouped cash,

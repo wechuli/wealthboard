@@ -117,13 +117,13 @@ separate API service. One optional OIDC provider may authenticate internal users
 
 ## Position-account architecture
 
-> **Status:** Implemented under backlog item F17. Position source records,
-> derived values, conversion, imports, advanced actions, portability, and
-> downstream completeness are part of the current runtime contract.
+Position source records, derived values, conversion, imports, advanced actions,
+portability, and downstream completeness are part of the current runtime
+contract.
 
 - Existing accounts retain `balance` tracking, where transactions and absolute
   valuation snapshots replay to one monetary value. An opt-in `positions`
-  tracking mode will represent an investment account containing a cash
+  tracking mode represents an investment account containing a cash
   subledger and one or more long-only instruments. A tracking mode cannot be
   toggled after financial activity; conversion requires an explicit as-of
   workflow that archives the source effective on the conversion date, creates
@@ -182,7 +182,7 @@ separate API service. One optional OIDC provider may authenticate internal users
 - Movement attribution uses a deterministic position bridge separating
   external cash, income, fees, adjustments, internal trade cash, quantity,
   price, and currency movement. Annualized position returns remain explicitly
-  unavailable until A3 supplies validated cash-flow-aware TWR methodology.
+  unavailable until validated cash-flow-aware TWR methodology is implemented.
 - Privacy mode masks quantities, unit prices, cash, reference cost basis, and
   derived values. Instrument names and symbols remain visible for account
   identification; raw identifiers and private notes follow their existing

@@ -97,8 +97,9 @@ The `position_bridge_v1` read model reconciles start and end values into:
 - currency movement as the remaining exact FX bridge.
 
 Completeness and residual are explicit. Position-account annualized return is
-unavailable until A3 introduces validated cash-flow-aware TWR; the movement
-bridge is attribution, not a return percentage or tax-gain calculation.
+unavailable until Wealthboard introduces validated cash-flow-aware TWR; the
+movement bridge is attribution, not a return percentage or tax-gain
+calculation.
 
 ## Contribution classification
 

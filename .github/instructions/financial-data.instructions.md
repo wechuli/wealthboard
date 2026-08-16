@@ -14,6 +14,9 @@ applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance
 - Preserve integer minor units end to end. Parse and format through `lib/money.ts`; use `bigint` or Decimal.js for arithmetic and conversion. Convert to `number` only at a display-library boundary after establishing that the value is safe and non-authoritative.
 - Recalculate an account by replaying transactions and valuation snapshots in chronological order using the existing helpers. A valuation is an absolute balance observation, not income, gain, or contribution.
 - Keep transaction effects consistent with `lib/finance.ts`. Transfers must create both sides with one transfer group and idempotency key in a single database transaction.
+- Ordinary transaction create/update paths must never target reserved `opening_balance` or `transfer` types; use their dedicated atomic workflows.
+- Imported external IDs are owner/account scoped, case-sensitive source identifiers. Identical records may be skipped, conflicts must never overwrite data, and fuzzy date/amount matching is not an identity policy.
+- Position quantities are replayed from ordered source events. Every mutation, correction, deletion, restore, or import must reject any sequence that becomes negative, and grouped cash/position events must commit and replay atomically.
 - Use the current user's most recent exchange rate effective on the date being calculated. Do not silently substitute the current rate for historical reports or reuse another user's rates.
 - Validate request and form data with the schemas in `lib/validation.ts`. Return the established `ActionState` shape for expected action errors; do not expose raw database errors to the client.
 - Every protected mutation must verify the session. Scope UUID idempotency keys to that user and perform multi-record financial changes atomically.

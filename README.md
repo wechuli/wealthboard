@@ -30,6 +30,8 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Per-user JSON portability and account/transaction CSV export
 - Operator-only full SQLite backup and offline restore
 - Installable PWA shell with explicit offline safety
+- Browser-local System, Light, and Dark appearance themes
+- Optional on-demand, evidence-linked AI portfolio review with private BYOK
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
 Money is stored as integer minor units. Exchange rates are effective-dated

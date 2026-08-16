@@ -3,12 +3,12 @@
 ## Status and terminology
 
 This document defines the product contract for the implemented multi-user
-baseline and accepted planned extensions. [backlog.md](backlog.md) is
-authoritative for implementation status. In particular, position-based
-investment accounts are planned under F17 and are not part of the current
-runtime schema. The current implemented schema remains the only supported
-runtime schema until an append-only migration delivers a planned extension;
-pre-release databases may be deleted and recreated rather than migrated.
+baseline. [backlog.md](backlog.md) contains only work that is not fully
+implemented. The current schema includes balance- and position-tracked
+accounts, institutions, estate planning, configurable local/OIDC
+authentication, appearance themes, and versioned portability. Persisted
+databases advance only through append-only migrations; applied migrations and
+snapshots are immutable.
 
 To avoid ambiguity:
 
@@ -1040,9 +1040,10 @@ the required lot and corporate-action model is implemented.
 Position movement attribution uses a deterministic bridge that separates
 external cash, income, fees, cash adjustments, internal trade cash, quantity
 changes, price movement, and currency movement. The bridge reports
-completeness and any residual explicitly. Until A3 implements validated
-cash-flow-aware TWR, position-account annualized returns display an explicit
-unavailable methodology state rather than a generic insufficient-history value.
+completeness and any residual explicitly. Until Wealthboard implements
+validated cash-flow-aware TWR, position-account annualized returns display an
+explicit unavailable methodology state rather than a generic
+insufficient-history value.
 
 ### Account comparison
 
