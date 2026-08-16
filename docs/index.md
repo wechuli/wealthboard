@@ -20,6 +20,10 @@ in the order most people use it, with real screens and concrete examples.
     <strong>Plan an estate</strong>
     <span>Add beneficiaries, allocate property, resolve warnings, and create a printable summary.</span>
   </a>
+  <a href="./guides/investments">
+    <strong>Track investment positions</strong>
+    <span>Record units, prices, broker cash, trades, corporate actions, and reconciliations.</span>
+  </a>
   <a href="./admin/deployment">
     <strong>Run Wealthboard</strong>
     <span>Deploy, configure authentication, back up SQLite, and recover safely.</span>
@@ -45,6 +49,7 @@ one.
 | I want to…                                                 | Read…                                                    |
 | ---------------------------------------------------------- | -------------------------------------------------------- |
 | Add land, a bank account, a loan, or an investment         | [Accounts and assets](./guides/accounts)                 |
+| Track brokerage cash, units, prices, or corporate actions  | [Position-tracked investments](./guides/investments)     |
 | Record a deposit, fee, transfer, or updated property value | [Transactions and values](./guides/activity)             |
 | Understand allocation and net worth                        | [Reports and privacy](./guides/reports)                  |
 | Assign inheritance percentages                             | [Estate planning](./guides/estate-planning)              |

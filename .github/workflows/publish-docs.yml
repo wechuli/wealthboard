@@ -6,6 +6,8 @@ on:
             - main
         paths:
             - "docs/**"
+            - "public/templates/**"
+            - "scripts/sync-docs-assets.mjs"
             - "package.json"
             - "package-lock.json"
             - ".github/workflows/publish-docs.yml"

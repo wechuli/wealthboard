@@ -122,8 +122,171 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByText("2028 Family Car", { exact: true }).click();
   await capturePage(page, "goal-planning.png");
 
+  const portfolioBeforeConversion = (await (
+    await page.request.get("/api/export/json")
+  ).json()) as {
+    accounts: Array<{ id: string; name: string }>;
+  };
+  const brokerage = portfolioBeforeConversion.accounts.find(
+    (account) => account.name === "Interactive Brokers VWRA",
+  );
+  expect(brokerage).toBeTruthy();
+
+  await page.goto(`/accounts/${brokerage!.id}/convert`);
+  await page.getByRole("link", { name: "Add instrument" }).click();
+  await page
+    .getByLabel("Instrument name")
+    .fill("Vanguard FTSE All-World UCITS ETF");
+  await page.getByLabel("Symbol").fill("VWRA");
+  await page.getByLabel("Identifier", { exact: true }).fill("VWRA");
+  await page.getByLabel("Exchange MIC").fill("XLON");
+  await page.getByLabel("Quote currency").selectOption("USD");
+  await page.getByRole("button", { name: "Create instrument" }).click();
+  await page
+    .getByLabel("Replacement account name")
+    .fill("Interactive Brokers Positions");
+  await page.getByLabel("Conversion date").fill("2026-08-12");
+  await page.getByLabel(/Opening cash/).fill("1111");
+  await page.getByLabel("Quantity").fill("15");
+  await page.getByLabel("Unit price").fill("200");
+  await page.getByLabel("Reference basis").fill("2800");
+  await page.getByLabel("Price source").fill("broker statement");
+  await page
+    .getByLabel("Price provenance")
+    .fill("Fictional 12 August 2026 statement");
+  await page.getByRole("button", { name: "Preview conversion" }).click();
+  await expect(page.getByText("Projected total")).toBeVisible();
+  await page.getByText("Projected total").scrollIntoViewIfNeeded();
+  await capturePage(page, "account-conversion-preview.png");
+  await page.getByRole("button", { name: "Convert account" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Interactive Brokers Positions" }),
+  ).toBeVisible();
+  const positionAccountId = new URL(page.url()).pathname.split("/").at(-1)!;
+
+  await page.getByRole("link", { name: "Buy", exact: true }).click();
+  await page.getByLabel("Quantity").fill("1");
+  await page.getByLabel("Execution price per unit").fill("205");
+  await page.getByLabel("Fee amount").fill("1");
+  await page.getByLabel("Trade date").fill("2026-08-13");
+  await page.getByLabel("Settlement date").fill("2026-08-14");
+  await page.getByLabel("Description").fill("Fictional recurring investment");
+  await captureLocator(
+    cardForHeading(page, "Position activity"),
+    "position-trade-entry.png",
+  );
+  await page.getByRole("button", { name: "Save position activity" }).click();
+
+  await page
+    .getByLabel("Update Vanguard FTSE All-World UCITS ETF price")
+    .click();
+  await page.getByLabel("Unit price").fill("212");
+  await page.getByLabel("Price date").fill("2026-08-14");
+  await page.getByLabel("Source").fill("broker statement");
+  await page
+    .getByLabel("Provenance")
+    .fill("Fictional 14 August 2026 statement");
+  await capturePage(page, "security-price-entry.png");
+  await page.getByRole("button", { name: "Save price" }).click();
+
+  await page.getByRole("link", { name: "Reinvest" }).click();
+  await page.getByLabel(/Dividend amount/).fill("106");
+  await page.getByLabel("Execution price per unit").fill("212");
+  await page.getByLabel("Purchased quantity").fill("0.5");
+  await page.getByLabel("Effective date").fill("2026-08-14");
+  await page.getByLabel("Private notes").fill("Fictional reinvestment");
+  await captureLocator(
+    cardForHeading(page, "Authoritative source activity"),
+    "investment-actions.png",
+  );
+  await page
+    .getByRole("button", { name: "Save dividend reinvestment" })
+    .click();
+
+  await page.getByRole("link", { name: "Reconcile" }).click();
+  await page.getByLabel("Statement date").fill("2026-08-14");
+  await page.getByLabel(/Reported cash/).fill("905");
+  await page.getByLabel(/Reported total/).fill("4405");
+  await page.getByLabel("Notes").fill("Fictional broker statement comparison");
+  await page.getByRole("button", { name: "Save reconciliation" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Statement reconciliations" }),
+  ).toBeVisible();
+  await capturePage(page, "position-account-detail.png");
+
+  await page.goto(`/accounts/${positionAccountId}/import`);
+  await page.getByLabel("CSV or JSON file").setInputFiles({
+    name: "fictional-investment-history.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({
+        format: "wealthboard-investment-history",
+        version: 1,
+        instruments: [
+          {
+            external_id: "instrument:fictional-emerging-markets",
+            name: "Fictional Emerging Markets ETF",
+            symbol: "FEME",
+            identifier_type: "ticker_exchange",
+            identifier: "FEME",
+            exchange_mic: "XLON",
+            asset_type: "etf",
+            quote_currency: "USD",
+          },
+        ],
+        position_events: [
+          {
+            external_id: "event:fictional-emerging-markets:opening",
+            instrument_external_id: "instrument:fictional-emerging-markets",
+            type: "opening_position",
+            quantity: "3",
+            unit_price: null,
+            trade_currency: "USD",
+            fee_amount: null,
+            fee_currency: null,
+            cash_effect: null,
+            applied_exchange_rate: null,
+            opening_cost_basis: "180",
+            event_group_id: null,
+            trade_date: "2026-08-14",
+            settlement_date: null,
+            description: "Fictional opening holding",
+            notes: null,
+          },
+        ],
+        cash_transactions: [],
+        prices: [
+          {
+            external_id: "price:fictional-emerging-markets:2026-08-14",
+            instrument_external_id: "instrument:fictional-emerging-markets",
+            price: "62",
+            effective_date: "2026-08-14",
+            source: "broker statement",
+            provenance: "Fictional 14 August 2026 statement",
+          },
+        ],
+      }),
+    ),
+  });
+  await page.getByRole("button", { name: "Preview file" }).click();
+  await expect(
+    page.getByText(/Interactive Brokers Positions · 3 source records/),
+  ).toBeVisible();
+  await page
+    .getByRole("columnheader", { name: "Instrument" })
+    .first()
+    .scrollIntoViewIfNeeded();
+  await captureLocator(
+    cardForHeading(page, "Confirm projected account"),
+    "investment-import-preview.png",
+  );
+
   await page.goto("/reports");
   await capturePage(page, "reports-overview.png");
+  await captureLocator(
+    cardForHeading(page, "Position movement attribution"),
+    "position-movement-attribution.png",
+  );
 
   await page.goto("/estate/beneficiaries");
   await addBeneficiary(page, {
@@ -147,7 +310,12 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   const archive = (await (
     await page.request.get("/api/export/json")
   ).json()) as {
-    accounts: Array<{ id: string; name: string; isLiability: boolean }>;
+    accounts: Array<{
+      id: string;
+      name: string;
+      isLiability: boolean;
+      archivedAt: string | null;
+    }>;
   };
   const land = archive.accounts.find(
     (account) => account.name === "Southern Bypass Land",
@@ -156,7 +324,8 @@ test("capture the Wealthboard product guide", async ({ page }) => {
 
   await page.goto(`/estate/distribution?account=${land!.id}#asset-${land!.id}`);
   for (const account of archive.accounts.filter(
-    (account) => !account.isLiability && account.id !== land!.id,
+    (account) =>
+      !account.isLiability && !account.archivedAt && account.id !== land!.id,
   )) {
     const card = page.locator(`#asset-${account.id}`);
     await card

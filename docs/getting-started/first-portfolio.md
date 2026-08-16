@@ -34,17 +34,18 @@ details from **Institutions**.
 
 Open **Accounts**, then select **Add account**.
 
-| Field                    | How to use it                                                     |
-| ------------------------ | ----------------------------------------------------------------- |
-| Account or asset name    | Use a name you will recognize in reports and transfers.           |
-| Category                 | Determines asset/liability classification and reporting behavior. |
-| Institution              | Optional provider link.                                           |
-| Currency                 | The account's permanent source currency.                          |
-| Opening value            | Starting balance or current value when tracking begins.           |
-| Cost basis               | Optional reference; Wealthboard does not calculate tax basis.     |
-| Opened or acquired       | Date from which the opening value applies.                        |
-| Masked account reference | Keep this short and non-sensitive.                                |
-| Include in net worth     | Turn off for informational accounts you do not want in totals.    |
+| Field                    | How to use it                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| Account or asset name    | Use a name you will recognize in reports and transfers.                                   |
+| Category                 | Determines asset/liability classification and reporting behavior.                         |
+| Institution              | Optional provider link.                                                                   |
+| Currency                 | The account's permanent source currency.                                                  |
+| Tracking method          | Use total value for monetary replay or units and prices for a long-only brokerage ledger. |
+| Opening value            | Starting balance or current value when tracking begins.                                   |
+| Cost basis               | Optional reference; Wealthboard does not calculate tax basis.                             |
+| Opened or acquired       | Date from which the opening value applies.                                                |
+| Masked account reference | Keep this short and non-sensitive.                                                        |
+| Include in net worth     | Turn off for informational accounts you do not want in totals.                            |
 
 ::: warning Choose the currency carefully
 An account's currency cannot be changed after creation because every transaction
@@ -83,6 +84,11 @@ You have three reasonable starting points:
 
 For a manual asset such as land or a vehicle, periodic valuations are usually
 more useful than artificial purchase/sale transactions.
+
+For a brokerage account that needs cash, units, and effective prices, select
+**Units and prices** before entering activity. Follow
+[Position-tracked investments](../guides/investments) rather than importing
+generic purchase/sale transactions.
 
 ## Reconcile before expanding
 

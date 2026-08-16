@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
-import { and, eq } from "drizzleorm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import {

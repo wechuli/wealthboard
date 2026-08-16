@@ -65,6 +65,12 @@ zero. Price rows retain their date, source, and provenance. Configure separate
 stock, ETF, and fund freshness thresholds under **Settings**; account, goal,
 estate, dashboard, report, and import views show affected date ranges.
 
+![Position account with cash, priced units, data quality, and one activity timeline](/images/screenshots/position-account-detail.png)
+
+See [Position-tracked investments](./investments) for account setup, trades,
+settlement, prices, reinvestment, transfers, corporate actions, reconciliation,
+conversion, privacy, and supported instrument boundaries.
+
 ## Convert an existing investment account
 
 For an active balance-tracked investment account, choose **Convert**. Select an
@@ -90,6 +96,9 @@ date range, net change, missing/stale price or rate issues, duplicates,
 conflicts, and oversells. Confirmation reparses the SHA-256-confirmed file and
 commits the complete valid sequence in one transaction; one invalid dependent
 record blocks the whole investment import.
+
+See the exact [Investment History v1 contract](../reference/investment-import)
+for JSON fields, CSV headers, grouped reinvestments, and rejection guidance.
 
 ## Edit account metadata
 

@@ -43,6 +43,10 @@ export default defineConfig({
         text: "Use Wealthboard",
         items: [
           { text: "Accounts and assets", link: "/guides/accounts" },
+          {
+            text: "Position-tracked investments",
+            link: "/guides/investments",
+          },
           { text: "Transactions and values", link: "/guides/activity" },
           { text: "Goals", link: "/guides/goals" },
           { text: "Reports and privacy", link: "/guides/reports" },
@@ -66,6 +70,10 @@ export default defineConfig({
         text: "Reference",
         items: [
           { text: "Financial behavior", link: "/reference/financial-behavior" },
+          {
+            text: "Investment History v1",
+            link: "/reference/investment-import",
+          },
           { text: "Security and privacy", link: "/reference/security" },
           { text: "Architecture", link: "/ARCHITECTURE" },
         ],

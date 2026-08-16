@@ -117,6 +117,9 @@ dist
 # vitepress cache directory
 **/.vitepress/cache
 
+# Documentation assets copied from canonical application public files
+/docs/public/templates/
+
 # Docusaurus cache and generated files
 .docusaurus
 

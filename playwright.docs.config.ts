@@ -14,7 +14,7 @@ export default defineConfig({
   testDir: "./tests/docs",
   fullyParallel: false,
   workers: 1,
-  timeout: 120_000,
+  timeout: 240_000,
   expect: { timeout: 10_000 },
   use: {
     ...devices["Desktop Chrome"],

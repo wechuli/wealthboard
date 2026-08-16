@@ -16,6 +16,17 @@ active account. See [Transactions and values](./activity#import-detailed-account
 The file cannot choose a user, account, institution, or currency. The signed-in
 session and account URL establish those values.
 
+## Investment history import
+
+Use an active position account's **Import** action for instruments, opening
+holdings, trades, broker cash, and effective-dated prices. This is a strict,
+all-or-nothing workflow because one trade can depend on earlier quantities and
+cash.
+
+See [Investment History v1](../reference/investment-import) for the JSON
+envelope, four CSV templates, stable-ID policy, preview fields, and grouped
+reinvestment rules.
+
 ## CSV downloads
 
 - **Accounts CSV:** a spreadsheet-friendly account inventory.
@@ -65,6 +76,21 @@ upgrades deterministically. Versions 2 through 6 restore accounts in balance
 mode with empty position collections rather than inferring quantities from
 money-only history. Older formats also receive the appropriate institution,
 transaction-ID, goal, and estate compatibility defaults.
+
+## Archive version history
+
+| Version | Added source records                                                                              | Restore behavior                                                                            |
+| ------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 8       | Ordered advanced position events, grouped cash, account conversions, and freshness settings       | Current output; validates every advanced relationship before replacement                    |
+| 7       | Initial instruments, position events, security prices, reconciliations, and account tracking mode | Upgrades deterministically; legacy advisory group IDs are cleared rather than reinterpreted |
+| 6       | Beneficiaries, estate directives, allocations, residue, and retained summaries                    | Restores with balance-mode accounts and empty position collections                          |
+| 5       | Stable transaction external IDs                                                                   | Missing later collections receive safe empty defaults                                       |
+| 4       | User-owned institution directory                                                                  | Earlier institution names are normalized into owned records                                 |
+| 3       | Goal milestones and alert dismissals                                                              | Receives later source-collection defaults                                                   |
+| 2       | Baseline supported user archive                                                                   | Receives every compatibility conversion in order                                            |
+
+Restore never infers units from money-only purchases, descriptions, valuations,
+or cost basis in versions 2 through 6.
 
 ::: danger A user export is not a deployment backup
 A JSON restore cannot recover login identities, OIDC mappings, or another user's

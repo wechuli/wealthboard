@@ -23,6 +23,12 @@ Open **Goals**, then select **Create goal**. Enter:
 When an account is linked, its live balance supplies current progress. Use an
 unlinked goal only when no account should be the source of truth.
 
+A linked position account supplies its complete price-derived market value. A
+missing price or exchange rate marks goal progress incomplete, while stale
+prices remain visible for review. Goal progress does not treat account-internal
+buys or sells as contributions and does not calculate a position-account return
+percentage.
+
 ## Read the forecast
 
 ![Goal page with current progress, target, required monthly pace, and projection](/images/screenshots/goal-planning.png)

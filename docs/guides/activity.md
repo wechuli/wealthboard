@@ -28,6 +28,37 @@ deposit or withdrawal.
 
 Opening balances and transfers use dedicated workflows.
 
+::: info Position accounts use different source events
+Generic `Purchase`, `Sale`, `Capital gain`, and `Capital loss` are monetary
+balance-account types. A position account rejects them. Use its **Buy**,
+**Sell**, cash, price, and investment-action workflows instead.
+:::
+
+## Position cash and settlement
+
+Position accounts keep an account-currency cash subledger alongside instrument
+units.
+
+| Source event             | Cash effect                                        | Quantity effect                     |
+| ------------------------ | -------------------------------------------------- | ----------------------------------- |
+| Deposit / withdrawal     | Adds or removes external broker cash               | None                                |
+| Interest / cash dividend | Adds income cash                                   | None                                |
+| Fee                      | Removes cash                                       | None                                |
+| Buy                      | Removes settlement plus fees                       | Adds units                          |
+| Sell                     | Adds proceeds less fees                            | Removes units                       |
+| Dividend reinvestment    | Adds dividend cash and consumes it in grouped buys | Adds purchased units                |
+| In-kind transfer         | Optional grouped fee only                          | Paired transfer-out and transfer-in |
+
+![Position buy with execution, fee, trade, and settlement fields](/images/screenshots/position-trade-entry.png)
+
+Buys and sells are internal allocation changes, not contributions or
+withdrawals. Cross-currency trades require the actual account-currency
+settlement or explicit applied settlement rate. A grouped reinvestment saves and
+deletes its dividend and buys atomically.
+
+See [Position-tracked investments](./investments) for corporate actions,
+reconciliation, conversion, and price behavior.
+
 ## Record a transaction
 
 1. Open an account and select a quick action, or open **Transactions** and select

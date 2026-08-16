@@ -46,6 +46,11 @@ account currency are correct.
 Wealthboard intentionally does not substitute a current rate for a missing
 historical rate.
 
+For a position account, also open the account's **Data quality** section. Add a
+missing effective security price, correct its quote currency, or review a stale
+carried price. Settings has separate stock, ETF, and fund freshness thresholds.
+Warnings include the affected range and last available source observation.
+
 ## An imported file is rejected
 
 Confirm:
@@ -60,6 +65,31 @@ Confirm:
 
 Use the downloadable row report to distinguish validation failures, duplicates,
 and conflicting IDs.
+
+## An investment import is rejected
+
+Investment History v1 is all-or-nothing. Check the detailed preview for:
+
+- an unresolved `instrument_external_id`;
+- a duplicate or conflicting stable external ID;
+- a sell or backdated correction that makes quantity negative;
+- a cross-currency trade without actual settlement or an applied rate;
+- an invalid dividend-reinvestment group; or
+- a future date, unsupported currency, wrong CSV header, or file limit.
+
+Correct the source file and preview it again. Do not change IDs merely to bypass
+a conflict. See [Investment History v1](../reference/investment-import).
+
+## A conversion cannot be confirmed
+
+The conversion date must be on or after the source account's latest activity.
+Create at least one instrument, enter explicit cash, quantities, and prices, and
+preview again after every field change. A non-zero source/replacement difference
+requires the explicit confirmation checkbox.
+
+The source becomes archived history after conversion. It cannot be restored
+while the linked replacement is active because that would double count the
+same investment.
 
 ## An estate plan is not complete
 

@@ -29,10 +29,15 @@ Before allocating anything:
 - add all material assets and liabilities;
 - update stale property, vehicle, business, and investment values;
 - resolve missing exchange rates;
+- resolve missing position prices and review carried prices older than the
+  configured stock, ETF, or fund freshness threshold;
 - archive duplicates or closed accounts;
 - verify whether jointly held property is wholly or partly yours.
 
 Liabilities appear in the estate estimate but cannot be allocated as gifts.
+Position-account values enter the plan through the same account boundary as
+other assets. An unresolved instrument or rate marks the estate total
+incomplete; stale prices create review warnings without changing allocations.
 
 ## Step 2: Add beneficiaries
 

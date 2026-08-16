@@ -77,6 +77,23 @@ docker compose up -d --build
 
 Verify readiness after migrations finish.
 
+## Position-account migration
+
+The F17 schema is delivered through two append-only migrations. Migration
+`0005` introduces account tracking mode, instruments, position events, security
+prices, and reconciliation observations. Migration `0006` completes the epic
+with conversion provenance, advanced-action relationships, grouped cash,
+deterministic event order, and freshness settings.
+
+- Existing accounts remain in total-value mode and keep their balances.
+- No migration infers instruments or quantities from monetary history.
+- Users opt into units and prices when creating an account or through guided
+  conversion.
+- Create and verify a deployment backup before upgrading.
+- After startup, check readiness, one existing balance account, and one
+  position-account value before removing the pre-upgrade backup from immediate
+  recovery storage.
+
 ## Kubernetes
 
 The example at `deploy/kubernetes.yaml` uses:

@@ -16,6 +16,8 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
   rates, imports, exports, restores, caches, and idempotency keys
 - Accounts and liabilities with custom categories, archives, filters, and
   base-currency values
+- Position-tracked investment accounts with broker cash, fractional units,
+  effective prices, conversion, reconciliation, imports, and corporate actions
 - Per-user base currency and enabled ISO currency catalog, including East
   African and common international currencies
 - Deposits, withdrawals, income, fees, gains/losses, valuations, and atomic
@@ -37,8 +39,9 @@ decimal strings, and calculations use `bigint` or Decimal.js.
 
 The user and operator guide is published at
 <https://wechuliprojects.github.io/wealthboard/>. It covers first setup,
-accounts, activity, goals, reports, estate planning, portability, deployment,
-authentication, backups, and troubleshooting with fictional product screenshots.
+accounts, position-tracked investments, activity, goals, reports, estate
+planning, portability, deployment, authentication, backups, and troubleshooting
+with fictional product screenshots.
 
 Documentation source lives under `docs/` and is built with VitePress:
 

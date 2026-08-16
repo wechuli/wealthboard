@@ -20,6 +20,11 @@ order:
 
 Editing or deleting a supported event recalculates the affected account.
 
+A position-tracked account instead replays broker cash and ordered quantity
+events, then values each instrument with the latest price effective on or before
+the requested date. Missing prices or rates mark the result incomplete rather
+than turning unresolved exposure into zero.
+
 ## Transactions and valuations answer different questions
 
 Use a **transaction** when an economic event changed the holding: a deposit,
