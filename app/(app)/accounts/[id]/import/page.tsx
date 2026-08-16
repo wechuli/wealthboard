@@ -4,6 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 
 import { AccountHistoryAiPrompt } from "@/components/account-history-ai-prompt";
 import { AccountHistoryImport } from "@/components/account-history-import";
+import { InvestmentHistoryAiPrompt } from "@/components/investment-history-ai-prompt";
 import { InvestmentHistoryImport } from "@/components/investment-history-import";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { PageHeader } from "@/components/ui/page";
 import { requireSession } from "@/lib/auth/session";
 import { currencyDigits } from "@/lib/money";
 import { getAccount } from "@/lib/services/accounts";
+import { getCurrencyConfiguration } from "@/lib/services/settings";
 
 export default async function AccountHistoryImportPage({
   params,
@@ -21,6 +23,10 @@ export default async function AccountHistoryImportPage({
   const { id } = await params;
   const account = await getAccount(userId, id);
   if (!account || account.archivedAt) notFound();
+  const currencyConfiguration =
+    account.trackingMode === "positions"
+      ? getCurrencyConfiguration(userId)
+      : null;
 
   return (
     <>
@@ -67,6 +73,11 @@ export default async function AccountHistoryImportPage({
               </div>
             </CardContent>
           </Card>
+          <InvestmentHistoryAiPrompt
+            accountCurrency={account.currency}
+            accountFractionDigits={currencyDigits(account.currency)}
+            enabledCurrencies={currencyConfiguration!.enabledCurrencies}
+          />
           <InvestmentHistoryImport accountId={id} />
         </>
       ) : (

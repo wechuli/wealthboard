@@ -161,6 +161,15 @@ and shows before/after quantities, price impact ranges, projected cash and
 positions, net change, duplicates, conflicts, oversells, and completeness
 issues.
 
+The import page also provides a strict, currency-aware AI transformation prompt
+for complete JSON or one of the four CSV collections. Copy it into an AI service
+you trust and add the source statement there. Prompt generation and copying are
+entirely client-side; Wealthboard sends neither the prompt nor the statement.
+Complete JSON is recommended when records are interdependent or a dividend and
+its reinvestment buys must share one atomic group.
+
+![Client-only investment transformation prompt with a selectable output contract](/images/screenshots/investment-ai-prompt.png)
+
 ![Atomic investment import preview with instrument resolution, event ordering, quantities, and price impact](/images/screenshots/investment-import-preview.png)
 
 Confirmation reparses the SHA-256-confirmed file and writes the complete

@@ -113,6 +113,11 @@ test.describe.serial("position accounts", () => {
     await expect(
       page.getByRole("heading", { name: "Investment History v1" }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Prepare your investment file with AI",
+      }),
+    ).toBeVisible();
     await page.getByLabel("CSV or JSON file").setInputFiles({
       name: "second-position.json",
       mimeType: "application/json",

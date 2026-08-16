@@ -21,6 +21,12 @@ Files are limited to 5 MB and 10,000 combined source records. Dates are
 non-future `YYYY-MM-DD` values. Quantities, prices, rates, and money are decimal
 strings, not JSON numbers.
 
+The position import page can generate a strict prompt for an external AI
+service. It supports complete JSON and each CSV collection, includes the account
+currency and enabled currency set, and treats source content as untrusted data.
+Wealthboard only generates and copies the prompt in the browser; it does not
+send the prompt or financial file. Always inspect the resulting import preview.
+
 ## Stable external IDs
 
 Every source record needs a stable, case-sensitive external ID no longer than

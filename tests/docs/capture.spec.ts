@@ -215,6 +215,17 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await capturePage(page, "position-account-detail.png");
 
   await page.goto(`/accounts/${positionAccountId}/import`);
+  await expect(
+    page.getByRole("heading", {
+      name: "Prepare your investment file with AI",
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Show prompt" }).click();
+  await captureLocator(
+    cardForHeading(page, "Prepare your investment file with AI"),
+    "investment-ai-prompt.png",
+  );
+  await page.getByRole("button", { name: "Hide prompt" }).click();
   await page.getByLabel("CSV or JSON file").setInputFiles({
     name: "fictional-investment-history.json",
     mimeType: "application/json",
