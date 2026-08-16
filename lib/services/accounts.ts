@@ -251,18 +251,22 @@ export async function getAccountActivity(userId: string, accountId: string) {
         desc(transactions.createdAt),
       ],
     }),
-    db.query.valuationSnapshots.findMany({
-      where: and(
-        eq(valuationSnapshots.userId, userId),
-        eq(valuationSnapshots.accountId, accountId),
-      ),
-      orderBy: [
-        desc(valuationSnapshots.valuationDate),
-        desc(valuationSnapshots.createdAt),
-      ],
-    }),
+    listAccountValuations(userId, accountId),
   ]);
   return { transactions: transactionRows, valuations };
+}
+
+export async function listAccountValuations(userId: string, accountId: string) {
+  return getDatabase().query.valuationSnapshots.findMany({
+    where: and(
+      eq(valuationSnapshots.userId, userId),
+      eq(valuationSnapshots.accountId, accountId),
+    ),
+    orderBy: [
+      desc(valuationSnapshots.valuationDate),
+      desc(valuationSnapshots.createdAt),
+    ],
+  });
 }
 
 const INFLOW_TYPES: TransactionType[] = [

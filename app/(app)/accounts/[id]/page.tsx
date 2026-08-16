@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import {
   Archive,
   ArrowDownToLine,
+  ArrowLeft,
   ArrowLeftRight,
+  ArrowRight,
   ArrowUpFromLine,
   Edit3,
   Landmark,
@@ -36,22 +38,50 @@ import { PageHeader } from "@/components/ui/page";
 import { TRANSACTION_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/dates";
 import { minorToDecimalString } from "@/lib/money";
-import { getAccount, getAccountActivity } from "@/lib/services/accounts";
+import {
+  getAccount,
+  listAccountValuations,
+  listTransactionPage,
+} from "@/lib/services/accounts";
 import { getAccountAnalytics } from "@/lib/services/analytics";
 import { getSettings } from "@/lib/bootstrap";
 import { listGoals } from "@/lib/services/goals";
 import { requireSession } from "@/lib/auth/session";
+import { parseTransactionListQuery } from "@/lib/validation";
 
 export default async function AccountDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { userId } = await requireSession();
   const { id } = await params;
-  const [account, activity, analytics, settings, allGoals] = await Promise.all([
+  const query = await searchParams;
+  const transactionQuery = parseTransactionListQuery({
+    cursor: query.txCursor,
+    page: query.txPage,
+    sort: "newest",
+  });
+  const transactionCursor = transactionQuery.cursor;
+  const [
+    account,
+    valuations,
+    transactionResult,
+    analytics,
+    settings,
+    allGoals,
+  ] = await Promise.all([
     getAccount(userId, id),
-    getAccountActivity(userId, id),
+    listAccountValuations(userId, id),
+    listTransactionPage(userId, {
+      accountId: id,
+      sort: "newest",
+      cursor: transactionCursor,
+      page: transactionQuery.page,
+      pageSize: ACCOUNT_TRANSACTION_PAGE_SIZE,
+    }),
     getAccountAnalytics(userId, id),
     getSettings(userId),
     listGoals(userId),
@@ -312,78 +342,165 @@ export default async function AccountDetailPage({
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
         {account.trackingMode === "balance" ? (
-          <Card>
+          <Card id="transactions" className="scroll-mt-24">
             <CardHeader>
-              <CardTitle>Transactions</CardTitle>
+              <div>
+                <CardTitle>Transactions</CardTitle>
+                <p className="mt-1 text-xs text-slate-500">
+                  Newest account activity first
+                </p>
+              </div>
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/transactions?accountId=${id}&sort=newest`}>
+                  View all
+                  <ArrowRight size={15} />
+                </Link>
+              </Button>
             </CardHeader>
             <CardContent>
-              {activity.transactions.length === 0 ? (
-                <p className="py-10 text-center text-sm text-slate-500">
-                  No transactions recorded.
-                </p>
-              ) : (
-                <div className="divide-y divide-white/[0.06]">
-                  {activity.transactions.map((transaction) => (
-                    <div
-                      key={transaction.id}
-                      className="flex items-center justify-between gap-3 py-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-slate-200">
-                          {TRANSACTION_LABELS[transaction.type]}
-                        </p>
-                        <p className="truncate text-xs text-slate-500">
-                          {formatDate(
-                            transaction.transactionDate,
-                            settings.timezone,
-                            settings.preferredDateFormat,
-                          )}
-                          {transaction.description
-                            ? ` · ${transaction.description}`
-                            : ""}
-                          {transaction.externalId
-                            ? ` · External ID: ${transaction.externalId}`
-                            : ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MoneyValue
-                          amount={transaction.amountMinor}
-                          currency={transaction.currency}
-                          className="text-sm"
-                        />
-                        {transaction.type !== "opening_balance" &&
-                        transaction.type !== "transfer" ? (
-                          <Button
-                            asChild
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Edit transaction"
-                          >
-                            <Link href={`/transactions/${transaction.id}/edit`}>
-                              <Edit3 size={15} />
-                            </Link>
-                          </Button>
-                        ) : null}
-                        {transaction.type !== "opening_balance" ? (
-                          <MutationButton
-                            action={deleteTransactionAction.bind(
-                              null,
-                              transaction.id,
-                            )}
-                            confirm="Delete this transaction? The account balance will be recalculated."
-                            successMessage="Transaction deleted."
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Delete transaction"
-                          >
-                            <Trash2 size={15} />
-                          </MutationButton>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
+              {transactionResult.rows.length === 0 ? (
+                <div className="py-10 text-center text-sm text-slate-500">
+                  <p>
+                    {transactionCursor
+                      ? "No transactions on this page."
+                      : "No transactions recorded."}
+                  </p>
+                  {transactionCursor ? (
+                    <Button asChild variant="ghost" size="sm" className="mt-2">
+                      <Link href={`/accounts/${id}#transactions`}>
+                        Back to newest
+                      </Link>
+                    </Button>
+                  ) : null}
                 </div>
+              ) : (
+                <>
+                  <div
+                    role="list"
+                    aria-label="Account transactions"
+                    className="divide-y divide-white/[0.06]"
+                  >
+                    {transactionResult.rows.map((transaction) => (
+                      <div
+                        key={transaction.id}
+                        role="listitem"
+                        className="flex items-center justify-between gap-3 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-slate-200">
+                            {TRANSACTION_LABELS[transaction.type]}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {formatDate(
+                              transaction.transactionDate,
+                              settings.timezone,
+                              settings.preferredDateFormat,
+                            )}
+                            {transaction.description
+                              ? ` · ${transaction.description}`
+                              : ""}
+                            {transaction.externalId
+                              ? ` · External ID: ${transaction.externalId}`
+                              : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MoneyValue
+                            amount={transaction.amountMinor}
+                            currency={transaction.currency}
+                            className="text-sm"
+                          />
+                          {transaction.type !== "opening_balance" &&
+                          transaction.type !== "transfer" ? (
+                            <Button
+                              asChild
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Edit transaction"
+                            >
+                              <Link
+                                href={`/transactions/${transaction.id}/edit`}
+                              >
+                                <Edit3 size={15} />
+                              </Link>
+                            </Button>
+                          ) : null}
+                          {transaction.type !== "opening_balance" ? (
+                            <MutationButton
+                              action={deleteTransactionAction.bind(
+                                null,
+                                transaction.id,
+                              )}
+                              confirm="Delete this transaction? The account balance will be recalculated."
+                              successMessage="Transaction deleted."
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Delete transaction"
+                            >
+                              <Trash2 size={15} />
+                            </MutationButton>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-col gap-3 border-t border-white/[0.06] pt-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                    <p>
+                      Showing {transactionResult.rows.length} transactions on
+                      this page.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        asChild={Boolean(transactionResult.previousCursor)}
+                        variant="secondary"
+                        size="sm"
+                        disabled={!transactionResult.previousCursor}
+                      >
+                        {transactionResult.previousCursor ? (
+                          <Link
+                            href={accountTransactionHref(
+                              id,
+                              transactionResult.previousCursor,
+                              "previous",
+                            )}
+                          >
+                            <ArrowLeft size={15} />
+                            Previous
+                          </Link>
+                        ) : (
+                          <>
+                            <ArrowLeft size={15} />
+                            Previous
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        asChild={Boolean(transactionResult.nextCursor)}
+                        variant="secondary"
+                        size="sm"
+                        disabled={!transactionResult.nextCursor}
+                      >
+                        {transactionResult.nextCursor ? (
+                          <Link
+                            href={accountTransactionHref(
+                              id,
+                              transactionResult.nextCursor,
+                              "next",
+                            )}
+                          >
+                            Next
+                            <ArrowRight size={15} />
+                          </Link>
+                        ) : (
+                          <>
+                            Next
+                            <ArrowRight size={15} />
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -394,13 +511,13 @@ export default async function AccountDetailPage({
             <CardTitle>Valuation history</CardTitle>
           </CardHeader>
           <CardContent>
-            {activity.valuations.length === 0 ? (
+            {valuations.length === 0 ? (
               <p className="py-10 text-center text-sm text-slate-500">
                 No manual valuations yet.
               </p>
             ) : (
               <div className="divide-y divide-white/[0.06]">
-                {activity.valuations.map((valuation) => (
+                {valuations.map((valuation) => (
                   <div
                     key={valuation.id}
                     className="flex items-center justify-between gap-3 py-3"
@@ -585,4 +702,18 @@ function Detail({ label, value }: { label: string; value: string }) {
       <span className="text-right text-slate-300">{value}</span>
     </div>
   );
+}
+
+const ACCOUNT_TRANSACTION_PAGE_SIZE = 10;
+
+function accountTransactionHref(
+  accountId: string,
+  cursor: string,
+  page: "next" | "previous",
+) {
+  const searchParams = new URLSearchParams({
+    txCursor: cursor,
+    txPage: page,
+  });
+  return `/accounts/${accountId}?${searchParams.toString()}#transactions`;
 }

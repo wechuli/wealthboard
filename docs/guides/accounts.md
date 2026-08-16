@@ -28,6 +28,10 @@ useful for comparison; card view gives each account more context.
 Select an account to see its current value, classification, chart, transactions,
 valuations, linked goals, and quick actions.
 
+The account detail shows the 10 newest transactions per page. Use **Previous**
+and **Next** for nearby history, or **View all** to open the account-filtered
+transaction workbench with search, date/type filters, sorting, and CSV export.
+
 ![Fictional land account detail with value history and quick actions](/images/screenshots/account-detail.png)
 
 Common actions include:

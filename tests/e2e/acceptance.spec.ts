@@ -135,6 +135,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Cash Savings" }),
   ).toBeVisible();
+  const cashSavingsAccountId = new URL(page.url()).pathname.split("/").at(-1)!;
   await page.getByRole("link", { name: "Import" }).click();
   await expect(
     page.getByRole("heading", { name: "Import history for Cash Savings" }),
@@ -154,15 +155,24 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
     /OUTPUT CONTRACT: JSON/,
   );
   await page.getByRole("button", { name: "csv", exact: true }).click();
+  const cashHistoryRows = Array.from({ length: 12 }, (_, index) => {
+    const sequence = index + 1;
+    return `cash-history-${sequence},interest,${sequence.toFixed(2)},2025-02-${String(sequence).padStart(2, "0")},Imported interest ${sequence},`;
+  });
   await page.getByLabel("CSV or JSON file").setInputFiles({
     name: "cash-history.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(
-      "external_id,type,amount,date,description,notes\ncash-history-1,interest,125.50,2025-02-01,Imported interest,",
+      [
+        "external_id,type,amount,date,description,notes",
+        ...cashHistoryRows,
+      ].join("\n"),
     ),
   });
   await page.getByRole("button", { name: "Preview file" }).click();
-  await expect(page.getByText(/1 ready · 0 existing duplicates/)).toBeVisible();
+  await expect(
+    page.getByText(/12 ready · 0 existing duplicates/),
+  ).toBeVisible();
   await expect(
     page.getByText("Cash Savings · No institution · KES"),
   ).toBeVisible();
@@ -171,11 +181,42 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await page.getByRole("button", { name: "Reveal financial values" }).click();
   await page.getByRole("button", { name: "Confirm import" }).click();
   await expect(
-    page.getByText("1 imported, 0 duplicates skipped, 0 failed."),
+    page.getByText("12 imported, 0 duplicates skipped, 0 failed."),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Download CSV report" }),
   ).toBeVisible();
+
+  await page.goto(`/accounts/${cashSavingsAccountId}`);
+  await expect(
+    page
+      .getByRole("list", { name: "Account transactions" })
+      .getByRole("listitem"),
+  ).toHaveCount(10);
+  await expect(
+    page.getByText("Showing 10 transactions on this page."),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Next", exact: true }).click();
+  await expect(page).toHaveURL(/txCursor=/);
+  await expect(page).toHaveURL(/#transactions$/);
+  await expect(
+    page
+      .getByRole("list", { name: "Account transactions" })
+      .getByRole("listitem"),
+  ).toHaveCount(3);
+  await page.getByRole("link", { name: "Previous", exact: true }).click();
+  await expect(
+    page
+      .getByRole("list", { name: "Account transactions" })
+      .getByRole("listitem"),
+  ).toHaveCount(10);
+  await page.getByRole("link", { name: "View all" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/transactions\\?accountId=${cashSavingsAccountId}&sort=newest`),
+  );
+  await expect(page.getByLabel("Filter by account")).toHaveValue(
+    cashSavingsAccountId,
+  );
 
   await page.goto("/transactions/new?type=transfer");
   await page
