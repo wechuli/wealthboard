@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Download,
   KeyRound,
@@ -486,6 +487,7 @@ export function PasswordForm() {
 }
 
 export function DataPortability() {
+  const router = useRouter();
   const restoreRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
@@ -521,7 +523,7 @@ export function DataPortability() {
       };
       if (!response.ok) throw new Error(result.error || "Upload failed.");
       toast.success(result.message);
-      window.location.assign("/");
+      router.push("/");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed.");
     } finally {
