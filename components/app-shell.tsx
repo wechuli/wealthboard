@@ -31,7 +31,9 @@ import {
 
 import { logoutAction } from "@/app/login/actions";
 import { PrivacyProvider, PrivacyToggle } from "@/components/privacy-provider";
+import { ThemeControl } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
+import { THEME_STORAGE_KEY } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -118,8 +120,8 @@ function QuickAdd() {
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" />
-        <Dialog.Content className="fixed inset-x-3 bottom-3 z-50 max-h-[85vh] rounded-3xl border border-white/10 bg-[#121918] p-5 shadow-2xl outline-none sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--overlay)] backdrop-blur-sm" />
+        <Dialog.Content className="fixed inset-x-3 bottom-3 z-50 max-h-[85vh] rounded-3xl border border-white/10 bg-[var(--panel-raised)] p-5 shadow-2xl outline-none sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2">
           <div className="flex items-center justify-between">
             <div>
               <Dialog.Title className="text-lg font-semibold">
@@ -193,7 +195,9 @@ export function AppShell({
   const clearUserState = () => {
     sessionStorage.clear();
     for (const key of Object.keys(localStorage)) {
-      if (key.startsWith("wealthboard-")) localStorage.removeItem(key);
+      if (key.startsWith("wealthboard-") && key !== THEME_STORAGE_KEY) {
+        localStorage.removeItem(key);
+      }
     }
     if ("caches" in window) {
       void caches
@@ -213,7 +217,7 @@ export function AppShell({
       <div className="min-h-screen">
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-30 hidden border-r border-white/[0.07] bg-[#0c1110]/95 px-3 py-4 backdrop-blur md:flex md:flex-col",
+            "fixed inset-y-0 left-0 z-30 hidden border-r border-white/[0.07] bg-[var(--panel)] px-3 py-4 backdrop-blur md:flex md:flex-col",
             collapsed ? "w-20" : "w-64",
           )}
         >
@@ -263,7 +267,7 @@ export function AppShell({
             collapsed && "md:pl-20",
           )}
         >
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.06] bg-[#090d0d]/85 px-4 backdrop-blur-xl sm:px-6">
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/[0.06] bg-[var(--background)] px-4 backdrop-blur-xl sm:px-6">
             <div className="flex items-center gap-3 md:hidden">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-emerald-950">
                 <CircleDollarSign size={19} />
@@ -280,6 +284,7 @@ export function AppShell({
             </div>
             <div className="flex items-center gap-1">
               <PrivacyToggle />
+              <ThemeControl />
               <div className="hidden sm:block">
                 <QuickAdd />
               </div>
@@ -302,7 +307,7 @@ export function AppShell({
 
         <nav
           aria-label="Mobile navigation"
-          className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4.5rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-white/10 bg-[#0d1312]/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(4.5rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-white/10 bg-[var(--panel)] px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
         >
           <MobileLink href="/" label="Home" icon={BarChart3} />
           <MobileLink href="/accounts" label="Accounts" icon={Landmark} />
@@ -344,8 +349,8 @@ function MobileMore() {
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" />
-        <Dialog.Content className="fixed inset-x-3 bottom-3 z-50 rounded-2xl border border-white/10 bg-[#121918] p-5 shadow-2xl outline-none">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--overlay)] backdrop-blur-sm" />
+        <Dialog.Content className="fixed inset-x-3 bottom-3 z-50 rounded-2xl border border-white/10 bg-[var(--panel-raised)] p-5 shadow-2xl outline-none">
           <div className="flex items-center justify-between">
             <Dialog.Title className="text-base font-semibold">
               More

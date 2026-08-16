@@ -8,7 +8,7 @@ export const metadata = { title: "Offline · Wealthboard" };
 export default function OfflinePage() {
   return (
     <main className="financial-grid flex min-h-screen items-center justify-center p-5">
-      <section className="max-w-md rounded-3xl border border-white/10 bg-[#101615] p-8 text-center shadow-2xl">
+      <section className="max-w-md rounded-3xl border border-white/10 bg-[var(--panel)] p-8 text-center shadow-2xl">
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.06] text-slate-300">
           <WifiOff size={23} />
         </span>

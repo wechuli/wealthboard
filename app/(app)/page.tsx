@@ -155,7 +155,7 @@ export default async function DashboardPage({
         timezone={data.settings.timezone}
       />
 
-      <Card className="relative overflow-hidden border-emerald-400/15 bg-[#101a17]">
+      <Card className="relative overflow-hidden border-emerald-400/15 bg-[var(--panel-raised)]">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-emerald-400/[0.07] blur-3xl" />
         <CardContent className="relative p-6 sm:p-8">
           <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">

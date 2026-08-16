@@ -25,7 +25,13 @@ import { formatDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
-const axisStyle = { fill: "#75847f", fontSize: 11 };
+const axisStyle = { fill: "var(--muted)", fontSize: 11 };
+const tooltipStyle = {
+  background: "var(--chart-tooltip)",
+  border: "1px solid var(--border)",
+  borderRadius: 12,
+  color: "var(--text-primary)",
+};
 
 function HiddenChart({ height = "h-64" }: { height?: string }) {
   return (
@@ -93,7 +99,7 @@ export function NetWorthChart({
                 <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="rgba(255,255,255,.05)" vertical={false} />
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="date"
               tickFormatter={(value: string) => formatDate(value, "UTC", "MMM yy")}
@@ -110,12 +116,7 @@ export function NetWorthChart({
               width={72}
             />
             <Tooltip
-              contentStyle={{
-                background: "#101716",
-                border: "1px solid rgba(255,255,255,.1)",
-                borderRadius: 12,
-                fontSize: 12,
-              }}
+              contentStyle={{ ...tooltipStyle, fontSize: 12 }}
               labelFormatter={(value) => formatDate(String(value), "UTC", "dd MMM yyyy")}
               formatter={(value, name) => [
                 formatMoney(Number(value ?? 0), currency),
@@ -153,11 +154,11 @@ export function AccountHistoryChart({
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data}>
-          <CartesianGrid stroke="rgba(255,255,255,.05)" vertical={false} />
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis dataKey="date" tickFormatter={(value: string) => formatDate(value, "UTC", "MMM yy")} axisLine={false} tickLine={false} tick={axisStyle} />
           <YAxis tickFormatter={(value: number) => compact(value, currency)} axisLine={false} tickLine={false} tick={axisStyle} width={70} />
           <Tooltip
-            contentStyle={{ background: "#101716", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12 }}
+            contentStyle={tooltipStyle}
             labelFormatter={(value) => formatDate(String(value), "UTC", "dd MMM yyyy")}
             formatter={(value) => [formatMoney(Number(value ?? 0), currency), "Value"]}
           />
@@ -215,7 +216,7 @@ export function AllocationChart({
                   {data.map((item, index) => <Cell key={item.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ background: "#101716", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12 }}
+                  contentStyle={tooltipStyle}
                   formatter={(value) => [formatMoney(Number(value ?? 0), currency), "Value"]}
                 />
               </PieChart>
@@ -274,7 +275,7 @@ export function AssetsLiabilitiesChart({
           <XAxis type="number" hide />
           <YAxis type="category" dataKey="name" hide />
           <Tooltip
-            contentStyle={{ background: "#101716", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12 }}
+            contentStyle={tooltipStyle}
             formatter={(value) => [formatMoney(Number(value ?? 0), currency)]}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -300,11 +301,11 @@ export function ContributionsGrowthChart({
       <p className="sr-only">{values.map((item) => `${item.name}: ${formatMoney(item.value, currency)}`).join(", ")}</p>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={values} margin={{ left: 4, right: 4 }}>
-          <CartesianGrid stroke="rgba(255,255,255,.05)" vertical={false} />
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} />
           <YAxis tickFormatter={(value: number) => compact(value, currency)} tick={axisStyle} axisLine={false} tickLine={false} width={72} />
           <Tooltip
-            contentStyle={{ background: "#101716", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12 }}
+            contentStyle={tooltipStyle}
             formatter={(value) => [formatMoney(Number(value ?? 0), currency), "Amount"]}
           />
           <Bar dataKey="value" radius={[7, 7, 0, 0]}>
@@ -330,16 +331,16 @@ export function GoalProjectionChart({
       <p className="sr-only">Estimated goal projection based on the configured contribution and return assumption.</p>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data}>
-          <CartesianGrid stroke="rgba(255,255,255,.05)" vertical={false} />
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis dataKey="date" tickFormatter={(value: string) => formatDate(value, "UTC", "MMM yy")} tick={axisStyle} axisLine={false} tickLine={false} minTickGap={30} />
           <YAxis tickFormatter={(value: number) => compact(value, currency)} tick={axisStyle} axisLine={false} tickLine={false} width={72} />
           <Tooltip
-            contentStyle={{ background: "#101716", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12 }}
+            contentStyle={tooltipStyle}
             formatter={(value, name) => [formatMoney(Number(value ?? 0), currency), String(name)]}
           />
           <Area type="monotone" dataKey="projected" stroke="var(--chart-1)" fill="var(--chart-1)" fillOpacity={0.12} strokeWidth={2} />
           <Area type="monotone" dataKey="contributions" stroke="var(--chart-2)" fill="transparent" strokeDasharray="4 4" />
-          <ReferenceLine y={data[0]?.target ?? 0} stroke="var(--warning)" strokeDasharray="5 5" label={{ value: "Target", fill: "#fbbf24", fontSize: 11 }} />
+          <ReferenceLine y={data[0]?.target ?? 0} stroke="var(--warning)" strokeDasharray="5 5" label={{ value: "Target", fill: "var(--warning)", fontSize: 11 }} />
         </AreaChart>
       </ResponsiveContainer>
     </div>

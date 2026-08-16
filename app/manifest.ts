@@ -9,8 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Private, self-hosted wealth and goals tracking.",
     start_url: "/",
     display: "standalone",
-    background_color: "#090d0d",
-    theme_color: "#090d0d",
+    background_color: "#f4f7f6",
+    theme_color: "#60706b",
     orientation: "portrait-primary",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },

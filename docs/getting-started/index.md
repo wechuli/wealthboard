@@ -51,6 +51,18 @@ The eye icon in the header hides financial values on screen. Use it before
 sharing your screen or working in a public place.
 :::
 
+## Choose an appearance
+
+Use the device icon in the authenticated header to cycle through **System**,
+**Light**, and **Dark**, or select one under **Settings → Preferences →
+Appearance**. System follows changes to your device appearance immediately;
+Light and Dark override it.
+
+Appearance is saved only in this browser and remains selected after logout or
+when another Wealthboard user signs in. It is not included in portfolio exports
+or backups. Printed estate summaries remain white with dark text in every
+appearance.
+
 ## On a phone
 
 The mobile navigation keeps the most frequent destinations at the bottom.

@@ -1,9 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Toaster } from "sonner";
 
 import "@/app/globals.css";
 import { PwaManager } from "@/components/pwa-manager";
+import {
+  ThemeProvider,
+  ThemeToaster,
+} from "@/components/theme-provider";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: {
@@ -25,16 +29,24 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#090d0d",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f7f6" },
+    { media: "(prefers-color-scheme: dark)", color: "#090d0d" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
+      </head>
       <body>
-        {children}
-        <PwaManager />
-        <Toaster theme="dark" richColors position="top-right" />
+        <ThemeProvider>
+          {children}
+          <PwaManager />
+          <ThemeToaster />
+        </ThemeProvider>
       </body>
     </html>
   );
