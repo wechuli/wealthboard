@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GeneralSettingsForm } from "@/components/settings-forms";
+import { ThemeProvider } from "@/components/theme-provider";
 import type { UserSettings } from "@/db/schema";
 
 const settings: UserSettings = {
@@ -24,12 +25,27 @@ const settings: UserSettings = {
 };
 
 describe("position freshness settings", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({
+        matches: false,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    );
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
   it("shows independent asset-class thresholds", () => {
     render(
-      <GeneralSettingsForm
-        settings={settings}
-        referencedCurrencies={["USD"]}
-      />,
+      <ThemeProvider>
+        <GeneralSettingsForm
+          settings={settings}
+          referencedCurrencies={["USD"]}
+        />
+      </ThemeProvider>,
     );
 
     expect(screen.getByLabelText("Stocks (days)")).toHaveValue(5);
