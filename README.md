@@ -39,8 +39,7 @@ decimal strings, and calculations use `bigint` or Decimal.js.
 
 ## Product guide
 
-The user and operator guide is published at
-<https://wechuliprojects.github.io/wealthboard/>. It covers first setup,
+The user and operator guide is published at https://wechuli.github.io/wealthboard/. It covers first setup,
 accounts, position-tracked investments, activity, goals, reports, estate
 planning, portability, deployment, authentication, backups, and troubleshooting
 with fictional product screenshots.
