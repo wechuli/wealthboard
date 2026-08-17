@@ -1,9 +1,14 @@
-FROM node:24-bookworm-slim AS dependencies
+FROM node:24-bookworm-slim AS build-base
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM build-base AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-FROM node:24-bookworm-slim AS builder
+FROM build-base AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
