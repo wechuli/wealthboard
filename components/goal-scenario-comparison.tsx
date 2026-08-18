@@ -25,6 +25,8 @@ export function GoalScenarioComparison({
   currency,
   fromDate,
   targetDate,
+  planStartDate,
+  planEndDate,
   savedMonthlyContribution,
   requiredMonthlyContribution,
   savedAnnualReturn,
@@ -35,6 +37,8 @@ export function GoalScenarioComparison({
   currency: string;
   fromDate: string;
   targetDate: string;
+  planStartDate: string | null;
+  planEndDate: string | null;
   savedMonthlyContribution: string;
   requiredMonthlyContribution: string;
   savedAnnualReturn: number;
@@ -98,6 +102,8 @@ export function GoalScenarioComparison({
               currency={currency}
               fromDate={fromDate}
               targetDate={targetDate}
+              planStartDate={planStartDate}
+              planEndDate={planEndDate}
               timezone={timezone}
               onChange={updateScenario}
             />
@@ -107,9 +113,11 @@ export function GoalScenarioComparison({
           <TrendingUp className="mt-0.5 shrink-0" size={15} />
           <p>
             Assumes the current balance grows at the selected annual return,
-            compounded monthly, with contributions added at each month end from
-            next month through the fixed target date. Fees, taxes, inflation,
-            and return volatility are excluded; actual results will vary.
+            compounded monthly, with contributions added at the end of each
+            monthly period. Saved plan scenarios respect the configured plan
+            dates; Required pace runs through the fixed target date. Fees,
+            taxes, inflation, and return volatility are excluded; actual results
+            will vary.
           </p>
         </div>
       </CardContent>
@@ -124,6 +132,8 @@ function ScenarioPanel({
   currency,
   fromDate,
   targetDate,
+  planStartDate,
+  planEndDate,
   timezone,
   onChange,
 }: {
@@ -133,6 +143,8 @@ function ScenarioPanel({
   currency: string;
   fromDate: string;
   targetDate: string;
+  planStartDate: string | null;
+  planEndDate: string | null;
   timezone: string;
   onChange: (
     id: Scenario["id"],
@@ -166,6 +178,14 @@ function ScenarioPanel({
       annualReturnBps: Math.round(annualReturn * 100),
       fromDate: new Date(`${fromDate}T12:00:00.000Z`),
       targetDate: new Date(targetDate),
+      contributionStart:
+        scenario.id !== "required" && planStartDate
+          ? new Date(planStartDate)
+          : undefined,
+      contributionEnd:
+        scenario.id !== "required" && planEndDate
+          ? new Date(planEndDate)
+          : null,
     });
   } catch (caught) {
     error =

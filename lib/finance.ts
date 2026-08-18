@@ -249,16 +249,51 @@ export function futureValueWithContributionWindow(input: {
   for (let month = 1; month <= input.months; month += 1) {
     value = value.mul(monthlyRate.plus(1));
     const contributionDate = addUtcMonths(fromDate, month);
-    const contributionDay = utcToDateInput(contributionDate);
-    const afterStart =
-      !input.contributionStart ||
-      contributionDay >= utcToDateInput(input.contributionStart);
-    const beforeEnd =
-      !input.contributionEnd ||
-      contributionDay <= utcToDateInput(input.contributionEnd);
-    if (afterStart && beforeEnd) value = value.plus(contribution);
+    if (
+      contributionFallsWithinWindow(
+        contributionDate,
+        input.contributionStart,
+        input.contributionEnd,
+      )
+    ) {
+      value = value.plus(contribution);
+    }
   }
   return decimalToBigInt(value);
+}
+
+function contributionFallsWithinWindow(
+  contributionDate: Date,
+  contributionStart?: Date,
+  contributionEnd?: Date | null,
+) {
+  const contributionDay = utcToDateInput(contributionDate);
+  return (
+    (!contributionStart ||
+      contributionDay >= utcToDateInput(contributionStart)) &&
+    (!contributionEnd || contributionDay <= utcToDateInput(contributionEnd))
+  );
+}
+
+function contributionPeriodsWithinWindow(input: {
+  months: number;
+  fromDate: Date;
+  contributionStart?: Date;
+  contributionEnd?: Date | null;
+}) {
+  let periods = 0;
+  for (let month = 1; month <= input.months; month += 1) {
+    if (
+      contributionFallsWithinWindow(
+        addUtcMonths(input.fromDate, month),
+        input.contributionStart,
+        input.contributionEnd,
+      )
+    ) {
+      periods += 1;
+    }
+  }
+  return periods;
 }
 
 export function forecastCompletionWithContributionWindow(input: {
@@ -271,18 +306,25 @@ export function forecastCompletionWithContributionWindow(input: {
   contributionEnd?: Date | null;
 }): Date | null {
   const fromDate = input.fromDate ?? new Date();
-  if (BigInt(input.currentMinor) >= BigInt(input.targetMinor)) return fromDate;
+  const target = BigInt(input.targetMinor);
+  if (BigInt(input.currentMinor) >= target) return fromDate;
+  let value = new Decimal(input.currentMinor.toString());
+  const contribution = new Decimal(input.monthlyContributionMinor.toString());
+  const monthlyRate = new Decimal(input.annualReturnBps).div(10000).div(12);
 
   for (let month = 1; month <= 1200; month += 1) {
+    value = value.mul(monthlyRate.plus(1));
+    const contributionDate = addUtcMonths(fromDate, month);
     if (
-      futureValueWithContributionWindow({
-        ...input,
-        months: month,
-        fromDate,
-      }) >= BigInt(input.targetMinor)
+      contributionFallsWithinWindow(
+        contributionDate,
+        input.contributionStart,
+        input.contributionEnd,
+      )
     ) {
-      return addUtcMonths(fromDate, month);
+      value = value.plus(contribution);
     }
+    if (decimalToBigInt(value) >= target) return contributionDate;
   }
   return null;
 }
@@ -320,6 +362,8 @@ export function projectGoalScenario(input: {
   annualReturnBps: number;
   fromDate: Date;
   targetDate: Date;
+  contributionStart?: Date;
+  contributionEnd?: Date | null;
 }) {
   const monthsToTarget = Math.max(
     0,
@@ -327,20 +371,31 @@ export function projectGoalScenario(input: {
   );
   const current = BigInt(input.currentMinor);
   const monthlyContribution = BigInt(input.monthlyContributionMinor);
-  const futureContributions = monthlyContribution * BigInt(monthsToTarget);
-  const projectedAtTarget = futureValueMinor(
-    current,
-    monthlyContribution,
-    input.annualReturnBps,
-    monthsToTarget,
-  );
-  const forecastDate = forecastCompletionDate(
-    current,
-    input.targetMinor,
-    monthlyContribution,
-    input.annualReturnBps,
-    input.fromDate,
-  );
+  const contributionPeriods = contributionPeriodsWithinWindow({
+    months: monthsToTarget,
+    fromDate: input.fromDate,
+    contributionStart: input.contributionStart,
+    contributionEnd: input.contributionEnd,
+  });
+  const futureContributions = monthlyContribution * BigInt(contributionPeriods);
+  const projectedAtTarget = futureValueWithContributionWindow({
+    currentMinor: current,
+    monthlyContributionMinor: monthlyContribution,
+    annualReturnBps: input.annualReturnBps,
+    months: monthsToTarget,
+    fromDate: input.fromDate,
+    contributionStart: input.contributionStart,
+    contributionEnd: input.contributionEnd,
+  });
+  const forecastDate = forecastCompletionWithContributionWindow({
+    currentMinor: current,
+    targetMinor: input.targetMinor,
+    monthlyContributionMinor: monthlyContribution,
+    annualReturnBps: input.annualReturnBps,
+    fromDate: input.fromDate,
+    contributionStart: input.contributionStart,
+    contributionEnd: input.contributionEnd,
+  });
 
   return {
     monthsToTarget,
@@ -358,6 +413,7 @@ export function goalTrackingStatus(input: {
   createdAt: Date;
   targetDate: Date;
   monthlyPlannedMinor: number | bigint;
+  annualReturnBps?: number;
   now?: Date;
 }): "ahead" | "on_track" | "behind" {
   const now = input.now ?? new Date();
@@ -379,7 +435,7 @@ export function goalTrackingStatus(input: {
     input.currentMinor,
     input.targetMinor,
     input.targetDate,
-    0,
+    input.annualReturnBps ?? 0,
     now,
   );
 

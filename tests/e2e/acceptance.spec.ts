@@ -268,6 +268,11 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(page.getByText(/ahead|on track|behind/).first()).toBeVisible();
   await expect(page.getByText("KCB Car Fund")).toBeVisible();
   await expect(page.getByText("Saved plan", { exact: true })).toBeVisible();
+  const savedPlan = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Saved plan" }),
+  });
+  await expect(savedPlan.getByText("Shortfall", { exact: true })).toBeVisible();
+  await expect(page.getByText("behind", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Required pace", { exact: true })).toBeVisible();
   await expect(page.getByText("Lower return", { exact: true })).toBeVisible();
   await page.getByLabel("Lower return monthly contribution").fill("200000");

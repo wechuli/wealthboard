@@ -18,6 +18,7 @@ import {
   dateInputForTimezone,
   endOfUtcDay,
   dateInputToUtc,
+  monthsBetween,
   nowIso,
   utcToDateInput,
 } from "@/lib/dates";
@@ -63,6 +64,7 @@ type GoalInput = {
 export async function listGoals(userId: string, now = new Date()) {
   const db = getDatabase();
   const today = dateInputForTimezone(getUserTimezone(userId), now);
+  const calculationDate = new Date(dateInputToUtc(today));
   const evaluationDate = endOfUtcDay(now).toISOString();
   const rows = await db
     .select({
@@ -156,14 +158,14 @@ export async function listGoals(userId: string, now = new Date()) {
       goal.targetAmountMinor,
       targetDate,
       goal.assumedAnnualReturnBps,
-      now,
+      calculationDate,
     );
     const forecast = forecastCompletionWithContributionWindow({
       currentMinor: current,
       targetMinor: goal.targetAmountMinor,
       monthlyContributionMinor: plannedMonthly,
       annualReturnBps: goal.assumedAnnualReturnBps,
-      fromDate: now,
+      fromDate: calculationDate,
       contributionStart: planStart,
       contributionEnd: planEnd,
     });
@@ -173,7 +175,8 @@ export async function listGoals(userId: string, now = new Date()) {
       createdAt: new Date(goal.createdAt),
       targetDate,
       monthlyPlannedMinor: currentPlannedMonthly,
-      now,
+      annualReturnBps: goal.assumedAnnualReturnBps,
+      now: calculationDate,
     });
     const forecastAfterTarget = Boolean(
       forecast && utcToDateInput(forecast) > utcToDateInput(targetDate),
@@ -188,6 +191,7 @@ export async function listGoals(userId: string, now = new Date()) {
             : "on_track";
     return {
       ...goal,
+      calculationDate: today,
       currentAmountCalculated: current,
       plannedMonthly,
       currentPlannedMonthly,
@@ -575,33 +579,35 @@ export function goalProjectionPoints(input: {
   contributionEnd?: Date | null;
 }) {
   const startDate = input.startDate ?? new Date();
-  const months = Math.max(
-    1,
-    (input.targetDate.getUTCFullYear() - startDate.getUTCFullYear()) * 12 +
-      input.targetDate.getUTCMonth() -
-      startDate.getUTCMonth(),
-  );
-  const points = [];
-  for (
-    let month = 0;
-    month <= months;
-    month += Math.max(1, Math.ceil(months / 24))
+  const months = monthsBetween(startDate, input.targetDate);
+  const step = Math.max(1, Math.ceil(Math.max(1, months) / 24));
+  const sampledMonths: number[] = [];
+  for (let month = 0; month <= months; month += step) {
+    sampledMonths.push(month);
+  }
+  if (sampledMonths.at(-1) !== months) sampledMonths.push(months);
+
+  const pointAt = (month: number, date = addUtcMonths(startDate, month)) => ({
+    date: date.toISOString(),
+    projected: futureValueWithContributionWindow({
+      currentMinor: input.currentMinor,
+      monthlyContributionMinor: input.monthlyContributionMinor,
+      annualReturnBps: input.annualReturnBps,
+      months: month,
+      fromDate: startDate,
+      contributionStart: input.contributionStart,
+      contributionEnd: input.contributionEnd,
+    }),
+    contributions: projectionContributions(input, startDate, month),
+    target: BigInt(input.targetMinor),
+  });
+  const points = sampledMonths.map((month) => pointAt(month));
+  const finalProjectionDate = addUtcMonths(startDate, months);
+  if (
+    input.targetDate > startDate &&
+    utcToDateInput(finalProjectionDate) !== utcToDateInput(input.targetDate)
   ) {
-    const date = addUtcMonths(startDate, month);
-    points.push({
-      date: date.toISOString(),
-      projected: futureValueWithContributionWindow({
-        currentMinor: input.currentMinor,
-        monthlyContributionMinor: input.monthlyContributionMinor,
-        annualReturnBps: input.annualReturnBps,
-        months: month,
-        fromDate: startDate,
-        contributionStart: input.contributionStart,
-        contributionEnd: input.contributionEnd,
-      }),
-      contributions: projectionContributions(input, startDate, month),
-      target: BigInt(input.targetMinor),
-    });
+    points.push(pointAt(months, input.targetDate));
   }
   return points;
 }

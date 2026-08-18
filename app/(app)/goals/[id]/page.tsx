@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { PageHeader } from "@/components/ui/page";
 import { TRANSACTION_LABELS } from "@/lib/constants";
-import { dateInputForTimezone, formatDate, utcToDateInput } from "@/lib/dates";
+import { dateInputToUtc, formatDate, utcToDateInput } from "@/lib/dates";
 import { minorToDecimalString, safeChartNumber } from "@/lib/money";
 import { getAccountActivity } from "@/lib/services/accounts";
 import { getSettings } from "@/lib/bootstrap";
@@ -59,6 +59,7 @@ export default async function GoalDetailPage({
     targetMinor: goal.targetAmountMinor,
     monthlyContributionMinor: goal.plannedMonthly,
     annualReturnBps: goal.assumedAnnualReturnBps,
+    startDate: new Date(dateInputToUtc(goal.calculationDate)),
     targetDate: new Date(goal.targetDate),
     contributionStart: goal.planStartDate
       ? new Date(goal.planStartDate)
@@ -273,8 +274,10 @@ export default async function GoalDetailPage({
           currentMinor={goal.currentAmountCalculated.toString()}
           targetMinor={goal.targetAmountMinor.toString()}
           currency={goal.currency}
-          fromDate={dateInputForTimezone(settings.timezone)}
+          fromDate={goal.calculationDate}
           targetDate={goal.targetDate}
+          planStartDate={goal.planStartDate}
+          planEndDate={goal.planEndDate}
           savedMonthlyContribution={minorToDecimalString(
             goal.plannedMonthly,
             goal.currency,

@@ -9,7 +9,10 @@ export function dateInputToUtc(value: string) {
     throw new Error("Enter a valid date.");
   }
   const parsed = new Date(`${value}T12:00:00.000Z`);
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
     throw new Error("Enter a valid calendar date.");
   }
   return `${value}T12:00:00.000Z`;
@@ -32,20 +35,39 @@ export function formatDate(
 export function monthsBetween(start: Date, end: Date): number {
   if (end <= start) return 0;
   const years = end.getUTCFullYear() - start.getUTCFullYear();
-  const months = end.getUTCMonth() - start.getUTCMonth();
-  const partial = end.getUTCDate() > start.getUTCDate() ? 1 : 0;
-  return Math.max(0, years * 12 + months + partial);
+  const calendarMonths = years * 12 + end.getUTCMonth() - start.getUTCMonth();
+  const completeMonths =
+    utcToDateInput(addUtcMonths(start, calendarMonths)) <= utcToDateInput(end)
+      ? calendarMonths
+      : calendarMonths - 1;
+  return Math.max(0, completeMonths);
 }
 
 export function startOfUtcDay(date: Date) {
   return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0, 0),
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      0,
+      0,
+      0,
+      0,
+    ),
   );
 }
 
 export function endOfUtcDay(date: Date) {
   return new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59, 999),
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      23,
+      59,
+      59,
+      999,
+    ),
   );
 }
 

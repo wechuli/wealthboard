@@ -36,6 +36,7 @@ import {
   deleteGoalMilestone,
   dismissGoalAlert,
   getGoal,
+  goalProjectionPoints,
   listGoalAlerts,
   listGoalMilestones,
   listGoals,
@@ -232,6 +233,29 @@ describe.sequential("multi-user persistence and isolation", () => {
     await expect(
       authenticateUser("bob", "bob-new-password-12345"),
     ).resolves.toMatchObject({ userId: bobId });
+  });
+
+  test("goal projections end on the target date without later contributions", () => {
+    const targetDate = new Date("2028-07-01T12:00:00.000Z");
+    const points = goalProjectionPoints({
+      currentMinor: 30_000_000,
+      targetMinor: 350_000_000,
+      monthlyContributionMinor: 14_200_000,
+      annualReturnBps: 0,
+      startDate: new Date("2026-08-18T12:00:00.000Z"),
+      targetDate,
+      contributionStart: new Date("2026-08-18T12:00:00.000Z"),
+      contributionEnd: targetDate,
+    });
+
+    expect(points.at(-1)).toMatchObject({
+      date: targetDate.toISOString(),
+      projected: 342_400_000n,
+      contributions: 342_400_000n,
+    });
+    expect(points.every((point) => new Date(point.date) <= targetDate)).toBe(
+      true,
+    );
   });
 
   test("owner predicates, relationships, analytics, caches, and idempotency stay isolated", async () => {

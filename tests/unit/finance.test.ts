@@ -300,6 +300,27 @@ describe("goal calculations", () => {
     });
   });
 
+  it("applies the saved contribution window to scenario projections", () => {
+    const saved = projectGoalScenario({
+      currentMinor: 0,
+      targetMinor: 50_000,
+      monthlyContributionMinor: 10_000,
+      annualReturnBps: 0,
+      fromDate: new Date("2026-01-01T12:00:00Z"),
+      targetDate: new Date("2026-12-01T12:00:00Z"),
+      contributionStart: new Date("2026-04-01T12:00:00Z"),
+      contributionEnd: new Date("2026-06-01T12:00:00Z"),
+    });
+
+    expect(saved).toMatchObject({
+      monthsToTarget: 11,
+      projectedAtTarget: 30_000n,
+      futureContributions: 30_000n,
+      reachesTarget: false,
+      forecastDate: null,
+    });
+  });
+
   it("classifies goal tracking status without relying only on colour", () => {
     const base = {
       targetMinor: 120_000,
@@ -328,5 +349,31 @@ describe("goal calculations", () => {
         monthlyPlannedMinor: 1_000,
       }),
     ).toBe("behind");
+  });
+
+  it("uses the configured return when comparing a plan with required pace", () => {
+    const currentMinor = 150_000;
+    const targetMinor = 300_000;
+    const targetDate = new Date("2028-01-01T12:00:00Z");
+    const now = new Date("2027-01-01T12:00:00Z");
+    const requiredWithReturn = requiredMonthlyContribution(
+      currentMinor,
+      targetMinor,
+      targetDate,
+      1_200,
+      now,
+    );
+
+    expect(
+      goalTrackingStatus({
+        currentMinor,
+        targetMinor,
+        createdAt: new Date("2026-01-01T12:00:00Z"),
+        targetDate,
+        monthlyPlannedMinor: requiredWithReturn + 1n,
+        annualReturnBps: 1_200,
+        now,
+      }),
+    ).toBe("ahead");
   });
 });
