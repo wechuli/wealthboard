@@ -117,6 +117,8 @@ export async function listGoals(userId: string, now = new Date()) {
         stalePositionData = snapshot.staleInstrumentIds.length > 0;
         positionIssues = snapshot.issues;
         current = snapshot.totalMinor;
+      } else {
+        current = BigInt(goal.accountValueMinor);
       }
       try {
         current = convertMinor(

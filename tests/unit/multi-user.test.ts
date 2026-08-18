@@ -32,6 +32,7 @@ import { getDashboardData } from "@/lib/services/analytics";
 import {
   createGoal,
   createGoalMilestone,
+  deleteGoal,
   deleteGoalMilestone,
   dismissGoalAlert,
   getGoal,
@@ -309,6 +310,26 @@ describe.sequential("multi-user persistence and isolation", () => {
       isIncludedInNetWorth: true,
       openedAt: "2025-01-01",
     });
+
+    const linkedBalanceGoalId = createGoal(aliceId, {
+      name: "Linked balance regression",
+      targetAmount: "1000",
+      currentAmount: "0",
+      currency: "KES",
+      targetDate: "2028-07-01",
+      linkedAccountId: aliceAccountId,
+      icon: "Target",
+      status: "active",
+      priority: 1,
+      assumedAnnualReturn: 8,
+      plannedContribution: "0",
+      frequency: "monthly",
+      planStartDate: "2026-01-01",
+    });
+    const linkedBalanceGoal = await getGoal(aliceId, linkedBalanceGoalId);
+    expect(linkedBalanceGoal?.currentAmountCalculated).toBe(10_000n);
+    expect(linkedBalanceGoal?.progressPercent).toBe("10");
+    deleteGoal(aliceId, linkedBalanceGoalId);
 
     await expect(getAccount(bobId, aliceAccountId)).resolves.toBeUndefined();
     expect(() =>

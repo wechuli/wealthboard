@@ -259,6 +259,11 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "July 2028 Family Car" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("progressbar", {
+      name: "July 2028 Family Car progress",
+    }),
+  ).toHaveAttribute("aria-valuenow", "4.2");
   await expect(page.getByText("Required monthly (8% return)")).toBeVisible();
   await expect(page.getByText(/ahead|on track|behind/).first()).toBeVisible();
   await expect(page.getByText("KCB Car Fund")).toBeVisible();
