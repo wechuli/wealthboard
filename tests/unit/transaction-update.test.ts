@@ -252,4 +252,64 @@ describe.sequential("transaction update invariants", () => {
         .all(),
     ).toHaveLength(1);
   });
+
+  test("a derived external ID prevents a later import duplicate", async () => {
+    const category = await getDatabase().query.categories.findFirst({
+      where: and(eq(categories.userId, userId), eq(categories.slug, "savings")),
+    });
+    if (!category) throw new Error("Savings category was not created.");
+    const importAccountId = createAccount(userId, {
+      name: "Derived Import Deduplication Account",
+      categoryId: category.id,
+      currency: "KES",
+      openingValue: "0",
+      isIncludedInNetWorth: true,
+      openedAt: "2025-01-01",
+    });
+    const formData = new FormData();
+    formData.set("accountId", importAccountId);
+    formData.set("type", "deposit");
+    formData.set("amount", "12.3");
+    formData.set("transactionDate", "2025-03-03");
+    formData.set("description", "Cash deposit");
+    formData.set("notes", "Entered manually");
+    formData.set("idempotencyKey", crypto.randomUUID());
+
+    await transactionAction(formData);
+
+    const externalId = "derived-2025-03-03-deposit-12.30";
+    expect(
+      getDatabase()
+        .select({ externalId: transactions.externalId })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            eq(transactions.accountId, importAccountId),
+            eq(transactions.externalId, externalId),
+          ),
+        )
+        .all(),
+    ).toEqual([{ externalId }]);
+
+    const result = commitAccountHistory(
+      userId,
+      importAccountId,
+      [
+        "external_id,type,amount,date,description,notes",
+        ",deposit,12.30,2025-03-03,Cash deposit,Entered manually",
+      ].join("\n"),
+      "csv",
+    );
+
+    expect(result.summary).toEqual({
+      imported: 0,
+      skippedDuplicates: 1,
+      failed: 0,
+    });
+    expect(result.rows[0]).toMatchObject({
+      externalId,
+      status: "duplicate_existing",
+    });
+  });
 });

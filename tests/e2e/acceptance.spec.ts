@@ -154,10 +154,13 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await expect(page.getByLabel("AI conversion prompt")).toHaveValue(
     /OUTPUT CONTRACT: JSON/,
   );
+  await expect(page.getByLabel("AI conversion prompt")).toHaveValue(
+    /derived-<date>-<transaction_type>-<amount>/,
+  );
   await page.getByRole("button", { name: "csv", exact: true }).click();
   const cashHistoryRows = Array.from({ length: 12 }, (_, index) => {
     const sequence = index + 1;
-    return `cash-history-${sequence},interest,${sequence.toFixed(2)},2025-02-${String(sequence).padStart(2, "0")},Imported interest ${sequence},`;
+    return `,interest,${sequence.toFixed(2)},2025-02-${String(sequence).padStart(2, "0")},Imported interest ${sequence},`;
   });
   await page.getByLabel("CSV or JSON file").setInputFiles({
     name: "cash-history.csv",
@@ -172,6 +175,9 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   await page.getByRole("button", { name: "Preview file" }).click();
   await expect(
     page.getByText(/12 ready · 0 existing duplicates/),
+  ).toBeVisible();
+  await expect(
+    page.getByText("derived-2025-02-01-interest-1.00"),
   ).toBeVisible();
   await expect(
     page.getByText("Cash Savings · No institution · KES"),

@@ -450,7 +450,6 @@ describe.sequential("position account valuation", () => {
       ],
       cash_transactions: [
         {
-          external_id: "cash:deposit:1",
           type: "deposit",
           amount: "50.00",
           date: "2026-01-01",
@@ -487,6 +486,17 @@ describe.sequential("position account valuation", () => {
     expect(getPositionAccountSnapshot(userId, accountId).totalMinor).toBe(
       30_063n,
     );
+    expect(
+      getDatabase()
+        .query.transactions.findFirst({
+          where: and(
+            eq(transactions.userId, userId),
+            eq(transactions.accountId, accountId),
+            eq(transactions.externalId, "derived-2026-01-01-deposit-50.00"),
+          ),
+        })
+        .sync(),
+    ).toMatchObject({ amountMinor: 5_000, type: "deposit" });
 
     const duplicate = previewInvestmentHistory(
       userId,

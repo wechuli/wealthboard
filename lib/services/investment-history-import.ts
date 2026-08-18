@@ -34,7 +34,10 @@ import {
   MissingExchangeRateError,
   parseMoney,
 } from "@/lib/money";
-import { recalculateAccountBalance } from "@/lib/services/accounts";
+import {
+  deriveTransactionExternalId,
+  recalculateAccountBalance,
+} from "@/lib/services/accounts";
 import {
   calculatePositionAccountSnapshot,
   type PositionDataIssue,
@@ -90,7 +93,12 @@ const sourceEventSchema = z
 
 const sourceCashSchema = z
   .object({
-    external_id: z.string().trim().min(1).max(200),
+    external_id: z
+      .string()
+      .trim()
+      .max(200)
+      .nullish()
+      .transform((value) => value || ""),
     type: z.enum([
       "deposit",
       "withdrawal",
@@ -482,6 +490,19 @@ function prepareInvestmentHistory(
   if (!settings) throw new Error("User settings are unavailable.");
   const today = dateInputForTimezone(settings.timezone);
   const errors: InvestmentImportError[] = [];
+  for (const source of envelope.cash_transactions) {
+    if (source.external_id) continue;
+    try {
+      source.external_id = deriveTransactionExternalId({
+        transactionDate: source.date,
+        type: source.type,
+        amountMinor: parseMoney(source.amount, account.currency),
+        currency: account.currency,
+      });
+    } catch {
+      continue;
+    }
+  }
   const groupedEvents = new Map<string, SourceEvent[]>();
   const groupedCash = new Map<string, SourceCash[]>();
   for (const event of envelope.position_events) {
@@ -885,7 +906,9 @@ function prepareInvestmentHistory(
       .map((row) => [row.externalId!, row]),
   );
   const cashDuplicates = duplicateValues(
-    envelope.cash_transactions.map((row) => row.external_id),
+    envelope.cash_transactions
+      .map((row) => row.external_id)
+      .filter((externalId) => Boolean(externalId)),
   );
   const cash: Array<typeof transactions.$inferInsert> = [];
   envelope.cash_transactions.forEach((source, index) => {
@@ -950,7 +973,7 @@ function prepareInvestmentHistory(
       errors.push({
         collection: "cash_transactions",
         row: index + 1,
-        externalId: source.external_id,
+        externalId: source.external_id || null,
         message:
           error instanceof Error
             ? error.message

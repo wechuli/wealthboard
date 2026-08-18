@@ -34,7 +34,7 @@ import {
 import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { replayBalance, type FinancialEvent } from "@/lib/finance";
-import { parseMoney } from "@/lib/money";
+import { minorToDecimalString, parseMoney } from "@/lib/money";
 import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
 import { replayPositionQuantities } from "@/lib/investments";
 import { requireEnabledCurrency } from "@/lib/services/settings";
@@ -737,6 +737,15 @@ type TransactionInput = {
   idempotencyKey: string;
 };
 
+export function deriveTransactionExternalId(input: {
+  transactionDate: string;
+  type: TransactionType;
+  amountMinor: number;
+  currency: string;
+}) {
+  return `derived-${input.transactionDate}-${input.type}-${minorToDecimalString(input.amountMinor, input.currency)}`;
+}
+
 export function recordTransaction(userId: string, input: TransactionInput) {
   const db = getDatabase();
   assertNotFutureDate(userId, input.transactionDate, db);
@@ -786,6 +795,14 @@ export function recordTransaction(userId: string, input: TransactionInput) {
     if (input.type === "manual_adjustment" && amountMinor === 0) {
       throw new Error("Adjustment cannot be zero.");
     }
+    const externalId =
+      input.externalId?.trim() ||
+      deriveTransactionExternalId({
+        transactionDate: input.transactionDate,
+        type: input.type,
+        amountMinor,
+        currency: account.currency,
+      });
     tx.insert(transactions)
       .values({
         id,
@@ -796,7 +813,7 @@ export function recordTransaction(userId: string, input: TransactionInput) {
         currency: account.currency,
         transactionDate: dateInputToUtc(input.transactionDate),
         description: input.description || null,
-        externalId: input.externalId || null,
+        externalId,
         notes: input.notes,
         idempotencyKey: input.idempotencyKey,
         createdAt: timestamp,

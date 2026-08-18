@@ -211,6 +211,42 @@ describe.sequential("account history import", () => {
     ).toEqual([]);
   });
 
+  test("derives canonical external IDs when the source ID is unavailable", () => {
+    const csvPreview = previewAccountHistory(
+      aliceId,
+      aliceAccountId,
+      csv(",interest,10,2025-02-04,Interest payment,"),
+      "csv",
+    );
+    const jsonPreview = previewAccountHistory(
+      aliceId,
+      aliceAccountId,
+      JSON.stringify({
+        format: "wealthboard-account-history",
+        version: 1,
+        transactions: [
+          {
+            type: "interest",
+            amount: "10.0",
+            date: "2025-02-04",
+            description: "Interest payment",
+            notes: null,
+          },
+        ],
+      }),
+      "json",
+    );
+
+    expect(csvPreview.rows[0]).toMatchObject({
+      status: "ready",
+      externalId: "derived-2025-02-04-interest-10.00",
+    });
+    expect(jsonPreview.rows[0]).toMatchObject({
+      status: "ready",
+      externalId: "derived-2025-02-04-interest-10.00",
+    });
+  });
+
   test("commits valid rows while excluding validation and in-file duplicates", async () => {
     const content = csv(
       "equivalent-1,deposit,10.00,2025-02-01,Funding,note",

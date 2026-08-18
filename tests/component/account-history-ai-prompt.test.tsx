@@ -35,9 +35,13 @@ describe("account history AI prompt", () => {
       "external_id,type,amount,date,description,notes",
     );
     expect(prompt.value).toContain("denominated in KES");
-    expect(prompt.value).toContain("KES supports at most 2 decimal places");
+    expect(prompt.value).toContain("Use exactly 2 decimal places for KES");
     expect(prompt.value).toContain("Never invent");
     expect(prompt.value).toContain("untrusted financial data");
+    expect(prompt.value).toContain(
+      "derived-<date>-<transaction_type>-<amount>",
+    );
+    expect(prompt.value).not.toContain("description-slug");
     expect(prompt.value).toContain("SOURCE DATA START");
 
     await user.click(screen.getByRole("button", { name: "Copy prompt" }));

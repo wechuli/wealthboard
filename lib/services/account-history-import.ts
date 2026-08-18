@@ -21,7 +21,10 @@ import {
 import { getDatabase } from "@/lib/db";
 import { replayBalance, type FinancialEvent } from "@/lib/finance";
 import { parseMoney } from "@/lib/money";
-import { recalculateAccountBalance } from "@/lib/services/accounts";
+import {
+  deriveTransactionExternalId,
+  recalculateAccountBalance,
+} from "@/lib/services/accounts";
 
 export const ACCOUNT_HISTORY_MAX_BYTES = 5 * 1024 * 1024;
 export const ACCOUNT_HISTORY_MAX_ROWS = 10_000;
@@ -258,23 +261,26 @@ function validateRow(
       "The row contains an unknown field.",
     );
   }
-  if (typeof source.external_id !== "string") {
+  if (source.external_id != null && typeof source.external_id !== "string") {
     return failed(
       row,
       source,
       null,
-      "external_id_required",
-      "external_id is required and must be text.",
+      "invalid_external_id",
+      "external_id must be text, null, or omitted.",
     );
   }
-  const externalId = source.external_id.trim();
-  if (!externalId || externalId.length > 200) {
+  let externalId =
+    typeof source.external_id === "string"
+      ? source.external_id.trim() || null
+      : null;
+  if (externalId && externalId.length > 200) {
     return failed(
       row,
       source,
-      externalId || null,
+      externalId,
       "invalid_external_id",
-      "external_id must contain 1 to 200 characters.",
+      "external_id must contain 200 characters or fewer.",
     );
   }
   if (
@@ -348,6 +354,12 @@ function validateRow(
       "date cannot be in the future.",
     );
   }
+  externalId ??= deriveTransactionExternalId({
+    transactionDate: source.date,
+    type: source.type as ImportType,
+    amountMinor,
+    currency,
+  });
   const description = textValue(source.description, "description", 200);
   if ("error" in description) {
     return failed(

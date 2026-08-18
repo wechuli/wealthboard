@@ -50,6 +50,12 @@ describe("investment history AI prompt", () => {
     expect(prompt.value).toContain("in-kind transfers, stock splits");
     expect(prompt.value).toContain("event_group_id");
     expect(prompt.value).toContain("untrusted financial data");
+    expect(prompt.value).toContain(
+      "derived-<date>-<transaction_type>-<amount>",
+    );
+    expect(prompt.value).toContain(
+      "Format cash amounts with exactly 2 decimal places",
+    );
 
     await user.click(screen.getByRole("button", { name: "Copy prompt" }));
 
