@@ -583,29 +583,16 @@ function prepareInvestmentHistory(
       return;
     }
     try {
+      const existing = existingInstrumentByExternal.get(source.external_id);
+      if (existing) {
+        skippedDuplicates += 1;
+        return;
+      }
       const quoteCurrency = requireEnabledCurrency(
         userId,
         source.quote_currency,
         db,
       );
-      const existing = existingInstrumentByExternal.get(source.external_id);
-      if (existing) {
-        const identical =
-          existing.name === source.name &&
-          existing.symbol === (source.symbol?.toUpperCase() ?? null) &&
-          existing.identifierType === source.identifier_type &&
-          existing.identifier === (source.identifier?.toUpperCase() ?? null) &&
-          existing.exchangeMic ===
-            (source.exchange_mic?.toUpperCase() ?? null) &&
-          existing.assetType === source.asset_type &&
-          existing.quoteCurrency === quoteCurrency;
-        if (!identical)
-          throw new Error(
-            "Instrument external ID conflicts with an existing instrument.",
-          );
-        skippedDuplicates += 1;
-        return;
-      }
       const id = crypto.randomUUID();
       const row: typeof investmentInstruments.$inferInsert = {
         id,

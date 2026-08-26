@@ -13,6 +13,7 @@ import {
   accountConversions,
   accounts,
   categories,
+  investmentInstruments,
   positionEvents,
   transactions,
   userSettings,
@@ -561,6 +562,117 @@ describe.sequential("position account valuation", () => {
     expect(
       getPositionAccountSnapshot(userId, restoredAccount.id).totalMinor,
     ).toBe(30_063n);
+  });
+
+  test("reuses an existing instrument when imported metadata differs", () => {
+    const accountId = createAccount(userId, {
+      name: "Existing Instrument Import",
+      categoryId: currentCategoryId(),
+      currency: "USD",
+      trackingMode: "positions",
+      openingValue: "0.00",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    const instrumentId = createInvestmentInstrument(userId, {
+      externalId: "broker:existing-vwra",
+      name: "My World ETF",
+      symbol: "VWRA",
+      identifierType: "ticker_exchange",
+      identifier: "VWRA",
+      exchangeMic: "XLON",
+      assetType: "etf",
+      quoteCurrency: "USD",
+    });
+    const archive = JSON.stringify({
+      format: "wealthboard-investment-history",
+      version: 1,
+      instruments: [
+        {
+          external_id: "broker:existing-vwra",
+          name: "VANG FTSE AW USDA",
+          symbol: "VWRA",
+          identifier_type: "isin",
+          identifier: "IE00BK5BQT80",
+          exchange_mic: "XLON",
+          asset_type: "fund",
+          quote_currency: "USD",
+        },
+      ],
+      position_events: [
+        {
+          external_id: "broker:existing-vwra:opening",
+          instrument_external_id: "broker:existing-vwra",
+          type: "opening_position",
+          quantity: "2",
+          unit_price: null,
+          trade_currency: "USD",
+          fee_amount: null,
+          fee_currency: null,
+          cash_effect: null,
+          applied_exchange_rate: null,
+          opening_cost_basis: "200.00",
+          trade_date: "2026-01-01",
+          settlement_date: null,
+          description: null,
+          notes: null,
+        },
+      ],
+      cash_transactions: [],
+      prices: [],
+    });
+
+    const preview = previewInvestmentHistory(
+      userId,
+      accountId,
+      archive,
+      "json",
+    );
+    expect(preview).toMatchObject({
+      canCommit: true,
+      summary: { ready: 1, skippedDuplicates: 1, failed: 0 },
+    });
+    expect(preview.instrumentChanges).toEqual(
+      expect.arrayContaining([
+        {
+          instrumentId,
+          name: "My World ETF",
+          resolution: "existing",
+          projectedQuantity: "2",
+          currentQuantity: "0",
+          externalId: "broker:existing-vwra",
+          quantityChange: "2",
+          symbol: "VWRA",
+        },
+      ]),
+    );
+
+    expect(
+      commitInvestmentHistory(userId, accountId, archive, "json").summary,
+    ).toEqual({ imported: 1, skippedDuplicates: 1 });
+    expect(getPositionAccountSnapshot(userId, accountId).positions).toEqual([
+      expect.objectContaining({
+        instrument: expect.objectContaining({
+          id: instrumentId,
+          name: "My World ETF",
+          identifierType: "ticker_exchange",
+          assetType: "etf",
+        }),
+        quantity: "2",
+      }),
+    ]);
+    expect(
+      getDatabase()
+        .select()
+        .from(investmentInstruments)
+        .where(
+          and(
+            eq(investmentInstruments.userId, userId),
+            eq(investmentInstruments.externalId, "broker:existing-vwra"),
+          ),
+        )
+        .all(),
+    ).toHaveLength(1);
   });
 
   test("requires explicit settlement data for cross-currency trades", () => {
