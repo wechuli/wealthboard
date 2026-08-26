@@ -167,3 +167,8 @@ vite.config.ts.timestamp-*
 /playwright-report/
 /test-results/
 /.auth/
+
+
+# scratchpads
+
+/scratchpad/
