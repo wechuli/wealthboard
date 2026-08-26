@@ -384,12 +384,28 @@ export async function createInvestmentInstrumentAction(
   } catch (error) {
     return mutationError(error);
   }
+  revalidatePath("/instruments");
   revalidatePath(`/accounts/${accountId}`);
   redirect(
     account.trackingMode === "positions"
       ? `/accounts/${accountId}/positions/new?instrumentId=${instrumentId}`
       : `/accounts/${accountId}/convert?instrumentId=${instrumentId}`,
   );
+}
+
+export async function createStandaloneInvestmentInstrumentAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = investmentInstrumentSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    createInvestmentInstrument(userId, parsed.data);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/instruments");
+  redirect("/instruments?created=1");
 }
 
 export async function updateInvestmentInstrumentAction(

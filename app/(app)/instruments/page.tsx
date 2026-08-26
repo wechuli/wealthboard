@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Edit3, ArchiveRestore } from "lucide-react";
+import { ArchiveRestore, Edit3, Plus } from "lucide-react";
 
 import { archiveInvestmentInstrumentAction } from "@/app/(app)/actions";
 import { MutationButton } from "@/components/mutation-button";
@@ -21,7 +21,15 @@ export default async function InstrumentsPage() {
     <>
       <PageHeader
         title="Investment instruments"
-        description="Owner-scoped stocks, ETFs, and funds referenced by position accounts."
+        description="Manage the stocks, ETFs, and funds used by your position accounts."
+        actions={
+          <Button asChild>
+            <Link href="/instruments/new">
+              <Plus size={17} />
+              Add instrument
+            </Link>
+          </Button>
+        }
       />
       <Card>
         <CardHeader>
@@ -30,7 +38,8 @@ export default async function InstrumentsPage() {
         <CardContent>
           {!instruments.length ? (
             <p className="py-12 text-center text-sm text-slate-500">
-              Instruments are created from a position account.
+              No instruments yet. Add one to make it available to your
+              position accounts.
             </p>
           ) : (
             <div className="divide-y divide-white/[0.06]">
