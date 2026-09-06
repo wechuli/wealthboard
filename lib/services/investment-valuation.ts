@@ -17,7 +17,7 @@ import {
   replayPositionQuantities,
 } from "@/lib/investments";
 import { convertMinor, MissingExchangeRateError } from "@/lib/money";
-import { nowIso } from "@/lib/dates";
+import { endOfUtcDay } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 
 type DatabaseClient = ReturnType<typeof getDatabase>;
@@ -69,7 +69,7 @@ export function calculatePositionAccountSnapshot(
   userId: string,
   client: InvestmentClient,
   accountId: string,
-  throughDate = nowIso(),
+  throughDate = endOfUtcDay(new Date()).toISOString(),
 ) {
   const account = client.query.accounts
     .findFirst({

@@ -7,7 +7,7 @@ import Database from "better-sqlite3";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
 import {
   accountConversions,
@@ -1103,6 +1103,69 @@ describe.sequential("position account valuation", () => {
       provenance: "January statement",
       thresholdDays: 10,
     });
+  });
+
+  test("clears stale prices after a same-day update before noon UTC", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-02-15T08:00:00.000Z"));
+    try {
+      const accountId = createAccount(userId, {
+        name: "Morning Price Brokerage",
+        categoryId: currentCategoryId(),
+        currency: "USD",
+        trackingMode: "positions",
+        openingValue: "0",
+        isIncludedInNetWorth: true,
+        openedAt: "2026-01-01",
+      });
+      const instrumentId = createInvestmentInstrument(userId, {
+        name: "Morning Equity",
+        symbol: "MORNING",
+        identifierType: "ticker_exchange",
+        identifier: "MORNING",
+        exchangeMic: "XNAS",
+        assetType: "stock",
+        quoteCurrency: "USD",
+      });
+      recordPositionEvent(userId, {
+        accountId,
+        instrumentId,
+        type: "opening_position",
+        quantity: "1",
+        tradeDate: "2026-01-01",
+      });
+      setSecurityPrice(userId, {
+        instrumentId,
+        price: "100",
+        effectiveDate: "2026-01-01",
+      });
+      expect(
+        getPositionAccountSnapshot(userId, accountId).staleInstrumentIds,
+      ).toEqual([instrumentId]);
+
+      setSecurityPrice(userId, {
+        instrumentId,
+        price: "120",
+        effectiveDate: "2026-02-15",
+      });
+      expect(getPositionAccountSnapshot(userId, accountId)).toMatchObject({
+        staleInstrumentIds: [],
+        issues: [],
+        positionsMinor: 12_000n,
+      });
+      expect(
+        getPositionAccountSnapshot(
+          userId,
+          accountId,
+          "2026-02-14T23:59:59.999Z",
+        ),
+      ).toMatchObject({
+        staleInstrumentIds: [instrumentId],
+        positionsMinor: 10_000n,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("never uses a future price for a historical snapshot", () => {
