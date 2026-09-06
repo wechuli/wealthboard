@@ -65,6 +65,15 @@ separate API service. One optional OIDC provider may authenticate internal users
   exchange rate owned by that user and effective on each date. Every point
   carries completeness metadata and affected currency codes when conversion is
   unavailable.
+- **Exchange-rate management:** Settings groups observations by unordered
+  currency pair while preserving effective-dated source rows. Updates upsert a
+  directional pair/date; corrections and deletions require an owner-scoped ID
+  and recalculate position account projections in the same transaction. New
+  inverse-only duplicates are rejected; existing bidirectional histories remain
+  reviewable without automatic data conversion. Current missing/stale rate
+  issues are distinct from historical pair/date gaps. Freshness uses the selected
+  rate's effective date and a one-calendar-month threshold; stale rates remain
+  usable and historical conversions never look ahead.
 - **Goals:** A linked account is the source of truth for goal progress. Unlinked
   goals retain a direct current amount. Forecasts use Decimal.js future-value
   calculations and a configurable annual return assumption. Scenario

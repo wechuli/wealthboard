@@ -11,6 +11,8 @@ import {
   accountSchema,
   accountConversionSchema,
   categorySchema,
+  exchangeRateSchema,
+  deleteExchangeRateSchema,
   formDataObject,
   goalMilestoneSchema,
   goalSchema,
@@ -64,7 +66,7 @@ import {
 } from "@/lib/services/goals";
 import { recordTransfer } from "@/lib/services/transfers";
 import type { GoalStatus, InstitutionType } from "@/db/schema";
-import { addExchangeRate, updateSettings } from "@/lib/services/settings";
+import { addExchangeRate, deleteExchangeRate, updateSettings } from "@/lib/services/settings";
 import { createSession } from "@/lib/auth/session";
 import {
   AuthenticationMethodError,
@@ -1003,23 +1005,15 @@ export async function updateSettingsAction(
   return { ok: true, message: "Settings saved." };
 }
 
-const exchangeRateSchema = z.object({
-  baseCurrency: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/),
-  quoteCurrency: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/),
-  rate: z
-    .string()
-    .trim()
-    .regex(/^\d+(?:\.\d+)?$/),
-  effectiveDate: z.string().date(),
-});
+function revalidateExchangeRatePaths() {
+  revalidatePath("/");
+  revalidatePath("/accounts", "layout");
+  revalidatePath("/goals", "layout");
+  revalidatePath("/estate", "layout");
+  revalidatePath("/reports");
+  revalidatePath("/review");
+  revalidatePath("/settings");
+}
 
 export async function exchangeRateAction(
   _previous: ActionState,
@@ -1033,11 +1027,24 @@ export async function exchangeRateAction(
   } catch (error) {
     return mutationError(error);
   }
-  revalidatePath("/");
-  revalidatePath("/accounts");
-  revalidatePath("/reports");
-  revalidatePath("/settings");
+  revalidateExchangeRatePaths();
   return { ok: true, message: "Exchange rate saved." };
+}
+
+export async function deleteExchangeRateAction(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = deleteExchangeRateSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    deleteExchangeRate(userId, parsed.data.id);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidateExchangeRatePaths();
+  return { ok: true, message: "Exchange rate deleted." };
 }
 
 export async function changePasswordAction(

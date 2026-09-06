@@ -3,11 +3,13 @@ import { Building2, FolderCog } from "lucide-react";
 
 import {
   DataPortability,
-  ExchangeRateForm,
   GeneralSettingsForm,
   PasswordForm,
 } from "@/components/settings-forms";
 import { Button } from "@/components/ui/button";
+import { ExchangeRateManager } from "@/components/exchange-rate-manager";
+import { dateInputForTimezone } from "@/lib/dates";
+import { z } from "zod";
 import { PageHeader } from "@/components/ui/page";
 import { AiSettingsForm } from "@/components/ai-settings-form";
 import { AuthenticationMethodsForm } from "@/components/auth-methods-form";
@@ -16,7 +18,7 @@ import { getAuthConfig } from "@/lib/auth/config";
 import { getSettings } from "@/lib/bootstrap";
 import {
   getCurrencyConfiguration,
-  listExchangeRates,
+  listExchangeRateGroups,
 } from "@/lib/services/settings";
 import { requireSession } from "@/lib/auth/session";
 import { getUserAuthState } from "@/lib/auth/users";
@@ -36,26 +38,31 @@ const authenticationFeedback: Record<string, string> = {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ auth?: string }>;
+  searchParams: Promise<{ auth?: string; rateBase?: string; rateQuote?: string; rateDate?: string }>;
 }) {
   const { userId } = await requireSession();
   const query = await searchParams;
   const authConfig = getAuthConfig();
   const [
     settings,
-    rates,
     currencyConfiguration,
     aiSettings,
     aiUsage,
     authState,
   ] = await Promise.all([
     getSettings(userId),
-    listExchangeRates(userId),
     getCurrencyConfiguration(userId),
     getAiProviderSettings(userId),
     getAiUsageSummary(userId),
     getUserAuthState(userId, authConfig.oidc?.issuer),
   ]);
+  const today = dateInputForTimezone(settings.timezone);
+  const groups = await listExchangeRateGroups(userId, today);
+  const rateRequest = z.object({
+    baseCurrency: z.enum(currencyConfiguration.enabledCurrencies as [string, ...string[]]),
+    quoteCurrency: z.enum(currencyConfiguration.enabledCurrencies as [string, ...string[]]),
+    effectiveDate: z.string().date(),
+  }).safeParse({ baseCurrency: query.rateBase, quoteCurrency: query.rateQuote, effectiveDate: query.rateDate ?? today });
   return (
     <>
       <PageHeader
@@ -83,10 +90,15 @@ export default async function SettingsPage({
           settings={settings}
           referencedCurrencies={currencyConfiguration.referencedCurrencies}
         />
-        <ExchangeRateForm
-          rates={rates}
+        <ExchangeRateManager
+          key={`${query.rateBase ?? ""}-${query.rateQuote ?? ""}-${query.rateDate ?? ""}`}
+          groups={groups}
           enabledCurrencies={currencyConfiguration.enabledCurrencies}
           baseCurrency={currencyConfiguration.baseCurrency}
+          today={today}
+          timezone={settings.timezone}
+          dateFormat={settings.preferredDateFormat}
+          initial={rateRequest.success ? rateRequest.data : undefined}
         />
         <AiSettingsForm
           settings={aiSettings}

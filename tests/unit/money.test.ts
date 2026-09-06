@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isExchangeRateStale } from "@/lib/dates";
 
 import {
   CURRENCY_CATALOG,
@@ -13,6 +14,7 @@ import {
   minorToDecimalString,
   parseMoney,
   percentage,
+  selectExchangeRate,
 } from "@/lib/money";
 
 describe("decimal-safe money", () => {
@@ -101,6 +103,20 @@ describe("decimal-safe money", () => {
     expect(() => convertMinor(100, "EUR", "KES", [])).toThrow(
       MissingExchangeRateError,
     );
+  });
+
+  it("uses calendar months for exchange-rate freshness", () => {
+    expect(isExchangeRateStale("2026-08-06T12:00:00.000Z", "2026-09-06T23:59:59.999Z")).toBe(false);
+    expect(isExchangeRateStale("2026-08-05T12:00:00.000Z", "2026-09-06T00:00:00.000Z")).toBe(true);
+    expect(isExchangeRateStale("2026-02-28", "2026-03-31")).toBe(false);
+    expect(isExchangeRateStale("2026-02-27", "2026-03-31")).toBe(true);
+    expect(isExchangeRateStale("2026-09-07", "2026-09-06")).toBe(false);
+  });
+
+  it("reports the same selected inverse rate used for conversion without looking ahead", () => {
+    const rate = { baseCurrency: "USD", quoteCurrency: "KES", rate: "130", effectiveDate: "2026-09-01" };
+    expect(selectExchangeRate("KES", "USD", [rate], "2026-09-06")).toEqual({ rate, inverse: true });
+    expect(selectExchangeRate("KES", "USD", [rate], "2026-08-31")).toBeNull();
   });
 
   it("calculates allocation percentages with decimal precision", () => {

@@ -8,7 +8,7 @@ export type ExchangeRateLike = {
 };
 
 export class MissingExchangeRateError extends Error {
-  constructor(from: string, to: string) {
+  constructor(public readonly from: string, public readonly to: string) {
     super(`No exchange rate is configured for ${from}/${to}.`);
     this.name = "MissingExchangeRateError";
   }
@@ -87,6 +87,22 @@ function latestRate(
     .sort((a, b) => (b.effectiveDate ?? "").localeCompare(a.effectiveDate ?? ""))[0];
 }
 
+export function selectExchangeRate(
+  from: string,
+  to: string,
+  rates: ExchangeRateLike[],
+  asOf?: string,
+) {
+  const direct = latestRate(rates, from, to, asOf);
+  const inverse = latestRate(rates, to, from, asOf);
+  if (!direct && !inverse) return null;
+  const useDirect =
+    Boolean(direct) &&
+    (!inverse ||
+      (direct?.effectiveDate ?? "") >= (inverse.effectiveDate ?? ""));
+  return { rate: useDirect ? direct! : inverse!, inverse: !useDirect };
+}
+
 export function convertMinor(
   amountMinor: number | bigint,
   fromCurrency: string,
@@ -97,21 +113,15 @@ export function convertMinor(
   const from = fromCurrency.toUpperCase();
   const to = toCurrency.toUpperCase();
   if (from === to) return BigInt(amountMinor);
-
-  const direct = latestRate(rates, from, to, asOf);
-  const inverse = latestRate(rates, to, from, asOf);
-  if (!direct && !inverse) throw new MissingExchangeRateError(from, to);
-  const useDirect =
-    Boolean(direct) &&
-    (!inverse ||
-      (direct?.effectiveDate ?? "") >= (inverse.effectiveDate ?? ""));
+  const selected = selectExchangeRate(from, to, rates, asOf);
+  if (!selected) throw new MissingExchangeRateError(from, to);
 
   const sourceMajor = new Decimal(amountMinor.toString()).div(
     new Decimal(10).pow(currencyDigits(from)),
   );
-  const targetMajor = useDirect
-    ? sourceMajor.mul(direct!.rate)
-    : sourceMajor.div(inverse!.rate);
+  const targetMajor = selected.inverse
+    ? sourceMajor.div(selected.rate.rate)
+    : sourceMajor.mul(selected.rate.rate);
   const targetMinor = targetMajor.mul(new Decimal(10).pow(currencyDigits(to)));
   return BigInt(targetMinor.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toFixed(0));
 }

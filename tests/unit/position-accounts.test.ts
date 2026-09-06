@@ -53,6 +53,8 @@ import { getEstateWorkspace } from "@/lib/services/estate-planning";
 import { createGoal, listGoals } from "@/lib/services/goals";
 import {
   addExchangeRate,
+  deleteExchangeRate,
+  listExchangeRates,
   listReferencedCurrencies,
 } from "@/lib/services/settings";
 import { replayPositionQuantities } from "@/lib/investments";
@@ -988,6 +990,26 @@ describe.sequential("position account valuation", () => {
     expect((await getAccount(userId, accountId))?.currentValueMinor).toBe(
       240_000,
     );
+    const rate = (await listExchangeRates(userId)).find((entry) =>
+      entry.baseCurrency === "UGX" && entry.quoteCurrency === "TZS")!;
+    expect(() => addExchangeRate(userId, {
+      id: rate.id, baseCurrency: "UGX", quoteCurrency: "TZS",
+      rate: "999999999999999999999999", effectiveDate: "2026-01-01",
+    })).toThrow("outside the supported range");
+    expect((await listExchangeRates(userId)).find((entry) => entry.id === rate.id)?.rate).toBe("0.7");
+    expect((await getAccount(userId, accountId))?.currentValueMinor).toBe(240_000);
+    addExchangeRate(userId, {
+      id: rate.id, baseCurrency: "UGX", quoteCurrency: "TZS",
+      rate: "0.8", effectiveDate: "2026-01-01",
+    });
+    expect((await getAccount(userId, accountId))?.currentValueMinor).toBe(260_000);
+    deleteExchangeRate(userId, rate.id);
+    expect(getPositionAccountSnapshot(userId, accountId).complete).toBe(false);
+    expect((await getAccount(userId, accountId))?.currentValueMinor).toBe(100_000);
+    addExchangeRate(userId, {
+      baseCurrency: "UGX", quoteCurrency: "TZS",
+      rate: "0.7", effectiveDate: "2026-01-01",
+    });
   });
 
   test("uses the evaluation date for linked position goal exchange rates", async () => {

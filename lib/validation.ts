@@ -49,6 +49,19 @@ const optionalDateSchema = z
   .optional()
   .transform((value) => value || undefined);
 
+export const exchangeRateSchema = z.object({
+  id: optionalUuid,
+  baseCurrency: currencyCodeSchema,
+  quoteCurrency: currencyCodeSchema,
+  rate: z.string().trim().max(80).regex(/^\d+(?:\.\d+)?$/, "Enter a positive decimal rate.")
+    .refine((value) => /^\d+(?:\.\d+)?$/.test(value) && new Decimal(value).gt(0), "Enter a positive decimal rate."),
+  effectiveDate: z.string().date("Enter a valid effective date."),
+}).refine((value) => value.baseCurrency !== value.quoteCurrency, {
+  message: "Choose two different currencies.", path: ["quoteCurrency"],
+});
+
+export const deleteExchangeRateSchema = z.object({ id: z.string().uuid() });
+
 export const loginSchema = z.object({
   username: z
     .string()

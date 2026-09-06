@@ -46,6 +46,13 @@ import Decimal from "decimal.js";
 import { calculatePositionAccountSnapshot } from "@/lib/services/investment-valuation";
 import { calculateQuoteValueMinor } from "@/lib/investments";
 import { getPositionMovementAttribution } from "@/lib/services/investment-attribution";
+import {
+  currentExchangeRateIssue,
+  exchangeRatePairKey,
+  recordExchangeRateGap,
+  type CurrentExchangeRateIssue,
+  type ExchangeRateGap,
+} from "@/lib/services/exchange-rate-status";
 
 type PositionIssue = ReturnType<
   typeof calculatePositionAccountSnapshot
@@ -142,14 +149,7 @@ export async function getNetWorthHistory(
   let cursor = rangeStart(range, earliest, today);
   const step =
     range === "all" || range === "1y" || range === "6m" ? "month" : "day";
-  const points: Array<{
-    date: string;
-    netWorth: number;
-    assets: number;
-    liabilities: number;
-    complete: boolean;
-    missingCurrencies: string[];
-  }> = [];
+  const points: Array<ReturnType<typeof getHistoricalPoint>> = [];
 
   while (cursor <= today) {
     const evaluationDate = endOfUtcDay(cursor);
@@ -195,6 +195,7 @@ function getHistoricalPoint(
   let assetTotal = 0n;
   let liabilityTotal = 0n;
   const missingCurrencies = new Set<string>();
+  const rateGaps = new Map<string, ExchangeRateGap>();
   const missingPrices = new Set<string>();
   const stalePrices = new Set<string>();
   for (const account of accountRows) {
@@ -217,6 +218,7 @@ function getHistoricalPoint(
     }
     for (const currency of positionSnapshot?.missingCurrencies ?? []) {
       missingCurrencies.add(currency);
+      recordExchangeRateGap(rateGaps, currency, account.currency, date.toISOString());
     }
     for (const instrumentId of positionSnapshot?.staleInstrumentIds ?? []) {
       stalePrices.add(instrumentId);
@@ -235,6 +237,7 @@ function getHistoricalPoint(
     } catch (error) {
       if (!(error instanceof MissingExchangeRateError)) throw error;
       missingCurrencies.add(account.currency);
+      recordExchangeRateGap(rateGaps, error.from, error.to, date.toISOString());
     }
   }
   return {
@@ -244,6 +247,7 @@ function getHistoricalPoint(
     netWorth: safeChartNumber(assetTotal - liabilityTotal),
     complete: missingCurrencies.size === 0 && missingPrices.size === 0,
     missingCurrencies: [...missingCurrencies],
+    rateGaps: [...rateGaps.values()],
     missingPrices: [...missingPrices],
     stalePrices: [...stalePrices],
   };
@@ -397,6 +401,8 @@ export async function getDashboardData(
   let liquidTotal = 0n;
   let investibleTotal = 0n;
   const missingRates = new Set<string>();
+  const currentRateIssues = new Map<string, CurrentExchangeRateIssue>();
+  const historicalRateGaps = new Map<string, ExchangeRateGap>();
   const missingPrices = new Set<string>();
   const stalePrices = new Set<string>();
   const positionIssues: Array<
@@ -408,9 +414,14 @@ export async function getDashboardData(
   const institutionMap = new Map<string, bigint>();
   const currencyMap = new Map<string, bigint>();
   const instrumentAllocationMap = new Map<string, bigint>();
+  const checkCurrentRate = (from: string, to: string) => {
+    const issue = currentExchangeRateIssue(from, to, rateRows, currentAsOf);
+    if (issue) currentRateIssues.set(exchangeRatePairKey(from, to), issue);
+  };
 
   for (const account of accountRows) {
     if (!account.isIncludedInNetWorth) continue;
+    checkCurrentRate(account.currency, settings.baseCurrency);
     try {
       const positionSnapshot =
         account.trackingMode === "positions"
@@ -438,6 +449,7 @@ export async function getDashboardData(
         });
       }
       for (const position of positionSnapshot?.positions ?? []) {
+        if (position.price) checkCurrentRate(position.price.currency, account.currency);
         if (position.accountValueMinor == null) continue;
         const positionBaseValue = convertMinor(
           position.accountValueMinor,
@@ -519,9 +531,10 @@ export async function getDashboardData(
       fees += flow.fees;
       capitalGrowth += flow.realizedGrowth;
     } catch (error) {
-      if (error instanceof MissingExchangeRateError)
+      if (error instanceof MissingExchangeRateError) {
         missingRates.add(transaction.currency);
-      else throw error;
+        recordExchangeRateGap(historicalRateGaps, error.from, error.to, transaction.transactionDate);
+      } else throw error;
     }
   }
 
@@ -547,6 +560,7 @@ export async function getDashboardData(
         } catch (error) {
           if (error instanceof MissingExchangeRateError) {
             missingRates.add(account.currency);
+            recordExchangeRateGap(historicalRateGaps, error.from, error.to, event.date);
           } else {
             throw error;
           }
@@ -618,6 +632,11 @@ export async function getDashboardData(
     .slice(0, 10);
 
   const history = await getNetWorthHistory(userId, range);
+  for (const point of history) {
+    for (const gap of point.rateGaps) {
+      recordExchangeRateGap(historicalRateGaps, gap.baseCurrency, gap.quoteCurrency, gap.affectedFrom, gap.affectedTo);
+    }
+  }
   const historicalMissingRates = [
     ...new Set(history.flatMap((point) => point.missingCurrencies)),
   ];
@@ -653,6 +672,10 @@ export async function getDashboardData(
     history,
     historyComplete: history.every((point) => point.complete),
     historicalMissingRates,
+    historicalRateGaps: [...historicalRateGaps.values()],
+    currentRateIssues: [...currentRateIssues.values()],
+    currentComplete: missingPrices.size === 0 &&
+      ![...currentRateIssues.values()].some((issue) => issue.status === "missing"),
     recentActivity,
     missingRates: [...missingRates],
     missingPrices: [...missingPrices],

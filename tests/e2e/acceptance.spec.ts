@@ -370,19 +370,20 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
 
   await page.goto("/");
   await expect(
-    page.getByText(/Current or historical totals are incomplete/),
+    page.getByText("Current total is incomplete.", { exact: true }),
   ).toBeVisible();
 
   await page.goto("/settings");
-  await page.getByLabel("Base", { exact: true }).selectOption("USD");
-  await page.getByLabel("Quote", { exact: true }).selectOption("KES");
-  await page.getByLabel("Rate").fill("130");
+  await page.getByRole("button", { name: "Add pair" }).click();
+  await page.getByLabel("Base currency", { exact: true }).last().selectOption("USD");
+  await page.getByLabel("Quote currency", { exact: true }).selectOption("KES");
+  await page.getByLabel("Rate (quote per base)").fill("130");
   await page.getByLabel("Effective date").fill("2025-01-01");
   await page.getByRole("button", { name: "Save rate" }).click();
   await expect(page.getByText("Exchange rate saved.")).toBeVisible();
   await page.goto("/");
   await expect(
-    page.getByText(/Current or historical totals are incomplete/),
+    page.getByText("Current total is incomplete.", { exact: true }),
   ).toHaveCount(0);
 
   const exportResponse = await page.request.get("/api/export/json");

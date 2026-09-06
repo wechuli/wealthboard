@@ -646,6 +646,22 @@ update must affect only the current user's calculations.
 Provide a settings area where the user can manage effective-dated rates between
 any two enabled currencies.
 
+Show one summary row per currency pair, with the latest effective rate, date,
+freshness status, and expandable history. The inverse is automatic. New entries
+must not introduce a second direction for an existing pair; existing histories
+containing both directions remain visible for review without silent conversion
+or deletion. Updating adds a dated observation or replaces the same pair/date.
+History supports owner-scoped corrections and confirmed deletion, with atomic
+recalculation of affected position account values. A correction must not
+overwrite another dated observation or change its currency pair.
+
+Separate current missing-rate warnings from historical conversion gaps. Current
+rates older than one calendar month warn but remain usable; freshness is based
+on effective date, not edit time. Historical warnings belong beside history and
+affected reports, identify pairs and date ranges, and state whether the current
+total is complete. Warning links preselect the relevant pair, and historical
+links prefill the earliest identified missing date without guessing its rate.
+
 All dashboard totals should be converted into the configured base currency.
 Changing that base must not rewrite source amounts. Current and historical
 aggregates must declare when a rate is missing and identify affected currencies

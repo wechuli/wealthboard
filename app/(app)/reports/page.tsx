@@ -6,6 +6,7 @@ import {
   NetWorthChart,
 } from "@/components/charts";
 import { MoneyValue } from "@/components/privacy-provider";
+import { CurrentExchangeRateWarnings, HistoricalExchangeRateWarnings } from "@/components/exchange-rate-warnings";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page";
@@ -49,13 +50,7 @@ export default async function ReportsPage() {
         title="Reports & analytics"
         description="Long-term trends, allocation, returns, and comparable account performance."
       />
-      {data.missingRates.length ? (
-        <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
-          This report is incomplete because effective-dated rates for{" "}
-          {data.missingRates.join(", ")} are missing. Affected holdings are
-          excluded where conversion is unavailable.
-        </div>
-      ) : null}
+      <CurrentExchangeRateWarnings issues={data.currentRateIssues} timezone={data.settings.timezone} dateFormat={data.settings.preferredDateFormat} />
       {data.positionIssues.length ? (
         <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
           Position reporting needs review. {data.missingPrices.length} missing
@@ -136,6 +131,7 @@ export default async function ReportsPage() {
           </div>
         </CardHeader>
         <CardContent>
+          <HistoricalExchangeRateWarnings gaps={data.historicalRateGaps} currentComplete={data.currentComplete} timezone={data.settings.timezone} dateFormat={data.settings.preferredDateFormat} />
           <NetWorthChart data={data.history} currency={currency} range="all" />
         </CardContent>
       </Card>

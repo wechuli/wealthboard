@@ -6,7 +6,6 @@ import {
   Download,
   KeyRound,
   LoaderCircle,
-  RefreshCw,
   Save,
   Upload,
 } from "lucide-react";
@@ -14,7 +13,6 @@ import { toast } from "sonner";
 
 import {
   changePasswordAction,
-  exchangeRateAction,
   updateSettingsAction,
 } from "@/app/(app)/actions";
 import { Button } from "@/components/ui/button";
@@ -32,7 +30,6 @@ import {
   normalizeEnabledCurrencies,
   parseEnabledCurrencies,
 } from "@/lib/currencies";
-import { formatDate } from "@/lib/dates";
 
 function SubmitButton({
   pending,
@@ -299,129 +296,6 @@ export function GeneralSettingsForm({
             />
           </div>
         </form>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function ExchangeRateForm({
-  rates,
-  enabledCurrencies,
-  baseCurrency,
-}: {
-  rates: Array<{
-    id: string;
-    baseCurrency: string;
-    quoteCurrency: string;
-    rate: string;
-    effectiveDate: string;
-    source: string;
-  }>;
-  enabledCurrencies: string[];
-  baseCurrency: string;
-}) {
-  const [state, action, pending] = useActionState(exchangeRateAction, {});
-  const options = currencyOptions(enabledCurrencies).filter((currency) =>
-    enabledCurrencies.includes(currency.code),
-  );
-  const defaultRateBase =
-    options.find((currency) => currency.code !== baseCurrency)?.code ??
-    baseCurrency;
-  const canAddRate = options.length > 1;
-  return (
-    <Card>
-      <CardHeader>
-        <div>
-          <CardTitle>Exchange rates</CardTitle>
-          <p className="mt-1 text-xs text-slate-500">
-            Quote units received for one base unit, for example 130 KES per USD.
-          </p>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <form action={action} className="grid gap-3 sm:grid-cols-4">
-          <div>
-            <Label htmlFor="rateBase">Base</Label>
-            <Select
-              id="rateBase"
-              name="baseCurrency"
-              defaultValue={defaultRateBase}
-              disabled={!canAddRate}
-            >
-              {options.map((currency) => (
-                <option key={currency.code} value={currency.code}>
-                  {currency.code} - {currency.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="rateQuote">Quote</Label>
-            <Select
-              id="rateQuote"
-              name="quoteCurrency"
-              defaultValue={baseCurrency}
-              disabled={!canAddRate}
-            >
-              {options.map((currency) => (
-                <option key={currency.code} value={currency.code}>
-                  {currency.code} - {currency.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="rate">Rate</Label>
-            <Input
-              id="rate"
-              name="rate"
-              inputMode="decimal"
-              placeholder="130.00"
-            />
-          </div>
-          <div>
-            <Label htmlFor="effectiveDate">Effective date</Label>
-            <Input
-              id="effectiveDate"
-              name="effectiveDate"
-              type="date"
-              defaultValue={new Date().toISOString().slice(0, 10)}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3 sm:col-span-4">
-            <p
-              role="status"
-              className={
-                state.ok ? "text-sm text-emerald-300" : "text-sm text-red-300"
-              }
-            >
-              {state.message}
-            </p>
-            <SubmitButton
-              pending={pending}
-              label="Save rate"
-              icon={<RefreshCw size={16} />}
-              disabled={!canAddRate}
-            />
-          </div>
-        </form>
-        <div className="mt-5 max-h-56 overflow-auto rounded-xl border border-white/[0.06]">
-          {rates.map((rate) => (
-            <div
-              key={rate.id}
-              className="flex items-center justify-between border-b border-white/[0.05] px-3 py-2 text-sm last:border-0"
-            >
-              <span>
-                {rate.baseCurrency}/{rate.quoteCurrency}
-              </span>
-              <span className="tabular-nums text-slate-300">{rate.rate}</span>
-              <span className="text-xs text-slate-500">
-                {formatDate(rate.effectiveDate, "UTC", "dd MMM yyyy")} ·{" "}
-                {rate.source}
-              </span>
-            </div>
-          ))}
-        </div>
       </CardContent>
     </Card>
   );

@@ -16,9 +16,44 @@ Net worth is included assets minus included liabilities after conversion to the
 base currency. Dashboard period cards compare the current estimate with earlier
 replayed values.
 
-If a required exchange rate is missing, Wealthboard marks the result as
-incomplete and identifies the affected currency. Add an effective-dated rate
-instead of interpreting the partial total as complete.
+Exchange-rate warnings distinguish current balances from historical calculations:
+
+- **Current total is incomplete:** a required currency pair has no rate effective
+	on or before today. Affected holdings are excluded until a rate is supplied.
+- **Rate is over a month old:** the effective date is older than one calendar
+	month. The rate still converts current balances; age alone does not make a
+	total incomplete. Editing the value does not refresh its effective date.
+- **Some historical totals are incomplete:** older calculations lack a rate.
+	The warning beside the history chart identifies each pair and affected date
+	range, and says whether the current total is complete. Transaction-based
+	contributions, income, and gains can also be affected.
+
+Each warning links to the matching pair in Settings. **Add earlier rate** also
+prefills the earliest identified missing date, leaving the rate blank. Enter
+a rate appropriate for that date rather than substituting today's rate.
+
+## Managing exchange rates
+
+Under **Settings > Exchange rates**, each currency pair has one summary row
+showing its latest effective rate, date, and freshness. The rate is quote units
+per base unit: USD/KES 130 means one USD buys 130 KES. The inverse conversion is
+automatic; do not add KES/USD separately.
+
+Use the update icon to enter a rate for today or another effective date. Saving
+a new date adds an observation and preserves older ones. Saving the same pair
+and date updates that observation.
+
+Expand **History** to correct a dated entry or delete it. Corrections may change
+the rate or effective date, but not its currency pair. Moving an entry to a date
+that already has an entry is rejected; correct the existing entry instead.
+Deletion requires confirmation, then calculations fall back to an older rate
+where available. Removing the only applicable rate can make current or
+historical totals incomplete.
+
+Older data may contain entries in both directions. They appear together with a
+review notice; Wealthboard does not silently invert, merge, or remove them.
+Review and correct or delete erroneous entries in History. Future-dated rates
+remain in history but do not replace the rate currently in effect.
 
 For a position account, a missing security price has the same completeness
 effect. The unresolved component is excluded from the partial numeric total,
