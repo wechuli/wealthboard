@@ -38,31 +38,41 @@ const authenticationFeedback: Record<string, string> = {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ auth?: string; rateBase?: string; rateQuote?: string; rateDate?: string }>;
+  searchParams: Promise<{
+    auth?: string;
+    rateBase?: string;
+    rateQuote?: string;
+    rateDate?: string;
+  }>;
 }) {
   const { userId } = await requireSession();
   const query = await searchParams;
   const authConfig = getAuthConfig();
-  const [
-    settings,
-    currencyConfiguration,
-    aiSettings,
-    aiUsage,
-    authState,
-  ] = await Promise.all([
-    getSettings(userId),
-    getCurrencyConfiguration(userId),
-    getAiProviderSettings(userId),
-    getAiUsageSummary(userId),
-    getUserAuthState(userId, authConfig.oidc?.issuer),
-  ]);
+  const [settings, currencyConfiguration, aiSettings, aiUsage, authState] =
+    await Promise.all([
+      getSettings(userId),
+      getCurrencyConfiguration(userId),
+      getAiProviderSettings(userId),
+      getAiUsageSummary(userId),
+      getUserAuthState(userId, authConfig.oidc?.issuer),
+    ]);
   const today = dateInputForTimezone(settings.timezone);
   const groups = await listExchangeRateGroups(userId, today);
-  const rateRequest = z.object({
-    baseCurrency: z.enum(currencyConfiguration.enabledCurrencies as [string, ...string[]]),
-    quoteCurrency: z.enum(currencyConfiguration.enabledCurrencies as [string, ...string[]]),
-    effectiveDate: z.string().date(),
-  }).safeParse({ baseCurrency: query.rateBase, quoteCurrency: query.rateQuote, effectiveDate: query.rateDate ?? today });
+  const rateRequest = z
+    .object({
+      baseCurrency: z.enum(
+        currencyConfiguration.enabledCurrencies as [string, ...string[]],
+      ),
+      quoteCurrency: z.enum(
+        currencyConfiguration.enabledCurrencies as [string, ...string[]],
+      ),
+      effectiveDate: z.string().date(),
+    })
+    .safeParse({
+      baseCurrency: query.rateBase,
+      quoteCurrency: query.rateQuote,
+      effectiveDate: query.rateDate ?? today,
+    });
   return (
     <>
       <PageHeader

@@ -218,7 +218,12 @@ function getHistoricalPoint(
     }
     for (const currency of positionSnapshot?.missingCurrencies ?? []) {
       missingCurrencies.add(currency);
-      recordExchangeRateGap(rateGaps, currency, account.currency, date.toISOString());
+      recordExchangeRateGap(
+        rateGaps,
+        currency,
+        account.currency,
+        date.toISOString(),
+      );
     }
     for (const instrumentId of positionSnapshot?.staleInstrumentIds ?? []) {
       stalePrices.add(instrumentId);
@@ -449,7 +454,8 @@ export async function getDashboardData(
         });
       }
       for (const position of positionSnapshot?.positions ?? []) {
-        if (position.price) checkCurrentRate(position.price.currency, account.currency);
+        if (position.price)
+          checkCurrentRate(position.price.currency, account.currency);
         if (position.accountValueMinor == null) continue;
         const positionBaseValue = convertMinor(
           position.accountValueMinor,
@@ -533,7 +539,12 @@ export async function getDashboardData(
     } catch (error) {
       if (error instanceof MissingExchangeRateError) {
         missingRates.add(transaction.currency);
-        recordExchangeRateGap(historicalRateGaps, error.from, error.to, transaction.transactionDate);
+        recordExchangeRateGap(
+          historicalRateGaps,
+          error.from,
+          error.to,
+          transaction.transactionDate,
+        );
       } else throw error;
     }
   }
@@ -560,7 +571,12 @@ export async function getDashboardData(
         } catch (error) {
           if (error instanceof MissingExchangeRateError) {
             missingRates.add(account.currency);
-            recordExchangeRateGap(historicalRateGaps, error.from, error.to, event.date);
+            recordExchangeRateGap(
+              historicalRateGaps,
+              error.from,
+              error.to,
+              event.date,
+            );
           } else {
             throw error;
           }
@@ -634,7 +650,13 @@ export async function getDashboardData(
   const history = await getNetWorthHistory(userId, range);
   for (const point of history) {
     for (const gap of point.rateGaps) {
-      recordExchangeRateGap(historicalRateGaps, gap.baseCurrency, gap.quoteCurrency, gap.affectedFrom, gap.affectedTo);
+      recordExchangeRateGap(
+        historicalRateGaps,
+        gap.baseCurrency,
+        gap.quoteCurrency,
+        gap.affectedFrom,
+        gap.affectedTo,
+      );
     }
   }
   const historicalMissingRates = [
@@ -674,8 +696,11 @@ export async function getDashboardData(
     historicalMissingRates,
     historicalRateGaps: [...historicalRateGaps.values()],
     currentRateIssues: [...currentRateIssues.values()],
-    currentComplete: missingPrices.size === 0 &&
-      ![...currentRateIssues.values()].some((issue) => issue.status === "missing"),
+    currentComplete:
+      missingPrices.size === 0 &&
+      ![...currentRateIssues.values()].some(
+        (issue) => issue.status === "missing",
+      ),
     recentActivity,
     missingRates: [...missingRates],
     missingPrices: [...missingPrices],

@@ -19,7 +19,10 @@ import {
   NetWorthChart,
 } from "@/components/charts";
 import { GoalAlerts } from "@/components/goal-alerts";
-import { CurrentExchangeRateWarnings, HistoricalExchangeRateWarnings } from "@/components/exchange-rate-warnings";
+import {
+  CurrentExchangeRateWarnings,
+  HistoricalExchangeRateWarnings,
+} from "@/components/exchange-rate-warnings";
 import { MoneyValue } from "@/components/privacy-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,7 +105,11 @@ export default async function DashboardPage({
         }
       />
 
-      <CurrentExchangeRateWarnings issues={data.currentRateIssues} timezone={data.settings.timezone} dateFormat={data.settings.preferredDateFormat} />
+      <CurrentExchangeRateWarnings
+        issues={data.currentRateIssues}
+        timezone={data.settings.timezone}
+        dateFormat={data.settings.preferredDateFormat}
+      />
       {data.positionIssues.length ? (
         <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
           Position values need review. {data.missingPrices.length} instrument
@@ -281,7 +288,12 @@ export default async function DashboardPage({
                 </div>
               </CardHeader>
               <CardContent>
-                <HistoricalExchangeRateWarnings gaps={data.historicalRateGaps} currentComplete={data.currentComplete} timezone={data.settings.timezone} dateFormat={data.settings.preferredDateFormat} />
+                <HistoricalExchangeRateWarnings
+                  gaps={data.historicalRateGaps}
+                  currentComplete={data.currentComplete}
+                  timezone={data.settings.timezone}
+                  dateFormat={data.settings.preferredDateFormat}
+                />
                 <NetWorthChart
                   data={data.history}
                   currency={currency}

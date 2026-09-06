@@ -19,14 +19,14 @@ replayed values.
 Exchange-rate warnings distinguish current balances from historical calculations:
 
 - **Current total is incomplete:** a required currency pair has no rate effective
-	on or before today. Affected holdings are excluded until a rate is supplied.
+  on or before today. Affected holdings are excluded until a rate is supplied.
 - **Rate is over a month old:** the effective date is older than one calendar
-	month. The rate still converts current balances; age alone does not make a
-	total incomplete. Editing the value does not refresh its effective date.
+  month. The rate still converts current balances; age alone does not make a
+  total incomplete. Editing the value does not refresh its effective date.
 - **Some historical totals are incomplete:** older calculations lack a rate.
-	The warning beside the history chart identifies each pair and affected date
-	range, and says whether the current total is complete. Transaction-based
-	contributions, income, and gains can also be affected.
+  The warning beside the history chart identifies each pair and affected date
+  range, and says whether the current total is complete. Transaction-based
+  contributions, income, and gains can also be affected.
 
 Each warning links to the matching pair in Settings. **Add earlier rate** also
 prefills the earliest identified missing date, leaving the rate blank. Enter

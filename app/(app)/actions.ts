@@ -66,7 +66,11 @@ import {
 } from "@/lib/services/goals";
 import { recordTransfer } from "@/lib/services/transfers";
 import type { GoalStatus, InstitutionType } from "@/db/schema";
-import { addExchangeRate, deleteExchangeRate, updateSettings } from "@/lib/services/settings";
+import {
+  addExchangeRate,
+  deleteExchangeRate,
+  updateSettings,
+} from "@/lib/services/settings";
 import { createSession } from "@/lib/auth/session";
 import {
   AuthenticationMethodError,

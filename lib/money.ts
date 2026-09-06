@@ -8,7 +8,10 @@ export type ExchangeRateLike = {
 };
 
 export class MissingExchangeRateError extends Error {
-  constructor(public readonly from: string, public readonly to: string) {
+  constructor(
+    public readonly from: string,
+    public readonly to: string,
+  ) {
     super(`No exchange rate is configured for ${from}/${to}.`);
     this.name = "MissingExchangeRateError";
   }
@@ -16,10 +19,12 @@ export class MissingExchangeRateError extends Error {
 
 export function currencyDigits(currency: string): number {
   try {
-    return new Intl.NumberFormat("en", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).resolvedOptions().maximumFractionDigits ?? 2;
+    return (
+      new Intl.NumberFormat("en", {
+        style: "currency",
+        currency: currency.toUpperCase(),
+      }).resolvedOptions().maximumFractionDigits ?? 2
+    );
   } catch {
     return 2;
   }
@@ -35,7 +40,9 @@ export function parseMoney(value: string, currency: string): number {
   const decimal = new Decimal(normalized);
   const minor = decimal.mul(new Decimal(10).pow(digits));
   if (!minor.isInteger()) {
-    throw new Error(`${currency.toUpperCase()} supports at most ${digits} decimal places.`);
+    throw new Error(
+      `${currency.toUpperCase()} supports at most ${digits} decimal places.`,
+    );
   }
   if (minor.abs().greaterThan(Number.MAX_SAFE_INTEGER)) {
     throw new Error("The amount is outside the supported range.");
@@ -43,7 +50,10 @@ export function parseMoney(value: string, currency: string): number {
   return minor.toNumber();
 }
 
-export function minorToDecimalString(amountMinor: number | bigint, currency: string): string {
+export function minorToDecimalString(
+  amountMinor: number | bigint,
+  currency: string,
+): string {
   const digits = currencyDigits(currency);
   return new Decimal(amountMinor.toString())
     .div(new Decimal(10).pow(digits))
@@ -84,7 +94,9 @@ function latestRate(
         rate.quoteCurrency === quote &&
         (!asOf || !rate.effectiveDate || rate.effectiveDate <= asOf),
     )
-    .sort((a, b) => (b.effectiveDate ?? "").localeCompare(a.effectiveDate ?? ""))[0];
+    .sort((a, b) =>
+      (b.effectiveDate ?? "").localeCompare(a.effectiveDate ?? ""),
+    )[0];
 }
 
 export function selectExchangeRate(
@@ -123,10 +135,15 @@ export function convertMinor(
     ? sourceMajor.div(selected.rate.rate)
     : sourceMajor.mul(selected.rate.rate);
   const targetMinor = targetMajor.mul(new Decimal(10).pow(currencyDigits(to)));
-  return BigInt(targetMinor.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toFixed(0));
+  return BigInt(
+    targetMinor.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toFixed(0),
+  );
 }
 
-export function percentage(part: number | bigint, whole: number | bigint): string {
+export function percentage(
+  part: number | bigint,
+  whole: number | bigint,
+): string {
   if (BigInt(whole) === 0n) return "0";
   return new Decimal(part.toString())
     .div(whole.toString())
@@ -138,7 +155,9 @@ export function percentage(part: number | bigint, whole: number | bigint): strin
 export function safeChartNumber(value: number | bigint): number {
   const decimal = new Decimal(value.toString());
   if (decimal.abs().greaterThan(Number.MAX_SAFE_INTEGER)) {
-    return decimal.isNegative() ? -Number.MAX_SAFE_INTEGER : Number.MAX_SAFE_INTEGER;
+    return decimal.isNegative()
+      ? -Number.MAX_SAFE_INTEGER
+      : Number.MAX_SAFE_INTEGER;
   }
   return decimal.toNumber();
 }

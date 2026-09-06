@@ -375,7 +375,10 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
 
   await page.goto("/settings");
   await page.getByRole("button", { name: "Add pair" }).click();
-  await page.getByLabel("Base currency", { exact: true }).last().selectOption("USD");
+  await page
+    .getByLabel("Base currency", { exact: true })
+    .last()
+    .selectOption("USD");
   await page.getByLabel("Quote currency", { exact: true }).selectOption("KES");
   await page.getByLabel("Rate (quote per base)").fill("130");
   await page.getByLabel("Effective date").fill("2025-01-01");

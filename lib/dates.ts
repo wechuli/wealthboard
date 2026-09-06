@@ -94,8 +94,12 @@ export function dateInputForTimezone(timezone: string, date = new Date()) {
 }
 
 export function isExchangeRateStale(effectiveDate: string, asOf: string) {
-  return effectiveDate.slice(0, 10) <
-    utcToDateInput(addUtcMonths(new Date(`${asOf.slice(0, 10)}T12:00:00.000Z`), -1));
+  return (
+    effectiveDate.slice(0, 10) <
+    utcToDateInput(
+      addUtcMonths(new Date(`${asOf.slice(0, 10)}T12:00:00.000Z`), -1),
+    )
+  );
 }
 
 export function isValidTimezone(timezone: string) {
