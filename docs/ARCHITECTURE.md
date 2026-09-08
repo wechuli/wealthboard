@@ -1,7 +1,8 @@
 # Wealthboard architecture
 
 > **Status:** This multi-user architecture is implemented. The repository ships
-> one baseline schema for fresh Wealthboard databases.
+> one baseline schema for fresh Wealthboard databases. Sections explicitly
+> marked "Planned" describe future work and are not runtime guarantees.
 
 Wealthboard remains a single-process Next.js application. Server Components read
 SQLite through Drizzle ORM, Server Actions perform validated mutations, and
@@ -202,6 +203,86 @@ contract.
   automatic trading, and mandatory market-data providers remain outside the
   initial extension.
 
+## Planned: LLM-assisted file import
+
+Status: proposed for backlog item AI3, not implemented. Add a conversion layer
+upstream of existing import services, not a new financial write path. Keep the
+strict v1 contracts and browser-only manual prompt workflow unchanged.
+
+1. The account import UI offers direct structured import or explicit AI
+   conversion. A proposed account-scoped POST route,
+   `/api/accounts/[id]/import/convert`, handles bounded multipart/HTTP concerns,
+   verifies the session and trusted origin, and delegates to a server-only
+   conversion service. Resolve the active account by `userId` and account ID
+   before expensive parsing or external calls; return not found for foreign
+   accounts. The account's tracking mode selects the target schema.
+2. Bounded local parsers prepare source text/tables and stable page/sheet/row
+   references for user review, selection, and redaction before external
+   submission. Initial formats are CSV, TSV, JSON, text, and XLSX; a later phase
+   adds PDF and PNG/JPEG with vetted extraction/OCR or document/vision support.
+   Browser parsers may assist the preview but their output remains untrusted.
+   Enforce server-side MIME/content checks, compressed and expanded byte limits,
+   page/sheet/row/image limits, and extraction timeouts. Never execute macros,
+   formulas, embedded scripts, or external references. Reject unsupported,
+   encrypted, corrupt, or over-limit sources instead of silently truncating.
+3. After explicit per-request consent, resolve the current user's provider and
+   credentials through `lib/services/ai-provider.ts`. Reuse encrypted-key
+   handling, endpoint allowlisting, disabled redirects, cancellation, and safe
+   errors. Generalize the existing review-specific usage reservation/completion
+   boundary so conversion and review share rate/token budgets. Record only
+   owner-scoped operation/status/model/token/latency metadata; no source names,
+   financial values, prompts, output, or credentials. Estimate text/document/image
+   input and output conservatively before reserving capacity; fail before
+   calling the provider if capability or budget is insufficient.
+4. Extend `lib/ai/provider.ts` with a separate extraction operation and schema,
+   not a call to the portfolio-review prompt/snapshot builder. Maintain an
+   explicit provider/model capability contract for text, structured JSON,
+   documents, and images. Use native schema-constrained output where supported;
+   otherwise accept only a documented bounded JSON response validated locally.
+   Models without a supported conversion mode are unavailable for this path.
+   The model receives only approved content, minimal account/schema context,
+   and no internal owner/account IDs, SQL, tools, URL fetching, or write access.
+   Treat source text as untrusted data, including instructions embedded in it.
+5. Validate a bounded extraction envelope containing candidate v1 records,
+   source references, and issues, with metadata outside the canonical import
+   contract. The conversion service maps validated candidates deterministically
+   to canonical JSON; money, dates, sign rules, identifiers, and replay stay in
+   their existing deterministic modules. Prefer original external IDs; otherwise
+   derive them from stable source evidence and a versioned deterministic rule,
+   rejecting ambiguous identities. Reordering or repeated model calls must not
+   change source identity. Check coverage against locally extracted source
+   units where possible and require explicit resolution/exclusion of uncertain
+   or unsupported activity. Never treat a schema-valid response as proof that
+   the source was interpreted correctly.
+6. Keep the source review and editable/downloadable draft transient. After
+   resolution, serialize the canonical file and submit it to the existing
+   `history-import/preview` or `investment-import/preview` route. Editing any
+   draft invalidates its preview/hash. Confirmation sends those same canonical
+   bytes and hash to the corresponding existing commit route. Commit rechecks
+   ownership, account state, duplicates, and replay in its transaction; it
+   never invokes AI. Preserve balance accepted-subset commits, investment
+   whole-file atomicity, and canonical 5 MB/10,000-record limits.
+
+The first implementation is bounded and request-scoped within the existing
+Next.js process, with no new backend, durable document store, or required job
+queue. Apply abort signals and time/output limits across parsing and provider
+work; no silent chunking, retries, truncation, or automatic partial acceptance.
+Larger-document/background processing requires a separate durable-job design.
+Keep content in memory where feasible; unavoidable temporary files need private
+access, bounded TTL, and success/failure/cancellation/crash cleanup. All financial
+responses use `Cache-Control: no-store` and remain outside service-worker caches.
+Client drafts are cleared on completion, cancel, navigation, or logout and never
+stored in localStorage/IndexedDB. Disable provider storage where supported and
+disclose that local cleanup cannot control provider retention.
+
+Implementation gates include deterministic parser/identity fixtures, both
+account modes, direct-import/no-provider regressions, two-user account and
+credential isolation, consent/redaction, malicious files and prompt injection,
+unsupported model capabilities, missing keys, shared budget enforcement,
+refusal/malformed/truncated output, cancellation/cleanup, changed-draft hashes,
+duplicates, rollback, and existing financial replay invariants. Mock provider
+responses in tests; never use real statements or credentials.
+
 ## Isolation boundary
 
 - All user-owned tables carry a non-null `userId` foreign key even when
@@ -320,6 +401,8 @@ own authorization decisions.
 - Appearance is a non-sensitive browser-local preference with System, Light,
   and Dark choices. A pre-hydration bootstrap resolves semantic CSS tokens;
   appearance is not user settings, financial data, or portable state.
-- AI output remains explanatory, non-authoritative, and non-advisory. Reviews
+- AI review output remains explanatory, non-authoritative, and non-advisory. Reviews
   are never persisted, cannot execute financial changes, and omit unreliable
   annualized performance until deterministic cash-flow-aware metrics exist.
+  Planned import extraction produces untrusted drafts only; deterministic
+  validation and explicit user confirmation remain the sole path to persistence.

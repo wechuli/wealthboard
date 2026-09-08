@@ -282,25 +282,58 @@ financial prompts by default.
   scope/date/evidence, never persist scenarios without confirmation, reject
   unsupported questions safely, and expose no raw SQL/code path.
 
-### AI3. Statement and Screenshot Extraction
+### AI3. LLM-Assisted File Import
 
-- **Priority:** P3
+- **Priority:** P2
 - **Estimated effort:** Epic
-- **Current gap:** Structured account/investment imports are safe, but PDF/image
-  statements require external preparation or manual transcription.
-- **Proposed improvement:** Extract candidate instruments, account context,
-  dates, descriptions, amounts, currencies, quantities, prices, and balances
-  into the existing import/reconciliation preview models. Require confirmation
-  before commit.
-- **Dependencies:** F1 corrections, existing strict imports/AI safety, and a
-  secure temporary-file lifecycle.
-- **Risks or trade-offs:** Statements are highly sensitive and extraction can
-  be wrong. Prefer local extraction where feasible; minimize retention; never
-  auto-post.
-- **Acceptance criteria:** Files have explicit retention/deletion behavior;
-  candidates show confidence/source location; low-confidence fields require
-  review; output validates against strict import contracts; nothing writes
-  before confirmation.
+- **Current gap:** Strict account/investment imports and copyable LLM prompts
+  exist, but users must prepare the expected CSV/JSON outside Wealthboard. The
+  stored provider/key configuration currently serves portfolio review, not
+  source-file conversion.
+- **Proposed improvement:** Offer two explicit paths on the account import
+  page: import an already formatted file, or convert a source file with AI.
+  The optional AI path uses the current user's configured provider, model, and
+  remembered key server-side, with the existing session-only key alternative.
+  Request schema-constrained output for the selected account's existing v1
+  import contract, then require source review, deterministic validation,
+  ordinary import preview, and separate commit confirmation. Preserve direct
+  CSV/JSON imports and browser-only copyable prompts without requiring AI.
+- **User value:** Users can upload a supported bank/broker export or statement
+  without manually translating it into Wealthboard's schema or moving between
+  an external chat and the import page.
+- **Delivery phases:** First support noncanonical CSV, TSV, JSON, text, and XLSX
+  through bounded local parsing. Then add text PDFs and scanned PDFs/PNG/JPEG
+  through vetted extraction/OCR or a compatible document/vision model. Publish
+  tested formats and limits; arbitrary source layouts do not imply support for
+  every file type, statement, financial product, or provider capability.
+- **Consent and privacy:** Before each provider submission, disclose the
+  destination/model, selected source content, required account context, and
+  likely usage/cost. Let users select/redact content; storing a key is not
+  consent to share a statement. Never send unrelated portfolio data. Retain no
+  raw files, extracted text, or model responses in logs, usage history, or
+  application storage; define cleanup for any unavoidable temporary artifacts.
+- **Dependencies:** Existing strict import parsers/previews/commits, encrypted
+  owner-scoped AI settings, shared usage limits, an extraction-specific schema
+  and provider capability contract, and bounded file parsers. F1 may support
+  later correction/reconciliation workflows but does not block conversion.
+- **Risks or trade-offs:** Sensitive documents, provider charges, hallucinations,
+  prompt injection, ambiguous dates/currencies/identifiers, and truncated
+  extraction. The model has no tools or write access. Reject unsupported or
+  incomplete output; never invent missing records or silently drop source
+  activity. Preserve stable IDs through deterministic application logic, not
+  model-generated identities.
+- **Acceptance criteria:** Both account modes support the two paths; direct
+  imports and copied prompts make no provider calls. Missing keys, incompatible
+  models/files, budget limits, cancellations, and provider failures leave
+  financial records unchanged. Every candidate references its source location;
+  ambiguous or excluded activity is visible and requires resolution before
+  preview. Users can inspect/correct/download the canonical draft; edits require
+  a new preview/hash, and commit never calls the model again. Existing ownership,
+  duplicate handling, balance replay, and investment whole-file atomicity remain
+  authoritative. Tests cover two-user account/key isolation, consent, redaction,
+  malformed/truncated output, repeat conversion, cleanup, and both import paths.
+- **Planning contracts:** See the [product requirements](SPEC.md#planned-llm-assisted-file-import)
+  and [architecture plan](docs/ARCHITECTURE.md#planned-llm-assisted-file-import).
 
 ### AI4. Anomaly Detection and Categorization Suggestions
 
