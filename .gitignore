@@ -172,3 +172,10 @@ vite.config.ts.timestamp-*
 # scratchpads
 
 /scratchpad/
+
+# ide files
+
+.DS_Store
+.idea/
+*.iml
+.vscode/
