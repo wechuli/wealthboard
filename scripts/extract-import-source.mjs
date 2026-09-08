@@ -3,11 +3,16 @@ import path from "node:path";
 import yauzl from "yauzl";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 
-const { bytes, extension } = workerData;
+const { bytes, extension, documentPassword } = workerData;
 const buffer = Buffer.from(bytes);
 const source = { units: [], warnings: [] };
 const MAX_EXPANDED_BYTES = 20 * 1024 * 1024;
-class SourceError extends Error {}
+class SourceError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.code = code;
+  }
+}
 let stage = "archive";
 
 function add(location, text) {
@@ -78,9 +83,16 @@ async function unzip() {
         );
         archive.on("entry", (entry) => {
           count += 1;
+          if (entry.generalPurposeBitFlag & 1) {
+            return fail(
+              new SourceError(
+                "Encrypted Office ZIP entries are unsupported. Open the document in its original application and export an unencrypted XLSX, DOCX, or CSV copy.",
+                "unsupported_encrypted_archive",
+              ),
+            );
+          }
           if (
             count > 2000 ||
-            entry.generalPurposeBitFlag & 1 ||
             entry.uncompressedSize > MAX_EXPANDED_BYTES ||
             entries.has(entry.fileName) ||
             entry.fileName.startsWith("/") ||
@@ -126,6 +138,12 @@ async function unzip() {
 }
 
 async function extractOffice() {
+  if (buffer.subarray(0, 8).equals(Buffer.from("d0cf11e0a1b11ae1", "hex"))) {
+    throw new SourceError(
+      "This Office file uses an encrypted or legacy container. Password-to-open XLSX/DOCX files are not supported yet. Open it in Excel or Word and export an unencrypted XLSX, DOCX, or CSV copy; renaming it is not enough.",
+      "unsupported_office_container",
+    );
+  }
   const entries = await unzip();
   for (const [name, content] of entries) {
     if (/vbaProject|embeddings\/|externalLinks\//i.test(name)) {
@@ -257,10 +275,12 @@ async function extractPdf() {
   stage = "pdf-module";
   globalThis.pdfjsWorker =
     await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
-  const { getDocument, OPS } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { getDocument, OPS, PasswordResponses } =
+    await import("pdfjs-dist/legacy/build/pdf.mjs");
   stage = "pdf-initialization";
   const task = getDocument({
     data: new Uint8Array(buffer),
+    password: documentPassword,
     isEvalSupported: false,
     useSystemFonts: false,
     disableFontFace: true,
@@ -309,6 +329,17 @@ async function extractPdf() {
     source.warnings.push(
       "PDF table columns and reading order may be ambiguous. Compare the extracted text with the original pages.",
     );
+  } catch (error) {
+    if (error?.name === "PasswordException") {
+      const incorrect = error.code === PasswordResponses.INCORRECT_PASSWORD;
+      throw new SourceError(
+        incorrect
+          ? "The PDF password is incorrect. Enter it again and retry extraction."
+          : "This PDF requires a password. Enter its document password and retry extraction.",
+        incorrect ? "incorrect_password" : "password_required",
+      );
+    }
+    throw error;
   } finally {
     await task.destroy();
   }
@@ -324,10 +355,11 @@ try {
   parentPort.postMessage({ source });
 } catch (error) {
   const message =
-    error?.name === "PasswordException"
-      ? "Password-protected PDFs are unsupported. Upload an unencrypted text-based copy."
-      : error instanceof SourceError
-        ? error.message
-        : `The document could not be extracted (${stage}${["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND"].includes(error?.code) ? ": missing parser module" : ""}). Check its format and contents.`;
-  parentPort.postMessage({ error: message });
+    error instanceof SourceError
+      ? error.message
+      : `The document could not be extracted (${stage}${["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND"].includes(error?.code) ? ": missing parser module" : ""}). Check its format and contents.`;
+  parentPort.postMessage({
+    error: message,
+    code: error instanceof SourceError ? error.code : undefined,
+  });
 }

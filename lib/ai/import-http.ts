@@ -5,6 +5,8 @@ import { ZodError } from "zod";
 import {
   IMPORT_SOURCE_MAX_BYTES,
   IMPORT_TEXT_MAX_BYTES,
+  importDocumentPasswordSchema,
+  type ImportSourceErrorCode,
 } from "@/lib/ai/import-schemas";
 import {
   AiImportResponseError,
@@ -36,8 +38,11 @@ import {
 
 const activeUsers = new Set<string>();
 const headers = { "Cache-Control": "no-store" };
-const responseError = (error: string, status: number) =>
-  Response.json({ error }, { status, headers });
+const responseError = (
+  error: string,
+  status: number,
+  code?: ImportSourceErrorCode,
+) => Response.json({ error, ...(code ? { code } : {}) }, { status, headers });
 
 async function boundedBody(request: Request, maximum: number) {
   if (Number(request.headers.get("content-length")) > maximum)
@@ -105,10 +110,19 @@ export async function handleImportPreparation(
       const file = form.get("file");
       if (!(file instanceof File))
         return responseError("Choose a source file.", 400);
+      const passwords = form.getAll("documentPassword");
+      const password = importDocumentPasswordSchema.safeParse(passwords[0]);
+      if (passwords.length > 1 || !password.success) {
+        return responseError(
+          "Provide one document password of at most 1,024 characters.",
+          400,
+        );
+      }
       const source = await extractImportSource(
         file.name,
         new Uint8Array(await file.arrayBuffer()),
         request.signal,
+        password.data,
       );
       const provider = await getImportProvider(session.userId, id);
       return Response.json({ source, provider }, { headers });
@@ -162,8 +176,9 @@ export async function handleImportPreparation(
       );
     if (error instanceof AiImportResponseError)
       return responseError(error.message, 502);
+    if (error instanceof ImportSourceError)
+      return responseError(error.message, 400, error.code);
     if (
-      error instanceof ImportSourceError ||
       error instanceof ImportConversionError ||
       error instanceof AiCredentialRequiredError ||
       error instanceof AiProviderNotConfiguredError

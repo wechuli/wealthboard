@@ -3,6 +3,18 @@ import { z } from "zod";
 export const IMPORT_SOURCE_MAX_BYTES = 5 * 1024 * 1024;
 export const IMPORT_TEXT_MAX_BYTES = 64 * 1024;
 export const IMPORT_SOURCE_MAX_UNITS = 1000;
+export const IMPORT_DOCUMENT_PASSWORD_MAX_LENGTH = 1024;
+export const importDocumentPasswordSchema = z
+  .string()
+  .max(IMPORT_DOCUMENT_PASSWORD_MAX_LENGTH)
+  .optional();
+export const importSourceErrorCodeSchema = z.enum([
+  "password_required",
+  "incorrect_password",
+  "unsupported_office_container",
+  "unsupported_encrypted_archive",
+]);
+export type ImportSourceErrorCode = z.infer<typeof importSourceErrorCodeSchema>;
 
 export const importSourceUnitSchema = z
   .object({

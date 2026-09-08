@@ -288,13 +288,18 @@ financial prompts by default.
 - **Estimated effort:** Epic
 - **Current gap:** Text/table conversion now supports CSV, TSV, JSON, TXT,
   XLSX, text-based PDF, and DOCX using the user's configured key and model.
-  Scans, image attachments, legacy DOC/XLS, large documents, and automatic
+  PDF password-to-open support is implemented with extraction-only credentials.
+  Encrypted XLSX/DOCX, scans, image attachments, legacy DOC/XLS, large documents, and automatic
   provider/model capability discovery remain unsupported. Source-section
   coverage does not prove that every financial event on a page was understood.
 - **Proposed improvement:** Add explicitly consented local OCR or vetted
   document/vision support for scanned PDFs and PNG/JPEG, stronger source-row
   reconciliation, and capability-aware model selection. Treat larger-document
-  processing and legacy formats as separate bounded extensions.
+  processing, legacy formats, and Office password-to-open decryption as separate
+  bounded extensions. Office support needs a vetted MS-OFFCRYPTO implementation,
+  in-worker decryption/resource limits, representative encryption fixtures, and
+  the same no-retention/no-provider-password boundary as PDFs; ordinary sheet or
+  editing protection is not encryption and already permits source extraction.
 - **Dependencies:** Existing source review, redaction, shared AI budgets,
   strict preview/commit boundaries, and a documented OCR/model capability
   matrix. Durable jobs under A13 are needed before background processing.

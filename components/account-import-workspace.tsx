@@ -23,6 +23,7 @@ import {
   Textarea,
 } from "@/components/ui/form-controls";
 import {
+  IMPORT_DOCUMENT_PASSWORD_MAX_LENGTH,
   IMPORT_SOURCE_MAX_BYTES,
   type ImportConversionResult,
   type ImportProviderView,
@@ -109,7 +110,10 @@ function AiSourceImport({
   const { hidden } = usePrivacy();
   const activeRequest = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const passwordInput = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [documentPassword, setDocumentPassword] = useState("");
+  const [passwordRequired, setPasswordRequired] = useState(false);
   const [source, setSource] = useState<ImportSource | null>(null);
   const [provider, setProvider] = useState<ImportProviderView | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -130,11 +134,17 @@ function AiSourceImport({
     [],
   );
 
+  useEffect(() => {
+    if (passwordRequired && !busy) passwordInput.current?.focus();
+  }, [passwordRequired, busy]);
+
   function clear() {
     activeRequest.current?.abort();
     activeRequest.current = null;
     if (fileInput.current) fileInput.current.value = "";
     setFile(null);
+    setDocumentPassword("");
+    setPasswordRequired(false);
     setSource(null);
     setProvider(null);
     setSelected(new Set());
@@ -158,9 +168,13 @@ function AiSourceImport({
     setBusy("extract");
     setError("");
     setComplete(false);
+    const body = new FormData();
+    body.set("file", file);
+    if (file.name.toLowerCase().endsWith(".pdf") && documentPassword) {
+      body.set("documentPassword", documentPassword);
+    }
+    setDocumentPassword("");
     try {
-      const body = new FormData();
-      body.set("file", file);
       const response = await fetch(
         `/api/accounts/${accountId}/import/extract`,
         { method: "POST", body, signal: controller.signal },
@@ -169,19 +183,28 @@ function AiSourceImport({
         source: ImportSource;
         provider: ImportProviderView | null;
         error?: string;
+        code?: string;
       };
-      if (!response.ok) throw new Error(result.error || "Extraction failed.");
       if (controller.signal.aborted) return;
+      if (!response.ok) {
+        setPasswordRequired(
+          result.code === "password_required" ||
+            result.code === "incorrect_password",
+        );
+        throw new Error(result.error || "Extraction failed.");
+      }
       setSource(result.source);
       setProvider(result.provider);
       setSelected(new Set(result.source.units.map((unit) => unit.id)));
       setFile(null);
+      setPasswordRequired(false);
       setConsent(false);
       setDraft(null);
     } catch (cause) {
       if (!controller.signal.aborted)
         setError(cause instanceof Error ? cause.message : "Extraction failed.");
     } finally {
+      body.delete("documentPassword");
       if (!controller.signal.aborted) setBusy(null);
     }
   }
@@ -281,7 +304,7 @@ function AiSourceImport({
         <h2 className="text-lg font-semibold text-slate-100">
           Source file conversion
         </h2>
-        {(source || busy) && (
+        {(file || source || busy) && (
           <Button type="button" variant="secondary" onClick={clear}>
             <X size={16} />
             Cancel
@@ -307,9 +330,51 @@ function AiSourceImport({
             disabled={busy !== null}
             onChange={(event) => {
               setFile(event.target.files?.[0] ?? null);
+              setDocumentPassword("");
+              setPasswordRequired(false);
               setError("");
             }}
           />
+          {file?.name.toLowerCase().endsWith(".pdf") && (
+            <div>
+              <Label htmlFor="importDocumentPassword">
+                PDF password (if required)
+              </Label>
+              <Input
+                ref={passwordInput}
+                id="importDocumentPassword"
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={IMPORT_DOCUMENT_PASSWORD_MAX_LENGTH}
+                value={documentPassword}
+                disabled={busy !== null}
+                aria-invalid={passwordRequired || undefined}
+                aria-describedby={
+                  passwordRequired
+                    ? "importPasswordPrivacy importPreparationError"
+                    : "importPasswordPrivacy"
+                }
+                onChange={(event) => setDocumentPassword(event.target.value)}
+              />
+              <p
+                id="importPasswordPrivacy"
+                className="mt-1 text-xs text-slate-400"
+              >
+                Used only to unlock this PDF on your Wealthboard server. Never
+                saved or sent to the AI provider; cleared after each attempt.
+              </p>
+              {passwordRequired && error && (
+                <p
+                  id="importPreparationError"
+                  role="alert"
+                  className="mt-2 text-sm text-red-300"
+                >
+                  {error}
+                </p>
+              )}
+            </div>
+          )}
           <p className="text-xs text-slate-400">
             CSV, TSV, JSON, TXT, XLSX, text-based PDF, or DOCX. Maximum 5 MB;
             extracted content: 64 KB and 1,000 sections. Scanned documents and
@@ -579,8 +644,12 @@ function AiSourceImport({
           </div>
         </div>
       )}
-      {error && (
-        <p role="alert" className="text-sm text-red-300">
+      {error && !passwordRequired && (
+        <p
+          id="importPreparationError"
+          role="alert"
+          className="text-sm text-red-300"
+        >
           {error}
         </p>
       )}

@@ -1257,10 +1257,24 @@ application; only approved extracted text goes to the configured model.
   value warning. PDF text order and Word body-only extraction have explicit
   completeness warnings. Embedded images and unreadable/scanned pages are
   identified for review; image-only documents fail. OCR, PNG/JPEG input, legacy
-  DOC/XLS, encrypted documents, and external document references are unsupported.
+  DOC/XLS, encrypted Office documents/archives, and external document references
+  are unsupported. Password-protected PDFs are supported with a supplied password.
   Source files are limited to 5 MB, extracted content to 64 KB/1,000 sections,
   PDFs to 100 pages, and workbooks to 20 sheets. Office archives are limited to
   20 MB expanded and 2,000 entries; document parsing times out after 15 seconds.
+- **Document passwords:** Offer a masked, optional PDF password field when a PDF
+  is selected. Accept one unmodified password of at most 1,024 characters only
+  on the authenticated extraction request; never put it in URLs, source text,
+  conversion requests, provider prompts, logs, usage records, or persistent
+  storage. Missing and incorrect passwords return distinct safe errors and allow
+  retry with the same file. Clear the field after submission, failure, success,
+  cancellation, file changes, or leaving the import flow. Pass it only to PDF.js
+  in the local, bounded worker; password support does not add OCR or remove
+  extraction limits. Password-to-open XLSX/DOCX encryption remains unsupported
+  with actionable export guidance. Workbook/sheet and Word editing protection
+  are not file encryption and do not prevent reading otherwise supported content.
+  CSV, TSV, JSON, and TXT have no native password encryption; encrypted wrappers
+  and archives must be opened outside Wealthboard before upload.
 - **Explicit sharing:** After local extraction and before each provider call,
   show the destination/model, selected source content, minimal target-account
   context, source size, and output-token ceiling with a possible-charge notice.

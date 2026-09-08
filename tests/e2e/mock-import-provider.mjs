@@ -22,6 +22,11 @@ const server = http.createServer(async (request, response) => {
     const prompt = input.messages.at(-1).content;
     if (prompt.includes("PRIVATE_REFERENCE"))
       throw new Error("Unredacted fixture");
+    if (
+      JSON.stringify(input).includes("fictional PDF unlock secret") ||
+      JSON.stringify(input).includes("documentPassword")
+    )
+      throw new Error("Document password must not reach the provider");
     const units = JSON.parse(prompt.split("Approved source sections: ").at(-1));
     const activity = units.find((unit) =>
       unit.text.includes("fixture-deposit-1"),

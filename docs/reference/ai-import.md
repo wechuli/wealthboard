@@ -6,20 +6,54 @@ without an AI provider.
 
 ## Supported sources
 
-| Format     | Extraction                          | Limitations                                                                   |
-| ---------- | ----------------------------------- | ----------------------------------------------------------------------------- |
-| CSV / TSV  | UTF-8 table rows                    | Original decimal text is preserved                                            |
-| JSON / TXT | UTF-8 source text                   | JSON is validated without rewriting its numbers                               |
-| XLSX       | Sheet rows and original cell values | Cached formulas are not recalculated; macros/external references are rejected |
-| PDF        | Selectable page text                | No OCR; table order and missing/image content require review                  |
-| DOCX       | Body paragraphs and tables          | Images, headers, footers, drawings, and text boxes may be excluded            |
+| Format     | Extraction                                               | Limitations                                                                   |
+| ---------- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| CSV / TSV  | UTF-8 table rows                                         | Original decimal text is preserved                                            |
+| JSON / TXT | UTF-8 source text                                        | JSON is validated without rewriting its numbers                               |
+| XLSX       | Sheet rows and original cell values                      | Cached formulas are not recalculated; macros/external references are rejected |
+| PDF        | Selectable page text, with an optional document password | No OCR; table order and missing/image content require review                  |
+| DOCX       | Body paragraphs and tables                               | Images, headers, footers, drawings, and text boxes may be excluded            |
 
 Files are limited to **5 MB**. Extracted content is limited to **64 KB and 1,000
 sections**. PDFs are limited to 100 pages, workbooks to 20 sheets, and expanded
 Office archives to 20 MB/2,000 entries. Document extraction times out after
-15 seconds. Scanned/image-only PDFs, PNG/JPEG, legacy DOC/XLS, password-protected
-files, and external document references are unsupported. Nothing is silently
+15 seconds. Scanned/image-only PDFs, PNG/JPEG, legacy DOC/XLS, encrypted Office
+files/archives, and external document references are unsupported. Nothing is silently
 truncated to fit these limits.
+
+## Password-protected files
+
+For a password-protected PDF, select the file and enter **PDF password (if
+required)** before **Extract locally**. You can also try extraction first: a
+missing or incorrect password produces a distinct error and focuses the password
+field. Re-enter the password and retry without selecting the file again.
+Passwords are case-sensitive and are passed through without trimming spaces.
+The field accepts up to 1,024 characters.
+
+The password is used only by PDF.js inside your Wealthboard server's isolated
+extraction worker. It is not an AI API key or application login password. It is
+cleared from the form at submission and on file changes, cancellation, or leaving
+the flow, and is never stored, logged, returned with extracted content, or sent
+to the AI provider. Retries require re-entry; use HTTPS for remote deployments.
+Unlocking a PDF does not add OCR support or guarantee correct table extraction.
+
+| Protection                                              | Current behavior                                                                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| PDF password to open                                    | Supported using the password you provide; missing/wrong passwords allow retry                        |
+| XLSX/DOCX password to open                              | Separate Office encryption, currently unsupported; open in Excel/Word and export an unencrypted copy |
+| Excel sheet/workbook locks or Word editing restrictions | Not file encryption; otherwise supported content can be read without an editing password             |
+| CSV, TSV, JSON, TXT                                     | No native password encryption; decrypt any external wrapper before uploading                         |
+| Password-protected ZIP/other archives                   | Unsupported; unpack locally and upload a supported document, not the archive                         |
+
+An encrypted Office file can retain its `.xlsx` or `.docx` extension while using
+a compound-file container instead of normal ZIP/XML. Wealthboard recognizes that
+container as encrypted or legacy and returns export guidance rather than asking
+for a PDF password. Renaming the file is not enough. Office decryption remains
+future work and does not fall back to external services.
+
+References: Microsoft's [Excel file protection](https://support.microsoft.com/en-us/office/protect-an-excel-file-7359d4ae-7213-4ac2-b058-f75e9311b599),
+[Word password protection](https://support.microsoft.com/en-us/office/protect-a-document-with-a-password-05084cc3-300d-4c1a-8416-38d3e37d6826),
+and [Office cryptography specification](https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-offcrypto/).
 
 ## Provider configuration
 
@@ -44,8 +78,8 @@ is incomplete. Retrying is explicit and may incur another provider charge.
 ## Workflow
 
 1. Choose **Convert with AI**, select a source, and select **Extract locally**.
-   The file is processed inside your self-hosted Wealthboard instance, not sent
-   to an external provider.
+   Supply the PDF's document password if required. The file is processed inside
+   your self-hosted Wealthboard instance, not sent to an external provider.
 2. Review the extracted sections and warnings. Select relevant activity and
    redact sensitive text. Section labels and original filenames are not sent.
 3. Check the destination/model, account context, source size, and output ceiling.

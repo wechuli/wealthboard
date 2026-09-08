@@ -226,9 +226,23 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
    100 PDF pages, 20 sheets, 20 MB expanded archives/2,000 ZIP entries, and a
    15-second document timeout. Workers have bounded V8 heap/stack limits and
-   receive no deployment environment or credentials. Never execute macros,
-   formulas, embedded scripts, or external references. Reject unsupported,
-   encrypted, corrupt, or over-limit input rather than silently truncating.
+  receive no deployment environment or AI credentials. An optional PDF
+  `documentPassword` is accepted only by the authenticated extraction multipart
+  route, validated as a single untrimmed string of at most 1,024 characters,
+  and passed to PDF.js through the worker message. It is never included in
+  extraction responses, source records, configuration, conversion requests,
+  provider prompts, logs, or persistent storage. PDF.js password exceptions
+  map to `password_required` and `incorrect_password` with fixed safe messages;
+  each attempt terminates its worker and retries explicitly resend the file.
+  The masked client field clears at submission, file change, cancellation, or
+  unmount. No server-side document/password retry cache is introduced.
+  Compound-file Office headers are rejected as encrypted-or-legacy containers,
+  not assumed to prove encryption. Encrypted ZIP entries are also rejected with
+  export guidance. Office password-to-open decryption remains unsupported;
+  worksheet/workbook and Word editing-protection metadata need no decryption.
+  Never execute macros, formulas, embedded scripts, or external references.
+  Reject unsupported encryption, corrupt, or over-limit input rather than
+  silently truncating.
 3. After explicit per-request consent, resolve the current user's provider and
    credentials through `lib/services/ai-provider.ts`. Reuse encrypted-key
    handling, endpoint allowlisting, disabled redirects, cancellation, and safe
@@ -291,6 +305,8 @@ Regression coverage includes deterministic parser/identity fixtures, both
 account modes, direct-import/no-provider regressions, two-user account and
 credential isolation, consent/redaction, malicious files and prompt injection,
 provider compatibility errors, missing keys, shared budget enforcement,
+encrypted-PDF missing/wrong/correct passwords, secret isolation, Office container
+rejection and readable editing protection,
 refusal/malformed/truncated output, cancellation/cleanup, changed-draft hashes,
 duplicates, rollback, and existing financial replay invariants. Mock provider
 responses in tests; never use real statements or credentials.

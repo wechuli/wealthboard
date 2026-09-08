@@ -383,8 +383,10 @@ the generated JSON draft, then use the existing preview and confirmation flow.
 No conversion automatically posts financial records.
 
 Sources are limited to 5 MB and extracted content to 64 KB/1,000 sections.
-Scanned documents, image input, legacy DOC/XLS, encrypted files, and external
-document references are unsupported. Original files are never sent to the model;
+Password-protected PDFs accept an optional one-time password for local extraction;
+it is cleared after each attempt and never stored or sent to the AI provider.
+Scanned documents, image input, legacy DOC/XLS, encrypted Office files/archives,
+and external document references are unsupported. Original files are never sent to the model;
 provider-side retention policies still apply to approved text. See
 [AI-assisted import](docs/reference/ai-import.md) for limits and provider requirements.
 

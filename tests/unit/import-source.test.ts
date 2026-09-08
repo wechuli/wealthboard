@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +8,7 @@ import {
   validateImportSource,
 } from "@/lib/services/import-source";
 import {
+  encryptedPdfFixture,
   pdfFixture,
   spreadsheetFixture,
   wordFixture,
@@ -14,6 +17,96 @@ import {
 const bytes = (text: string) => Buffer.from(text, "utf8");
 
 describe("local import source extraction", () => {
+  it("reads Office editing protection without requiring a decryption password", async () => {
+    const spreadsheet = await extractImportSource(
+      "protected.xlsx",
+      await spreadsheetFixture({ protected: true }),
+    );
+    expect(spreadsheet.units[1].text).toContain("123.4500");
+    const document = await extractImportSource(
+      "protected.docx",
+      await wordFixture({ protected: true }),
+    );
+    expect(document.units[0].text).toContain("Deposit 123.45");
+  });
+
+  it("rejects ZIP entries marked encrypted with an actionable message", async () => {
+    const archive = await spreadsheetFixture();
+    const firstHeader = archive.indexOf(Buffer.from("504b0102", "hex"));
+    const centralHeader =
+      archive.indexOf(Buffer.from("xl/workbook.xml"), firstHeader) - 46;
+    expect(centralHeader).toBeGreaterThanOrEqual(0);
+    expect(
+      archive.subarray(centralHeader, centralHeader + 4).toString("hex"),
+    ).toBe("504b0102");
+    archive.writeUInt16LE(
+      archive.readUInt16LE(centralHeader + 8) | 1,
+      centralHeader + 8,
+    );
+    await expect(
+      extractImportSource("encrypted.xlsx", archive),
+    ).rejects.toMatchObject({ code: "unsupported_encrypted_archive" });
+  });
+
+  it.each(["xlsx", "docx"])(
+    "identifies unsupported encrypted/legacy %s containers before ZIP parsing",
+    async (extension) => {
+      const container = Buffer.concat([
+        Buffer.from("d0cf11e0a1b11ae1", "hex"),
+        Buffer.alloc(504),
+      ]);
+      await expect(
+        extractImportSource(`locked.${extension}`, container),
+      ).rejects.toMatchObject({ code: "unsupported_office_container" });
+    },
+  );
+
+  it.each(["1.4", "1.7ext3"] as const)(
+    "decrypts PDF %s with the exact password and returns safe retry codes",
+    async (pdfVersion) => {
+      const password = " fictional PDF password ";
+      const encrypted = await encryptedPdfFixture(password, { pdfVersion });
+      await expect(
+        extractImportSource("locked.pdf", encrypted),
+      ).rejects.toMatchObject({ code: "password_required" });
+      await expect(
+        extractImportSource(
+          "locked.pdf",
+          encrypted,
+          undefined,
+          "incorrect-fixture-password",
+        ),
+      ).rejects.toMatchObject({ code: "incorrect_password" });
+      const source = await extractImportSource(
+        "locked.pdf",
+        encrypted,
+        undefined,
+        password,
+      );
+      expect(source.units[0].text).toContain("Deposit 123.45 on 2025-01-02");
+      expect(JSON.stringify(source)).not.toContain(password);
+    },
+  );
+
+  it("rejects overlong passwords and passwords for non-PDF files without echoing them", async () => {
+    await expect(
+      extractImportSource(
+        "bank.pdf",
+        pdfFixture(),
+        undefined,
+        "x".repeat(1025),
+      ),
+    ).rejects.toThrow("at most 1,024");
+    await expect(
+      extractImportSource(
+        "bank.csv",
+        bytes("amount\n12.30"),
+        undefined,
+        "fictional-password",
+      ),
+    ).rejects.toThrow("PDF files only");
+  });
+
   it("preserves CSV decimals, quoted text, and source locations", () => {
     const source = extractTextImportSource(
       "bank.csv",

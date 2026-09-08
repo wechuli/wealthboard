@@ -8,18 +8,41 @@ import {
   IMPORT_SOURCE_MAX_BYTES,
   IMPORT_SOURCE_MAX_UNITS,
   IMPORT_TEXT_MAX_BYTES,
+  importDocumentPasswordSchema,
+  importSourceErrorCodeSchema,
   importSourceSchema,
+  type ImportSourceErrorCode,
   type ImportSource,
 } from "@/lib/ai/import-schemas";
 
-export class ImportSourceError extends Error {}
+export class ImportSourceError extends Error {
+  constructor(
+    message: string,
+    readonly code?: ImportSourceErrorCode,
+  ) {
+    super(message);
+  }
+}
 
 export async function extractImportSource(
   name: string,
   bytes: Uint8Array,
   signal?: AbortSignal,
+  documentPassword?: string,
 ): Promise<ImportSource> {
+  const parsedPassword =
+    importDocumentPasswordSchema.safeParse(documentPassword);
+  if (!parsedPassword.success) {
+    throw new ImportSourceError(
+      "The document password must be text with at most 1,024 characters.",
+    );
+  }
   const extension = name.split(".").at(-1)?.toLowerCase();
+  if (parsedPassword.data && extension !== "pdf") {
+    throw new ImportSourceError(
+      "Document passwords are currently supported for PDF files only.",
+    );
+  }
   if (!["pdf", "xlsx", "docx"].includes(extension ?? "")) {
     return extractTextImportSource(name, bytes);
   }
@@ -33,7 +56,7 @@ export async function extractImportSource(
     const worker = new Worker(
       path.join(process.cwd(), "scripts/extract-import-source.mjs"),
       {
-        workerData: { extension, bytes },
+        workerData: { extension, bytes, documentPassword: parsedPassword.data },
         env: {},
         execArgv: [],
         resourceLimits: { maxOldGenerationSizeMb: 128, stackSizeMb: 4 },
@@ -66,8 +89,18 @@ export async function extractImportSource(
     signal?.addEventListener("abort", cancel, { once: true });
     worker.once(
       "message",
-      (message: { error?: string; source?: ImportSource }) => {
-        if (message.error) return finish(new ImportSourceError(message.error));
+      (message: { error?: string; code?: string; source?: ImportSource }) => {
+        if (message.error) {
+          const parsedCode = importSourceErrorCodeSchema.safeParse(
+            message.code,
+          );
+          return finish(
+            new ImportSourceError(
+              message.error,
+              parsedCode.success ? parsedCode.data : undefined,
+            ),
+          );
+        }
         try {
           finish(undefined, validateImportSource(message.source!));
         } catch {

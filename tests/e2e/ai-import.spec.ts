@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  encryptedPdfFixture,
   pdfFixture,
   spreadsheetFixture,
   wordFixture,
@@ -56,23 +57,83 @@ test("converts text sources with a saved key, then previews and confirms each ac
     if (mode === "balance") balanceId = accountId;
     await page.getByRole("link", { name: "Import", exact: true }).click();
     await page.getByRole("radio", { name: "Convert with AI" }).check();
-    await page.getByLabel("Source file").setInputFiles({
-      name: "statement.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(
-        "id,type,amount,date,currency,reference\nfixture-deposit-1,deposit,24.00,2025-01-02,KES,PRIVATE_REFERENCE",
-      ),
-    });
-    await page.getByRole("button", { name: "Extract locally" }).click();
-    await expect(page.getByLabel("Approved text for source-2")).toContainText(
-      "PRIVATE_REFERENCE",
+    if (mode === "balance") {
+      await page.getByLabel("Source file").setInputFiles({
+        name: "protected-statement.pdf",
+        mimeType: "application/pdf",
+        buffer: await encryptedPdfFixture(" fictional PDF unlock secret ", {
+          text: "fixture-deposit-1 deposit 24.00 2025-01-02 KES PRIVATE_REFERENCE",
+        }),
+      });
+      const password = page.getByLabel("PDF password (if required)");
+      await expect(password).toHaveAttribute("type", "password");
+      await page.getByRole("button", { name: "Extract locally" }).click();
+      await expect(
+        page.getByRole("alert").filter({ hasText: "requires a password" }),
+      ).toBeVisible();
+      await expect(password).toBeFocused();
+      await password.fill("incorrect-fictional-password");
+      await page.getByRole("button", { name: "Extract locally" }).click();
+      await expect(
+        page.getByRole("alert").filter({ hasText: "password is incorrect" }),
+      ).toBeVisible();
+      await expect(password).toHaveValue("");
+      for (const width of [360, 390, 768, 1024, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect(page.locator("main").locator("..")).toHaveCSS(
+          "padding-left",
+          width < 768 ? "0px" : "256px",
+        );
+        await expect(password).toBeVisible();
+        const bounds = (await password.boundingBox())!;
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+        expect(bounds.width).toBeGreaterThan(250);
+      }
+      await page.screenshot({
+        path: testInfo.outputPath("pdf-password-desktop.png"),
+        fullPage: true,
+      });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.locator("main").locator("..")).toHaveCSS(
+        "padding-left",
+        "0px",
+      );
+      await page.screenshot({
+        path: testInfo.outputPath("pdf-password-mobile.png"),
+        fullPage: true,
+      });
+      await password.fill(" fictional PDF unlock secret ");
+      await page.getByRole("button", { name: "Extract locally" }).click();
+      await expect(page.getByLabel("Approved text for source-1")).toBeVisible();
+      await expect(password).toHaveCount(0);
+      expect(
+        await page.evaluate(() =>
+          JSON.stringify({ ...localStorage, ...sessionStorage }),
+        ),
+      ).not.toContain("fictional PDF unlock secret");
+    } else {
+      await page.getByLabel("Source file").setInputFiles({
+        name: "statement.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from(
+          "id,type,amount,date,currency,reference\nfixture-deposit-1,deposit,24.00,2025-01-02,KES,PRIVATE_REFERENCE",
+        ),
+      });
+      await expect(page.getByLabel("PDF password (if required)")).toHaveCount(
+        0,
+      );
+      await page.getByRole("button", { name: "Extract locally" }).click();
+    }
+    const sourceText = page.getByLabel(
+      `Approved text for ${mode === "balance" ? "source-1" : "source-2"}`,
     );
+    await expect(sourceText).toContainText("PRIVATE_REFERENCE");
     await expect(
       page.getByRole("button", { name: "Convert selected text" }),
     ).toBeDisabled();
-    await page
-      .getByLabel("Approved text for source-2")
-      .fill('["fixture-deposit-1","deposit","24.00","2025-01-02","KES",""]');
+    await sourceText.fill(
+      '["fixture-deposit-1","deposit","24.00","2025-01-02","KES",""]',
+    );
     await page.getByRole("checkbox", { name: /I approve sending/ }).check();
     await page.getByRole("button", { name: "Convert selected text" }).click();
     await expect(page.getByLabel("Canonical JSON draft")).toHaveValue(
