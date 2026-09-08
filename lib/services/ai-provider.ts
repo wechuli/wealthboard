@@ -79,7 +79,9 @@ function validateLimits(monthlyTokenLimit: number, maxOutputTokens: number) {
     monthlyTokenLimit < 10_000 ||
     monthlyTokenLimit > 100_000_000
   ) {
-    throw new Error("Monthly AI tokens must be between 10,000 and 100,000,000.");
+    throw new Error(
+      "Monthly AI tokens must be between 10,000 and 100,000,000.",
+    );
   }
   if (
     !Number.isInteger(maxOutputTokens) ||

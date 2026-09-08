@@ -247,11 +247,11 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    credentials through `lib/services/ai-provider.ts`. Reuse encrypted-key
    handling, endpoint allowlisting, disabled redirects, cancellation, and safe
    errors. Existing usage reservation/completion functions enforce shared
-  review/conversion rate and monthly token budgets. The settings form, Zod
-  schema, and service enforce a 10,000 to 100,000,000 monthly token range.
-  Both provider transports use a 120,000 ms SDK timeout with retries disabled;
-  local extraction retains its separate 15-second timeout. Existing saved
-  limits remain unchanged. A configuration fingerprint
+   review/conversion rate and monthly token budgets. The settings form, Zod
+   schema, and service enforce a 10,000 to 100,000,000 monthly token range.
+   Both provider transports use a 120,000 ms SDK timeout with retries disabled;
+   local extraction retains its separate 15-second timeout. Existing saved
+   limits remain unchanged. A configuration fingerprint
    binds consent to the reviewed provider/model/output limit and account context.
    Record only owner-scoped status/model/token/latency metadata; no source names,
    financial values, prompts, output, or credentials. Reserve conservatively

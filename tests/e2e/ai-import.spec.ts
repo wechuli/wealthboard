@@ -32,9 +32,17 @@ test("converts text sources with a saved key, then previews and confirms each ac
   const monthlyTokenLimit = page.getByLabel("Monthly token limit");
   await expect(monthlyTokenLimit).toHaveAttribute("max", "100000000");
   await monthlyTokenLimit.fill("100000001");
-  expect(await monthlyTokenLimit.evaluate((element: HTMLInputElement) => element.validity.rangeOverflow)).toBe(true);
+  expect(
+    await monthlyTokenLimit.evaluate(
+      (element: HTMLInputElement) => element.validity.rangeOverflow,
+    ),
+  ).toBe(true);
   await monthlyTokenLimit.fill("100000000");
-  expect(await monthlyTokenLimit.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(true);
+  expect(
+    await monthlyTokenLimit.evaluate((element: HTMLInputElement) =>
+      element.checkValidity(),
+    ),
+  ).toBe(true);
   await page.getByLabel("Maximum output tokens").fill("4000");
   await page.getByRole("button", { name: "Save AI settings" }).click();
   await expect(page.getByLabel(/Keep encrypted credential/)).toBeVisible();
