@@ -18,10 +18,14 @@ const input = {
   maxOutputTokens: 1000,
   prompt: "Approved source JSON",
 };
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("structured import provider transport", () => {
   it("accepts only complete JSON from text-compatible providers without redirects or retries", async () => {
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const fetchMock = vi.fn<typeof fetch>(
       async () =>
         new Response(
@@ -44,6 +48,7 @@ describe("structured import provider transport", () => {
       outputTokens: 20,
     });
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: "manual" });
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 120_000);
   });
 
   it("rejects truncated output even when the returned JSON is syntactically valid", async () => {
@@ -67,6 +72,7 @@ describe("structured import provider transport", () => {
   });
 
   it("uses OpenAI native JSON schema with storage disabled and rejects refusals", async () => {
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const fetchMock = vi.fn<typeof fetch>(
       async () =>
         new Response(
@@ -91,6 +97,7 @@ describe("structured import provider transport", () => {
         baseUrl: "https://api.openai.com/v1",
       }),
     ).rejects.toBeInstanceOf(AiImportResponseError);
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 120_000);
     const body = JSON.parse(
       (fetchMock.mock.calls[0][1] as RequestInit).body as string,
     );

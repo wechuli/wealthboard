@@ -29,12 +29,18 @@ test("converts text sources with a saved key, then previews and confirms each ac
   await page.getByLabel("API endpoint").fill("http://127.0.0.1:4200/v1");
   await page.getByLabel("API key", { exact: true }).fill("fixture-import-key");
   await page.getByLabel("Encrypt and remember this key").check();
-  await page.getByLabel("Monthly token limit").fill("500000");
+  const monthlyTokenLimit = page.getByLabel("Monthly token limit");
+  await expect(monthlyTokenLimit).toHaveAttribute("max", "100000000");
+  await monthlyTokenLimit.fill("100000001");
+  expect(await monthlyTokenLimit.evaluate((element: HTMLInputElement) => element.validity.rangeOverflow)).toBe(true);
+  await monthlyTokenLimit.fill("100000000");
+  expect(await monthlyTokenLimit.evaluate((element: HTMLInputElement) => element.checkValidity())).toBe(true);
   await page.getByLabel("Maximum output tokens").fill("4000");
   await page.getByRole("button", { name: "Save AI settings" }).click();
   await expect(page.getByLabel(/Keep encrypted credential/)).toBeVisible();
   await page.reload();
   await expect(page.getByLabel(/Keep encrypted credential/)).toBeChecked();
+  await expect(monthlyTokenLimit).toHaveValue("100000000");
 
   let balanceId = "";
   for (const mode of ["balance", "positions"]) {

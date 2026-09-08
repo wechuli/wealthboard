@@ -38,7 +38,7 @@ export const aiProviderSettingsInputSchema = z
     rememberApiKey: z.boolean(),
     includeExactAmounts: z.boolean(),
     includeAccountNames: z.boolean(),
-    monthlyTokenLimit: z.coerce.number().int().min(10_000).max(5_000_000),
+    monthlyTokenLimit: z.coerce.number().int().min(10_000).max(100_000_000),
     maxOutputTokens: z.coerce.number().int().min(256),
   })
   .strict()

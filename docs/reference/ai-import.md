@@ -70,6 +70,10 @@ access and compatibility errors surface when conversion runs. Wealthboard never
 silently substitutes a model or provider.
 
 Review and conversion share the same monthly token budget and rate limits.
+The monthly limit can be set between **10,000 and 100,000,000 tokens**; existing
+saved limits and the 100,000-token form default are unchanged. Provider requests
+use a **120-second (two-minute) timeout**, with no automatic retries. This does
+not change the separate 15-second local document-extraction timeout.
 Conversion reserves a conservative input estimate plus the configured maximum
 output tokens. A failed call with unknown usage retains that reservation.
 Increase the output-token limit or use a smaller source if the model response

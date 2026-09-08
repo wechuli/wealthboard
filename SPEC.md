@@ -1358,6 +1358,9 @@ operator-approved OpenAI-compatible Chat Completions endpoint.
 - Provider credentials remain server-side. Session-only keys are not persisted;
   remembered keys require a dedicated encryption key and owner-bound authenticated
   encryption. Never reuse the session secret.
+- Reviews and import conversion share a configurable monthly token limit of
+  10,000 to 100,000,000 and a two-minute provider request timeout with automatic
+  retries disabled. Existing saved budgets and defaults are unchanged.
 - Fixed OpenAI and DeepSeek endpoints are allowed. Custom endpoint URLs must
   exactly match an operator allowlist, cannot contain credentials, queries, or
   fragments, and must not follow redirects.

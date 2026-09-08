@@ -350,6 +350,10 @@ and portfolio values are not written to usage records. A one-minute cooldown,
 UTC calendar-month token limit, response-token bound, redirect blocking, strict response
 validation, and evidence-reference checks apply to every request.
 
+AI reviews and import conversion use a two-minute provider request timeout with
+automatic retries disabled. The monthly token limit accepts 10,000 to
+100,000,000 tokens; existing saved limits are not increased automatically.
+
 Provider keys entered on the Review page remain in browser component memory for
 that request and are cleared after success. Remembered keys are encrypted with
 AES-256-GCM and bound to the owning user. They are excluded from per-user exports,

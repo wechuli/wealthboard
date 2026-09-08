@@ -218,9 +218,11 @@ const call = {
 describe("OpenAI-compatible review transport", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   test("uses one non-redirecting Chat Completions request and validates output", async () => {
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const fetchMock = vi.fn().mockResolvedValue(providerResponse(validReview));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -233,6 +235,7 @@ describe("OpenAI-compatible review transport", () => {
       providerRequestId: "request-review",
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 120_000);
     const [target, init] = fetchMock.mock.calls[0] as [
       RequestInfo | URL,
       RequestInit,
@@ -253,6 +256,7 @@ describe("OpenAI-compatible review transport", () => {
   });
 
   test("uses the Responses API with bounded reasoning for OpenAI", async () => {
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const fetchMock = vi
       .fn()
       .mockResolvedValue(openAiResponsesResponse(validReview));
@@ -276,6 +280,7 @@ describe("OpenAI-compatible review transport", () => {
       RequestInit,
     ];
     expect(String(target)).toBe("https://api.openai.com/v1/responses");
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 120_000);
     const requestBody = JSON.parse(String(init.body)) as Record<
       string,
       unknown

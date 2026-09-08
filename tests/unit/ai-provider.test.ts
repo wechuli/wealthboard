@@ -263,4 +263,37 @@ describe.sequential("AI provider persistence and limits", () => {
       AiProviderNotConfiguredError,
     );
   });
+
+  test("accepts a 100,000,000 monthly token limit and rejects values beyond its bounds", async () => {
+    const input = {
+      provider: "openai" as const,
+      model: "review-model",
+      rememberApiKey: false,
+      includeExactAmounts: false,
+      includeAccountNames: false,
+      monthlyTokenLimit: 100_000_000,
+      maxOutputTokens: 25_000,
+    };
+    const otherUserSettings = await getAiProviderSettings(bobId);
+    expect(aiProviderSettingsInputSchema.parse({
+      ...input,
+      monthlyTokenLimit: "100000000",
+    }).monthlyTokenLimit).toBe(100_000_000);
+    expect(saveAiProviderSettings(aliceId, input)?.monthlyTokenLimit).toBe(100_000_000);
+    const saved = await getAiProviderSettings(aliceId);
+    expect(saved?.monthlyTokenLimit).toBe(100_000_000);
+
+    for (const monthlyTokenLimit of [100_000_001, 9_999, 100_000_000.5]) {
+      const invalid = { ...input, monthlyTokenLimit };
+      expect(aiProviderSettingsInputSchema.safeParse(invalid).success).toBe(false);
+      expect(() => saveAiProviderSettings(aliceId, invalid)).toThrow(
+        "Monthly AI tokens must be between 10,000 and 100,000,000.",
+      );
+    }
+    const excessiveOutput = { ...input, maxOutputTokens: 100_000_001 };
+    expect(aiProviderSettingsInputSchema.safeParse(excessiveOutput).success).toBe(false);
+    expect(() => saveAiProviderSettings(aliceId, excessiveOutput)).toThrow("cannot exceed the monthly token limit");
+    expect(await getAiProviderSettings(aliceId)).toEqual(saved);
+    expect(await getAiProviderSettings(bobId)).toEqual(otherUserSettings);
+  });
 });

@@ -221,7 +221,7 @@ export function AiSettingsForm({
               name="monthlyTokenLimit"
               type="number"
               min="10000"
-              max="5000000"
+              max="100000000"
               step="1000"
               defaultValue={settings?.monthlyTokenLimit ?? 100000}
             />
