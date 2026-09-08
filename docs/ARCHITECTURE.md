@@ -203,57 +203,69 @@ contract.
   automatic trading, and mandatory market-data providers remain outside the
   initial extension.
 
-## Planned: LLM-assisted file import
+## LLM-assisted text-file import
 
-Status: proposed for backlog item AI3, not implemented. Add a conversion layer
-upstream of existing import services, not a new financial write path. Keep the
-strict v1 contracts and browser-only manual prompt workflow unchanged.
+The implemented conversion layer sits upstream of existing import services;
+it is not a financial write path. Strict v1 contracts and the browser-only
+manual prompt workflow remain unchanged. OCR/image processing remains backlog AI3.
 
 1. The account import UI offers direct structured import or explicit AI
-   conversion. A proposed account-scoped POST route,
-   `/api/accounts/[id]/import/convert`, handles bounded multipart/HTTP concerns,
+  conversion. Account-scoped POST routes,
+  `/api/accounts/[id]/import/{extract,convert}`, handle bounded multipart/JSON concerns,
    verifies the session and trusted origin, and delegates to a server-only
-   conversion service. Resolve the active account by `userId` and account ID
+  service in `lib/services/import-conversion.ts`. Resolve the active account by `userId` and account ID
    before expensive parsing or external calls; return not found for foreign
    accounts. The account's tracking mode selects the target schema.
 2. Bounded local parsers prepare source text/tables and stable page/sheet/row
    references for user review, selection, and redaction before external
-   submission. Initial formats are CSV, TSV, JSON, text, and XLSX; a later phase
-   adds PDF and PNG/JPEG with vetted extraction/OCR or document/vision support.
-   Browser parsers may assist the preview but their output remains untrusted.
-   Enforce server-side MIME/content checks, compressed and expanded byte limits,
-   page/sheet/row/image limits, and extraction timeouts. Never execute macros,
-   formulas, embedded scripts, or external references. Reject unsupported,
-   encrypted, corrupt, or over-limit sources instead of silently truncating.
+  submission. `lib/services/import-source.ts` handles UTF-8 CSV, TSV, JSON, and
+  TXT; a terminable Node worker in `scripts/extract-import-source.mjs` handles
+  XLSX, text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
+  XLSX numeric cells remain original strings. Formula caches and excluded
+  image/Word/PDF content have review warnings; no OCR is performed. Enforce
+  extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
+  100 PDF pages, 20 sheets, 20 MB expanded archives/2,000 ZIP entries, and a
+  15-second document timeout. Workers have bounded V8 heap/stack limits and
+  receive no deployment environment or credentials. Never execute macros,
+  formulas, embedded scripts, or external references. Reject unsupported,
+  encrypted, corrupt, or over-limit input rather than silently truncating.
 3. After explicit per-request consent, resolve the current user's provider and
    credentials through `lib/services/ai-provider.ts`. Reuse encrypted-key
    handling, endpoint allowlisting, disabled redirects, cancellation, and safe
-   errors. Generalize the existing review-specific usage reservation/completion
-   boundary so conversion and review share rate/token budgets. Record only
-   owner-scoped operation/status/model/token/latency metadata; no source names,
-   financial values, prompts, output, or credentials. Estimate text/document/image
-   input and output conservatively before reserving capacity; fail before
-   calling the provider if capability or budget is insufficient.
-4. Extend `lib/ai/provider.ts` with a separate extraction operation and schema,
-   not a call to the portfolio-review prompt/snapshot builder. Maintain an
-   explicit provider/model capability contract for text, structured JSON,
-   documents, and images. Use native schema-constrained output where supported;
-   otherwise accept only a documented bounded JSON response validated locally.
-   Models without a supported conversion mode are unavailable for this path.
-   The model receives only approved content, minimal account/schema context,
+  errors. Existing usage reservation/completion functions enforce shared
+  review/conversion rate and monthly token budgets. A configuration fingerprint
+  binds consent to the reviewed provider/model/output limit and account context.
+  Record only owner-scoped status/model/token/latency metadata; no source names,
+  financial values, prompts, output, or credentials. Reserve conservatively
+  from prompt bytes plus the output ceiling; retain the reservation on failed
+  conversion when usage is unknown. Requests have bounded streaming body reads
+  and active preparations are limited to one per user/four per module instance.
+4. `lib/ai/provider.ts` exposes a separate extraction operation and strict Zod
+  schema from `lib/ai/import-schemas.ts`; it never calls the portfolio-review
+  snapshot builder. OpenAI uses native structured output through Responses;
+  DeepSeek/custom models must support text Chat Completions and JSON output.
+  The configured model ID is not discovered or probed during settings save;
+  incompatible requests fail without model/provider substitution. Both paths
+  validate locally and reject refusals, malformed JSON, and incomplete output.
+  Provider response bodies are bounded to 8 MB, extracted JSON to 5 MB, and
+  candidate records to 1,000. No document or vision model capability is needed.
+  The model receives only approved text, minimal account/schema context,
    and no internal owner/account IDs, SQL, tools, URL fetching, or write access.
-   Treat source text as untrusted data, including instructions embedded in it.
+  Filenames and source location labels are not sent. Treat source text as
+  untrusted data, including instructions embedded in it.
 5. Validate a bounded extraction envelope containing candidate v1 records,
-   source references, and issues, with metadata outside the canonical import
-   contract. The conversion service maps validated candidates deterministically
+  source references, exclusions, and issues, with metadata outside the canonical
+  contract. The conversion service maps string-valued fields deterministically
    to canonical JSON; money, dates, sign rules, identifiers, and replay stay in
    their existing deterministic modules. Prefer original external IDs; otherwise
-   derive them from stable source evidence and a versioned deterministic rule,
-   rejecting ambiguous identities. Reordering or repeated model calls must not
-   change source identity. Check coverage against locally extracted source
-   units where possible and require explicit resolution/exclusion of uncertain
-   or unsupported activity. Never treat a schema-valid response as proof that
-   the source was interpreted correctly.
+  derive cash IDs through the existing date/type/amount rule and other IDs
+  through versioned normalized-field hashes, rejecting collisions. An instrument
+  without an original external ID requires a stable source identifier. Supplied
+  IDs must appear in cited source text. Unknown references fail; unaccounted
+  source sections, currency mismatches, and deterministic preview errors become
+  visible review issues. Users resolve/correct the editable draft and acknowledge
+  exclusions before a fresh preview. Section coverage and schema validity are
+  not proof that every event was interpreted correctly.
 6. Keep the source review and editable/downloadable draft transient. After
    resolution, serialize the canonical file and submit it to the existing
    `history-import/preview` or `investment-import/preview` route. Editing any
@@ -263,22 +275,22 @@ strict v1 contracts and browser-only manual prompt workflow unchanged.
    never invokes AI. Preserve balance accepted-subset commits, investment
    whole-file atomicity, and canonical 5 MB/10,000-record limits.
 
-The first implementation is bounded and request-scoped within the existing
+The implementation is bounded and request-scoped within the existing
 Next.js process, with no new backend, durable document store, or required job
 queue. Apply abort signals and time/output limits across parsing and provider
 work; no silent chunking, retries, truncation, or automatic partial acceptance.
 Larger-document/background processing requires a separate durable-job design.
-Keep content in memory where feasible; unavoidable temporary files need private
-access, bounded TTL, and success/failure/cancellation/crash cleanup. All financial
+Content stays in memory; workers are terminated on completion, failure, timeout,
+or cancellation, and no temporary document files are written. All financial
 responses use `Cache-Control: no-store` and remain outside service-worker caches.
 Client drafts are cleared on completion, cancel, navigation, or logout and never
 stored in localStorage/IndexedDB. Disable provider storage where supported and
 disclose that local cleanup cannot control provider retention.
 
-Implementation gates include deterministic parser/identity fixtures, both
+Regression coverage includes deterministic parser/identity fixtures, both
 account modes, direct-import/no-provider regressions, two-user account and
 credential isolation, consent/redaction, malicious files and prompt injection,
-unsupported model capabilities, missing keys, shared budget enforcement,
+provider compatibility errors, missing keys, shared budget enforcement,
 refusal/malformed/truncated output, cancellation/cleanup, changed-draft hashes,
 duplicates, rollback, and existing financial replay invariants. Mock provider
 responses in tests; never use real statements or credentials.
@@ -404,5 +416,5 @@ own authorization decisions.
 - AI review output remains explanatory, non-authoritative, and non-advisory. Reviews
   are never persisted, cannot execute financial changes, and omit unreliable
   annualized performance until deterministic cash-flow-aware metrics exist.
-  Planned import extraction produces untrusted drafts only; deterministic
+  Import extraction produces untrusted drafts only; deterministic
   validation and explicit user confirmation remain the sole path to persistence.

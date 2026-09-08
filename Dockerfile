@@ -37,6 +37,7 @@ COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/migrate.mjs ./s
 COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/reset-password.mjs ./scripts/reset-password.mjs
 COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/backup.mjs ./scripts/backup.mjs
 COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/restore-backup.mjs ./scripts/restore-backup.mjs
+COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/extract-import-source.mjs ./scripts/extract-import-source.mjs
 COPY --from=builder --chown=wealthboard:wealthboard /app/package.json ./
 
 USER wealthboard

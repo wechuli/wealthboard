@@ -93,10 +93,10 @@ export function AiSettingsForm({
     <Card>
       <CardHeader>
         <div>
-          <CardTitle>AI portfolio review</CardTitle>
+          <CardTitle>AI provider</CardTitle>
           <p className="mt-1 text-xs text-slate-500">
             Connect OpenAI, DeepSeek, or an operator-approved compatible
-            endpoint. Reviews are generated only when requested.
+            endpoint for on-demand reviews and source-file conversion.
           </p>
         </div>
         <span className="flex items-center gap-1.5 text-xs text-emerald-300">
@@ -168,7 +168,7 @@ export function AiSettingsForm({
             />
             <FieldError>{state.fieldErrors?.apiKey?.[0]}</FieldError>
             <p className="mt-1.5 text-xs text-slate-500">
-              Session-only keys are entered on the Review page and are never
+              Session-only keys are entered on the Review or Import page and are never
               stored. A saved key replaces the previous credential.
             </p>
           </div>
@@ -209,8 +209,8 @@ export function AiSettingsForm({
               />
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Notes, references, descriptions, and raw transaction rows are
-              never shared.
+              Reviews never share notes, references, descriptions, or raw
+              transaction rows. Import conversion requires separate source-sharing consent.
             </p>
           </fieldset>
           <div>
@@ -271,7 +271,7 @@ export function AiSettingsForm({
             {usage ? (
               <>
                 <p className="mt-1 text-xs text-slate-500">
-                  {usage.successfulReviews} successful reviews
+                  {usage.successfulReviews} successful AI requests
                 </p>
                 <form action={clearAction} className="mt-3">
                   <Button

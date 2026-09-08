@@ -1123,7 +1123,7 @@ directions. In this manual prompt workflow, generation and copying are entirely
 client-side: Wealthboard must not send the prompt, account history, statement,
 or generated file to an AI provider. Users are responsible for choosing a
 provider they trust and must still preview the generated file before importing
-it. The separately consented AI conversion path below is planned, not implemented.
+it. The separately consented AI conversion path below is optional.
 
 Each row requires a stable, trimmed, case-sensitive external ID of at most 200
 characters. Provider IDs should be used when available; otherwise users must
@@ -1234,15 +1234,15 @@ role model, perform consistent full-database backup and offline restore through
 documented CLI or container operations. Document the persistent backup
 directory and require the app to be stopped for a raw-file restore.
 
-### Planned: LLM-assisted file import
+### LLM-assisted text-file import
 
-Status: planned under backlog item AI3; not part of the implemented import
-workflow. Add an optional source-file conversion step for both balance- and
+An optional source-file conversion step supports both balance- and
 position-tracked accounts without changing Account History Import v1 or
-Investment History Import v1.
+Investment History Import v1. File extraction runs inside the self-hosted
+application; only approved extracted text goes to the configured model.
 
 - **Two entry paths:** Keep direct import of already compliant CSV/JSON and the
-  existing browser-only copyable prompts. Add a separate "Convert with AI"
+  existing browser-only copyable prompts. Offer a separate "Convert with AI"
   choice on the same account import page. Direct imports never call a provider,
   and local-first import remains available without an AI configuration.
 - **Provider and credentials:** Reuse the current user's configured provider,
@@ -1251,20 +1251,26 @@ Investment History Import v1.
   it for each file. Preserve the existing session-only key alternative. A
   missing key or unsupported model offers configuration or direct import,
   never a silent provider/model substitution.
-- **Supported sources:** Start with noncanonical CSV, TSV, JSON, plain text,
-  and XLSX exports; follow with text PDFs and scanned PDFs/PNG/JPEG. Publish a
-  tested format/model capability matrix and explicit file, page/sheet, row,
-  extracted-text, image, and token limits. Do not promise arbitrary binaries
-  or universal statement recognition. Reject encrypted, corrupt, unsupported,
-  or oversized input with actionable errors before provider submission.
+- **Supported sources:** Noncanonical UTF-8 CSV, TSV, JSON, TXT, XLSX, text-based
+  PDF, and DOCX. Preserve spreadsheet numeric cells as their original decimal
+  text; never execute formulas or macros. Cached formula values carry a stale
+  value warning. PDF text order and Word body-only extraction have explicit
+  completeness warnings. Embedded images and unreadable/scanned pages are
+  identified for review; image-only documents fail. OCR, PNG/JPEG input, legacy
+  DOC/XLS, encrypted documents, and external document references are unsupported.
+  Source files are limited to 5 MB, extracted content to 64 KB/1,000 sections,
+  PDFs to 100 pages, and workbooks to 20 sheets. Office archives are limited to
+  20 MB expanded and 2,000 entries; document parsing times out after 15 seconds.
 - **Explicit sharing:** After local extraction and before each provider call,
   show the destination/model, selected source content, minimal target-account
-  context, and estimated usage with a possible-charge notice. Allow selection
-  and redaction of pages, sheets, rows, and sensitive identifiers before sending.
-  For document/vision input, preview the actual selected/redacted pages or
-  images. Do not send an unredacted original alongside redacted text. Saved
+  context, source size, and output-token ceiling with a possible-charge notice.
+  Allow selection and editing/redaction of extracted sections before sending.
+  Never send original files, images, filenames, or section labels alongside the
+  approved text. Saved
   credentials and portfolio-review sharing preferences are not import consent;
-  selecting a file alone must not trigger external processing.
+  selecting a file alone must not trigger external processing. Editing source
+  text or selection clears consent. Changes to the provider/model or target
+  account context invalidate the consent-bound configuration fingerprint.
 - **Scope:** The verified session and selected active owned account determine
   ownership, tracking mode, and account currency. Send only approved source
   content and the minimum schema/account context needed for conversion, not a
@@ -1276,9 +1282,14 @@ Investment History Import v1.
   issues. Validate it with Zod and the existing deterministic import rules.
   Preserve decimal values as strings and original source identifiers. Missing
   IDs may be derived only by deterministic application logic from stable source
-  evidence, never guessed by the model or based on changing row numbers; block
+  fields, never guessed by the model or based on changing row numbers; block
   ambiguous identity and show conflicts. Repeated conversion must not mint new
-  identities for unchanged source activity.
+  identities for unchanged source activity. Cash records reuse the established
+  date/type/amount identity rule when no source ID exists. Extraction responses
+  are limited to 1,000 candidate records. OpenAI uses native structured output;
+  DeepSeek/compatible endpoints must support text Chat Completions with JSON
+  output, validated locally. Model IDs remain user-configured rather than
+  discovered automatically; unsupported requests fail without switching models.
 - **Source review:** Show candidate records alongside page/sheet/row references,
   source coverage, and unresolved or excluded activity. Let users correct,
   explicitly exclude with acknowledgment, or cancel; model confidence alone
@@ -1299,10 +1310,11 @@ Investment History Import v1.
   cancellation, and exhausted budgets never auto-import partial output. Retries
   require an explicit user action and may incur new charges. Do not persist or
   log source files, extracted text, prompts, drafts, or provider responses;
-  clear transient content on cancel, completion, navigation, or logout. Any
-  unavoidable temporary files need bounded lifetime and cleanup on success,
-  failure, and crash recovery. Usage history remains owner-scoped metadata
-  only. Disclose that provider-side retention is governed by the provider and
+  clear transient content on cancel, completion, navigation, or logout. Parsing
+  uses memory and terminable workers, with no temporary document files. Usage
+  history remains owner-scoped metadata only and shares review rate/token limits.
+  Failed conversions retain the conservative reservation when token usage is
+  unknown. Disclose that provider-side retention is governed by the provider and
   cannot be guaranteed by Wealthboard's local cleanup.
 
 ## AI portfolio review

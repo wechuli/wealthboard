@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, LoaderCircle, Upload } from "lucide-react";
+import { Download, LoaderCircle, Pencil, Upload } from "lucide-react";
 
 import { MoneyValue } from "@/components/privacy-provider";
 import { Button } from "@/components/ui/button";
@@ -94,8 +94,13 @@ function downloadReport(rows: ReportRow[], format: "csv" | "json") {
   URL.revokeObjectURL(url);
 }
 
-export function AccountHistoryImport({ accountId }: { accountId: string }) {
-  const [file, setFile] = useState<File | null>(null);
+export function AccountHistoryImport({ accountId, initialFile, onEditFile, onComplete }: {
+  accountId: string;
+  initialFile?: File;
+  onEditFile?: () => void;
+  onComplete?: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(initialFile ?? null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
@@ -165,6 +170,7 @@ export function AccountHistoryImport({ accountId }: { accountId: string }) {
       setResult(data);
       setPreview(null);
       setPage(1);
+      onComplete?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Import failed.");
     } finally {
@@ -185,7 +191,7 @@ export function AccountHistoryImport({ accountId }: { accountId: string }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
+          {initialFile ? <Button type="button" variant="secondary" onClick={onEditFile} disabled={busy !== null}><Pencil size={16} />Edit draft</Button> : <div>
             <Label htmlFor="accountHistoryFile">CSV or JSON file</Label>
             <Input
               id="accountHistoryFile"
@@ -198,7 +204,7 @@ export function AccountHistoryImport({ accountId }: { accountId: string }) {
                 setError("");
               }}
             />
-          </div>
+          </div>}
           <Button
             type="button"
             onClick={previewFile}

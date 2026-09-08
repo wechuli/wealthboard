@@ -282,58 +282,32 @@ financial prompts by default.
   scope/date/evidence, never persist scenarios without confirmation, reject
   unsupported questions safely, and expose no raw SQL/code path.
 
-### AI3. LLM-Assisted File Import
+### AI3. OCR and Import Extraction Extensions
 
-- **Priority:** P2
+- **Priority:** P3
 - **Estimated effort:** Epic
-- **Current gap:** Strict account/investment imports and copyable LLM prompts
-  exist, but users must prepare the expected CSV/JSON outside Wealthboard. The
-  stored provider/key configuration currently serves portfolio review, not
-  source-file conversion.
-- **Proposed improvement:** Offer two explicit paths on the account import
-  page: import an already formatted file, or convert a source file with AI.
-  The optional AI path uses the current user's configured provider, model, and
-  remembered key server-side, with the existing session-only key alternative.
-  Request schema-constrained output for the selected account's existing v1
-  import contract, then require source review, deterministic validation,
-  ordinary import preview, and separate commit confirmation. Preserve direct
-  CSV/JSON imports and browser-only copyable prompts without requiring AI.
-- **User value:** Users can upload a supported bank/broker export or statement
-  without manually translating it into Wealthboard's schema or moving between
-  an external chat and the import page.
-- **Delivery phases:** First support noncanonical CSV, TSV, JSON, text, and XLSX
-  through bounded local parsing. Then add text PDFs and scanned PDFs/PNG/JPEG
-  through vetted extraction/OCR or a compatible document/vision model. Publish
-  tested formats and limits; arbitrary source layouts do not imply support for
-  every file type, statement, financial product, or provider capability.
-- **Consent and privacy:** Before each provider submission, disclose the
-  destination/model, selected source content, required account context, and
-  likely usage/cost. Let users select/redact content; storing a key is not
-  consent to share a statement. Never send unrelated portfolio data. Retain no
-  raw files, extracted text, or model responses in logs, usage history, or
-  application storage; define cleanup for any unavoidable temporary artifacts.
-- **Dependencies:** Existing strict import parsers/previews/commits, encrypted
-  owner-scoped AI settings, shared usage limits, an extraction-specific schema
-  and provider capability contract, and bounded file parsers. F1 may support
-  later correction/reconciliation workflows but does not block conversion.
-- **Risks or trade-offs:** Sensitive documents, provider charges, hallucinations,
-  prompt injection, ambiguous dates/currencies/identifiers, and truncated
-  extraction. The model has no tools or write access. Reject unsupported or
-  incomplete output; never invent missing records or silently drop source
-  activity. Preserve stable IDs through deterministic application logic, not
-  model-generated identities.
-- **Acceptance criteria:** Both account modes support the two paths; direct
-  imports and copied prompts make no provider calls. Missing keys, incompatible
-  models/files, budget limits, cancellations, and provider failures leave
-  financial records unchanged. Every candidate references its source location;
-  ambiguous or excluded activity is visible and requires resolution before
-  preview. Users can inspect/correct/download the canonical draft; edits require
-  a new preview/hash, and commit never calls the model again. Existing ownership,
-  duplicate handling, balance replay, and investment whole-file atomicity remain
-  authoritative. Tests cover two-user account/key isolation, consent, redaction,
-  malformed/truncated output, repeat conversion, cleanup, and both import paths.
-- **Planning contracts:** See the [product requirements](SPEC.md#planned-llm-assisted-file-import)
-  and [architecture plan](docs/ARCHITECTURE.md#planned-llm-assisted-file-import).
+- **Current gap:** Text/table conversion now supports CSV, TSV, JSON, TXT,
+  XLSX, text-based PDF, and DOCX using the user's configured key and model.
+  Scans, image attachments, legacy DOC/XLS, large documents, and automatic
+  provider/model capability discovery remain unsupported. Source-section
+  coverage does not prove that every financial event on a page was understood.
+- **Proposed improvement:** Add explicitly consented local OCR or vetted
+  document/vision support for scanned PDFs and PNG/JPEG, stronger source-row
+  reconciliation, and capability-aware model selection. Treat larger-document
+  processing and legacy formats as separate bounded extensions.
+- **Dependencies:** Existing source review, redaction, shared AI budgets,
+  strict preview/commit boundaries, and a documented OCR/model capability
+  matrix. Durable jobs under A13 are needed before background processing.
+- **Risks or trade-offs:** OCR can misread digits and columns; images may contain
+  more sensitive data than extracted text. Never transmit an unredacted original
+  alongside redacted content, invent missing activity, or auto-post results.
+- **Acceptance criteria:** Scans have reviewable page/region evidence and
+  explicit sharing consent; uncertain or omitted activity remains visible;
+  resource/cost limits, cancellation, retention, and two-user isolation are
+  tested. The implemented text-only and direct structured-import paths remain
+  available without document/vision models.
+- **Implemented contracts:** See the [product requirements](SPEC.md#llm-assisted-text-file-import)
+  and [architecture](docs/ARCHITECTURE.md#llm-assisted-text-file-import).
 
 ### AI4. Anomaly Detection and Categorization Suggestions
 

@@ -394,12 +394,13 @@ export function completeAiReviewUsage(
     outputTokens?: number;
     latencyMs: number;
     errorCode?: string;
+    retainReservationOnError?: boolean;
   },
 ) {
   const actualTokens =
     details.inputTokens !== undefined && details.outputTokens !== undefined
       ? Math.max(0, details.inputTokens + details.outputTokens)
-      : details.status === "error"
+      : details.status === "error" && !details.retainReservationOnError
         ? 0
         : undefined;
   const values = {

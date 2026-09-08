@@ -4,6 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 
 import { AccountHistoryAiPrompt } from "@/components/account-history-ai-prompt";
 import { AccountHistoryImport } from "@/components/account-history-import";
+import { AccountImportWorkspace } from "@/components/account-import-workspace";
 import { InvestmentHistoryAiPrompt } from "@/components/investment-history-ai-prompt";
 import { InvestmentHistoryImport } from "@/components/investment-history-import";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export default async function AccountHistoryImportPage({
           </Button>
         }
       />
+      <AccountImportWorkspace accountId={id} trackingMode={account.trackingMode} currency={account.currency}>
       {account.trackingMode === "positions" ? (
         <>
           <Card className="mb-5">
@@ -154,6 +156,7 @@ export default async function AccountHistoryImportPage({
           <AccountHistoryImport accountId={id} />
         </>
       )}
+      </AccountImportWorkspace>
     </>
   );
 }

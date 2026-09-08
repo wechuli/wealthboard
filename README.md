@@ -369,10 +369,24 @@ Each active account provides an **Import** action for strict Account History
 Import v1 CSV or JSON files. The import page publishes templates, a JSON Schema,
 field and balance-direction rules, and an optional currency-aware prompt that can
 be copied into an external AI service to transform a provider statement. The
-prompt runs entirely in the browser; Wealthboard does not send the prompt,
+manual prompt workflow runs entirely in the browser; Wealthboard does not send the prompt,
 statement, or generated file to an AI provider. Use only an AI provider you
 trust, then preview and validate the generated file in Wealthboard before
 confirming the import.
+
+The separate **Convert with AI** mode supports CSV, TSV, JSON, TXT, XLSX,
+text-based PDF, and DOCX. Wealthboard extracts text locally in the self-hosted
+application, lets you select/redact sections, and requests explicit consent
+before sending only approved text to your configured provider/model. It reuses
+your encrypted remembered key or accepts a session-only key. Review and correct
+the generated JSON draft, then use the existing preview and confirmation flow.
+No conversion automatically posts financial records.
+
+Sources are limited to 5 MB and extracted content to 64 KB/1,000 sections.
+Scanned documents, image input, legacy DOC/XLS, encrypted files, and external
+document references are unsupported. Original files are never sent to the model;
+provider-side retention policies still apply to approved text. See
+[AI-assisted import](docs/reference/ai-import.md) for limits and provider requirements.
 
 Position-tracked investment accounts instead use strict Investment History v1
 JSON or dedicated holdings, trades, cash, and price CSV templates. Preview

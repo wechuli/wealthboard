@@ -14,6 +14,8 @@ const environment = {
   OIDC_TRANSACTION_SECRET: Buffer.alloc(32, 11).toString("base64"),
   TZ: "Africa/Nairobi",
   NEXT_DIST_DIR: ".next-e2e",
+  AI_ALLOWED_ENDPOINTS: "http://127.0.0.1:4200/v1",
+  AI_CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 19).toString("base64"),
 };
 
 export default defineConfig({
@@ -27,6 +29,12 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: [
+    {
+      command: "node tests/e2e/mock-import-provider.mjs",
+      url: "http://127.0.0.1:4200/health",
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
     {
       command: "node tests/e2e/mock-oidc-provider.mjs",
       url: "http://localhost:4100/health",

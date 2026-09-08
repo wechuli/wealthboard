@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LoaderCircle, Upload } from "lucide-react";
+import { LoaderCircle, Pencil, Upload } from "lucide-react";
 
 import { MoneyValue, SensitiveValue } from "@/components/privacy-provider";
 import { Button } from "@/components/ui/button";
@@ -98,8 +98,13 @@ async function sha256(file: File) {
   ).join("");
 }
 
-export function InvestmentHistoryImport({ accountId }: { accountId: string }) {
-  const [file, setFile] = useState<File | null>(null);
+export function InvestmentHistoryImport({ accountId, initialFile, onEditFile, onComplete }: {
+  accountId: string;
+  initialFile?: File;
+  onEditFile?: () => void;
+  onComplete?: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(initialFile ?? null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -157,6 +162,7 @@ export function InvestmentHistoryImport({ accountId }: { accountId: string }) {
         `${data.summary?.imported ?? 0} records imported; ${data.summary?.skippedDuplicates ?? 0} duplicates skipped.`,
       );
       setPreview(null);
+      onComplete?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Import failed.");
     } finally {
@@ -176,7 +182,7 @@ export function InvestmentHistoryImport({ accountId }: { accountId: string }) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
+          {initialFile ? <Button type="button" variant="secondary" onClick={onEditFile} disabled={busy !== null}><Pencil size={16} />Edit draft</Button> : <div>
             <Label htmlFor="investmentHistoryFile">CSV or JSON file</Label>
             <Input
               id="investmentHistoryFile"
@@ -189,7 +195,7 @@ export function InvestmentHistoryImport({ accountId }: { accountId: string }) {
                 setStatus("");
               }}
             />
-          </div>
+          </div>}
           <Button
             type="button"
             onClick={previewFile}

@@ -138,6 +138,7 @@ const envelopeSchema = z
   .strict();
 
 type SourceEnvelope = z.infer<typeof envelopeSchema>;
+export const investmentHistorySourceSchema = envelopeSchema;
 type SourceInstrument = z.infer<typeof sourceInstrumentSchema>;
 type SourceEvent = z.infer<typeof sourceEventSchema>;
 type SourceCash = z.infer<typeof sourceCashSchema>;

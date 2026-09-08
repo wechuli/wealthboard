@@ -74,6 +74,7 @@ export default defineConfig({
             text: "Investment History v1",
             link: "/reference/investment-import",
           },
+          { text: "AI-assisted import", link: "/reference/ai-import" },
           { text: "Security and privacy", link: "/reference/security" },
           { text: "Architecture", link: "/ARCHITECTURE" },
         ],
