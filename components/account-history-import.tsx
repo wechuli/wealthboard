@@ -46,7 +46,10 @@ type Result = {
 const PAGE_SIZE = 50;
 
 async function sha256(file: File) {
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    await file.arrayBuffer(),
+  );
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
@@ -75,9 +78,7 @@ function downloadReport(rows: ReportRow[], format: "csv" | "json") {
       ? JSON.stringify(report, null, 2)
       : [
           "row,external_id,status,code,message,transaction_id",
-          ...report.map((row) =>
-            Object.values(row).map(csvCell).join(","),
-          ),
+          ...report.map((row) => Object.values(row).map(csvCell).join(",")),
         ].join("\n");
   const url = URL.createObjectURL(
     new Blob([content], {
@@ -94,7 +95,12 @@ function downloadReport(rows: ReportRow[], format: "csv" | "json") {
   URL.revokeObjectURL(url);
 }
 
-export function AccountHistoryImport({ accountId, initialFile, onEditFile, onComplete }: {
+export function AccountHistoryImport({
+  accountId,
+  initialFile,
+  onEditFile,
+  onComplete,
+}: {
   accountId: string;
   initialFile?: File;
   onEditFile?: () => void;
@@ -137,7 +143,8 @@ export function AccountHistoryImport({ accountId, initialFile, onEditFile, onCom
       ]);
       const data = (await response.json()) as Preview & { error?: string };
       if (!response.ok) throw new Error(data.error || "Preview failed.");
-      if (data.hash !== hash) throw new Error("The uploaded file hash did not match.");
+      if (data.hash !== hash)
+        throw new Error("The uploaded file hash did not match.");
       setPreview(data);
       setResult(null);
       setPage(1);
@@ -191,20 +198,32 @@ export function AccountHistoryImport({ accountId, initialFile, onEditFile, onCom
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {initialFile ? <Button type="button" variant="secondary" onClick={onEditFile} disabled={busy !== null}><Pencil size={16} />Edit draft</Button> : <div>
-            <Label htmlFor="accountHistoryFile">CSV or JSON file</Label>
-            <Input
-              id="accountHistoryFile"
-              type="file"
-              accept=".csv,.json,text/csv,application/json"
-              onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null);
-                setPreview(null);
-                setResult(null);
-                setError("");
-              }}
-            />
-          </div>}
+          {initialFile ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onEditFile}
+              disabled={busy !== null}
+            >
+              <Pencil size={16} />
+              Edit draft
+            </Button>
+          ) : (
+            <div>
+              <Label htmlFor="accountHistoryFile">CSV or JSON file</Label>
+              <Input
+                id="accountHistoryFile"
+                type="file"
+                accept=".csv,.json,text/csv,application/json"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setPreview(null);
+                  setResult(null);
+                  setError("");
+                }}
+              />
+            </div>
+          )}
           <Button
             type="button"
             onClick={previewFile}
@@ -363,7 +382,9 @@ function Summary({
 }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
+      <dt className="text-xs uppercase tracking-wide text-slate-500">
+        {label}
+      </dt>
       <dd className="mt-1 text-sm font-medium text-slate-200">{children}</dd>
     </div>
   );

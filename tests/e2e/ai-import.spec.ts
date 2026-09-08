@@ -56,15 +56,13 @@ test("converts text sources with a saved key, then previews and confirms each ac
     if (mode === "balance") balanceId = accountId;
     await page.getByRole("link", { name: "Import", exact: true }).click();
     await page.getByRole("radio", { name: "Convert with AI" }).check();
-    await page
-      .getByLabel("Source file")
-      .setInputFiles({
-        name: "statement.csv",
-        mimeType: "text/csv",
-        buffer: Buffer.from(
-          "id,type,amount,date,currency,reference\nfixture-deposit-1,deposit,24.00,2025-01-02,KES,PRIVATE_REFERENCE",
-        ),
-      });
+    await page.getByLabel("Source file").setInputFiles({
+      name: "statement.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(
+        "id,type,amount,date,currency,reference\nfixture-deposit-1,deposit,24.00,2025-01-02,KES,PRIVATE_REFERENCE",
+      ),
+    });
     await page.getByRole("button", { name: "Extract locally" }).click();
     await expect(page.getByLabel("Approved text for source-2")).toContainText(
       "PRIVATE_REFERENCE",

@@ -168,8 +168,8 @@ export function AiSettingsForm({
             />
             <FieldError>{state.fieldErrors?.apiKey?.[0]}</FieldError>
             <p className="mt-1.5 text-xs text-slate-500">
-              Session-only keys are entered on the Review or Import page and are never
-              stored. A saved key replaces the previous credential.
+              Session-only keys are entered on the Review or Import page and are
+              never stored. A saved key replaces the previous credential.
             </p>
           </div>
           {preserveUnavailableCredential ? (
@@ -210,7 +210,8 @@ export function AiSettingsForm({
             </div>
             <p className="mt-2 text-xs text-slate-500">
               Reviews never share notes, references, descriptions, or raw
-              transaction rows. Import conversion requires separate source-sharing consent.
+              transaction rows. Import conversion requires separate
+              source-sharing consent.
             </p>
           </fieldset>
           <div>

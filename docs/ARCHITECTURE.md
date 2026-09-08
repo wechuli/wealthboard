@@ -210,62 +210,62 @@ it is not a financial write path. Strict v1 contracts and the browser-only
 manual prompt workflow remain unchanged. OCR/image processing remains backlog AI3.
 
 1. The account import UI offers direct structured import or explicit AI
-  conversion. Account-scoped POST routes,
-  `/api/accounts/[id]/import/{extract,convert}`, handle bounded multipart/JSON concerns,
+   conversion. Account-scoped POST routes,
+   `/api/accounts/[id]/import/{extract,convert}`, handle bounded multipart/JSON concerns,
    verifies the session and trusted origin, and delegates to a server-only
-  service in `lib/services/import-conversion.ts`. Resolve the active account by `userId` and account ID
+   service in `lib/services/import-conversion.ts`. Resolve the active account by `userId` and account ID
    before expensive parsing or external calls; return not found for foreign
    accounts. The account's tracking mode selects the target schema.
 2. Bounded local parsers prepare source text/tables and stable page/sheet/row
    references for user review, selection, and redaction before external
-  submission. `lib/services/import-source.ts` handles UTF-8 CSV, TSV, JSON, and
-  TXT; a terminable Node worker in `scripts/extract-import-source.mjs` handles
-  XLSX, text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
-  XLSX numeric cells remain original strings. Formula caches and excluded
-  image/Word/PDF content have review warnings; no OCR is performed. Enforce
-  extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
-  100 PDF pages, 20 sheets, 20 MB expanded archives/2,000 ZIP entries, and a
-  15-second document timeout. Workers have bounded V8 heap/stack limits and
-  receive no deployment environment or credentials. Never execute macros,
-  formulas, embedded scripts, or external references. Reject unsupported,
-  encrypted, corrupt, or over-limit input rather than silently truncating.
+   submission. `lib/services/import-source.ts` handles UTF-8 CSV, TSV, JSON, and
+   TXT; a terminable Node worker in `scripts/extract-import-source.mjs` handles
+   XLSX, text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
+   XLSX numeric cells remain original strings. Formula caches and excluded
+   image/Word/PDF content have review warnings; no OCR is performed. Enforce
+   extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
+   100 PDF pages, 20 sheets, 20 MB expanded archives/2,000 ZIP entries, and a
+   15-second document timeout. Workers have bounded V8 heap/stack limits and
+   receive no deployment environment or credentials. Never execute macros,
+   formulas, embedded scripts, or external references. Reject unsupported,
+   encrypted, corrupt, or over-limit input rather than silently truncating.
 3. After explicit per-request consent, resolve the current user's provider and
    credentials through `lib/services/ai-provider.ts`. Reuse encrypted-key
    handling, endpoint allowlisting, disabled redirects, cancellation, and safe
-  errors. Existing usage reservation/completion functions enforce shared
-  review/conversion rate and monthly token budgets. A configuration fingerprint
-  binds consent to the reviewed provider/model/output limit and account context.
-  Record only owner-scoped status/model/token/latency metadata; no source names,
-  financial values, prompts, output, or credentials. Reserve conservatively
-  from prompt bytes plus the output ceiling; retain the reservation on failed
-  conversion when usage is unknown. Requests have bounded streaming body reads
-  and active preparations are limited to one per user/four per module instance.
+   errors. Existing usage reservation/completion functions enforce shared
+   review/conversion rate and monthly token budgets. A configuration fingerprint
+   binds consent to the reviewed provider/model/output limit and account context.
+   Record only owner-scoped status/model/token/latency metadata; no source names,
+   financial values, prompts, output, or credentials. Reserve conservatively
+   from prompt bytes plus the output ceiling; retain the reservation on failed
+   conversion when usage is unknown. Requests have bounded streaming body reads
+   and active preparations are limited to one per user/four per module instance.
 4. `lib/ai/provider.ts` exposes a separate extraction operation and strict Zod
-  schema from `lib/ai/import-schemas.ts`; it never calls the portfolio-review
-  snapshot builder. OpenAI uses native structured output through Responses;
-  DeepSeek/custom models must support text Chat Completions and JSON output.
-  The configured model ID is not discovered or probed during settings save;
-  incompatible requests fail without model/provider substitution. Both paths
-  validate locally and reject refusals, malformed JSON, and incomplete output.
-  Provider response bodies are bounded to 8 MB, extracted JSON to 5 MB, and
-  candidate records to 1,000. No document or vision model capability is needed.
-  The model receives only approved text, minimal account/schema context,
+   schema from `lib/ai/import-schemas.ts`; it never calls the portfolio-review
+   snapshot builder. OpenAI uses native structured output through Responses;
+   DeepSeek/custom models must support text Chat Completions and JSON output.
+   The configured model ID is not discovered or probed during settings save;
+   incompatible requests fail without model/provider substitution. Both paths
+   validate locally and reject refusals, malformed JSON, and incomplete output.
+   Provider response bodies are bounded to 8 MB, extracted JSON to 5 MB, and
+   candidate records to 1,000. No document or vision model capability is needed.
+   The model receives only approved text, minimal account/schema context,
    and no internal owner/account IDs, SQL, tools, URL fetching, or write access.
-  Filenames and source location labels are not sent. Treat source text as
-  untrusted data, including instructions embedded in it.
+   Filenames and source location labels are not sent. Treat source text as
+   untrusted data, including instructions embedded in it.
 5. Validate a bounded extraction envelope containing candidate v1 records,
-  source references, exclusions, and issues, with metadata outside the canonical
-  contract. The conversion service maps string-valued fields deterministically
+   source references, exclusions, and issues, with metadata outside the canonical
+   contract. The conversion service maps string-valued fields deterministically
    to canonical JSON; money, dates, sign rules, identifiers, and replay stay in
    their existing deterministic modules. Prefer original external IDs; otherwise
-  derive cash IDs through the existing date/type/amount rule and other IDs
-  through versioned normalized-field hashes, rejecting collisions. An instrument
-  without an original external ID requires a stable source identifier. Supplied
-  IDs must appear in cited source text. Unknown references fail; unaccounted
-  source sections, currency mismatches, and deterministic preview errors become
-  visible review issues. Users resolve/correct the editable draft and acknowledge
-  exclusions before a fresh preview. Section coverage and schema validity are
-  not proof that every event was interpreted correctly.
+   derive cash IDs through the existing date/type/amount rule and other IDs
+   through versioned normalized-field hashes, rejecting collisions. An instrument
+   without an original external ID requires a stable source identifier. Supplied
+   IDs must appear in cited source text. Unknown references fail; unaccounted
+   source sections, currency mismatches, and deterministic preview errors become
+   visible review issues. Users resolve/correct the editable draft and acknowledge
+   exclusions before a fresh preview. Section coverage and schema validity are
+   not proof that every event was interpreted correctly.
 6. Keep the source review and editable/downloadable draft transient. After
    resolution, serialize the canonical file and submit it to the existing
    `history-import/preview` or `investment-import/preview` route. Editing any

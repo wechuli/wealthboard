@@ -98,7 +98,12 @@ async function sha256(file: File) {
   ).join("");
 }
 
-export function InvestmentHistoryImport({ accountId, initialFile, onEditFile, onComplete }: {
+export function InvestmentHistoryImport({
+  accountId,
+  initialFile,
+  onEditFile,
+  onComplete,
+}: {
   accountId: string;
   initialFile?: File;
   onEditFile?: () => void;
@@ -182,20 +187,32 @@ export function InvestmentHistoryImport({ accountId, initialFile, onEditFile, on
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {initialFile ? <Button type="button" variant="secondary" onClick={onEditFile} disabled={busy !== null}><Pencil size={16} />Edit draft</Button> : <div>
-            <Label htmlFor="investmentHistoryFile">CSV or JSON file</Label>
-            <Input
-              id="investmentHistoryFile"
-              type="file"
-              accept=".csv,.json,text/csv,application/json"
-              onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null);
-                setPreview(null);
-                setError("");
-                setStatus("");
-              }}
-            />
-          </div>}
+          {initialFile ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onEditFile}
+              disabled={busy !== null}
+            >
+              <Pencil size={16} />
+              Edit draft
+            </Button>
+          ) : (
+            <div>
+              <Label htmlFor="investmentHistoryFile">CSV or JSON file</Label>
+              <Input
+                id="investmentHistoryFile"
+                type="file"
+                accept=".csv,.json,text/csv,application/json"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setPreview(null);
+                  setError("");
+                  setStatus("");
+                }}
+              />
+            </div>
+          )}
           <Button
             type="button"
             onClick={previewFile}
