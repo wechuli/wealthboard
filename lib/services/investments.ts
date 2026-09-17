@@ -261,7 +261,10 @@ export function setInvestmentInstrumentArchived(
   });
 }
 
-export function deleteInvestmentInstrument(userId: string, instrumentId: string) {
+export function deleteInvestmentInstrument(
+  userId: string,
+  instrumentId: string,
+) {
   getDatabase().transaction((tx) => {
     const instrument = tx.query.investmentInstruments
       .findFirst({
