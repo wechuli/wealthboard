@@ -20,7 +20,9 @@ test("manages rate history and distinguishes current, stale, and historical warn
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
   await page.goto("/accounts/new");
-  await page.getByLabel("Account or asset name").fill("Archived position example");
+  await page
+    .getByLabel("Account or asset name")
+    .fill("Archived position example");
   await page.getByLabel("Category").selectOption({ label: "Securities" });
   await page.getByLabel("Tracking method").selectOption("positions");
   await page.getByLabel("Opening cash").fill("50");
@@ -31,7 +33,9 @@ test("manages rate history and distinguishes current, stale, and historical warn
   ).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Archive account" }).click();
-  await expect(page.getByRole("heading", { name: "Accounts & assets" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Accounts & assets" }),
+  ).toBeVisible();
 
   await page.goto("/accounts/new");
   await page.getByLabel("Account or asset name").fill("Dollar savings example");
@@ -85,7 +89,9 @@ test("manages rate history and distinguishes current, stale, and historical warn
     }).toPass();
   }
   await page.goto("/accounts");
-  const accountCard = page.getByRole("link", { name: /Dollar savings example/ });
+  const accountCard = page.getByRole("link", {
+    name: /Dollar savings example/,
+  });
   await expect(accountCard).not.toContainText("Exchange rate needed");
   await expect(accountCard).toContainText(/Ksh\s*13,000\.00/);
   await expect(accountCard).toContainText("30-day changeIncomplete data");

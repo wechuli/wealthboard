@@ -6,7 +6,9 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   await page.goto("/signup");
   await page.getByLabel("Username").fill("isolation-alice");
   await page.getByLabel("Display name").fill("Isolation Alice");
-  await page.getByLabel("Password", { exact: true }).fill("isolation-alice-password");
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill("isolation-alice-password");
   await page.getByLabel("Confirm password").fill("isolation-alice-password");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
@@ -43,18 +45,26 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   await page.goto("/signup");
   await page.getByLabel("Username").fill("bob");
   await page.getByLabel("Display name").fill("Bob Example");
-  await page.getByLabel("Password", { exact: true }).fill("bob-e2e-password-123");
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill("bob-e2e-password-123");
   await page.getByLabel("Confirm password").fill("bob-e2e-password-123");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(page.getByText("Alice Private Savings")).toHaveCount(0);
 
   await page.goto(`/accounts/${aliceAccount!.id}`);
-  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Page not found" }),
+  ).toBeVisible();
   await page.goto(`/transactions/${aliceExport.transactions[0].id}/edit`);
-  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Page not found" }),
+  ).toBeVisible();
   await page.goto(`/goals/${aliceExport.goals[0].id}`);
-  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Page not found" }),
+  ).toBeVisible();
 
   const importResponse = await page.request.post(
     `/api/accounts/${aliceAccount!.id}/history-import/preview`,
@@ -79,7 +89,9 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   await page.getByLabel("Category").selectOption({ label: "Savings" });
   await page.getByLabel("Opening value").fill("700");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("heading", { name: "Bob Private Savings" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Bob Private Savings" }),
+  ).toBeVisible();
 
   const bobExportResponse = await page.request.get("/api/export/json");
   const bobExport = await bobExportResponse.json();
@@ -98,7 +110,9 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   });
   expect(rejectedRestore.status()).toBe(400);
   await page.goto("/accounts");
-  await expect(page.getByText("Bob Private Savings", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Bob Private Savings", { exact: true }),
+  ).toBeVisible();
 
   expect((await page.request.get("/api/backup")).status()).toBe(404);
   expect(
@@ -116,6 +130,8 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await page.goto("/accounts");
-  await expect(page.getByText("Alice Private Savings", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Alice Private Savings", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("Bob Private Savings")).toHaveCount(0);
 });

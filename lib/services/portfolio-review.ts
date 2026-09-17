@@ -99,9 +99,10 @@ export async function buildPortfolioReviewSnapshot(
 ) {
   const options = portfolioReviewOptionsSchema.parse(input);
   const db = getDatabase();
-  const activeAccountIds = db.select({ id: accounts.id }).from(accounts).where(
-    and(eq(accounts.userId, userId), isNull(accounts.archivedAt)),
-  );
+  const activeAccountIds = db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(and(eq(accounts.userId, userId), isNull(accounts.archivedAt)));
   const [accountCount, goalCount, transactionCount, valuationCount] =
     await Promise.all([
       db
@@ -117,12 +118,22 @@ export async function buildPortfolioReviewSnapshot(
       db
         .select({ value: count() })
         .from(transactions)
-        .where(and(eq(transactions.userId, userId), inArray(transactions.accountId, activeAccountIds)))
+        .where(
+          and(
+            eq(transactions.userId, userId),
+            inArray(transactions.accountId, activeAccountIds),
+          ),
+        )
         .get(),
       db
         .select({ value: count() })
         .from(valuationSnapshots)
-        .where(and(eq(valuationSnapshots.userId, userId), inArray(valuationSnapshots.accountId, activeAccountIds)))
+        .where(
+          and(
+            eq(valuationSnapshots.userId, userId),
+            inArray(valuationSnapshots.accountId, activeAccountIds),
+          ),
+        )
         .get(),
     ]);
   assertPortfolioReviewWorkload({

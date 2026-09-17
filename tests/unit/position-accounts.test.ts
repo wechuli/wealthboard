@@ -2472,7 +2472,9 @@ describe.sequential("position account valuation", () => {
     const targetAccountId = convertAccountToPositions(userId, input);
     expect(convertAccountToPositions(userId, input)).toBe(targetAccountId);
     expect(await getAccount(userId, sourceAccountId)).toBeUndefined();
-    expect(await getAccount(userId, sourceAccountId, { includeArchived: true })).toMatchObject({
+    expect(
+      await getAccount(userId, sourceAccountId, { includeArchived: true }),
+    ).toMatchObject({
       trackingMode: "balance",
       goalId: null,
       archivedAt: "2026-02-01T12:00:00.000Z",

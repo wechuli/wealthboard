@@ -8,4 +8,6 @@ if (databasePath === path.resolve("./data/wealthboard.db")) {
 for (const suffix of ["", "-wal", "-shm"]) {
   fs.rmSync(`${databasePath}${suffix}`, { force: true });
 }
-fs.mkdirSync(path.resolve(process.env.BACKUP_PATH || "./backups/e2e"), { recursive: true });
+fs.mkdirSync(path.resolve(process.env.BACKUP_PATH || "./backups/e2e"), {
+  recursive: true,
+});

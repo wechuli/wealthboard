@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: mocks.refresh }),
+}));
 vi.mock("@/app/(app)/actions", () => ({
   archiveAccountAction: mocks.archiveAccount,
   deleteAccountAction: mocks.deleteAccount,
@@ -141,7 +143,8 @@ test("does not display a signed loss from an incomplete monthly baseline", async
   expect(within(month).getByText("Incomplete data")).toBeVisible();
   expect(month.textContent).not.toContain(formatMoney(-10_000n, "KES"));
   expect(
-    screen.getByRole("group", { name: "3 months net worth change" }).textContent,
+    screen.getByRole("group", { name: "3 months net worth change" })
+      .textContent,
   ).toContain(formatMoney(5_000n, "KES", { compact: true }));
   expect(screen.getByText("Net worth chart")).toBeVisible();
   expect(screen.getByText("Allocation chart")).toBeVisible();
@@ -193,14 +196,18 @@ test("keeps today's conversion visible when only the historical rate is missing"
 
   const card = screen.getByRole("link", { name: /Example savings/ });
   expect(card.textContent).toContain(formatMoney(1_300_000n, "KES"));
-  expect(within(card).queryByText("Exchange rate needed")).not.toBeInTheDocument();
+  expect(
+    within(card).queryByText("Exchange rate needed"),
+  ).not.toBeInTheDocument();
   expect(within(card).getByText("Incomplete data")).toBeVisible();
 });
 
 test.each(["current", "historical"])(
   "uses live position values but hides changes with missing %s prices",
   async (missingEndpoint) => {
-    mocks.accounts.mockResolvedValue([{ ...account, trackingMode: "positions" }]);
+    mocks.accounts.mockResolvedValue([
+      { ...account, trackingMode: "positions" },
+    ]);
     mocks.positionSnapshot
       .mockReturnValueOnce({
         totalMinor: 20_000n,
@@ -263,17 +270,37 @@ test("requires the exact archived account name before permanent deletion", async
   const user = userEvent.setup();
   mocks.deleteAccount.mockResolvedValue({ ok: true });
   const accountId = "318b42a8-305d-4b3a-a828-7a03c8f7f882";
-  render(<ArchivedAccountActions accountId={accountId} name="Archived Savings" canRestore />);
-  await user.click(screen.getByRole("button", { name: "Delete Archived Savings" }));
-  const dialog = screen.getByRole("dialog", { name: "Permanently delete account" });
-  const remove = within(dialog).getByRole("button", { name: "Permanently delete" });
+  render(
+    <ArchivedAccountActions
+      accountId={accountId}
+      name="Archived Savings"
+      canRestore
+    />,
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Delete Archived Savings" }),
+  );
+  const dialog = screen.getByRole("dialog", {
+    name: "Permanently delete account",
+  });
+  const remove = within(dialog).getByRole("button", {
+    name: "Permanently delete",
+  });
   expect(remove).toBeDisabled();
-  await user.type(within(dialog).getByLabelText("Account name confirmation"), "Wrong name");
+  await user.type(
+    within(dialog).getByLabelText("Account name confirmation"),
+    "Wrong name",
+  );
   expect(remove).toBeDisabled();
   await user.clear(within(dialog).getByLabelText("Account name confirmation"));
-  await user.type(within(dialog).getByLabelText("Account name confirmation"), "Archived Savings");
+  await user.type(
+    within(dialog).getByLabelText("Account name confirmation"),
+    "Archived Savings",
+  );
   await user.click(remove);
   expect(mocks.deleteAccount).toHaveBeenCalledOnce();
   expect(mocks.deleteAccount.mock.calls[0][0].get("accountId")).toBe(accountId);
-  expect(mocks.deleteAccount.mock.calls[0][0].get("confirmationName")).toBe("Archived Savings");
+  expect(mocks.deleteAccount.mock.calls[0][0].get("confirmationName")).toBe(
+    "Archived Savings",
+  );
 });

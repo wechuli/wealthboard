@@ -208,7 +208,11 @@ export default async function DashboardPage({
                         ) : (
                           <ArrowDownRight size={14} />
                         )}
-                        <MoneyValue amount={value} currency={currency} compact />
+                        <MoneyValue
+                          amount={value}
+                          currency={currency}
+                          compact
+                        />
                       </>
                     )}
                   </p>

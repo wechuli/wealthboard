@@ -31,7 +31,10 @@ let convertedAccountId = "";
 let convertedSourceAccountId = "";
 let responsiveConversionSourceId = "";
 
-test("archives accounts out of tracking and permanently deletes them with confirmation", async ({ page, browser }, testInfo) => {
+test("archives accounts out of tracking and permanently deletes them with confirmation", async ({
+  page,
+  browser,
+}, testInfo) => {
   await signUp(page, "archive-lifecycle-e2e");
   await page.goto("/accounts/new");
   await page.getByLabel("Account or asset name").fill("Lifecycle Brokerage");
@@ -39,27 +42,43 @@ test("archives accounts out of tracking and permanently deletes them with confir
   await page.getByLabel("Tracking method").selectOption("positions");
   await page.getByLabel("Opening cash").fill("1000");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("heading", { name: "Lifecycle Brokerage" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Lifecycle Brokerage" }),
+  ).toBeVisible();
   const createdAccountId = new URL(page.url()).pathname.split("/").at(-1)!;
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Archive account" }).click();
-  await expect(page.getByRole("heading", { name: "Accounts & assets" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Accounts & assets" }),
+  ).toBeVisible();
   await expect(page.getByText("Lifecycle Brokerage")).toHaveCount(0);
   await expect(page.getByLabel("Filter by status")).toHaveCount(0);
   await page.goto("/transactions");
-  await expect(page.getByText("Lifecycle Brokerage", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("Lifecycle Brokerage", { exact: true }),
+  ).toHaveCount(0);
   await page.goto("/reports");
-  await expect(page.getByText("Lifecycle Brokerage", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("Lifecycle Brokerage", { exact: true }),
+  ).toHaveCount(0);
   await page.goto(`/accounts/${createdAccountId}`);
   await expect(page.getByRole("heading", { name: /not found/i })).toBeVisible();
-  const archivedExport = await (await page.request.get("/api/export/json")).json();
-  expect(archivedExport.accounts).toContainEqual(expect.objectContaining({
-    id: createdAccountId,
-    archivedAt: expect.any(String),
-  }));
-  expect(await (await page.request.get("/api/export/accounts.csv")).text()).not.toContain("Lifecycle Brokerage");
+  const archivedExport = await (
+    await page.request.get("/api/export/json")
+  ).json();
+  expect(archivedExport.accounts).toContainEqual(
+    expect.objectContaining({
+      id: createdAccountId,
+      archivedAt: expect.any(String),
+    }),
+  );
+  expect(
+    await (await page.request.get("/api/export/accounts.csv")).text(),
+  ).not.toContain("Lifecycle Brokerage");
 
-  const otherContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  const otherContext = await browser.newContext({
+    baseURL: new URL(page.url()).origin,
+  });
   try {
     const otherPage = await otherContext.newPage();
     await signUp(otherPage, "archive-other-e2e");
@@ -72,30 +91,49 @@ test("archives accounts out of tracking and permanently deletes them with confir
 
   await page.goto("/settings");
   await page.getByRole("link", { name: "Archived accounts" }).click();
-  await expect(page.getByRole("heading", { name: "Lifecycle Brokerage" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Lifecycle Brokerage" }),
+  ).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Restore", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Lifecycle Brokerage" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Lifecycle Brokerage" }),
+  ).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/accounts/${createdAccountId}$`));
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Archive account" }).click();
-  await expect(page.getByRole("heading", { name: "Accounts & assets" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Accounts & assets" }),
+  ).toBeVisible();
   await page.goto("/accounts/archived");
-  await page.getByRole("button", { name: "Delete Lifecycle Brokerage" }).click();
-  const deletionDialog = page.getByRole("dialog", { name: "Permanently delete account" });
-  const deleteButton = deletionDialog.getByRole("button", { name: "Permanently delete", exact: true });
+  await page
+    .getByRole("button", { name: "Delete Lifecycle Brokerage" })
+    .click();
+  const deletionDialog = page.getByRole("dialog", {
+    name: "Permanently delete account",
+  });
+  const deleteButton = deletionDialog.getByRole("button", {
+    name: "Permanently delete",
+    exact: true,
+  });
   await expect(deleteButton).toBeDisabled();
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     const bounds = await deletionDialog.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
-    await deletionDialog.screenshot({ path: testInfo.outputPath(`delete-account-${width}.png`) });
+    await deletionDialog.screenshot({
+      path: testInfo.outputPath(`delete-account-${width}.png`),
+    });
   }
-  await deletionDialog.getByLabel("Account name confirmation").fill("Lifecycle Brokerage");
+  await deletionDialog
+    .getByLabel("Account name confirmation")
+    .fill("Lifecycle Brokerage");
   await deleteButton.click();
   await expect(page.getByText("No archived accounts.")).toBeVisible();
-  const deletedExport = await (await page.request.get("/api/export/json")).json();
+  const deletedExport = await (
+    await page.request.get("/api/export/json")
+  ).json();
   expect(deletedExport.accounts).toEqual([]);
   expect(deletedExport.transactions).toEqual([]);
 });

@@ -44,8 +44,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command:
-        `node tests/e2e/prepare.mjs && npm run db:migrate && exec ./node_modules/.bin/next dev -p ${port}`,
+      command: `node tests/e2e/prepare.mjs && npm run db:migrate && exec ./node_modules/.bin/next dev -p ${port}`,
       url: `${appUrl}/api/health/ready`,
       reuseExistingServer: false,
       timeout: 120_000,

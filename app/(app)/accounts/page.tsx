@@ -42,7 +42,11 @@ export default async function AccountsPage() {
     let monthlyChangeMinor: number | null = null;
     const positionSnapshot =
       account.trackingMode === "positions"
-        ? getPositionAccountSnapshot(userId, account.id, currentAsOf.toISOString())
+        ? getPositionAccountSnapshot(
+            userId,
+            account.id,
+            currentAsOf.toISOString(),
+          )
         : null;
     const currentValueMinor =
       positionSnapshot?.totalMinor ?? BigInt(account.currentValueMinor);

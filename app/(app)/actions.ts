@@ -387,7 +387,9 @@ export async function archiveAccountAction(
   redirect(archived ? "/accounts" : `/accounts/${id}`);
 }
 
-export async function deleteAccountAction(formData: FormData): Promise<ActionState> {
+export async function deleteAccountAction(
+  formData: FormData,
+): Promise<ActionState> {
   const { userId } = await requireSession();
   const parsed = deleteAccountSchema.safeParse(formDataObject(formData));
   if (!parsed.success) return zodActionError(parsed.error);

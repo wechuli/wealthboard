@@ -674,7 +674,8 @@ export function updateAccount(
       })
       .sync();
     if (!existing) throw new Error("Account not found.");
-    if (existing.archivedAt) throw new Error("Archived accounts cannot be changed.");
+    if (existing.archivedAt)
+      throw new Error("Archived accounts cannot be changed.");
     if (input.trackingMode && input.trackingMode !== existing.trackingMode) {
       throw new Error("Account tracking mode cannot be changed.");
     }
@@ -782,58 +783,92 @@ export function deleteAccount(
 ) {
   const db = getDatabase();
   db.transaction((tx) => {
-    const account = tx.query.accounts.findFirst({
-      where: and(eq(accounts.userId, userId), eq(accounts.id, accountId)),
-    }).sync();
+    const account = tx.query.accounts
+      .findFirst({
+        where: and(eq(accounts.userId, userId), eq(accounts.id, accountId)),
+      })
+      .sync();
     if (!account) throw new Error("Account not found.");
-    if (!account.archivedAt) throw new Error("Archive the account before deleting it.");
+    if (!account.archivedAt)
+      throw new Error("Archive the account before deleting it.");
     if (confirmationName !== account.name) {
       throw new Error("Enter the account name exactly to confirm deletion.");
     }
-    const cashScope = and(eq(transactions.userId, userId), eq(transactions.accountId, accountId));
-    const positionScope = and(eq(positionEvents.userId, userId), eq(positionEvents.accountId, accountId));
-    const transferIds = tx.select({ id: transactions.transferGroupId }).from(transactions).where(cashScope);
-    const cashGroupIds = tx.select({ id: transactions.eventGroupId }).from(transactions).where(cashScope);
-    const positionGroupIds = tx.select({ id: positionEvents.eventGroupId }).from(positionEvents).where(positionScope);
-    const linkedCash = tx.select({ id: transactions.id }).from(transactions).where(
-      and(
-        eq(transactions.userId, userId),
-        ne(transactions.accountId, accountId),
-        or(
-          inArray(transactions.transferGroupId, transferIds),
-          inArray(transactions.eventGroupId, cashGroupIds),
-          inArray(transactions.eventGroupId, positionGroupIds),
+    const cashScope = and(
+      eq(transactions.userId, userId),
+      eq(transactions.accountId, accountId),
+    );
+    const positionScope = and(
+      eq(positionEvents.userId, userId),
+      eq(positionEvents.accountId, accountId),
+    );
+    const transferIds = tx
+      .select({ id: transactions.transferGroupId })
+      .from(transactions)
+      .where(cashScope);
+    const cashGroupIds = tx
+      .select({ id: transactions.eventGroupId })
+      .from(transactions)
+      .where(cashScope);
+    const positionGroupIds = tx
+      .select({ id: positionEvents.eventGroupId })
+      .from(positionEvents)
+      .where(positionScope);
+    const linkedCash = tx
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          ne(transactions.accountId, accountId),
+          or(
+            inArray(transactions.transferGroupId, transferIds),
+            inArray(transactions.eventGroupId, cashGroupIds),
+            inArray(transactions.eventGroupId, positionGroupIds),
+          ),
         ),
-      ),
-    ).get();
-    const linkedPositions = tx.select({ id: positionEvents.id }).from(positionEvents).where(
-      and(
-        eq(positionEvents.userId, userId),
-        ne(positionEvents.accountId, accountId),
-        or(
-          inArray(positionEvents.eventGroupId, cashGroupIds),
-          inArray(positionEvents.eventGroupId, positionGroupIds),
+      )
+      .get();
+    const linkedPositions = tx
+      .select({ id: positionEvents.id })
+      .from(positionEvents)
+      .where(
+        and(
+          eq(positionEvents.userId, userId),
+          ne(positionEvents.accountId, accountId),
+          or(
+            inArray(positionEvents.eventGroupId, cashGroupIds),
+            inArray(positionEvents.eventGroupId, positionGroupIds),
+          ),
         ),
-      ),
-    ).get();
+      )
+      .get();
     if (linkedCash || linkedPositions) {
       throw new Error(
         "Remove linked transfers before deleting this account. Other accounts will not be changed.",
       );
     }
     tx.update(goals)
-      .set({ linkedAccountId: null, currentAmountMinor: 0, updatedAt: nowIso() })
-      .where(and(eq(goals.userId, userId), eq(goals.linkedAccountId, accountId)))
+      .set({
+        linkedAccountId: null,
+        currentAmountMinor: 0,
+        updatedAt: nowIso(),
+      })
+      .where(
+        and(eq(goals.userId, userId), eq(goals.linkedAccountId, accountId)),
+      )
       .run();
-    tx.delete(accountConversions).where(
-      and(
-        eq(accountConversions.userId, userId),
-        or(
-          eq(accountConversions.sourceAccountId, accountId),
-          eq(accountConversions.targetAccountId, accountId),
+    tx.delete(accountConversions)
+      .where(
+        and(
+          eq(accountConversions.userId, userId),
+          or(
+            eq(accountConversions.sourceAccountId, accountId),
+            eq(accountConversions.targetAccountId, accountId),
+          ),
         ),
-      ),
-    ).run();
+      )
+      .run();
     tx.delete(accounts)
       .where(and(eq(accounts.userId, userId), eq(accounts.id, accountId)))
       .run();
@@ -1027,9 +1062,14 @@ export function deleteTransaction(userId: string, id: string) {
       })
       .sync();
     if (!existing) throw new Error("Transaction not found.");
-    const account = tx.query.accounts.findFirst({
-      where: and(eq(accounts.userId, userId), eq(accounts.id, existing.accountId)),
-    }).sync();
+    const account = tx.query.accounts
+      .findFirst({
+        where: and(
+          eq(accounts.userId, userId),
+          eq(accounts.id, existing.accountId),
+        ),
+      })
+      .sync();
     if (!account || account.archivedAt) {
       throw new Error("Archived accounts cannot be changed.");
     }
