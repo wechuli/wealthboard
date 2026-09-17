@@ -335,7 +335,8 @@ Guided conversion archives the source effective on the conversion date and
 creates a linked position replacement with explicit opening cash, holdings,
 prices, and optional reference basis. The date cannot precede later source
 activity. Existing goal and estate links move atomically to the replacement,
-while source history remains unchanged and visible as archived history.
+while source history remains unchanged in backup exports. Archived sources are
+excluded from current and historical tracking.
 
 ### Investment instruments, position events, and security prices
 
@@ -815,6 +816,12 @@ transactions and valuations for balance-tracked accounts and from cash,
 position events, effective-dated security prices, and exchange rates for
 position-tracked accounts.
 
+Dashboard period changes and account 30-day changes use the same end-of-UTC-day
+cutoff. Show a signed change only when both endpoints are complete; otherwise
+show incomplete data. A missing historical rate must not hide a valid current
+base-currency value. Archived accounts are excluded from both current and
+historical calculations, regardless of their archive date.
+
 ### Asset allocation chart
 
 Use a donut or radial chart showing allocation by category.
@@ -896,14 +903,13 @@ Show recent:
 
 ## Accounts and assets page
 
-Create a page listing all accounts and assets.
+Create a page listing active accounts and assets.
 
 Allow views by:
 
 - Category
 - Institution
 - Currency
-- Active or archived
 - Asset or liability
 - Balance or position tracking mode
 - Complete, missing-price, or stale-price state

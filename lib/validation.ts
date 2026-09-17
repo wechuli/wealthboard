@@ -155,6 +155,16 @@ export const accountSchema = z.object({
   openedAt: z.string().date().optional(),
 });
 
+export const archiveAccountSchema = z.object({
+  accountId: z.string().uuid(),
+  archived: z.boolean(),
+});
+
+export const deleteAccountSchema = z.object({
+  accountId: z.string().uuid(),
+  confirmationName: z.string().min(1, "Enter the account name.").max(100),
+});
+
 const decimalInput = (label: string) =>
   z
     .string()

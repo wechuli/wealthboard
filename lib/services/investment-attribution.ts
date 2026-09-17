@@ -1,7 +1,7 @@
 import "server-only";
 
 import Decimal from "decimal.js";
-import { and, eq, gt, inArray, lte } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lte } from "drizzle-orm";
 
 import {
   accounts,
@@ -11,7 +11,7 @@ import {
   transactions,
   userSettings,
 } from "@/db/schema";
-import { nowIso } from "@/lib/dates";
+import { endOfUtcDay } from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { calculateQuoteValueMinor } from "@/lib/investments";
 import { convertMinor, MissingExchangeRateError } from "@/lib/money";
@@ -62,6 +62,7 @@ export function getPositionMovementAttribution(
         eq(accounts.userId, userId),
         eq(accounts.id, accountId),
         eq(accounts.trackingMode, "positions"),
+        isNull(accounts.archivedAt),
       ),
     })
     .sync();
@@ -280,7 +281,7 @@ export function getPositionMovementAttribution(
 export function getPortfolioPositionMovementAttribution(
   userId: string,
   from?: string,
-  to = nowIso(),
+  to = endOfUtcDay(new Date()).toISOString(),
 ) {
   const db = getDatabase();
   const settings = db.query.userSettings
@@ -295,6 +296,7 @@ export function getPortfolioPositionMovementAttribution(
         eq(accounts.userId, userId),
         eq(accounts.trackingMode, "positions"),
         eq(accounts.isIncludedInNetWorth, true),
+        isNull(accounts.archivedAt),
       ),
     )
     .all();

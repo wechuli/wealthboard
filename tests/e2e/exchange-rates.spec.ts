@@ -20,6 +20,20 @@ test("manages rate history and distinguishes current, stale, and historical warn
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
   await page.goto("/accounts/new");
+  await page.getByLabel("Account or asset name").fill("Archived position example");
+  await page.getByLabel("Category").selectOption({ label: "Securities" });
+  await page.getByLabel("Tracking method").selectOption("positions");
+  await page.getByLabel("Opening cash").fill("50");
+  await page.getByLabel("Opened or acquired").fill("2025-01-01");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Archived position example" }),
+  ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Archive account" }).click();
+  await expect(page.getByRole("heading", { name: "Accounts & assets" })).toBeVisible();
+
+  await page.goto("/accounts/new");
   await page.getByLabel("Account or asset name").fill("Dollar savings example");
   await page.getByLabel("Category").selectOption({ label: "Savings" });
   await page.getByLabel("Currency", { exact: true }).selectOption("USD");
@@ -57,6 +71,25 @@ test("manages rate history and distinguishes current, stale, and historical warn
   await expect(
     page.getByText("Some historical totals are incomplete.", { exact: true }),
   ).toBeVisible();
+  const monthlyChange = page.getByRole("group", {
+    name: "1 month net worth change",
+  });
+  await expect(monthlyChange).toHaveText("1 monthIncomplete data");
+  for (const width of [360, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(monthlyChange).toBeVisible();
+    await expect(async () => {
+      const bounds = await monthlyChange.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+    }).toPass();
+  }
+  await page.goto("/accounts");
+  const accountCard = page.getByRole("link", { name: /Dollar savings example/ });
+  await expect(accountCard).not.toContainText("Exchange rate needed");
+  await expect(accountCard).toContainText(/Ksh\s*13,000\.00/);
+  await expect(accountCard).toContainText("30-day changeIncomplete data");
+  await page.goto("/");
   await page.getByRole("link", { name: "Add earlier USD/KES rate" }).click();
   await expect(manager.getByLabel("Effective date")).toHaveValue("2025-01-01");
   await expect(manager.getByLabel("Rate (quote per base)")).toHaveValue("");
@@ -88,6 +121,8 @@ test("manages rate history and distinguishes current, stale, and historical warn
   await expect(
     page.getByText("Some historical totals are incomplete.", { exact: true }),
   ).toHaveCount(0);
+  await expect(monthlyChange).not.toContainText("Incomplete data");
+  await expect(monthlyChange).toContainText(/Ksh\s*340/);
   await page.goto("/reports");
   await expect(
     page.getByText("Some historical totals are incomplete.", { exact: true }),

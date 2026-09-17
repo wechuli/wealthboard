@@ -35,6 +35,7 @@ export async function listInstitutions(
       and(
         eq(institutions.userId, accounts.userId),
         eq(institutions.id, accounts.institutionId),
+        isNull(accounts.archivedAt),
       ),
     )
     .where(

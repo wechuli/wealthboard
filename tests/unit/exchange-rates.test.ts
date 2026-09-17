@@ -7,12 +7,21 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { afterAll, beforeAll, expect, test, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { categories, exchangeRates } from "@/db/schema";
 
 import { registerUser } from "@/lib/auth/users";
 import { closeDatabase, getDatabase } from "@/lib/db";
-import { createAccount } from "@/lib/services/accounts";
+import {
+  createAccount,
+  getAccount,
+  setAccountArchived,
+} from "@/lib/services/accounts";
+import {
+  createInvestmentInstrument,
+  recordPositionEvent,
+  setSecurityPrice,
+} from "@/lib/services/investments";
 import { getDashboardData } from "@/lib/services/analytics";
 import { convertMinor } from "@/lib/money";
 import {
@@ -56,6 +65,146 @@ beforeAll(async () => {
 afterAll(() => {
   closeDatabase();
   fs.rmSync(workspace, { recursive: true, force: true });
+});
+
+test("saves and deletes dated rates without recalculating archived or foreign position accounts", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-17T08:00:00.000Z"));
+  try {
+    const { userId: rateOwnerId } = await registerUser({
+      username: "archived-rate-owner",
+      displayName: "Archived Rate Owner",
+      password: "fictional-archived-rate-password",
+      baseCurrency: "KES",
+    });
+    const { userId: foreignOwnerId } = await registerUser({
+      username: "archived-rate-other",
+      displayName: "Other Rate Owner",
+      password: "fictional-other-rate-password",
+      baseCurrency: "KES",
+    });
+    const createPositionAccount = (
+      userId: string,
+      name: string,
+      openingValue: string,
+    ) => {
+      const category = getDatabase()
+        .select({ id: categories.id })
+        .from(categories)
+        .where(
+          and(eq(categories.userId, userId), eq(categories.slug, "securities")),
+        )
+        .get()!;
+      return createAccount(userId, {
+        name,
+        categoryId: category.id,
+        currency: "KES",
+        trackingMode: "positions",
+        openingValue,
+        openedAt: "2026-01-01",
+        isIncludedInNetWorth: true,
+      });
+    };
+    const activeId = createPositionAccount(
+      rateOwnerId,
+      "Active Brokerage",
+      "100",
+    );
+    const archivedId = createPositionAccount(
+      rateOwnerId,
+      "Archived Brokerage",
+      "50",
+    );
+    const foreignId = createPositionAccount(
+      foreignOwnerId,
+      "Foreign Brokerage",
+      "7",
+    );
+    const instrumentId = createInvestmentInstrument(rateOwnerId, {
+      name: "Rate Test Stock",
+      identifierType: "custom",
+      assetType: "stock",
+      quoteCurrency: "USD",
+    });
+    for (const accountId of [activeId, archivedId]) {
+      recordPositionEvent(rateOwnerId, {
+        accountId,
+        instrumentId,
+        type: "opening_position",
+        quantity: "2",
+        tradeDate: "2026-01-01",
+      });
+    }
+    setSecurityPrice(rateOwnerId, {
+      instrumentId,
+      price: "10",
+      effectiveDate: "2026-01-01",
+    });
+    setAccountArchived(rateOwnerId, archivedId, true);
+    const archivedBefore = await getAccount(rateOwnerId, archivedId, {
+      includeArchived: true,
+    });
+    const foreignBefore = await getAccount(foreignOwnerId, foreignId);
+    vi.setSystemTime(new Date("2026-09-17T09:00:00.000Z"));
+
+    const pair = { baseCurrency: "USD", quoteCurrency: "KES" };
+    addExchangeRate(rateOwnerId, {
+      ...pair,
+      rate: "130",
+      effectiveDate: "2026-07-01",
+    });
+    const [saved] = await listExchangeRates(rateOwnerId);
+    expect(saved).toMatchObject({
+      rate: "130",
+      effectiveDate: "2026-07-01T12:00:00.000Z",
+    });
+    expect((await getAccount(rateOwnerId, activeId))?.currentValueMinor).toBe(
+      270_000,
+    );
+
+    addExchangeRate(rateOwnerId, {
+      ...pair,
+      id: saved.id,
+      rate: "125",
+      effectiveDate: "2026-07-02",
+    });
+    expect((await getAccount(rateOwnerId, activeId))?.currentValueMinor).toBe(
+      260_000,
+    );
+    addExchangeRate(rateOwnerId, {
+      ...pair,
+      rate: "120",
+      effectiveDate: "2026-06-01",
+    });
+    expect((await getAccount(rateOwnerId, activeId))?.currentValueMinor).toBe(
+      260_000,
+    );
+    deleteExchangeRate(rateOwnerId, saved.id);
+    expect((await getAccount(rateOwnerId, activeId))?.currentValueMinor).toBe(
+      250_000,
+    );
+    const [earlier] = await listExchangeRates(rateOwnerId);
+    deleteExchangeRate(rateOwnerId, earlier.id);
+    expect((await getAccount(rateOwnerId, activeId))?.currentValueMinor).toBe(
+      10_000,
+    );
+
+    expect(
+      await getAccount(rateOwnerId, archivedId, { includeArchived: true }),
+    ).toEqual(archivedBefore);
+    expect(await getAccount(foreignOwnerId, foreignId)).toEqual(foreignBefore);
+    expect(await listExchangeRates(foreignOwnerId)).toEqual([]);
+    setAccountArchived(rateOwnerId, activeId, true);
+    expect(() =>
+      addExchangeRate(rateOwnerId, {
+        ...pair,
+        rate: "130",
+        effectiveDate: "2026-07-01",
+      }),
+    ).not.toThrow();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("preserves dated rates, corrects entries, prevents inverse duplicates, and scopes deletion", async () => {

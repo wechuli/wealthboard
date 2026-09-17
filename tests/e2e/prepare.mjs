@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
-for (const suffix of ["", "-wal", "-shm"]) {
-  fs.rmSync(path.resolve(`./data/e2e.db${suffix}`), { force: true });
+const databasePath = path.resolve(process.env.DATABASE_PATH || "./data/e2e.db");
+if (databasePath === path.resolve("./data/wealthboard.db")) {
+  throw new Error("End-to-end tests cannot reset the development database.");
 }
-fs.mkdirSync(path.resolve("./backups/e2e"), { recursive: true });
+for (const suffix of ["", "-wal", "-shm"]) {
+  fs.rmSync(`${databasePath}${suffix}`, { force: true });
+}
+fs.mkdirSync(path.resolve(process.env.BACKUP_PATH || "./backups/e2e"), { recursive: true });

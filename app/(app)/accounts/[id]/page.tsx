@@ -30,7 +30,6 @@ import { AccountHistoryChart } from "@/components/charts";
 import { MoneyValue } from "@/components/privacy-provider";
 import { PositionAccountDetails } from "@/components/position-account-details";
 import { MutationButton } from "@/components/mutation-button";
-import { ConfirmSubmit } from "@/components/confirm-submit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -626,19 +625,14 @@ export default async function AccountDetailPage({
       </div>
 
       <div className="mt-8 flex justify-end">
-        <form action={archiveAccountAction.bind(null, id, !account.archivedAt)}>
-          <ConfirmSubmit
-            message={
-              account.archivedAt
-                ? "Restore this account?"
-                : "Archive this account? It will be removed from current net worth."
-            }
-            variant={account.archivedAt ? "secondary" : "danger"}
-          >
-            <Archive size={16} />
-            {account.archivedAt ? "Restore account" : "Archive account"}
-          </ConfirmSubmit>
-        </form>
+        <MutationButton
+          action={archiveAccountAction.bind(null, id, true)}
+          confirm="Archive this account? It will be removed from all financial views and historical totals. Its records remain available for recovery or permanent deletion in Settings > Archived accounts."
+          variant="danger"
+        >
+          <Archive size={16} />
+          Archive account
+        </MutationButton>
       </div>
     </>
   );

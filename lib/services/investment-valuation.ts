@@ -77,7 +77,7 @@ export function calculatePositionAccountSnapshot(
       where: and(eq(accounts.userId, userId), eq(accounts.id, accountId)),
     })
     .sync();
-  if (!account) throw new Error("Account not found.");
+  if (!account || account.archivedAt) throw new Error("Account not found.");
   if (account.trackingMode !== "positions") {
     throw new Error("This account does not track positions.");
   }

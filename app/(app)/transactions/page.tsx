@@ -71,7 +71,7 @@ export default async function TransactionsPage({
     await Promise.all([
       listTransactionPage(userId, params),
       getSettings(userId),
-      listAccounts(userId, { includeArchived: true }),
+      listAccounts(userId),
     ]);
   const exportParams = filterSearchParams(params);
   const hasFilters = Boolean(

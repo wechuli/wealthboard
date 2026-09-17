@@ -18,7 +18,7 @@ The account workspace can filter by:
 - currency;
 - institution;
 - asset or liability;
-- active or archived status.
+- tracking method and price state.
 
 Sort by value, name, category, recent change, or last update. Table view is
 useful for comparison; card view gives each account more context.
@@ -115,13 +115,30 @@ liability.
 
 ## Archive an account
 
-Archive records that should no longer appear in normal active workflows. The
-history remains available. Before archiving, review:
+Choose **Archive account** from account detail. Archived accounts disappear
+from the accounts list, transactions, selectors, dashboard, reports, and live
+estate views. Their balances no longer contribute to goals, current totals,
+or historical totals. Price and rate changes do not update archived values.
 
-- linked goals;
-- estate allocations;
-- outstanding transfers or reconciliation work;
-- whether the account should still count in net worth.
+Records remain in full JSON backups. Open **Settings > Archived accounts** to
+restore an account and rebuild its value from retained history. Converted
+source accounts cannot be restored while their replacement exists.
+
+## Permanently delete an account
+
+Archive the account, then open **Settings > Archived accounts** and select its
+delete control. Enter the account name exactly and confirm permanent deletion.
+This removes its transactions, valuations, positions, reconciliations, and
+estate allocations. Goals remain but lose their account link; shared
+instruments and prices remain available.
+
+Deletion is blocked while a cash or in-kind transfer has a paired record in
+another account. Remove the linked transfer through the other account's
+activity, or restore the archived account to correct it first. Other account
+balances are never silently changed by permanent account deletion.
+
+Downloaded backups and previously saved estate snapshots are unchanged copies;
+deleting an account does not rewrite them.
 
 ## Categories
 

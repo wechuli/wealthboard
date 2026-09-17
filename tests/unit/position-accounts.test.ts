@@ -49,7 +49,11 @@ import {
   previewInvestmentHistory,
 } from "@/lib/services/investment-history-import";
 import { exportData, restoreUserData } from "@/lib/services/portability";
-import { getDashboardData, getNetWorthAt } from "@/lib/services/analytics";
+import {
+  getAccountAnalytics,
+  getDashboardData,
+  getNetWorthAt,
+} from "@/lib/services/analytics";
 import { getEstateWorkspace } from "@/lib/services/estate-planning";
 import { createGoal, listGoals } from "@/lib/services/goals";
 import {
@@ -63,7 +67,10 @@ import {
   convertAccountToPositions,
   previewAccountConversion,
 } from "@/lib/services/account-conversion";
-import { getPositionMovementAttribution } from "@/lib/services/investment-attribution";
+import {
+  getPortfolioPositionMovementAttribution,
+  getPositionMovementAttribution,
+} from "@/lib/services/investment-attribution";
 
 const migrationsFolder = path.resolve("db/migrations");
 const workspace = fs.mkdtempSync(
@@ -136,6 +143,56 @@ describe.sequential("position account valuation", () => {
   afterAll(() => {
     closeDatabase();
     fs.rmSync(workspace, { recursive: true, force: true });
+  });
+
+  test("loads a newly opened position account before noon UTC", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-17T08:00:00.000Z"));
+    try {
+      const { userId: sameDayUserId } = await registerUser({
+        username: "same-day-position-owner",
+        displayName: "Same Day Owner",
+        password: "same-day-position-password",
+        baseCurrency: "USD",
+      });
+      const sameDayCategory = getDatabase()
+        .select({ id: categories.id })
+        .from(categories)
+        .where(
+          and(
+            eq(categories.userId, sameDayUserId),
+            eq(categories.slug, "securities"),
+          ),
+        )
+        .get()!;
+      const accountId = createAccount(sameDayUserId, {
+        name: "New Position Account",
+        categoryId: sameDayCategory.id,
+        currency: "USD",
+        trackingMode: "positions",
+        openingValue: "100",
+        openedAt: "2026-09-17",
+        isIncludedInNetWorth: true,
+      });
+
+      await expect(
+        getAccountAnalytics(sameDayUserId, accountId),
+      ).resolves.toMatchObject({
+        positionSnapshot: { cashMinor: 10_000n, totalMinor: 10_000n },
+        movementAttribution: {
+          endValueMinor: 10_000n,
+          to: "2026-09-17T23:59:59.999Z",
+        },
+      });
+      expect(
+        getPortfolioPositionMovementAttribution(sameDayUserId),
+      ).toMatchObject({
+        endValueMinor: 10_000n,
+        to: "2026-09-17T23:59:59.999Z",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("uses explicit sequence for same-date position replay", () => {
@@ -257,11 +314,7 @@ describe.sequential("position account valuation", () => {
       }),
     );
     expect(
-      getPositionAccountSnapshot(
-        userId,
-        accountId,
-        "2026-01-01T23:59:59.999Z",
-      ),
+      getPositionAccountSnapshot(userId, accountId, "2026-01-01T23:59:59.999Z"),
     ).toMatchObject({ totalMinor: 100_000n, complete: true });
 
     const cashImport = JSON.stringify({
@@ -2418,7 +2471,8 @@ describe.sequential("position account valuation", () => {
     });
     const targetAccountId = convertAccountToPositions(userId, input);
     expect(convertAccountToPositions(userId, input)).toBe(targetAccountId);
-    expect(await getAccount(userId, sourceAccountId)).toMatchObject({
+    expect(await getAccount(userId, sourceAccountId)).toBeUndefined();
+    expect(await getAccount(userId, sourceAccountId, { includeArchived: true })).toMatchObject({
       trackingMode: "balance",
       goalId: null,
       archivedAt: "2026-02-01T12:00:00.000Z",

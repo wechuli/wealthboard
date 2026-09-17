@@ -623,7 +623,7 @@ export function getEstateWorkspace(userId: string, now = new Date()) {
         eq(accounts.institutionId, institutions.id),
       ),
     )
-    .where(eq(accounts.userId, userId))
+    .where(and(eq(accounts.userId, userId), isNull(accounts.archivedAt)))
     .orderBy(asc(accounts.name))
     .all();
   const directiveRows = db

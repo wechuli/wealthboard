@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, getTableColumns, ne } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, isNull, ne } from "drizzle-orm";
 
 import {
   accounts,
@@ -85,6 +85,7 @@ export async function listGoals(userId: string, now = new Date()) {
       and(
         eq(goals.linkedAccountId, accounts.id),
         eq(goals.userId, accounts.userId),
+        isNull(accounts.archivedAt),
       ),
     )
     .leftJoin(
@@ -106,7 +107,7 @@ export async function listGoals(userId: string, now = new Date()) {
     let missingPositionData = false;
     let stalePositionData = false;
     let positionIssues: PositionDataIssue[] = [];
-    let current = BigInt(goal.currentAmountMinor);
+    let current = goal.linkedAccountId ? 0n : BigInt(goal.currentAmountMinor);
     if (goal.accountValueMinor !== null && goal.accountCurrency) {
       if (goal.linkedAccountId && goal.accountTrackingMode === "positions") {
         const snapshot = calculatePositionAccountSnapshot(
@@ -191,6 +192,7 @@ export async function listGoals(userId: string, now = new Date()) {
             : "on_track";
     return {
       ...goal,
+      linkedAccountId: goal.accountName === null ? null : goal.linkedAccountId,
       calculationDate: today,
       currentAmountCalculated: current,
       plannedMonthly,
@@ -649,7 +651,11 @@ function assertLinkedAccountAvailable(
   if (!linkedAccountId) return;
   const account = tx.query.accounts
     .findFirst({
-      where: and(eq(accounts.userId, userId), eq(accounts.id, linkedAccountId)),
+      where: and(
+        eq(accounts.userId, userId),
+        eq(accounts.id, linkedAccountId),
+        isNull(accounts.archivedAt),
+      ),
     })
     .sync();
   if (!account) throw new Error("Linked account not found.");

@@ -159,6 +159,8 @@ not rewrite or infer historical units.
 
 Confirmation archives the source effective on the conversion date and creates a
 linked position account. Earlier monetary history stays on the archived source.
+It remains in backup exports but is no longer included in financial views or
+historical totals.
 Existing goal and estate links move to the replacement atomically. The archived
 source cannot be restored while its replacement remains active because that
 would count the same investment twice.

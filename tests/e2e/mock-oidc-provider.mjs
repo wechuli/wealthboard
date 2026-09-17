@@ -7,7 +7,7 @@ const port = 4100;
 const issuer = `http://${host}:${port}/realms/wealthboard`;
 const clientId = "wealthboard-e2e";
 const clientSecret = "wealthboard-e2e-client-secret";
-const callbackUrl = "http://127.0.0.1:3100/api/auth/oidc/callback";
+const callbackUrl = `http://127.0.0.1:${process.env.E2E_PORT || 3100}/api/auth/oidc/callback`;
 const identities = {
   alice: {
     subject: "e2e-oidc-alice",

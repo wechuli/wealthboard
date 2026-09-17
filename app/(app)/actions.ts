@@ -9,6 +9,8 @@ import { getAuthConfig } from "@/lib/auth/config";
 import { requireTrustedHeadersOrigin } from "@/lib/auth/origin";
 import {
   accountSchema,
+  archiveAccountSchema,
+  deleteAccountSchema,
   accountConversionSchema,
   categorySchema,
   exchangeRateSchema,
@@ -35,6 +37,7 @@ import {
 } from "@/lib/validation";
 import {
   createAccount,
+  deleteAccount,
   deleteTransaction,
   deleteValuation,
   getAccount,
@@ -358,14 +361,43 @@ export async function convertAccountToPositionsAction(
   redirect(`/accounts/${targetAccountId}?converted=1`);
 }
 
-export async function archiveAccountAction(id: string, archived: boolean) {
+function revalidateAccountLifecyclePaths(id: string) {
+  revalidateInvestmentPaths([id]);
+  revalidatePath("/accounts/archived");
+  revalidatePath("/transactions");
+  revalidatePath("/institutions");
+  revalidatePath("/review");
+  revalidatePath("/estate/distribution");
+  revalidatePath("/estate/summary");
+}
+
+export async function archiveAccountAction(
+  id: string,
+  archived: boolean,
+): Promise<ActionState> {
   const { userId } = await requireSession();
-  setAccountArchived(userId, id, archived);
-  revalidatePath("/");
-  revalidatePath("/accounts");
-  revalidatePath(`/accounts/${id}`);
-  revalidatePath("/estate");
-  redirect("/accounts");
+  const parsed = archiveAccountSchema.safeParse({ accountId: id, archived });
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    setAccountArchived(userId, parsed.data.accountId, parsed.data.archived);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidateAccountLifecyclePaths(id);
+  redirect(archived ? "/accounts" : `/accounts/${id}`);
+}
+
+export async function deleteAccountAction(formData: FormData): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = deleteAccountSchema.safeParse(formDataObject(formData));
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    deleteAccount(userId, parsed.data.accountId, parsed.data.confirmationName);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidateAccountLifecyclePaths(parsed.data.accountId);
+  return { ok: true };
 }
 
 export async function createInvestmentInstrumentAction(

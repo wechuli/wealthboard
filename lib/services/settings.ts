@@ -1,7 +1,7 @@
 import "server-only";
 
 import Decimal from "decimal.js";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import {
   accounts,
@@ -335,7 +335,11 @@ function recalculatePositionValues(
     .select({ id: accounts.id })
     .from(accounts)
     .where(
-      and(eq(accounts.userId, userId), eq(accounts.trackingMode, "positions")),
+      and(
+        eq(accounts.userId, userId),
+        eq(accounts.trackingMode, "positions"),
+        isNull(accounts.archivedAt),
+      ),
     )
     .all();
   for (const account of positionAccounts) {

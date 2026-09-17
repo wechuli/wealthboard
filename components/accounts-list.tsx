@@ -55,7 +55,6 @@ export function AccountsList({
   const [category, setCategory] = useState("all");
   const [currency, setCurrency] = useState("all");
   const [institution, setInstitution] = useState("all");
-  const [status, setStatus] = useState("active");
   const [kind, setKind] = useState("all");
   const [tracking, setTracking] = useState("all");
   const [priceState, setPriceState] = useState("all");
@@ -94,10 +93,6 @@ export function AccountsList({
             (institution === "unspecified"
               ? !account.institutionId
               : account.institutionId === institution)) &&
-          (status === "all" ||
-            (status === "archived"
-              ? account.archivedAt
-              : !account.archivedAt)) &&
           (kind === "all" ||
             (kind === "liability"
               ? account.isLiability
@@ -123,7 +118,6 @@ export function AccountsList({
     priceState,
     query,
     sort,
-    status,
     tracking,
   ]);
 
@@ -204,15 +198,6 @@ export function AccountsList({
           <option value="all">Assets & liabilities</option>
           <option value="asset">Assets</option>
           <option value="liability">Liabilities</option>
-        </Select>
-        <Select
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
-          aria-label="Filter by status"
-        >
-          <option value="active">Active</option>
-          <option value="archived">Archived</option>
-          <option value="all">All status</option>
         </Select>
         <Select
           value={sort}
@@ -321,13 +306,15 @@ export function AccountsList({
                     <p className="text-slate-500">30-day change</p>
                     <p
                       className={
-                        (account.monthlyChangeMinor ?? 0) >= 0
-                          ? "mt-1 flex items-center gap-1 text-emerald-300"
-                          : "mt-1 flex items-center gap-1 text-red-300"
+                        account.monthlyChangeMinor === null
+                          ? "mt-1 text-amber-300"
+                          : account.monthlyChangeMinor >= 0
+                            ? "mt-1 flex items-center gap-1 text-emerald-300"
+                            : "mt-1 flex items-center gap-1 text-red-300"
                       }
                     >
                       {account.monthlyChangeMinor === null ? (
-                        "Rate needed"
+                        "Incomplete data"
                       ) : (
                         <>
                           {account.monthlyChangeMinor >= 0 ? (
@@ -420,13 +407,15 @@ export function AccountsList({
                   </td>
                   <td
                     className={
-                      (account.monthlyChangeMinor ?? 0) >= 0
-                        ? "p-4 text-emerald-300"
-                        : "p-4 text-red-300"
+                      account.monthlyChangeMinor === null
+                        ? "p-4 text-amber-300"
+                        : account.monthlyChangeMinor >= 0
+                          ? "p-4 text-emerald-300"
+                          : "p-4 text-red-300"
                     }
                   >
                     {account.monthlyChangeMinor === null ? (
-                      "—"
+                      "Incomplete data"
                     ) : (
                       <MoneyValue
                         amount={account.monthlyChangeMinor}

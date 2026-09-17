@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -1909,6 +1909,6 @@ export async function accountCsv(userId: string) {
         eq(accounts.institutionId, institutions.id),
       ),
     )
-    .where(eq(accounts.userId, userId));
+    .where(and(eq(accounts.userId, userId), isNull(accounts.archivedAt)));
   return toCsv(rows);
 }

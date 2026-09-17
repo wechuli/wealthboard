@@ -59,7 +59,7 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   const importResponse = await page.request.post(
     `/api/accounts/${aliceAccount!.id}/history-import/preview`,
     {
-      headers: { Origin: "http://127.0.0.1:3100" },
+      headers: { Origin: new URL(page.url()).origin },
       multipart: {
         file: {
           name: "foreign.csv",
@@ -87,7 +87,7 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   expect(JSON.stringify(bobExport)).not.toContain("Alice Private Savings");
   bobExport.accounts[0].userId = "foreign-user-id";
   const rejectedRestore = await page.request.post("/api/restore/user", {
-    headers: { Origin: "http://127.0.0.1:3100" },
+    headers: { Origin: new URL(page.url()).origin },
     multipart: {
       file: {
         name: "malicious.json",
@@ -104,7 +104,7 @@ test("two users remain isolated across URLs, portability, imports, and browser s
   expect(
     (
       await page.request.post("/api/restore", {
-        headers: { Origin: "http://127.0.0.1:3100" },
+        headers: { Origin: new URL(page.url()).origin },
       })
     ).status(),
   ).toBe(404);

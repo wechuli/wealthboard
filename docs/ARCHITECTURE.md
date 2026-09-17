@@ -375,7 +375,17 @@ responses in tests; never use real statements or credentials.
 
 Every table except `login_attempts` is either the identity table or is owned by
 one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
-operations retain history. All timestamps are UTC ISO-8601 strings.
+operations retain source records. All timestamps are UTC ISO-8601 strings.
+
+Archived accounts are excluded from current and historical totals, activity,
+comparisons, live estate views, goal progress, ordinary CSV reports, and
+selectors. Their cached values are frozen until restore. Explicit archive
+management under Settings exposes names and lifecycle controls only; full JSON
+backups retain the source records. Permanent deletion requires an archived,
+owner-scoped account and exact-name confirmation. It clears goal links and
+conversion provenance before cascading account records, and rejects deletion
+while a cash or position transfer has records in another account. Shared
+instruments and prices, goals, and immutable estate snapshots are retained.
 
 Creating a user is one transaction that inserts the identity, base/enabled
 currency settings, and a copy of the default categories. User defaults are
@@ -390,6 +400,7 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 - `/` — net-worth dashboard
 - `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/[id]/edit`,
   `/accounts/[id]/import`
+- `/accounts/archived` - explicit recovery and permanent deletion management
 - `/transactions`, `/transactions/new`, `/transactions/[id]/edit`
 - `/goals`, `/goals/new`, `/goals/[id]`, `/goals/[id]/edit`
 - `/estate/{beneficiaries,distribution,summary}` and

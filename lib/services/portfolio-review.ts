@@ -1,7 +1,7 @@
 import "server-only";
 
 import Decimal from "decimal.js";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   accounts,
@@ -99,12 +99,15 @@ export async function buildPortfolioReviewSnapshot(
 ) {
   const options = portfolioReviewOptionsSchema.parse(input);
   const db = getDatabase();
+  const activeAccountIds = db.select({ id: accounts.id }).from(accounts).where(
+    and(eq(accounts.userId, userId), isNull(accounts.archivedAt)),
+  );
   const [accountCount, goalCount, transactionCount, valuationCount] =
     await Promise.all([
       db
         .select({ value: count() })
         .from(accounts)
-        .where(eq(accounts.userId, userId))
+        .where(and(eq(accounts.userId, userId), isNull(accounts.archivedAt)))
         .get(),
       db
         .select({ value: count() })
@@ -114,12 +117,12 @@ export async function buildPortfolioReviewSnapshot(
       db
         .select({ value: count() })
         .from(transactions)
-        .where(eq(transactions.userId, userId))
+        .where(and(eq(transactions.userId, userId), inArray(transactions.accountId, activeAccountIds)))
         .get(),
       db
         .select({ value: count() })
         .from(valuationSnapshots)
-        .where(eq(valuationSnapshots.userId, userId))
+        .where(and(eq(valuationSnapshots.userId, userId), inArray(valuationSnapshots.accountId, activeAccountIds)))
         .get(),
     ]);
   assertPortfolioReviewWorkload({

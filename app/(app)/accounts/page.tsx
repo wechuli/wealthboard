@@ -5,7 +5,7 @@ import { AccountsList } from "@/components/accounts-list";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page";
 import { exchangeRates, goals } from "@/db/schema";
-import { addUtcDays } from "@/lib/dates";
+import { addUtcDays, endOfUtcDay } from "@/lib/dates";
 import { getSettings } from "@/lib/bootstrap";
 import { getDatabase } from "@/lib/db";
 import {
@@ -23,7 +23,7 @@ export const metadata = { title: "Accounts" };
 export default async function AccountsPage() {
   const { userId } = await requireSession();
   const [accountRows, settings, rates, goalRows] = await Promise.all([
-    listAccounts(userId, { includeArchived: true }),
+    listAccounts(userId),
     getSettings(userId),
     getDatabase()
       .select()
@@ -34,17 +34,18 @@ export default async function AccountsPage() {
       .from(goals)
       .where(eq(goals.userId, userId)),
   ]);
-  const monthAgo = addUtcDays(new Date(), -30).toISOString();
-  const currentAsOf = new Date();
-  currentAsOf.setUTCHours(23, 59, 59, 999);
+  const currentAsOf = endOfUtcDay(new Date());
+  const monthAgo = addUtcDays(currentAsOf, -30).toISOString();
   const goalNames = new Map(goalRows.map((goal) => [goal.id, goal.name]));
   const items = accountRows.map((account) => {
     let convertedValueMinor: number | null = null;
     let monthlyChangeMinor: number | null = null;
     const positionSnapshot =
       account.trackingMode === "positions"
-        ? getPositionAccountSnapshot(userId, account.id)
+        ? getPositionAccountSnapshot(userId, account.id, currentAsOf.toISOString())
         : null;
+    const currentValueMinor =
+      positionSnapshot?.totalMinor ?? BigInt(account.currentValueMinor);
     const positionValueAsOf = positionSnapshot
       ? (positionSnapshot.positions
           .map((position) => position.price?.effectiveDate)
@@ -53,21 +54,35 @@ export default async function AccountsPage() {
       : null;
     try {
       const converted = convertMinor(
-        account.currentValueMinor,
+        currentValueMinor,
         account.currency,
         settings.baseCurrency,
         rates,
         currentAsOf.toISOString(),
       );
-      const previous = convertMinor(
-        accountBalanceAt(userId, account.id, monthAgo),
-        account.currency,
-        settings.baseCurrency,
-        rates,
-        monthAgo,
-      );
       convertedValueMinor = safeChartNumber(converted);
-      monthlyChangeMinor = safeChartNumber(converted - previous);
+      const previousPosition = positionSnapshot
+        ? getPositionAccountSnapshot(userId, account.id, monthAgo)
+        : null;
+      if (
+        (positionSnapshot?.complete ?? true) &&
+        (previousPosition?.complete ?? true)
+      ) {
+        const previousValueMinor =
+          previousPosition?.totalMinor ??
+          accountBalanceAt(userId, account.id, monthAgo);
+        const previous =
+          previousValueMinor === 0n
+            ? 0n
+            : convertMinor(
+                previousValueMinor,
+                account.currency,
+                settings.baseCurrency,
+                rates,
+                monthAgo,
+              );
+        monthlyChangeMinor = safeChartNumber(converted - previous);
+      }
     } catch (error) {
       if (!(error instanceof MissingExchangeRateError)) throw error;
     }
@@ -80,7 +95,7 @@ export default async function AccountsPage() {
       categoryName: account.categoryName,
       categoryIcon: account.categoryIcon,
       currency: account.currency,
-      currentValueMinor: account.currentValueMinor,
+      currentValueMinor: safeChartNumber(currentValueMinor),
       convertedValueMinor,
       monthlyChangeMinor,
       isLiability: account.isLiability,

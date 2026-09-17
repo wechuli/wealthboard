@@ -409,7 +409,7 @@ test("complete Wealthboard acceptance journey", async ({ page }) => {
   );
   expect(JSON.stringify(exportedPortfolio)).not.toContain("sk-e2e");
   const restoreResponse = await page.request.post("/api/restore/user", {
-    headers: { Origin: "http://127.0.0.1:3100" },
+    headers: { Origin: new URL(page.url()).origin },
     multipart: {
       file: {
         name: "wealthboard-user.json",

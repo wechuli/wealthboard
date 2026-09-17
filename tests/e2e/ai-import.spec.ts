@@ -241,7 +241,7 @@ test("converts text sources with a saved key, then previews and confirms each ac
       const response = await page.request.post(
         `/api/accounts/${accountId}/import/extract`,
         {
-          headers: { origin: "http://127.0.0.1:3100" },
+          headers: { origin: new URL(page.url()).origin },
           multipart: { file: { name, mimeType, buffer } },
         },
       );
@@ -257,7 +257,7 @@ test("converts text sources with a saved key, then previews and confirms each ac
     for (const phase of ["extract", "convert"]) {
       const response = await other.request.post(
         `/api/accounts/${balanceId}/import/${phase}`,
-        { headers: { origin: "http://127.0.0.1:3100" }, data: {} },
+        { headers: { origin: new URL(other.url()).origin }, data: {} },
       );
       expect(response.status()).toBe(404);
       expect(await response.text()).not.toContain("fixture-import-key");

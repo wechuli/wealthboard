@@ -784,6 +784,7 @@ export function deletePositionEvent(userId: string, eventId: string) {
       })
       .sync();
     if (!event) throw new Error("Position event not found.");
+    requirePositionAccount(tx, userId, event.accountId);
     const groupedEvents = event.eventGroupId
       ? tx
           .select()

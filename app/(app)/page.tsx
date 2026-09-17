@@ -70,13 +70,17 @@ export default async function DashboardPage({
     getNetWorthAt(userId, baselineDate(90)),
     getNetWorthAt(userId, baselineDate(365)),
   ]);
+  const changeFrom = (baseline: (typeof fullHistory)[number] | undefined) =>
+    !data.currentComplete || (baseline && !baseline.complete)
+      ? null
+      : baseline
+        ? current - BigInt(Math.round(baseline.netWorth))
+        : 0n;
   const changes = {
-    "1 month": current - BigInt(Math.round(oneMonth.netWorth)),
-    "3 months": current - BigInt(Math.round(threeMonths.netWorth)),
-    "1 year": current - BigInt(Math.round(oneYear.netWorth)),
-    "All time": fullHistory.length
-      ? current - BigInt(Math.round(fullHistory[0].netWorth))
-      : 0n,
+    "1 month": changeFrom(oneMonth),
+    "3 months": changeFrom(threeMonths),
+    "1 year": changeFrom(oneYear),
+    "All time": changeFrom(fullHistory[0]),
   };
   const activeGoals = goals
     .filter((goal) => goal.status === "active")
@@ -179,6 +183,8 @@ export default async function DashboardPage({
               {Object.entries(changes).map(([label, value]) => (
                 <div
                   key={label}
+                  role="group"
+                  aria-label={`${label} net worth change`}
                   className="min-w-28 rounded-xl border border-white/[0.06] bg-black/15 p-3"
                 >
                   <p className="text-[10px] uppercase tracking-wide text-slate-500">
@@ -186,17 +192,25 @@ export default async function DashboardPage({
                   </p>
                   <p
                     className={
-                      value >= 0
-                        ? "mt-1 flex items-center gap-1 text-sm font-medium text-emerald-300"
-                        : "mt-1 flex items-center gap-1 text-sm font-medium text-red-300"
+                      value === null
+                        ? "mt-1 text-sm font-medium text-amber-300"
+                        : value >= 0
+                          ? "mt-1 flex items-center gap-1 text-sm font-medium text-emerald-300"
+                          : "mt-1 flex items-center gap-1 text-sm font-medium text-red-300"
                     }
                   >
-                    {value >= 0 ? (
-                      <ArrowUpRight size={14} />
+                    {value === null ? (
+                      "Incomplete data"
                     ) : (
-                      <ArrowDownRight size={14} />
+                      <>
+                        {value >= 0 ? (
+                          <ArrowUpRight size={14} />
+                        ) : (
+                          <ArrowDownRight size={14} />
+                        )}
+                        <MoneyValue amount={value} currency={currency} compact />
+                      </>
                     )}
-                    <MoneyValue amount={value} currency={currency} compact />
                   </p>
                 </div>
               ))}
