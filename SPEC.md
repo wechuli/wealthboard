@@ -399,6 +399,11 @@ quantity negative at that date or any later date. Edits, deletions, and
 backdated corrections replay all affected quantities, cash, and account values
 atomically.
 
+A correction, deletion, import, or restore must also preserve the source
+quantity used by a recorded spin-off or merger. Reject incompatible history
+changes without partial writes; the affected corporate action must be removed
+before correcting earlier holdings and then recorded again.
+
 An in-kind transfer writes paired transfer-out and transfer-in quantity events
 with no contribution or withdrawal. Optional source-account fees use the same
 group. Supported stock splits, spin-offs, and mergers use explicit positive
@@ -425,6 +430,10 @@ must never be used. Manual entry and strict import work without an external
 provider. Any later automatic provider is optional, records provenance, never
 overwrites a user price silently, and leaves a manual fallback.
 
+For split-adjusted holdings, a quote must be effective on or after the latest
+recorded split at the valuation date. Earlier quotes make the holding
+incomplete until a post-split quote is supplied; pre-split history is unchanged.
+
 For a position-tracked account, derive the value at a date from replayed cash
 plus every replayed quantity multiplied by its effective price and converted
 to the account currency when necessary. Calculate quantity times price with
@@ -432,6 +441,8 @@ Decimal.js, round each quote value to that currency's minor unit, convert using
 the user's effective-dated exchange rate, and then sum integer minor units.
 `currentValueMinor` remains a rebuildable cache so goals, estate planning,
 dashboard totals, and existing account-level consumers share one value.
+Importing a shared instrument price must rebuild every affected owner-scoped
+account cache in the same transaction.
 
 Missing prices or exchange rates make the affected account and aggregate
 incomplete rather than silently treating a position as zero. Show the affected

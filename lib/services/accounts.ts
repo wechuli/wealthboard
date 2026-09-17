@@ -974,6 +974,8 @@ export function deleteTransaction(userId: string, id: string) {
                 ),
               )
               .all(),
+            undefined,
+            { validateCorporateActions: true },
           );
         }
         recalculateAccountBalance(userId, tx, accountId);

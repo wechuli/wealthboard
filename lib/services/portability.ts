@@ -1339,7 +1339,13 @@ export function restoreUserData(userId: string, input: unknown) {
       throw new Error("The archive contains an incomplete position group.");
     }
   }
-  replayPositionQuantities(archive.positionEvents);
+  for (const account of archive.accounts) {
+    replayPositionQuantities(
+      archive.positionEvents.filter((event) => event.accountId === account.id),
+      undefined,
+      { validateCorporateActions: true },
+    );
+  }
   for (const price of archive.securityPrices) {
     requiredMappedId(
       instrumentIds,

@@ -18,7 +18,11 @@ import {
   type SecurityPrice,
   type TransactionType,
 } from "@/db/schema";
-import { dateInputForTimezone, dateInputToUtc, nowIso } from "@/lib/dates";
+import {
+  dateInputForTimezone,
+  dateInputToUtc,
+  endOfUtcDay,
+} from "@/lib/dates";
 import { getDatabase } from "@/lib/db";
 import { transactionEffect } from "@/lib/finance";
 import {
@@ -28,6 +32,7 @@ import {
   convertMinorWithAppliedRate,
   orderPositionEvents,
   replayPositionQuantities,
+  selectPositionPrice,
 } from "@/lib/investments";
 import {
   convertMinor,
@@ -862,10 +867,11 @@ function prepareInvestmentHistory(
   const currentQuantities = replayPositionQuantities(existingEvents);
   let quantities = currentQuantities;
   try {
-    quantities = replayPositionQuantities([
-      ...existingEvents,
-      ...(events as PositionEvent[]),
-    ]);
+    quantities = replayPositionQuantities(
+      [...existingEvents, ...(events as PositionEvent[])],
+      undefined,
+      { validateCorporateActions: true },
+    );
   } catch (error) {
     errors.push({
       collection: "position_events",
@@ -1138,7 +1144,7 @@ function prepareInvestmentHistory(
   const missingCurrencies = new Set<string>();
   const staleInstrumentIds: string[] = [];
   const issues: PositionDataIssue[] = [];
-  const projectionAsOf = nowIso();
+  const projectionAsOf = endOfUtcDay(new Date()).toISOString();
   for (const [instrumentId, quantity] of quantities) {
     if (quantity === "0") continue;
     const instrument = allInstruments.get(instrumentId);
@@ -1153,11 +1159,12 @@ function prepareInvestmentHistory(
             left.createdAt.localeCompare(right.createdAt) ||
             left.id.localeCompare(right.id),
         )[0]?.tradeDate ?? projectionAsOf;
-    const price = allPrices
-      .filter((row) => row.instrumentId === instrumentId)
-      .sort((left, right) =>
-        right.effectiveDate.localeCompare(left.effectiveDate),
-      )[0];
+    const { price, latestPrice, latestSplitDate } = selectPositionPrice(
+      instrumentId,
+      allPrices,
+      allEvents,
+      projectionAsOf,
+    );
     if (!price) {
       missingPrices.push(instrumentId);
       issues.push({
@@ -1166,11 +1173,11 @@ function prepareInvestmentHistory(
         instrumentName: instrument.name,
         instrumentSymbol: instrument.symbol,
         currency: instrument.quoteCurrency,
-        affectedFrom: exposureFrom,
+        affectedFrom: latestSplitDate ?? exposureFrom,
         affectedTo: projectionAsOf,
-        lastPriceDate: null,
-        source: null,
-        provenance: null,
+        lastPriceDate: latestPrice?.effectiveDate ?? null,
+        source: latestPrice?.source ?? null,
+        provenance: latestPrice?.provenance ?? null,
         thresholdDays: null,
       });
       continue;
@@ -1181,7 +1188,7 @@ function prepareInvestmentHistory(
         price.currency,
         account.currency,
         rates,
-        nowIso(),
+        projectionAsOf,
       );
     } catch (error) {
       if (!(error instanceof MissingExchangeRateError)) throw error;
@@ -1457,8 +1464,30 @@ export function commitInvestmentHistory(
           ),
         )
         .all(),
+      undefined,
+      { validateCorporateActions: true },
     );
     const finalBalanceMinor = recalculateAccountBalance(userId, tx, accountId);
+    if (prepared.prices.length) {
+      const instrumentIds = [
+        ...new Set(prepared.prices.map((price) => price.instrumentId)),
+      ];
+      const affectedAccounts = tx
+        .selectDistinct({ accountId: positionEvents.accountId })
+        .from(positionEvents)
+        .where(
+          and(
+            eq(positionEvents.userId, userId),
+            inArray(positionEvents.instrumentId, instrumentIds),
+          ),
+        )
+        .all();
+      for (const affectedAccount of affectedAccounts) {
+        if (affectedAccount.accountId !== accountId) {
+          recalculateAccountBalance(userId, tx, affectedAccount.accountId);
+        }
+      }
+    }
     return {
       account: {
         id: account.id,

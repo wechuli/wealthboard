@@ -15,6 +15,7 @@ import { replayBalance, type FinancialEvent } from "@/lib/finance";
 import {
   calculateQuoteValueMinor,
   replayPositionQuantities,
+  selectPositionPrice,
 } from "@/lib/investments";
 import { convertMinor, MissingExchangeRateError } from "@/lib/money";
 import { endOfUtcDay } from "@/lib/dates";
@@ -170,21 +171,22 @@ export function calculatePositionAccountSnapshot(
   const issues: PositionDataIssue[] = [];
   const positions = instrumentRows.map((instrument) => {
     const quantity = quantities.get(instrument.id) ?? "0";
-    const exposureFrom =
-      eventRows
-        .filter((row) => row.instrumentId === instrument.id)
-        .sort(
-          (left, right) =>
-            left.tradeDate.localeCompare(right.tradeDate) ||
-            left.eventSequence - right.eventSequence ||
-            left.createdAt.localeCompare(right.createdAt) ||
-            left.id.localeCompare(right.id),
-        )[0]?.tradeDate ?? throughDate;
-    const price = priceRows
+    const instrumentEvents = eventRows
       .filter((row) => row.instrumentId === instrument.id)
-      .sort((left, right) =>
-        right.effectiveDate.localeCompare(left.effectiveDate),
-      )[0];
+      .sort(
+        (left, right) =>
+          left.tradeDate.localeCompare(right.tradeDate) ||
+          left.eventSequence - right.eventSequence ||
+          left.createdAt.localeCompare(right.createdAt) ||
+          left.id.localeCompare(right.id),
+      );
+    const exposureFrom = instrumentEvents[0]?.tradeDate ?? throughDate;
+    const { price, latestPrice, latestSplitDate } = selectPositionPrice(
+      instrument.id,
+      priceRows,
+      instrumentEvents,
+      throughDate,
+    );
     if (!price) {
       missingPrices.push(instrument.id);
       issues.push({
@@ -193,11 +195,11 @@ export function calculatePositionAccountSnapshot(
         instrumentName: instrument.name,
         instrumentSymbol: instrument.symbol,
         currency: instrument.quoteCurrency,
-        affectedFrom: exposureFrom,
+        affectedFrom: latestSplitDate ?? exposureFrom,
         affectedTo: throughDate,
-        lastPriceDate: null,
-        source: null,
-        provenance: null,
+        lastPriceDate: latestPrice?.effectiveDate ?? null,
+        source: latestPrice?.source ?? null,
+        provenance: latestPrice?.provenance ?? null,
         thresholdDays: null,
       });
       return {

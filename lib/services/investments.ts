@@ -558,6 +558,8 @@ function savePositionEvent(
           ),
         )
         .all(),
+      undefined,
+      { validateCorporateActions: true },
     );
     recalculateAccountBalance(userId, tx, account.id);
     return id;
@@ -649,7 +651,11 @@ function validateAndRecalculatePositionAccount(
   userId: string,
   accountId: string,
 ) {
-  replayPositionQuantities(accountPositionEvents(tx, userId, accountId));
+  replayPositionQuantities(
+    accountPositionEvents(tx, userId, accountId),
+    undefined,
+    { validateCorporateActions: true },
+  );
   recalculateAccountBalance(userId, tx, accountId);
 }
 

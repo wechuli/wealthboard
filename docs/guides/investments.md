@@ -100,6 +100,12 @@ legal ownership, cash in lieu, fractional-share disposal, or jurisdictional tax
 treatment. Add separate confirmed cash or fee records when the statement shows
 them.
 
+Historical edits, deletions, and imports are rejected when they would change
+the share entitlement of a recorded spin-off or merger. Remove the affected
+corporate action, correct the earlier holdings, then record the action again.
+If later actions depend on it, remove those actions in reverse chronological
+order first.
+
 ## Maintain prices and freshness
 
 Each price records the instrument, positive decimal unit price, effective date,
@@ -110,6 +116,10 @@ source, optional stable external ID, and provenance.
 At any value date, Wealthboard uses the latest price effective on or before that
 date. It never uses a future price. An earlier price may be carried forward, but
 its original date and stale state remain visible.
+
+After a stock split, add a quote dated on or after the split. A pre-split quote
+cannot value the new share count; the holding remains incomplete until a
+post-split quote is available. Earlier historical values are preserved.
 
 Configure separate stock, ETF, and fund freshness thresholds under
 **Settings → Preferences → Price freshness thresholds**. A missing price,
@@ -175,6 +185,9 @@ its reinvestment buys must share one atomic group.
 Confirmation reparses the SHA-256-confirmed file and writes the complete
 interdependent sequence in one transaction. See the exact fields, templates,
 and duplicate rules in [Investment History v1](../reference/investment-import).
+
+An imported price belongs to the instrument, not just the selected account.
+It also refreshes the values of your other accounts holding that instrument.
 
 ## Understand downstream values
 

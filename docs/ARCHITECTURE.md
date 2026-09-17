@@ -168,6 +168,10 @@ contract.
   Every grouped edit or deletion replays all affected accounts in one SQLite
   transaction. Same-date events use an explicit per-account sequence before
   timestamp and ID tie-breakers.
+  Mutations and restores validate recorded spin-off and merger entitlements
+  against the earlier source quantity. Incompatible historical changes are
+  rejected atomically; dependent actions must be removed and recorded again.
+  Restore validation replays each account independently.
 - Position accounts use price snapshots rather than account valuations to
   change market value. An optional owner/account-scoped broker reconciliation
   may retain its observation date and reported cash/total, but it cannot
@@ -178,12 +182,16 @@ contract.
   freshness thresholds are user-configurable. Detailed issues carry the
   affected range, instrument, currency, last price, source, and provenance to
   account, goal, estate, dashboard, report, and import-preview consumers.
+  Snapshot and import-preview price selection share a split-date cutoff:
+  quotes before the latest recorded split cannot value split-adjusted holdings.
 - Account History Import v1 remains unchanged. Position accounts receive a
   separate versioned investment-history contract for instruments, opening
   holdings, trades, cash activity, and prices. Identical external IDs are
   skipped, conflicts fail, and interdependent investment activity commits only
   when the complete remaining event sequence is valid. Each account mode
   rejects the other mode's format before parsing financial rows.
+  Imported prices rebuild every affected same-owner account cache inside the
+  import transaction, including accounts other than the import target.
 - User portability version 8 adds conversion provenance, grouped cash links,
   explicit event ordering, selected corporate actions, and freshness settings
   to the version 7 position collections. Version 7 upgrades deterministically;

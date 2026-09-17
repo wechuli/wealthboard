@@ -32,6 +32,7 @@ import {
 import {
   createInvestmentInstrument,
   deletePositionEvent,
+  deleteSecurityPrice,
   getPositionAccountSnapshot,
   recordDividendReinvestment,
   recordInKindTransfer,
@@ -187,6 +188,118 @@ describe.sequential("position account valuation", () => {
     ]);
 
     expect(quantities.get("instrument-split")).toBe("15");
+  });
+
+  test("requires a post-split quote for split-adjusted holdings", async () => {
+    const { userId } = await registerUser({
+      username: "split-quote-owner",
+      displayName: "Split Quote Owner",
+      password: "split-quote-owner-password",
+      baseCurrency: "USD",
+    });
+    const categoryId = getDatabase()
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(eq(categories.userId, userId), eq(categories.slug, "securities")),
+      )
+      .get()!.id;
+    const accountId = createAccount(userId, {
+      name: "Split Quote Brokerage",
+      categoryId,
+      currency: "USD",
+      trackingMode: "positions",
+      openingValue: "0",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    const instrumentId = createInvestmentInstrument(userId, {
+      name: "Split Quote Stock",
+      identifierType: "custom",
+      assetType: "stock",
+      quoteCurrency: "USD",
+    });
+    recordPositionEvent(userId, {
+      accountId,
+      instrumentId,
+      type: "opening_position",
+      quantity: "10",
+      tradeDate: "2026-01-01",
+    });
+    setSecurityPrice(userId, {
+      instrumentId,
+      price: "100",
+      effectiveDate: "2026-01-01",
+    });
+    recordStockSplit(userId, {
+      accountId,
+      instrumentId,
+      numerator: "2",
+      denominator: "1",
+      actionDate: "2026-01-02",
+      idempotencyKey: crypto.randomUUID(),
+    });
+
+    const asOf = "2026-01-02T23:59:59.999Z";
+    const unpriced = getPositionAccountSnapshot(userId, accountId, asOf);
+    expect(unpriced.complete).toBe(false);
+    expect(unpriced.missingPrices).toEqual([instrumentId]);
+    expect(unpriced.positions[0]).toMatchObject({
+      quantity: "20",
+      price: null,
+      accountValueMinor: null,
+    });
+    expect(unpriced.issues).toContainEqual(
+      expect.objectContaining({
+        type: "missing_price",
+        affectedFrom: "2026-01-02T12:00:00.000Z",
+        lastPriceDate: "2026-01-01T12:00:00.000Z",
+      }),
+    );
+    expect(
+      getPositionAccountSnapshot(
+        userId,
+        accountId,
+        "2026-01-01T23:59:59.999Z",
+      ),
+    ).toMatchObject({ totalMinor: 100_000n, complete: true });
+
+    const cashImport = JSON.stringify({
+      format: "wealthboard-investment-history",
+      version: 1,
+      cash_transactions: [
+        { type: "deposit", amount: "1.00", date: "2026-01-02" },
+      ],
+    });
+    expect(
+      previewInvestmentHistory(userId, accountId, cashImport, "json"),
+    ).toMatchObject({
+      canCommit: true,
+      current: { complete: false, totalMinor: 0 },
+      projected: { complete: false, totalMinor: 100 },
+    });
+
+    const postSplitPriceId = setSecurityPrice(userId, {
+      instrumentId,
+      price: "50",
+      effectiveDate: "2026-01-02",
+    });
+    expect(getPositionAccountSnapshot(userId, accountId, asOf)).toMatchObject({
+      totalMinor: 100_000n,
+      complete: true,
+    });
+    expect(
+      previewInvestmentHistory(userId, accountId, cashImport, "json"),
+    ).toMatchObject({
+      canCommit: true,
+      current: { complete: true, totalMinor: 100_000 },
+      projected: { complete: true, totalMinor: 100_100 },
+    });
+    deleteSecurityPrice(userId, postSplitPriceId);
+    expect(getPositionAccountSnapshot(userId, accountId, asOf)).toMatchObject({
+      complete: false,
+      missingPrices: [instrumentId],
+    });
   });
 
   test("derives cash plus fractional positions in exact minor units", async () => {
@@ -675,6 +788,125 @@ describe.sequential("position account valuation", () => {
         )
         .all(),
     ).toHaveLength(1);
+  });
+
+  test("rebuilds every owner account affected by an imported shared price", async () => {
+    const instrumentInput = {
+      externalId: "shared-price-import",
+      name: "Shared Import Stock",
+      identifierType: "custom" as const,
+      assetType: "stock" as const,
+      quoteCurrency: "USD",
+    };
+    const instrumentId = createInvestmentInstrument(userId, instrumentInput);
+    const foreignInstrumentId = createInvestmentInstrument(
+      otherUserId,
+      instrumentInput,
+    );
+    setSecurityPrice(userId, {
+      instrumentId,
+      price: "10",
+      effectiveDate: "2026-01-01",
+    });
+    setSecurityPrice(otherUserId, {
+      instrumentId: foreignInstrumentId,
+      price: "30",
+      effectiveDate: "2026-01-01",
+    });
+    const fixtures = [
+      {
+        ownerId: userId,
+        categoryId: currentCategoryId(),
+        instrumentId,
+        name: "Shared Price Target",
+        quantity: "10",
+      },
+      {
+        ownerId: userId,
+        categoryId: currentCategoryId(),
+        instrumentId,
+        name: "Shared Price Peer",
+        quantity: "20",
+      },
+      {
+        ownerId: otherUserId,
+        categoryId: otherCategoryId,
+        instrumentId: foreignInstrumentId,
+        name: "Foreign Shared Price",
+        quantity: "5",
+      },
+    ];
+    const [targetAccountId, peerAccountId, foreignAccountId] = fixtures.map(
+      (fixture) => {
+        const accountId = createAccount(fixture.ownerId, {
+          name: fixture.name,
+          categoryId: fixture.categoryId,
+          currency: "USD",
+          trackingMode: "positions",
+          openingValue: "0",
+          isIncludedInNetWorth: true,
+          openedAt: "2026-01-01",
+        });
+        recordPositionEvent(fixture.ownerId, {
+          accountId,
+          instrumentId: fixture.instrumentId,
+          type: "opening_position",
+          quantity: fixture.quantity,
+          tradeDate: "2026-01-01",
+        });
+        return accountId;
+      },
+    );
+    const archive = JSON.stringify({
+      format: "wealthboard-investment-history",
+      version: 1,
+      instruments: [
+        {
+          external_id: instrumentInput.externalId,
+          name: instrumentInput.name,
+          identifier_type: "custom",
+          asset_type: "stock",
+          quote_currency: "USD",
+        },
+      ],
+      prices: [
+        {
+          external_id: "shared-price-import:2026-01-02",
+          instrument_external_id: instrumentInput.externalId,
+          price: "20",
+          effective_date: "2026-01-02",
+          source: "statement",
+        },
+      ],
+    });
+
+    expect(
+      previewInvestmentHistory(userId, targetAccountId, archive, "json"),
+    ).toMatchObject({
+      canCommit: true,
+      current: { totalMinor: 10_000 },
+      projected: { totalMinor: 20_000 },
+    });
+    expect((await getAccount(userId, peerAccountId))?.currentValueMinor).toBe(
+      20_000,
+    );
+    expect(
+      commitInvestmentHistory(userId, targetAccountId, archive, "json")
+        .finalBalanceMinor,
+    ).toBe(20_000);
+    expect((await getAccount(userId, peerAccountId))?.currentValueMinor).toBe(
+      40_000,
+    );
+    expect(getPositionAccountSnapshot(userId, peerAccountId).totalMinor).toBe(
+      40_000n,
+    );
+    expect(
+      (await getAccount(otherUserId, foreignAccountId))?.currentValueMinor,
+    ).toBe(15_000);
+    expect(
+      getPositionAccountSnapshot(otherUserId, foreignAccountId).totalMinor,
+    ).toBe(15_000n);
+    expect(await getAccount(userId, foreignAccountId)).toBeUndefined();
   });
 
   test("requires explicit settlement data for cross-currency trades", () => {
@@ -1652,6 +1884,254 @@ describe.sequential("position account valuation", () => {
     );
     expect(restored.get(sourceInstrumentId)).toBe("15");
     expect(restored.get(mergerInstrumentId)).toBeUndefined();
+  });
+
+  test.each(["spinoff", "merger"] as const)(
+    "rejects history changes that invalidate a recorded corporate action (%s)",
+    async (actionType) => {
+      const accountId = createAccount(userId, {
+        name: `Correction ${actionType} Brokerage`,
+        categoryId: currentCategoryId(),
+        currency: "USD",
+        trackingMode: "positions",
+        openingValue: "0",
+        isIncludedInNetWorth: true,
+        openedAt: "2026-01-01",
+      });
+      const sourceExternalId = `correction-source:${actionType}`;
+      const sourceInstrumentId = createInvestmentInstrument(userId, {
+        externalId: sourceExternalId,
+        name: `Correction ${actionType} Source`,
+        identifierType: "custom",
+        assetType: "stock",
+        quoteCurrency: "USD",
+      });
+      const destinationInstrumentId = createInvestmentInstrument(userId, {
+        name: `Correction ${actionType} Destination`,
+        identifierType: "custom",
+        assetType: "stock",
+        quoteCurrency: "USD",
+      });
+      setSecurityPrice(userId, {
+        instrumentId: sourceInstrumentId,
+        price: "10",
+        effectiveDate: "2026-01-01",
+      });
+      setSecurityPrice(userId, {
+        instrumentId: destinationInstrumentId,
+        price: "5",
+        effectiveDate: "2026-01-01",
+      });
+      const opening = {
+        accountId,
+        instrumentId: sourceInstrumentId,
+        type: "opening_position" as const,
+        quantity: "10",
+        tradeDate: "2026-01-01",
+      };
+      const openingId = recordPositionEvent(userId, opening);
+      const adjustmentId = recordPositionEvent(userId, {
+        ...opening,
+        type: "quantity_adjustment",
+        quantity: "-5",
+        tradeDate: "2026-01-02",
+      });
+      const recordAction = () =>
+        actionType === "spinoff"
+          ? recordSpinoff(userId, {
+              accountId,
+              sourceInstrumentId,
+              newInstrumentId: destinationInstrumentId,
+              numerator: "1",
+              denominator: "5",
+              actionDate: "2026-02-01",
+              idempotencyKey: crypto.randomUUID(),
+            })
+          : recordMerger(userId, {
+              accountId,
+              sourceInstrumentId,
+              destinationInstrumentId,
+              numerator: "2",
+              denominator: "1",
+              actionDate: "2026-02-01",
+              idempotencyKey: crypto.randomUUID(),
+            });
+      const groupId = recordAction();
+      const before = getPositionAccountSnapshot(userId, accountId);
+      const beforeCache = (await getAccount(userId, accountId))!
+        .currentValueMinor;
+      const invalidArchive = structuredClone(await exportData(userId));
+      invalidArchive.positionEvents.find(
+        (event) => event.id === openingId,
+      )!.quantity = "20";
+      expect(() => restoreUserData(userId, invalidArchive)).toThrow(
+        /corporate action/i,
+      );
+
+      expect(() =>
+        updatePositionEvent(userId, openingId, {
+          ...opening,
+          quantity: "20",
+        }),
+      ).toThrow(/corporate action/i);
+      expect(() => deletePositionEvent(userId, adjustmentId)).toThrow(
+        /corporate action/i,
+      );
+      expect(() =>
+        recordPositionEvent(userId, {
+          ...opening,
+          type: "quantity_adjustment",
+          quantity: "1",
+          tradeDate: "2026-01-03",
+        }),
+      ).toThrow(/corporate action/i);
+
+      const archive = JSON.stringify({
+        format: "wealthboard-investment-history",
+        version: 1,
+        instruments: [
+          {
+            external_id: sourceExternalId,
+            name: `Correction ${actionType} Source`,
+            identifier_type: "custom",
+            asset_type: "stock",
+            quote_currency: "USD",
+          },
+        ],
+        position_events: [
+          {
+            external_id: `correction-import:${actionType}`,
+            instrument_external_id: sourceExternalId,
+            type: "quantity_adjustment",
+            quantity: "1",
+            trade_currency: "USD",
+            trade_date: "2026-01-03",
+          },
+        ],
+      });
+      const preview = previewInvestmentHistory(
+        userId,
+        accountId,
+        archive,
+        "json",
+      );
+      expect(preview.canCommit).toBe(false);
+      expect(preview.errors).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringMatching(/corporate action/i),
+        }),
+      );
+      expect(() =>
+        commitInvestmentHistory(userId, accountId, archive, "json"),
+      ).toThrow("Resolve every investment-history error");
+      expect(getPositionAccountSnapshot(userId, accountId).positions).toEqual(
+        before.positions,
+      );
+      expect((await getAccount(userId, accountId))?.currentValueMinor).toBe(
+        beforeCache,
+      );
+      expect(() =>
+        updatePositionEvent(userId, openingId, {
+          ...opening,
+          notes: "Corrected reference note",
+        }),
+      ).not.toThrow();
+
+      const actionEvent = getDatabase()
+        .select()
+        .from(positionEvents)
+        .where(
+          and(
+            eq(positionEvents.userId, userId),
+            eq(positionEvents.eventGroupId, groupId),
+          ),
+        )
+        .get()!;
+      deletePositionEvent(userId, actionEvent.id);
+      updatePositionEvent(userId, openingId, { ...opening, quantity: "20" });
+      recordAction();
+      const corrected = getPositionAccountSnapshot(userId, accountId);
+      expect(
+        corrected.positions.find(
+          (position) => position.instrument.id === destinationInstrumentId,
+        )?.quantity,
+      ).toBe(actionType === "spinoff" ? "3" : "30");
+      expect((await getAccount(userId, accountId))?.currentValueMinor).toBe(
+        Number(corrected.totalMinor),
+      );
+    },
+  );
+
+  test("rejects grouped cash deletion that invalidates a spin-off", () => {
+    const accountId = createAccount(userId, {
+      name: "Grouped Cash Correction Brokerage",
+      categoryId: currentCategoryId(),
+      currency: "USD",
+      trackingMode: "positions",
+      openingValue: "0",
+      isIncludedInNetWorth: true,
+      openedAt: "2026-01-01",
+    });
+    const sourceInstrumentId = createInvestmentInstrument(userId, {
+      name: "Grouped Cash Source",
+      identifierType: "custom",
+      assetType: "stock",
+      quoteCurrency: "USD",
+    });
+    const destinationInstrumentId = createInvestmentInstrument(userId, {
+      name: "Grouped Cash Spin-off",
+      identifierType: "custom",
+      assetType: "stock",
+      quoteCurrency: "USD",
+    });
+    recordPositionEvent(userId, {
+      accountId,
+      instrumentId: sourceInstrumentId,
+      type: "opening_position",
+      quantity: "10",
+      tradeDate: "2026-01-01",
+    });
+    const reinvestmentGroupId = recordDividendReinvestment(userId, {
+      accountId,
+      instrumentId: sourceInstrumentId,
+      dividendAmount: "50",
+      quantity: "5",
+      unitPrice: "10",
+      activityDate: "2026-01-02",
+      idempotencyKey: crypto.randomUUID(),
+    });
+    recordSpinoff(userId, {
+      accountId,
+      sourceInstrumentId,
+      newInstrumentId: destinationInstrumentId,
+      numerator: "1",
+      denominator: "5",
+      actionDate: "2026-02-01",
+      idempotencyKey: crypto.randomUUID(),
+    });
+    const dividend = getDatabase()
+      .query.transactions.findFirst({
+        where: and(
+          eq(transactions.userId, userId),
+          eq(transactions.eventGroupId, reinvestmentGroupId),
+        ),
+      })
+      .sync()!;
+    const before = getPositionAccountSnapshot(userId, accountId);
+    expect(() => deleteTransaction(userId, dividend.id)).toThrow(
+      /corporate action/i,
+    );
+    expect(getPositionAccountSnapshot(userId, accountId)).toEqual(before);
+    expect(
+      getDatabase()
+        .query.transactions.findFirst({
+          where: and(
+            eq(transactions.userId, userId),
+            eq(transactions.id, dividend.id),
+          ),
+        })
+        .sync(),
+    ).toEqual(dividend);
   });
 
   test("imports grouped dividend reinvestments atomically", async () => {

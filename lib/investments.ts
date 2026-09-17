@@ -15,6 +15,18 @@ export class InvalidPositionSequenceError extends Error {
   }
 }
 
+export class InvalidCorporateActionSequenceError extends Error {
+  constructor(
+    public readonly instrumentId: string,
+    public readonly eventDate: string,
+  ) {
+    super(
+      "This change would invalidate a recorded corporate action. Delete the affected action before correcting earlier holdings, then record it again.",
+    );
+    this.name = "InvalidCorporateActionSequenceError";
+  }
+}
+
 export function canonicalDecimal(
   value: string,
   options: {
@@ -40,6 +52,7 @@ export function canonicalDecimal(
 export type PositionEventLike = {
   id: string;
   instrumentId: string;
+  relatedInstrumentId?: string | null;
   type: PositionEventType;
   quantity: string;
   tradeDate: string;
@@ -99,6 +112,7 @@ export function applyPositionEventQuantity(
 export function replayPositionQuantities(
   events: PositionEventLike[],
   throughDate?: string,
+  options: { validateCorporateActions?: boolean } = {},
 ) {
   const quantities = new Map<string, Decimal>();
   const ordered = orderPositionEvents(events, throughDate);
@@ -111,6 +125,22 @@ export function replayPositionQuantities(
         event.instrumentId,
         event.tradeDate,
       );
+    }
+    if (options.validateCorporateActions) {
+      let expectedQuantity: Decimal | null = null;
+      if (event.type === "spinoff") {
+        const sourceQuantity =
+          quantities.get(event.relatedInstrumentId ?? "") ?? new Decimal(0);
+        expectedQuantity = splitQuantity(sourceQuantity, event);
+      } else if (event.type === "merger_out") {
+        expectedQuantity = current;
+      }
+      if (expectedQuantity && !expectedQuantity.equals(event.quantity)) {
+        throw new InvalidCorporateActionSequenceError(
+          event.instrumentId,
+          event.tradeDate,
+        );
+      }
     }
     quantities.set(event.instrumentId, next);
   }
@@ -131,6 +161,41 @@ export function calculateQuoteValueMinor(
   const scale = new Decimal(10).pow(currencyDigits(currency));
   const value = new Decimal(quantity).mul(unitPrice).mul(scale);
   return BigInt(value.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toFixed(0));
+}
+
+export function selectPositionPrice<
+  Price extends { instrumentId: string; effectiveDate: string },
+>(
+  instrumentId: string,
+  prices: Price[],
+  events: PositionEventLike[],
+  throughDate: string,
+) {
+  const latestSplitDate = events
+    .filter(
+      (event) =>
+        event.instrumentId === instrumentId &&
+        event.type === "split" &&
+        event.tradeDate <= throughDate,
+    )
+    .map((event) => event.tradeDate)
+    .sort()
+    .at(-1);
+  const latestPrice = prices
+    .filter(
+      (price) =>
+        price.instrumentId === instrumentId &&
+        price.effectiveDate <= throughDate,
+    )
+    .sort((left, right) =>
+      right.effectiveDate.localeCompare(left.effectiveDate),
+    )[0];
+  const price =
+    latestPrice &&
+    (!latestSplitDate || latestPrice.effectiveDate >= latestSplitDate)
+      ? latestPrice
+      : undefined;
+  return { price, latestPrice, latestSplitDate };
 }
 
 export function convertMinorWithAppliedRate(

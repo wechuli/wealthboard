@@ -197,6 +197,9 @@ test.describe.serial("position accounts", () => {
       page.getByText("Dividend reinvestment purchase"),
     ).toBeVisible();
 
+    const beforeSplit = (await (
+      await page.request.get("/api/export/json")
+    ).json()) as typeof exportedBeforeImport;
     await page.getByRole("link", { name: "Corp action" }).click();
     await page.getByLabel("Action").selectOption("split");
     await page.getByLabel("Instrument").selectOption({ label: "EWLD · KES" });
@@ -205,6 +208,24 @@ test.describe.serial("position accounts", () => {
     await page.getByLabel("Effective date").fill("2026-04-01");
     await page.getByRole("button", { name: "Save stock split" }).click();
     await expect(page.getByText(/Stock split · EWLD/)).toBeVisible();
+    await expect(page.getByText("Missing", { exact: true })).toBeVisible();
+
+    await page.getByLabel("Update Example World ETF price").click();
+    await page.getByLabel("Unit price").fill("50");
+    await page.getByLabel("Price date").fill("2026-04-01");
+    await page.getByLabel("Provenance").fill("Post-split statement");
+    await page.getByRole("button", { name: "Save price" }).click();
+    await expect(page.getByText("Missing", { exact: true })).toHaveCount(0);
+    const afterSplit = (await (
+      await page.request.get("/api/export/json")
+    ).json()) as typeof exportedBeforeImport;
+    expect(
+      afterSplit.accounts.find((account) => account.id === accountId)
+        ?.currentValueMinor,
+    ).toBe(
+      beforeSplit.accounts.find((account) => account.id === accountId)
+        ?.currentValueMinor,
+    );
 
     await page.goto("/accounts/new");
     await page.getByLabel("Account or asset name").fill("Legacy Investment");
