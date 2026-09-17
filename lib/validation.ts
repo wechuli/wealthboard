@@ -184,6 +184,10 @@ export const investmentInstrumentSchema = z.object({
   quoteCurrency: currencyCodeSchema,
 });
 
+export const deleteInvestmentInstrumentSchema = z.object({
+  instrumentId: z.string().uuid(),
+});
+
 export const positionEventSchema = z.object({
   accountId: z.string().uuid(),
   instrumentId: z.string().uuid(),

@@ -1,11 +1,29 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import InstrumentsPage from "@/app/(app)/instruments/page";
 import { AccountConversionForm } from "@/components/forms/account-conversion-form";
 import { InvestmentCommandForm } from "@/components/forms/investment-command-form";
 import { PrivacyProvider } from "@/components/privacy-provider";
 import type { InvestmentInstrument } from "@/db/schema";
+
+const mocks = vi.hoisted(() => ({
+  instruments: vi.fn(),
+  deleteInstrument: vi.fn(),
+  archiveInstrument: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/session", () => ({
+  requireSession: async () => ({ userId: "instrument-owner" }),
+}));
+vi.mock("@/lib/services/investments", () => ({
+  listInvestmentInstruments: mocks.instruments,
+}));
+vi.mock("@/app/(app)/actions", () => ({
+  deleteInvestmentInstrumentAction: mocks.deleteInstrument,
+  archiveInvestmentInstrumentAction: mocks.archiveInstrument,
+}));
 
 const instrument: InvestmentInstrument = {
   id: "22222222-2222-4222-8222-222222222222",
@@ -22,6 +40,55 @@ const instrument: InvestmentInstrument = {
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
+
+describe("instrument directory deletion", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.instruments.mockReturnValue([instrument]);
+    mocks.deleteInstrument.mockResolvedValue({ ok: true });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it.each([null, "2026-09-01T12:00:00.000Z"])(
+    "requires confirmation before deleting an instrument (archived: %s)",
+    async (archivedAt) => {
+      mocks.instruments.mockReturnValue([{ ...instrument, archivedAt }]);
+      const user = userEvent.setup();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      render(await InstrumentsPage());
+      const remove = screen.getByRole("button", { name: "Delete Example ETF" });
+      await user.click(remove);
+      expect(confirm).toHaveBeenCalledWith(
+        "Permanently delete Example ETF and all its saved prices? This cannot be undone. Instruments linked to account history cannot be deleted.",
+      );
+      expect(mocks.deleteInstrument).not.toHaveBeenCalled();
+      confirm.mockReturnValue(true);
+      await user.click(remove);
+      await waitFor(() =>
+        expect(mocks.deleteInstrument).toHaveBeenCalledWith(instrument.id),
+      );
+    },
+  );
+
+  it("keeps linked instruments visible and reports a rejected deletion", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mocks.deleteInstrument.mockResolvedValue({
+      message: "This instrument is still linked to account history.",
+    });
+    render(await InstrumentsPage());
+    await user.click(
+      screen.getByRole("button", { name: "Delete Example ETF" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "still linked to account history",
+    );
+    expect(screen.getByText("Example ETF")).toBeVisible();
+  });
+});
 
 describe("advanced investment workflows", () => {
   afterEach(cleanup);

@@ -17,7 +17,7 @@ import {
   vi,
 } from "vitest";
 
-import { accounts, categories } from "@/db/schema";
+import { accounts, categories, positionEvents } from "@/db/schema";
 import { registerUser } from "@/lib/auth/users";
 import { closeDatabase, getDatabase, getSqlite } from "@/lib/db";
 import {
@@ -43,11 +43,14 @@ import { accountCsv, exportData } from "@/lib/services/portability";
 import { recordTransfer } from "@/lib/services/transfers";
 import {
   createInvestmentInstrument,
+  deleteInvestmentInstrument,
   deletePositionEvent,
+  getInvestmentInstrument,
   getPositionAccountSnapshot,
   recordInKindTransfer,
   recordPositionEvent,
   recordPositionReconciliation,
+  setInvestmentInstrumentArchived,
   setSecurityPrice,
 } from "@/lib/services/investments";
 import { convertAccountToPositions } from "@/lib/services/account-conversion";
@@ -97,6 +100,153 @@ beforeEach(async () => {
       and(eq(categories.userId, ownerId), eq(categories.slug, "securities")),
     )
     .get()!.id;
+});
+
+test.each([false, true])(
+  "deletes an unattached instrument and its prices without crossing users (archived: %s)",
+  async (archived) => {
+    const input = {
+      name: "Unused Instrument",
+      externalId: "unused-instrument",
+      identifierType: "custom" as const,
+      assetType: "etf" as const,
+      quoteCurrency: "USD",
+    };
+    const instrumentId = createInvestmentInstrument(ownerId, input);
+    const foreignId = createInvestmentInstrument(otherId, input);
+    for (const [userId, targetId] of [
+      [ownerId, instrumentId],
+      [otherId, foreignId],
+    ]) {
+      setSecurityPrice(userId, {
+        instrumentId: targetId,
+        price: "10",
+        effectiveDate: "2026-01-01",
+      });
+    }
+    if (archived) setInvestmentInstrumentArchived(ownerId, instrumentId, true);
+    const before = await exportData(ownerId);
+    const foreignBefore = await exportData(otherId);
+    expect(() => deleteInvestmentInstrument(otherId, instrumentId)).toThrow(
+      "Instrument not found.",
+    );
+    expect(() =>
+      deleteInvestmentInstrument(ownerId, crypto.randomUUID()),
+    ).toThrow("Instrument not found.");
+    expect(await exportData(ownerId)).toEqual(before);
+
+    deleteInvestmentInstrument(ownerId, instrumentId);
+    expect(getInvestmentInstrument(ownerId, instrumentId)).toBeUndefined();
+    const after = await exportData(ownerId);
+    expect(after.investmentInstruments).toEqual([]);
+    expect(after.securityPrices).toEqual([]);
+    expect(await exportData(otherId)).toEqual(foreignBefore);
+    expect(getSqlite().pragma("foreign_key_check")).toHaveLength(0);
+    expect(() => createInvestmentInstrument(ownerId, input)).not.toThrow();
+  },
+);
+
+test.each(["active", "closed", "archived"] as const)(
+  "protects instrument history in a %s account until the account is deleted",
+  async (state) => {
+    const accountName = `Instrument ${state} Account`;
+    const accountId = createAccount(ownerId, {
+      name: accountName,
+      categoryId,
+      currency: "USD",
+      trackingMode: "positions",
+      openingValue: "0",
+      openedAt: "2026-01-01",
+      isIncludedInNetWorth: true,
+    });
+    const instrumentId = createInvestmentInstrument(ownerId, {
+      name: "Attached Instrument",
+      identifierType: "custom",
+      assetType: "stock",
+      quoteCurrency: "USD",
+    });
+    recordPositionEvent(ownerId, {
+      accountId,
+      instrumentId,
+      type: "opening_position",
+      quantity: "2",
+      tradeDate: "2026-01-01",
+    });
+    setSecurityPrice(ownerId, {
+      instrumentId,
+      price: "10",
+      effectiveDate: "2026-01-01",
+    });
+    if (state === "closed") {
+      recordPositionEvent(ownerId, {
+        accountId,
+        instrumentId,
+        type: "sell",
+        quantity: "2",
+        unitPrice: "10",
+        tradeDate: "2026-01-02",
+      });
+      setInvestmentInstrumentArchived(ownerId, instrumentId, true);
+    }
+    if (state === "archived") setAccountArchived(ownerId, accountId, true);
+    const before = await exportData(ownerId);
+    expect(() => deleteInvestmentInstrument(ownerId, instrumentId)).toThrow(
+      "still linked to account history",
+    );
+    expect(await exportData(ownerId)).toEqual(before);
+    setAccountArchived(ownerId, accountId, true);
+    deleteAccount(ownerId, accountId, accountName);
+    expect(() =>
+      deleteInvestmentInstrument(ownerId, instrumentId),
+    ).not.toThrow();
+    expect(getInvestmentInstrument(ownerId, instrumentId)).toBeUndefined();
+    expect(getSqlite().pragma("foreign_key_check")).toHaveLength(0);
+  },
+);
+
+test("protects an instrument referenced only by related corporate-action history", async () => {
+  const accountId = createAccount(ownerId, {
+    name: "Related Instrument Account",
+    categoryId,
+    currency: "USD",
+    trackingMode: "positions",
+    openingValue: "0",
+    openedAt: "2026-01-01",
+    isIncludedInNetWorth: true,
+  });
+  const [sourceId, destinationId] = [
+    "Related Source",
+    "Related Destination",
+  ].map((name) =>
+    createInvestmentInstrument(ownerId, {
+      name,
+      identifierType: "custom",
+      assetType: "stock",
+      quoteCurrency: "USD",
+    }),
+  );
+  getDatabase()
+    .insert(positionEvents)
+    .values({
+      id: crypto.randomUUID(),
+      userId: ownerId,
+      accountId,
+      instrumentId: destinationId,
+      relatedInstrumentId: sourceId,
+      type: "spinoff",
+      quantity: "1",
+      tradeCurrency: "USD",
+      tradeDate: "2026-01-01T12:00:00.000Z",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      updatedAt: "2026-01-01T12:00:00.000Z",
+    })
+    .run();
+  const before = await exportData(ownerId);
+  expect(() => deleteInvestmentInstrument(ownerId, sourceId)).toThrow(
+    "still linked to account history",
+  );
+  expect(await exportData(ownerId)).toEqual(before);
+  expect(getSqlite().pragma("foreign_key_check")).toHaveLength(0);
 });
 
 test.each(["balance", "positions"] as const)(

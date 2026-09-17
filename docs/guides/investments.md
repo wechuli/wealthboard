@@ -52,6 +52,18 @@ The current account value is:
 2. plus each replayed quantity multiplied by its effective unit price;
 3. converted into the account currency when the instrument is quoted elsewhere.
 
+## Permanently delete an instrument
+
+Open **Instruments** and select the instrument's delete control. Confirming
+permanently removes the instrument and all its saved prices. Both active and
+archived instruments can be deleted when no account history references them.
+
+Closed holdings, archived accounts, and related corporate-action records still
+count as account links. Remove the linked position activity or permanently
+delete the linked accounts before deleting the instrument. Archiving an
+account alone does not remove those links. Previously downloaded backups and
+saved estate snapshots are not rewritten.
+
 ## Record buys and sells
 
 Use **Buy** or **Sell** from the position account. Do not use the generic

@@ -1,7 +1,10 @@
 import Link from "next/link";
-import { ArchiveRestore, Edit3, Plus } from "lucide-react";
+import { ArchiveRestore, Edit3, Plus, Trash2 } from "lucide-react";
 
-import { archiveInvestmentInstrumentAction } from "@/app/(app)/actions";
+import {
+  archiveInvestmentInstrumentAction,
+  deleteInvestmentInstrumentAction,
+} from "@/app/(app)/actions";
 import { MutationButton } from "@/components/mutation-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,8 +41,8 @@ export default async function InstrumentsPage() {
         <CardContent>
           {!instruments.length ? (
             <p className="py-12 text-center text-sm text-slate-500">
-              No instruments yet. Add one to make it available to your
-              position accounts.
+              No instruments yet. Add one to make it available to your position
+              accounts.
             </p>
           ) : (
             <div className="divide-y divide-white/[0.06]">
@@ -63,7 +66,7 @@ export default async function InstrumentsPage() {
                       {instrument.quoteCurrency}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     <Button
                       asChild
                       variant="ghost"
@@ -99,6 +102,21 @@ export default async function InstrumentsPage() {
                       }
                     >
                       <ArchiveRestore size={15} />
+                    </MutationButton>
+                    <MutationButton
+                      action={deleteInvestmentInstrumentAction.bind(
+                        null,
+                        instrument.id,
+                      )}
+                      confirm={`Permanently delete ${instrument.name} and all its saved prices? This cannot be undone. Instruments linked to account history cannot be deleted.`}
+                      successMessage="Instrument permanently deleted."
+                      variant="ghost"
+                      size="icon"
+                      className="text-red-300 hover:text-red-200"
+                      aria-label={`Delete ${instrument.name}`}
+                      title={`Permanently delete ${instrument.name}`}
+                    >
+                      <Trash2 size={15} />
                     </MutationButton>
                   </div>
                 </div>

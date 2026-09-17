@@ -20,6 +20,7 @@ import {
   goalSchema,
   institutionSchema,
   investmentInstrumentSchema,
+  deleteInvestmentInstrumentSchema,
   investmentCommandSchema,
   localCredentialSchema,
   passwordConfirmationSchema,
@@ -114,6 +115,7 @@ import {
 } from "@/lib/services/ai-provider";
 import {
   createInvestmentInstrument,
+  deleteInvestmentInstrument,
   deletePositionEvent,
   deletePositionReconciliation,
   deleteSecurityPrice,
@@ -637,6 +639,23 @@ export async function archiveInvestmentInstrumentAction(
     ok: true,
     message: archived ? "Instrument archived." : "Instrument restored.",
   };
+}
+
+export async function deleteInvestmentInstrumentAction(
+  instrumentId: string,
+): Promise<ActionState> {
+  const { userId } = await requireSession();
+  const parsed = deleteInvestmentInstrumentSchema.safeParse({ instrumentId });
+  if (!parsed.success) return zodActionError(parsed.error);
+  try {
+    deleteInvestmentInstrument(userId, parsed.data.instrumentId);
+  } catch (error) {
+    return mutationError(error);
+  }
+  revalidatePath("/instruments");
+  revalidatePath(`/instruments/${parsed.data.instrumentId}/edit`);
+  revalidatePath("/accounts");
+  return { ok: true };
 }
 
 export async function recordPositionReconciliationAction(

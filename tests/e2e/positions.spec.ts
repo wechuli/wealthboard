@@ -46,6 +46,31 @@ test("archives accounts out of tracking and permanently deletes them with confir
     page.getByRole("heading", { name: "Lifecycle Brokerage" }),
   ).toBeVisible();
   const createdAccountId = new URL(page.url()).pathname.split("/").at(-1)!;
+  await page.getByRole("link", { name: "Add holding" }).click();
+  await page.getByRole("link", { name: "Create instrument" }).click();
+  await page.getByLabel("Instrument name").fill("Lifecycle ETF");
+  await page.getByLabel("Symbol").fill("LIFE");
+  await page.getByLabel("Identifier", { exact: true }).fill("LIFE");
+  await page.getByLabel("Exchange MIC").fill("XNAS");
+  await page.getByLabel("Quote currency").selectOption("KES");
+  await page.getByRole("button", { name: "Create instrument" }).click();
+  await page.getByLabel("Quantity").fill("2");
+  await page.getByLabel("Trade date").fill("2026-01-01");
+  await page.getByRole("button", { name: "Save position activity" }).click();
+  await page.getByLabel("Update Lifecycle ETF price").click();
+  await page.getByLabel("Unit price").fill("10");
+  await page.getByLabel("Price date").fill("2026-01-01");
+  await page.getByRole("button", { name: "Save price" }).click();
+  await page.goto("/instruments");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete Lifecycle ETF" }).click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "still linked to account history" }),
+  ).toContainText("still linked to account history");
+  await expect(page.getByText("Lifecycle ETF", { exact: true })).toBeVisible();
+  await page.goto(`/accounts/${createdAccountId}`);
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Archive account" }).click();
   await expect(
@@ -136,6 +161,56 @@ test("archives accounts out of tracking and permanently deletes them with confir
   ).json();
   expect(deletedExport.accounts).toEqual([]);
   expect(deletedExport.transactions).toEqual([]);
+  expect(deletedExport.investmentInstruments).toContainEqual(
+    expect.objectContaining({ name: "Lifecycle ETF" }),
+  );
+  expect(deletedExport.securityPrices).toHaveLength(1);
+
+  await page.goto("/instruments");
+  const removeInstrument = page.getByRole("button", {
+    name: "Delete Lifecycle ETF",
+  });
+  for (const width of [360, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(async () => {
+      const edit = await page
+        .getByRole("link", { name: "Edit Lifecycle ETF" })
+        .boundingBox();
+      const archive = await page
+        .getByRole("button", { name: "Archive instrument", exact: true })
+        .boundingBox();
+      const remove = await removeInstrument.boundingBox();
+      expect(edit!.x).toBeGreaterThanOrEqual(0);
+      expect(edit!.x + edit!.width).toBeLessThanOrEqual(archive!.x);
+      expect(archive!.x + archive!.width).toBeLessThanOrEqual(remove!.x);
+      expect(remove!.x + remove!.width).toBeLessThanOrEqual(width + 1);
+    }).toPass();
+    await page.screenshot({
+      path: testInfo.outputPath(`instrument-directory-${width}.png`),
+      fullPage: true,
+    });
+  }
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await removeInstrument.click();
+  await expect(page.getByText("Lifecycle ETF", { exact: true })).toBeVisible();
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain(
+      "Lifecycle ETF and all its saved prices",
+    );
+    await dialog.accept();
+  });
+  await removeInstrument.click();
+  await expect(page.getByText("Instrument permanently deleted.")).toBeVisible();
+  await expect(page.getByText("Lifecycle ETF", { exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Delete Lifecycle ETF" }),
+  ).toHaveCount(0);
+  const cleanedExport = await (
+    await page.request.get("/api/export/json")
+  ).json();
+  expect(cleanedExport.investmentInstruments).toEqual([]);
+  expect(cleanedExport.securityPrices).toEqual([]);
 });
 
 test.describe.serial("position accounts", () => {

@@ -361,6 +361,13 @@ ID for relationships and preserve the supplied identifier and exchange as
 reference metadata. Archived instruments retain history but cannot receive new
 positions, trades, or prices until restored.
 
+An active or archived instrument may be permanently deleted with confirmation
+when no account position event references it, either directly or as a related
+corporate-action instrument. Closed holdings and archived account history still
+count as references. Deletion removes the instrument and its saved prices
+atomically and only for the current user; referenced instruments must be
+retained until the linked activity or accounts are permanently removed.
+
 Position events are immutable source records from which quantity is replayed.
 Fields should include:
 

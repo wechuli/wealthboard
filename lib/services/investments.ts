@@ -1,7 +1,7 @@
 import "server-only";
 
 import Decimal from "decimal.js";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 import {
   accounts,
@@ -251,6 +251,45 @@ export function setInvestmentInstrumentArchived(
     }
     tx.update(investmentInstruments)
       .set({ archivedAt: archived ? nowIso() : null, updatedAt: nowIso() })
+      .where(
+        and(
+          eq(investmentInstruments.userId, userId),
+          eq(investmentInstruments.id, instrumentId),
+        ),
+      )
+      .run();
+  });
+}
+
+export function deleteInvestmentInstrument(userId: string, instrumentId: string) {
+  getDatabase().transaction((tx) => {
+    const instrument = tx.query.investmentInstruments
+      .findFirst({
+        where: and(
+          eq(investmentInstruments.userId, userId),
+          eq(investmentInstruments.id, instrumentId),
+        ),
+      })
+      .sync();
+    if (!instrument) throw new Error("Instrument not found.");
+    const accountReference = tx.query.positionEvents
+      .findFirst({
+        columns: { id: true },
+        where: and(
+          eq(positionEvents.userId, userId),
+          or(
+            eq(positionEvents.instrumentId, instrumentId),
+            eq(positionEvents.relatedInstrumentId, instrumentId),
+          ),
+        ),
+      })
+      .sync();
+    if (accountReference) {
+      throw new Error(
+        "This instrument is still linked to account history. Remove its position activity or permanently delete the linked accounts first.",
+      );
+    }
+    tx.delete(investmentInstruments)
       .where(
         and(
           eq(investmentInstruments.userId, userId),
