@@ -43,7 +43,7 @@
     "jose": "^6.2.9",
     "lucide-react": "^1.31.0",
     "mammoth": "^1.12.2",
-    "next": "16.3.1",
+    "next": "16.3.3",
     "openai": "7.4.0",
     "pdfjs-dist": "^6.3.289",
     "react": "19.2.8",
@@ -78,7 +78,7 @@
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
     "vitepress": "1.6.4",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.1"
   },
   "engines": {
     "node": ">=22.0.0"
