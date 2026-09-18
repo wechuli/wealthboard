@@ -9,6 +9,22 @@ SQLite through Drizzle ORM, Server Actions perform validated mutations, and
 Route Handlers provide user-scoped import/export and health checks. There is no
 separate API service. One optional OIDC provider may authenticate internal users.
 
+### Go migration checkpoint
+
+The replacement architecture is specified in the repository's
+`wealthboard-go-vite-migration-brief.md`,
+but production has not cut over. The additive Go code currently owns only
+operator database migration/adoption and independently tested financial
+primitives. It exposes no HTTP API. Existing Server Components, Server Actions,
+authentication, and deployments remain authoritative.
+
+During coexistence, `db/migrations/` remains the immutable Drizzle history;
+`db/goose/` holds the separate Goose baseline and `db/schema.sql` supplies sqlc.
+Ordinary Go application queries belong in `db/queries/` and generated bindings
+in `internal/database/generated/`. Migration bookkeeping and schema inspection
+are operator-only database concerns, not public resource queries. Do not remove
+the old implementation before the brief's parity and cutover gates pass.
+
 ## Decisions
 
 - **Runtime:** Next.js App Router on Node.js with strict TypeScript. Pages that
