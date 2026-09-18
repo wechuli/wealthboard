@@ -15,6 +15,7 @@ vi.mock("@/lib/auth/oidc", () => ({
   discoverOidcProvider: vi.fn(),
   exchangeAuthorizationCode: vi.fn(),
   openOidcTransaction: vi.fn(),
+  safeRelativePath: vi.fn((value: string | null | undefined) => value ?? "/"),
   sealOidcReauthGrant: vi.fn(),
   sealOidcTransaction: vi.fn(),
   verifyOidcIdToken: vi.fn(),
@@ -47,6 +48,7 @@ import {
   discoverOidcProvider,
   exchangeAuthorizationCode,
   openOidcTransaction,
+  safeRelativePath,
   sealOidcReauthGrant,
   sealOidcTransaction,
   verifyOidcIdToken,
@@ -274,6 +276,28 @@ describe("OIDC routes", () => {
     );
     expect(await response.text()).toContain(
       'window.location.replace("https://wealth.example.test/reports")',
+    );
+  });
+
+  test("callback re-sanitizes a stored redirect target before the handoff", async () => {
+    vi.mocked(openOidcTransaction).mockResolvedValueOnce({
+      ...transaction,
+      next: "https://evil.example.test/phish",
+    });
+    vi.mocked(safeRelativePath).mockReturnValueOnce("/");
+
+    const response = await callbackGet(
+      request(
+        `/api/auth/oidc/callback?state=${transaction.state}&code=one-use-code`,
+      ),
+    );
+
+    expect(safeRelativePath).toHaveBeenCalledWith(
+      "https://evil.example.test/phish",
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(
+      'window.location.replace("https://wealth.example.test/")',
     );
   });
 

@@ -12,6 +12,7 @@ import {
   discoverOidcProvider,
   exchangeAuthorizationCode,
   openOidcTransaction,
+  safeRelativePath,
   sealOidcReauthGrant,
   verifyOidcIdToken,
 } from "@/lib/auth/oidc";
@@ -56,7 +57,7 @@ function escapeHtmlAttribute(value: string) {
 }
 
 function sessionHandoff(appOrigin: string, next: string) {
-  const destination = new URL(next, appOrigin).toString();
+  const destination = new URL(safeRelativePath(next), appOrigin).toString();
   const serializedDestination = serializeForInlineScript(destination);
   const escapedDestination = escapeHtmlAttribute(destination);
   const nonce = randomBytes(16).toString("base64");
