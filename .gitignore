@@ -162,6 +162,17 @@ vite.config.ts.timestamp-*
 /data/
 /backups/
 /exports/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+/wealthboard
 /wealthboard-*.csv
 /wealthboard-*.json
 /playwright-report/

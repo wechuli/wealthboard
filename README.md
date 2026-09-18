@@ -81,6 +81,77 @@ legally executed wills, and do not grant beneficiary access or transfer assets.
 - npm
 - A persistent local filesystem for SQLite
 
+### Go migration checkpoint (development only)
+
+The React/Vite and Go migration is **not ready for production cutover**.
+Next.js remains the application runtime, and existing npm, Docker, and Kubernetes
+commands are unchanged. The additive Go checkpoint provides database migration
+tools and financial parity tests, not an HTTP server or a replacement frontend.
+Authentication, API keys, product endpoints, Vite, and deployment cutover remain
+pending in the [migration brief](wealthboard-go-vite-migration-brief.md).
+
+Go development requires Go 1.26.7 or newer (the Go toolchain can download the
+pinned version), Node.js 22+, npm, and Make. Tool versions for sqlc and
+govulncheck are pinned in `go.mod`; no global Goose/sqlc installation is needed.
+
+| Command | Current checkpoint behavior |
+| --- | --- |
+| `make generate` | Regenerate Go database queries with sqlc |
+| `make check-generated` | Reject sqlc output and Go module metadata drift |
+| `make lint` | Check Go formatting/vet and existing frontend lint |
+| `make typecheck` | Check existing frontend TypeScript |
+| `make test` | Run Go and existing Vitest tests |
+| `make migrate-check` | Run disposable-database migration and CLI tests |
+| `make test-e2e` | Run existing Playwright workflows against Next.js |
+| `make build` | Build the Go migration CLI and existing Next.js application |
+| `make build-go` | Build only `dist/wealthboard`, without CGO |
+| `make security` | Run govulncheck and the production npm dependency audit |
+
+Shared fictional cases in `tests/fixtures/go-financial-parity.json` are checked
+by both Go and the unchanged TypeScript financial helpers. They cover monetary
+parsing/formatting, effective-dated conversion, transaction signs, valuation
+replay, flow metrics, and net-worth totals. Currency digits follow the current
+Node/Intl catalog, including its differences from conventional ISO minor-unit
+tables; conversion preserves Decimal.js intermediate rounding. These tests are
+not a claim of full goal, position, import, or application parity.
+
+#### Rehearse database adoption on a copy
+
+Do not point experimental commands at your production database. Stop the
+application before adoption and use a SQLite-aware backup, not a raw copy of a
+live WAL-mode database. Existing `npm run backup` creates such a backup.
+Use a separate working copy of that backup and retain the original for rollback.
+The Go CLI reads exported environment variables, not `.env` files.
+
+```bash
+make build-go
+export DATABASE_PATH=/absolute/path/to/disposable-copy.db
+export BACKUP_PATH=/absolute/path/to/private-migration-backups
+dist/wealthboard migrate-status
+dist/wealthboard migrate-adopt --confirm-offline
+dist/wealthboard migrate-status
+dist/wealthboard migrate
+```
+
+`--confirm-offline` is an operator assertion: it does not stop or detect a
+running Next.js process. Adoption verifies known Drizzle history and schema,
+backs up the database, upgrades supported historical states, checks foreign keys,
+and records the Goose baseline without recreating existing application tables.
+Unknown history or schema changes must be investigated, not bypassed.
+
+Applied Drizzle migrations and metadata remain unchanged at `db/migrations/`
+during coexistence. New Goose migrations live separately at `db/goose/`;
+`db/schema.sql` is the sqlc schema input. Adoption retains the Drizzle history
+so the existing application can still open an adopted database. This does not
+authorize running both implementations as concurrent writers.
+
+For a **separate empty Go-only test database**, use `dist/wealthboard migrate`
+without adoption. It creates the Goose baseline, not a Drizzle-managed database;
+do not point the old application at that fresh Go-only database.
+`migrate-status` does not create a missing database. Downgrade is not a supported
+data-migration strategy: stop all writers and restore the retained pre-adoption
+backup using the existing offline restore procedure.
+
 ## Local development
 
 ```bash
