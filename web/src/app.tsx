@@ -1,22 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  BarChart3,
   CircleDollarSign,
-  Eye,
-  EyeOff,
-  Landmark,
-  LogOut,
-  Menu,
-  Moon,
   ShieldCheck,
-  Sun,
-  Target,
-  WalletCards,
-  X,
 } from "lucide-react";
-import { startTransition, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { z } from "zod";
 
 import {
@@ -28,7 +17,26 @@ import {
   logout,
   signup,
 } from "./api";
-import { formatMinorUnits } from "./format";
+import {
+  AccountDetailPage,
+  AccountsPage,
+  DashboardPage,
+  GoalDetailPage,
+  GoalsPage,
+  ReportsPage,
+  TransactionsPage,
+} from "./core-pages";
+import {
+  CategoriesPage,
+  EstatePage,
+  EstateSnapshotPage,
+  InstitutionsPage,
+  InstrumentDetailPage,
+  InstrumentsPage,
+  ReviewPage,
+} from "./feature-pages";
+import { AppShell, clearUserState } from "./shell";
+import { SettingsPage } from "./settings-page";
 import type { AuthConfig, Overview, Session } from "./types";
 
 const loginSchema = z.object({
@@ -282,24 +290,9 @@ function AuthenticatedApp({
 }) {
   const [overview, setOverview] = useState<Overview>();
   const [error, setError] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [hidden, setHidden] = useState(
-    () => localStorage.getItem("wealthboard-values-hidden") === "true",
-  );
-  const [theme, setTheme] = useState<"dark" | "light">(() =>
-    localStorage.getItem("theme-preference") === "light" ? "light" : "dark",
-  );
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("theme-preference", theme);
-  }, [theme]);
-  useEffect(() => {
-    localStorage.setItem("wealthboard-values-hidden", String(hidden));
-  }, [hidden]);
   useEffect(() => {
     void getOverview()
-      .then((value) => startTransition(() => setOverview(value)))
+      .then(setOverview)
       .catch((caught: unknown) =>
         setError(
           caught instanceof Error ? caught.message : "Overview unavailable.",
@@ -309,266 +302,36 @@ function AuthenticatedApp({
 
   const signOut = async () => {
     await logout(session.csrfToken);
-    sessionStorage.clear();
-    localStorage.removeItem("wealthboard-values-hidden");
+    clearUserState();
     onSignedOut();
   };
   const appName = overview?.settings.appName ?? "Wealthboard";
   const displayName = overview?.settings.displayName ?? session.user.username;
-  return (
-    <div className="app-layout">
-      <aside className={menuOpen ? "sidebar open" : "sidebar"}>
-        <div className="sidebar-brand">
-          <span className="brand-mark small">
-            <CircleDollarSign />
-          </span>
-          <div>
-            <strong>{appName}</strong>
-            <span>Private wealth</span>
-          </div>
-          <button
-            className="icon-button mobile-only"
-            aria-label="Close navigation"
-            onClick={() => setMenuOpen(false)}
-          >
-            <X />
-          </button>
-        </div>
-        <nav aria-label="Primary navigation">
-          <NavLink to="/" end>
-            <BarChart3 /> Overview
-          </NavLink>
-          <NavLink to="/accounts">
-            <Landmark /> Accounts
-          </NavLink>
-        </nav>
-      </aside>
-      {menuOpen ? (
-        <button
-          className="nav-overlay"
-          aria-label="Close navigation"
-          onClick={() => setMenuOpen(false)}
-        />
-      ) : null}
-      <div className="workspace">
-        <header className="topbar">
-          <button
-            className="icon-button mobile-only"
-            aria-label="Open navigation"
-            onClick={() => setMenuOpen(true)}
-          >
-            <Menu />
-          </button>
-          <div className="welcome">
-            <strong>Welcome back, {displayName}</strong>
-            <span>{session.user.username}</span>
-          </div>
-          <div className="toolbar">
-            <button
-              className="icon-button"
-              aria-label={hidden ? "Show values" : "Hide values"}
-              title={hidden ? "Show values" : "Hide values"}
-              onClick={() => setHidden((value) => !value)}
-            >
-              {hidden ? <Eye /> : <EyeOff />}
-            </button>
-            <button
-              className="icon-button"
-              aria-label={`Use ${theme === "dark" ? "light" : "dark"} theme`}
-              onClick={() =>
-                setTheme((value) => (value === "dark" ? "light" : "dark"))
-              }
-            >
-              {theme === "dark" ? <Sun /> : <Moon />}
-            </button>
-            <button
-              className="icon-button"
-              aria-label="Log out"
-              onClick={() => void signOut()}
-            >
-              <LogOut />
-            </button>
-          </div>
-        </header>
-        <main className="content">
-          {error ? (
-            <div className="notice error" role="alert">
-              {error}
-            </div>
-          ) : null}
-          {!overview && !error ? <LoadingPanel /> : null}
-          {overview ? (
-            <Routes>
-              <Route
-                path="/"
-                element={<OverviewPage overview={overview} hidden={hidden} />}
-              />
-              <Route
-                path="/accounts"
-                element={<AccountsPage overview={overview} hidden={hidden} />}
-              />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          ) : null}
-        </main>
-      </div>
-    </div>
-  );
-}
 
-function OverviewPage({
-  overview,
-  hidden,
-}: {
-  overview: Overview;
-  hidden: boolean;
-}) {
-  const money = (value: string) =>
-    hidden ? "••••••" : formatMinorUnits(value, overview.settings.baseCurrency);
-  return (
-    <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">Portfolio</p>
-          <h1>Overview</h1>
-          <p>What you own, owe, and are building toward.</p>
-        </div>
-      </div>
-      {!overview.currentComplete ? (
-        <div className="notice warning">
-          Some values need exchange rates:{" "}
-          {overview.missingCurrencies.join(", ")}.
-        </div>
-      ) : null}
-      <section className="net-worth-band">
-        <div>
-          <span>Total net worth</span>
-          <strong className={hidden ? "masked" : ""}>
-            {money(overview.totals.netWorth)}
-          </strong>
-          <small>
-            {overview.accountCount} active accounts · {overview.goalCount}{" "}
-            active goals
-          </small>
-        </div>
-        <CircleDollarSign aria-hidden />
-      </section>
-      <section className="metric-grid" aria-label="Portfolio totals">
-        <Metric
-          label="Assets"
-          value={money(overview.totals.assets)}
-          icon={<Landmark />}
-        />
-        <Metric
-          label="Liabilities"
-          value={money(overview.totals.liabilities)}
-          icon={<WalletCards />}
-        />
-        <Metric
-          label="Liquid"
-          value={money(overview.totals.liquid)}
-          icon={<CircleDollarSign />}
-        />
-        <Metric
-          label="Investible"
-          value={money(overview.totals.investible)}
-          icon={<Target />}
-        />
-      </section>
-      <section className="section-block">
-        <div className="section-heading">
-          <h2>Accounts</h2>
-          <NavLink to="/accounts">View all</NavLink>
-        </div>
-        <AccountTable
-          accounts={overview.accounts.slice(0, 5)}
-          hidden={hidden}
-        />
-      </section>
-    </>
-  );
-}
+  if (error) return <main className="content"><div className="notice error" role="alert">{error}</div></main>;
+  if (!overview) return <LoadingScreen />;
 
-function AccountsPage({
-  overview,
-  hidden,
-}: {
-  overview: Overview;
-  hidden: boolean;
-}) {
   return (
-    <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">Portfolio</p>
-          <h1>Accounts</h1>
-          <p>{overview.accountCount} active financial accounts.</p>
-        </div>
-      </div>
-      <section className="section-block">
-        <AccountTable accounts={overview.accounts} hidden={hidden} />
-      </section>
-    </>
-  );
-}
-
-function AccountTable({
-  accounts,
-  hidden,
-}: {
-  accounts: Overview["accounts"];
-  hidden: boolean;
-}) {
-  if (accounts.length === 0)
-    return (
-      <div className="empty-state">
-        <Landmark />
-        <h2>No accounts yet</h2>
-        <p>Your account list will appear here.</p>
-      </div>
-    );
-  return (
-    <div className="account-list">
-      {accounts.map((account) => (
-        <article className="account-row" key={account.id}>
-          <div className="account-icon">
-            <Landmark />
-          </div>
-          <div className="account-main">
-            <strong>{account.name}</strong>
-            <span>{account.institutionName || account.categoryName}</span>
-          </div>
-          <div className="account-value">
-            <strong className={hidden ? "masked" : ""}>
-              {hidden
-                ? "••••••"
-                : formatMinorUnits(account.currentValueMinor, account.currency)}
-            </strong>
-            <span>
-              {account.isLiability ? "Liability" : account.categoryName}
-            </span>
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <article className="metric">
-      <div className="metric-icon">{icon}</div>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </article>
+    <AppShell session={session} appName={appName} displayName={displayName} onSignOut={signOut}>
+      <Routes>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/accounts/:id" element={<AccountDetailPage />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/goals" element={<GoalsPage />} />
+        <Route path="/goals/:id" element={<GoalDetailPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/institutions" element={<InstitutionsPage />} />
+        <Route path="/instruments" element={<InstrumentsPage />} />
+        <Route path="/instruments/:id" element={<InstrumentDetailPage />} />
+        <Route path="/estate" element={<EstatePage />} />
+        <Route path="/estate/snapshots/:id" element={<EstateSnapshotPage />} />
+        <Route path="/review" element={<ReviewPage />} />
+        <Route path="/settings" element={<SettingsPage session={session} />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppShell>
   );
 }
 
@@ -578,12 +341,5 @@ function LoadingScreen() {
       <CircleDollarSign />
       <span>Loading Wealthboard</span>
     </main>
-  );
-}
-function LoadingPanel() {
-  return (
-    <div className="loading-panel" role="status">
-      Loading overview...
-    </div>
   );
 }
