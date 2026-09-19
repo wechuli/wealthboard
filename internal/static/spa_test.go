@@ -1,5 +1,4 @@
 package static
-package static
 
 import (
 	"net/http"

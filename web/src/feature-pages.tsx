@@ -1,10 +1,4 @@
-import {
-  Building2,
-  CandlestickChart,
-  FolderCog,
-  ScrollText,
-  Sparkles,
-} from "lucide-react";
+import { CandlestickChart } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import {

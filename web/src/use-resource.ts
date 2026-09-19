@@ -13,7 +13,6 @@ export function useResource<T>(
 
   useEffect(() => {
     let active = true;
-    setState({ status: "loading" });
     void load()
       .then((data) => {
         if (active) startTransition(() => setState({ status: "ready", data }));

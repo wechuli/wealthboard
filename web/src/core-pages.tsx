@@ -1,4 +1,4 @@
-import { Landmark, Target } from "lucide-react";
+import { Landmark } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import {

@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 import { PrivacyBoundary } from "./privacy";
 import type { Session } from "./types";
@@ -59,9 +59,6 @@ export function AppShell({
   const [theme, setTheme] = useState<"dark" | "light">(() =>
     localStorage.getItem("wealthboard-theme") === "light" ? "light" : "dark",
   );
-  const location = useLocation();
-
-  useEffect(() => setMenuOpen(false), [location.pathname]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -94,7 +91,12 @@ export function AppShell({
           </div>
           <nav aria-label="Primary navigation">
             {navigation.map(({ to, label, icon: Icon }) => (
-              <NavLink key={to} to={to} end={to === "/"}>
+              <NavLink
+                key={to}
+                to={to}
+                end={to === "/"}
+                onClick={() => setMenuOpen(false)}
+              >
                 <Icon /> {label}
               </NavLink>
             ))}
