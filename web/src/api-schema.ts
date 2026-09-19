@@ -28,8 +28,431 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Return the current user's read-only overview */
+        /**
+         * Return the current user's read-only overview
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
         get: operations["getOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current user's account categories
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/institutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current user's institutions
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listInstitutions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current user's accounts
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one account owned by the current user
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountID}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List transactions for one account
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listAccountTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountID}/valuations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List valuation snapshots for one account
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listAccountValuations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountID}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List combined transaction and valuation activity for one account
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listAccountActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current user's transactions
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current user's goals
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listGoals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one goal owned by the current user
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getGoal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{id}/milestones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List milestones for one goal
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listGoalMilestones"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List active alerts for the current user's goals
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listGoalAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the current dashboard snapshot
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the current portfolio summary report
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getReportSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/allocation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return current portfolio allocation breakdowns
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getReportAllocation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return settings, currency configuration, rates, and authentication methods
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instruments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current user's investment instruments
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listInstruments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instruments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one investment instrument and its price history
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getInstrument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/estate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the current user's estate-planning workspace
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getEstateWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/estate/snapshots/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return one immutable estate snapshot
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["getEstateSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return AI provider metadata, usage, and review availability
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Stored API key secrets are never returned.
+         */
+        get: operations["getAIReadModel"];
         put?: never;
         post?: never;
         delete?: never;
@@ -320,6 +743,538 @@ export interface components {
             currentComplete: boolean;
             missingCurrencies: string[];
         };
+        /** @description Integer monetary amount in the currency's minor units. */
+        MinorUnits: string;
+        /** @description Exact decimal value serialized as a string. */
+        DecimalString: string;
+        /** @enum {string} */
+        TransactionType: "opening_balance" | "deposit" | "withdrawal" | "interest" | "dividend" | "capital_gain" | "capital_loss" | "fee" | "purchase" | "sale" | "manual_adjustment" | "liability_payment" | "liability_increase" | "transfer";
+        Category: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            icon: string;
+            displayOrder: number;
+            assetOrLiability: string;
+            description?: string;
+            isLiquid: boolean;
+            isInvestible: boolean;
+            isArchived: boolean;
+            isSystem: boolean;
+        };
+        Institution: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            type: string;
+            websiteUrl?: string;
+            countryCode?: string;
+            address?: string;
+            notes?: string;
+            /** Format: date-time */
+            archivedAt?: string;
+        };
+        Account: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            categoryId: string;
+            /** Format: uuid */
+            institutionId?: string;
+            name: string;
+            description?: string;
+            currency: string;
+            trackingMode: string;
+            currentValueMinor: components["schemas"]["MinorUnits"];
+            costBasisMinor?: components["schemas"]["MinorUnits"];
+            isLiability: boolean;
+            isIncludedInNetWorth: boolean;
+            categoryName: string;
+            institutionName?: string;
+            accountReference?: string;
+            notes?: string;
+            /** Format: date */
+            openedAt?: string;
+            /** Format: date-time */
+            archivedAt?: string;
+        };
+        Transaction: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            accountId: string;
+            accountName: string;
+            type: components["schemas"]["TransactionType"];
+            amountMinor: components["schemas"]["MinorUnits"];
+            currency: string;
+            /** Format: date */
+            transactionDate: string;
+            description?: string;
+            notes?: string;
+            externalId?: string;
+            /** Format: uuid */
+            transferGroupId?: string;
+            /** Format: uuid */
+            eventGroupId?: string;
+        };
+        Valuation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            accountId: string;
+            accountName: string;
+            valueMinor: components["schemas"]["MinorUnits"];
+            currency: string;
+            /** Format: date */
+            valuationDate: string;
+            notes?: string;
+        };
+        ActivityItem: {
+            /** @enum {string} */
+            kind: "transaction" | "valuation";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            accountId: string;
+            accountName: string;
+            type: string;
+            amountMinor: components["schemas"]["MinorUnits"];
+            currency: string;
+            /** Format: date */
+            date: string;
+            description?: string;
+            notes?: string;
+        };
+        TransactionPage: {
+            items: components["schemas"]["Transaction"][];
+            limit: number;
+            offset: number;
+            hasMore: boolean;
+        };
+        ValuationPage: {
+            items: components["schemas"]["Valuation"][];
+            limit: number;
+            offset: number;
+            hasMore: boolean;
+        };
+        ActivityPage: {
+            items: components["schemas"]["ActivityItem"][];
+            limit: number;
+            offset: number;
+            hasMore: boolean;
+        };
+        GoalLinkedAccount: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            currency: string;
+        };
+        GoalPlan: {
+            plannedContributionMinor: components["schemas"]["MinorUnits"];
+            frequency: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string | null;
+        };
+        Goal: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string | null;
+            targetAmountMinor: components["schemas"]["MinorUnits"];
+            currentAmountMinor: components["schemas"]["MinorUnits"];
+            currentAmountCurrency: string;
+            currency: string;
+            /** Format: date */
+            targetDate: string;
+            linkedAccount: components["schemas"]["GoalLinkedAccount"] | null;
+            icon: string;
+            status: string;
+            /** Format: int32 */
+            priority: number;
+            /** Format: int32 */
+            assumedAnnualReturnBps: number;
+            progressPercent: components["schemas"]["DecimalString"];
+            valueIncomplete: boolean;
+            missingCurrencies: string[];
+            plan: components["schemas"]["GoalPlan"] | null;
+        };
+        GoalMilestone: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            goalId: string;
+            name: string;
+            targetAmountMinor: components["schemas"]["MinorUnits"];
+            /** Format: date */
+            targetDate: string | null;
+            status: string;
+            progressPercent: components["schemas"]["DecimalString"];
+            remainingMinor: components["schemas"]["MinorUnits"] | null;
+        };
+        GoalAlert: {
+            /** Format: uuid */
+            goalId: string;
+            goalName: string;
+            currency: string;
+            targetAmountMinor: components["schemas"]["MinorUnits"];
+            currentAmountMinor: components["schemas"]["MinorUnits"];
+            progressPercent: components["schemas"]["DecimalString"];
+            /** Format: date */
+            targetDate: string;
+            alertKey: string;
+            /** Format: int32 */
+            assumedAnnualReturnBps: number;
+        };
+        CurrentTotals: {
+            assets: components["schemas"]["MinorUnits"];
+            liabilities: components["schemas"]["MinorUnits"];
+            netWorth: components["schemas"]["MinorUnits"];
+            liquid: components["schemas"]["MinorUnits"];
+            investible: components["schemas"]["MinorUnits"];
+        };
+        Dashboard: {
+            /** Format: date */
+            asOf: string;
+            baseCurrency: string;
+            totals: components["schemas"]["CurrentTotals"];
+            accountCount: number;
+            goalCount: number;
+            currentComplete: boolean;
+            missingCurrencies: string[];
+            historicalAvailable: boolean;
+            historicalComplete: boolean;
+            valueBasis: string;
+        };
+        ReportSummary: {
+            /** Format: date */
+            asOf: string;
+            baseCurrency: string;
+            totals: components["schemas"]["CurrentTotals"];
+            accountCount: number;
+            goalCount: number;
+            currentComplete: boolean;
+            missingCurrencies: string[];
+            valueBasis: string;
+        };
+        AllocationItem: {
+            name: string;
+            valueMinor: components["schemas"]["MinorUnits"];
+            sharePercent: components["schemas"]["DecimalString"];
+        };
+        ReportAllocation: {
+            /** Format: date */
+            asOf: string;
+            baseCurrency: string;
+            currentComplete: boolean;
+            missingCurrencies: string[];
+            valueBasis: string;
+            categories: components["schemas"]["AllocationItem"][];
+            institutions: components["schemas"]["AllocationItem"][];
+            currencies: components["schemas"]["AllocationItem"][];
+        };
+        SettingsRead: {
+            settings: components["schemas"]["UserSettings"];
+            currencyConfiguration: components["schemas"]["CurrencyConfiguration"];
+            exchangeRates: components["schemas"]["ExchangeRate"][];
+            authMethods: components["schemas"]["AuthMethodState"];
+        };
+        UserSettings: {
+            displayName: string;
+            appName: string;
+            baseCurrency: string;
+            supportedCurrencies: string[];
+            timezone: string;
+            preferredDateFormat: string;
+            defaultDashboardPeriod: string;
+            /** Format: int32 */
+            sessionTimeoutMinutes: number;
+            /** Format: int32 */
+            defaultGoalReturnBps: number;
+            /** Format: int32 */
+            positionStaleDaysStock: number;
+            /** Format: int32 */
+            positionStaleDaysEtf: number;
+            /** Format: int32 */
+            positionStaleDaysFund: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CurrencyConfiguration: {
+            baseCurrency: string;
+            enabledCurrencies: string[];
+            referencedCurrencies: string[];
+        };
+        ExchangeRate: {
+            /** Format: uuid */
+            id: string;
+            baseCurrency: string;
+            quoteCurrency: string;
+            rate: components["schemas"]["DecimalString"];
+            /** Format: date-time */
+            effectiveDate: string;
+            source: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AuthMethodState: {
+            status: string;
+            hasPassword: boolean;
+            oidcIdentities: components["schemas"]["OIDCIdentity"][];
+        };
+        OIDCIdentity: {
+            /** Format: uuid */
+            id: string;
+            issuer: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            lastLoginAt: string;
+        };
+        SecurityPrice: {
+            /** Format: uuid */
+            id: string;
+            externalId: string | null;
+            price: components["schemas"]["DecimalString"];
+            currency: string;
+            /** Format: date-time */
+            effectiveDate: string;
+            source: string;
+            provenance: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        Instrument: {
+            /** Format: uuid */
+            id: string;
+            externalId: string | null;
+            name: string;
+            symbol: string | null;
+            identifierType: string;
+            identifier: string | null;
+            exchangeMic: string | null;
+            assetType: string;
+            quoteCurrency: string;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            latestPrice: components["schemas"]["SecurityPrice"] | null;
+        };
+        InstrumentDetail: {
+            instrument: components["schemas"]["Instrument"];
+            prices: components["schemas"]["SecurityPrice"][];
+        };
+        EstatePlan: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            jurisdiction: string | null;
+            /** Format: date-time */
+            lastReviewedDate: string | null;
+            /** Format: date-time */
+            reviewReminderDate: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        Beneficiary: {
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            name: string;
+            relationship: string | null;
+            contactSummary: string | null;
+            notes: string | null;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        EstateDirective: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            estatePlanId: string;
+            /** Format: uuid */
+            accountId: string;
+            accountName: string;
+            currency: string;
+            currentValueMinor: components["schemas"]["MinorUnits"];
+            isLiability: boolean;
+            /** Format: date-time */
+            accountArchivedAt: string | null;
+            isIncluded: boolean;
+            /** Format: int32 */
+            ownershipShareBps: number;
+            transferContext: string;
+            distributionMethod: string;
+            documentReference: string | null;
+            notes: string | null;
+            /** Format: date-time */
+            reviewedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        EstateAllocation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            estatePlanId: string;
+            /** Format: uuid */
+            directiveId: string;
+            /** Format: uuid */
+            beneficiaryId: string;
+            tier: string;
+            /** Format: int32 */
+            allocationBps: number;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ResiduaryAllocation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            estatePlanId: string;
+            /** Format: uuid */
+            beneficiaryId: string;
+            tier: string;
+            /** Format: int32 */
+            allocationBps: number;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        EstateSnapshotMeta: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            estatePlanId: string;
+            /** Format: int32 */
+            version: number;
+            title: string;
+            /** Format: date-time */
+            valueAsOfDate: string;
+            baseCurrency: string;
+            contentHash: string;
+            /** Format: date-time */
+            generatedAt: string;
+        };
+        EstateSnapshot: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            estatePlanId: string;
+            /** Format: int32 */
+            version: number;
+            title: string;
+            /** Format: date-time */
+            valueAsOfDate: string;
+            baseCurrency: string;
+            contentHash: string;
+            /** Format: date-time */
+            generatedAt: string;
+            content: unknown;
+        };
+        EstateWorkspace: {
+            plan: components["schemas"]["EstatePlan"] | null;
+            beneficiaries: components["schemas"]["Beneficiary"][];
+            directives: components["schemas"]["EstateDirective"][];
+            allocations: components["schemas"]["EstateAllocation"][];
+            residuaryAllocations: components["schemas"]["ResiduaryAllocation"][];
+            snapshots: components["schemas"]["EstateSnapshotMeta"][];
+            currentValuesComplete: boolean;
+            currentValuesWarning: string;
+        };
+        AIProviderSettings: {
+            provider: string;
+            baseUrl: string;
+            model: string;
+            hasStoredApiKey: boolean;
+            apiKeyHint: string | null;
+            includeExactAmounts: boolean;
+            includeAccountNames: boolean;
+            /** Format: int32 */
+            monthlyTokenLimit: number;
+            /** Format: int32 */
+            maxOutputTokens: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AIUsageEvent: {
+            /** Format: uuid */
+            id: string;
+            provider: string;
+            endpointHost: string;
+            model: string;
+            requestType: string;
+            status: string;
+            billingMonth: string;
+            /** Format: int32 */
+            chargedTokens: number;
+            /** Format: int32 */
+            inputTokens: number | null;
+            /** Format: int32 */
+            outputTokens: number | null;
+            /** Format: int32 */
+            latencyMs: number | null;
+            errorCode: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AIUsageSummary: {
+            billingMonth: string;
+            /** Format: int64 */
+            chargedTokens: number;
+            /** Format: int64 */
+            remainingTokens: number;
+            /** Format: int32 */
+            monthlyTokenLimit: number;
+            successfulReviews: number;
+            /** Format: date-time */
+            lastUsedAt: string | null;
+        };
+        ReviewAvailability: {
+            available: boolean;
+            reason: string;
+            providerConfigured: boolean;
+            storedCredentialAvailable: boolean;
+            sessionCredentialAccepted: boolean;
+            /** Format: date-time */
+            cooldownUntil: string | null;
+            /** Format: int64 */
+            budgetRemainingTokens: number;
+        };
+        AIRead: {
+            settings: components["schemas"]["AIProviderSettings"] | null;
+            usage: components["schemas"]["AIUsageSummary"];
+            events: components["schemas"]["AIUsageEvent"][];
+            reviewAvailability: components["schemas"]["ReviewAvailability"];
+        };
         /** @enum {string} */
         APIKeyScope: "portfolio:read" | "portfolio:write" | "imports:write" | "exports:read" | "ai:invoke";
         APIKeyMetadata: {
@@ -405,6 +1360,18 @@ export interface components {
     };
     parameters: {
         CSRFToken: string;
+        AccountID: string;
+        ResourceID: string;
+        /** @description Select active accounts, archived accounts, or both. */
+        ArchivedFilter: "active" | "archived" | "all";
+        AccountIDFilter: string;
+        TransactionType: components["schemas"]["TransactionType"];
+        /** @description Inclusive start date. */
+        FromDate: string;
+        /** @description Inclusive end date; must not precede `from`. */
+        ToDate: string;
+        Limit: number;
+        Offset: number;
     };
     requestBodies: never;
     headers: never;
@@ -448,6 +1415,541 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Overview"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped categories */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Category"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listInstitutions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped institutions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Institution"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listAccounts: {
+        parameters: {
+            query?: {
+                /** @description Select active accounts, archived accounts, or both. */
+                archived?: components["parameters"]["ArchivedFilter"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped accounts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Account"][];
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAccountTransactions: {
+        parameters: {
+            query?: {
+                type?: components["parameters"]["TransactionType"];
+                /** @description Inclusive start date. */
+                from?: components["parameters"]["FromDate"];
+                /** @description Inclusive end date; must not precede `from`. */
+                to?: components["parameters"]["ToDate"];
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of owner-scoped account transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAccountValuations: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start date. */
+                from?: components["parameters"]["FromDate"];
+                /** @description Inclusive end date; must not precede `from`. */
+                to?: components["parameters"]["ToDate"];
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of owner-scoped account valuations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValuationPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listAccountActivity: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start date. */
+                from?: components["parameters"]["FromDate"];
+                /** @description Inclusive end date; must not precede `from`. */
+                to?: components["parameters"]["ToDate"];
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of owner-scoped account activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listTransactions: {
+        parameters: {
+            query?: {
+                accountId?: components["parameters"]["AccountIDFilter"];
+                type?: components["parameters"]["TransactionType"];
+                /** @description Inclusive start date. */
+                from?: components["parameters"]["FromDate"];
+                /** @description Inclusive end date; must not precede `from`. */
+                to?: components["parameters"]["ToDate"];
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of owner-scoped transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listGoals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped goals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Goal"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getGoal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped goal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Goal"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listGoalMilestones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped goal milestones */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMilestone"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listGoalAlerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped goal alerts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalAlert"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped dashboard snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getReportSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped portfolio summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportSummary"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getReportAllocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped allocation report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportAllocation"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped settings workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsRead"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listInstruments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped instruments and latest prices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        instruments: components["schemas"]["Instrument"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getInstrument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped instrument detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getEstateWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped estate workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstateWorkspace"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getEstateSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped estate snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstateSnapshot"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getAIReadModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped AI configuration and usage metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIRead"];
                 };
             };
             401: components["responses"]["Problem"];

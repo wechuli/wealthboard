@@ -1,8 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  CircleDollarSign,
-  ShieldCheck,
-} from "lucide-react";
+import { CircleDollarSign, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, Route, Routes } from "react-router-dom";
@@ -308,11 +305,23 @@ function AuthenticatedApp({
   const appName = overview?.settings.appName ?? "Wealthboard";
   const displayName = overview?.settings.displayName ?? session.user.username;
 
-  if (error) return <main className="content"><div className="notice error" role="alert">{error}</div></main>;
+  if (error)
+    return (
+      <main className="content">
+        <div className="notice error" role="alert">
+          {error}
+        </div>
+      </main>
+    );
   if (!overview) return <LoadingScreen />;
 
   return (
-    <AppShell session={session} appName={appName} displayName={displayName} onSignOut={signOut}>
+    <AppShell
+      session={session}
+      appName={appName}
+      displayName={displayName}
+      onSignOut={signOut}
+    >
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/accounts" element={<AccountsPage />} />
