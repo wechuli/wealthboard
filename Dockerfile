@@ -1,47 +1,33 @@
-FROM node:24-bookworm-slim AS build-base
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
-
-FROM build-base AS dependencies
+FROM node:24-bookworm-slim AS web-builder
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund
+COPY web/package.json web/package-lock.json ./web/
+RUN npm --prefix web ci --no-audit --no-fund
+COPY api ./api
+COPY app/globals.css ./app/globals.css
+COPY web ./web
+RUN npm --prefix web run build
 
-FROM build-base AS builder
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
-COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+FROM golang:1.27-bookworm AS go-builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd ./cmd
+COPY db/postgres ./db/postgres
+COPY internal ./internal
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/wealthboard ./cmd/wealthboard
 
-FROM node:24-bookworm-slim AS runner
+FROM gcr.io/distroless/static-debian12:nonroot AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    DATABASE_PATH=/data/wealthboard.db \
-    BACKUP_PATH=/backups \
-    PORT=3000
+    PORT=3000 \
+    WEB_DIST_PATH=/app/web/dist
 
-RUN groupadd --system --gid 1001 wealthboard \
-  && useradd --system --uid 1001 --gid wealthboard wealthboard \
-    && mkdir -p /data /backups \
-  && chown -R wealthboard:wealthboard /data /backups
+COPY --from=go-builder --chown=nonroot:nonroot /out/wealthboard /app/wealthboard
+COPY --from=web-builder --chown=nonroot:nonroot /app/web/dist /app/web/dist
 
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=builder --chown=wealthboard:wealthboard /app/.next ./.next
-COPY --from=builder --chown=wealthboard:wealthboard /app/public ./public
-COPY --from=builder --chown=wealthboard:wealthboard /app/db/migrations ./db/migrations
-COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/migrate.mjs ./scripts/migrate.mjs
-COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/reset-password.mjs ./scripts/reset-password.mjs
-COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/backup.mjs ./scripts/backup.mjs
-COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/restore-backup.mjs ./scripts/restore-backup.mjs
-COPY --from=builder --chown=wealthboard:wealthboard /app/scripts/extract-import-source.mjs ./scripts/extract-import-source.mjs
-COPY --from=builder --chown=wealthboard:wealthboard /app/package.json ./
-
-USER wealthboard
+USER nonroot
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-CMD ["npm", "start"]
+  CMD ["/app/wealthboard", "healthcheck"]
+ENTRYPOINT ["/app/wealthboard"]
+CMD ["serve"]

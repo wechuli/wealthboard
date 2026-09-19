@@ -92,6 +92,32 @@ func TestUnknownAPIEndpointUsesProblemJSON(t *testing.T) {
 	}
 }
 
+func TestStaticFallbackDoesNotCaptureAPI(t *testing.T) {
+	static := http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusOK)
+		_, _ = response.Write([]byte("spa"))
+	})
+	router := NewRouterWithReads(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		func(context.Context) error { return nil },
+		nil,
+		nil,
+		ReadHandlers{Static: static},
+	)
+
+	apiResponse := httptest.NewRecorder()
+	router.ServeHTTP(apiResponse, httptest.NewRequest(http.MethodGet, "/api/v1/missing", nil))
+	if apiResponse.Code != http.StatusNotFound || apiResponse.Header().Get("Content-Type") != "application/problem+json" {
+		t.Fatalf("API fallback = %d %q", apiResponse.Code, apiResponse.Header().Get("Content-Type"))
+	}
+
+	spaResponse := httptest.NewRecorder()
+	router.ServeHTTP(spaResponse, httptest.NewRequest(http.MethodGet, "/accounts/example", nil))
+	if spaResponse.Code != http.StatusOK || spaResponse.Body.String() != "spa" {
+		t.Fatalf("SPA fallback = %d %q", spaResponse.Code, spaResponse.Body.String())
+	}
+}
+
 func testRouter(check readinessCheck) http.Handler {
 	return NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), check)
 }

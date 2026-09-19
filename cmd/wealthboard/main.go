@@ -18,6 +18,7 @@ import (
 	"github.com/wechuli/wealthboard/internal/database"
 	"github.com/wechuli/wealthboard/internal/database/generated"
 	"github.com/wechuli/wealthboard/internal/service"
+	staticfiles "github.com/wechuli/wealthboard/internal/static"
 )
 
 func main() {
@@ -30,6 +31,12 @@ func main() {
 func run(args []string) error {
 	if len(args) == 0 {
 		return usageError()
+	}
+	if args[0] == "healthcheck" {
+		if len(args) != 1 {
+			return usageError()
+		}
+		return healthcheck()
 	}
 	if args[0] != "reset-password" && len(args) != 1 {
 		return usageError()
@@ -57,6 +64,9 @@ func run(args []string) error {
 
 	switch args[0] {
 	case "serve":
+		if err := database.MigrateUp(ctx, db); err != nil {
+			return err
+		}
 		return serve(ctx, logger, cfg, db)
 	case "migrate":
 		return database.MigrateUp(ctx, db)
@@ -109,6 +119,14 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	coreReads := api.NewCoreReadHandler(authHandler, service.NewCoreReadService(service.NewSQLCoreReadRepository(db)))
 	goalsReports := api.NewGoalsReportsHandler(authHandler, service.NewGoalsReportsService(service.NewSQLGoalsReportsRepository(db)))
 	featureReads := api.NewFeatureReadHandler(authHandler, service.NewFeatureReads(db))
+	distPath := os.Getenv("WEB_DIST_PATH")
+	if distPath == "" {
+		distPath = "web/dist"
+	}
+	spa, err := staticfiles.NewSPA(distPath)
+	if err != nil {
+		return err
+	}
 	var oidcClient *webauth.OIDCClient
 	if oidcConfig != nil {
 		oidcClient = webauth.NewOIDCClient(*oidcConfig, secureCookies)
@@ -124,7 +142,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	server := &http.Server{
 		Addr: cfg.HTTP.Address,
 		Handler: api.NewRouterWithReads(logger, ready, authHandler, overviewHandler, api.ReadHandlers{
-			Core: coreReads, GoalsReports: goalsReports, Features: featureReads,
+			Core: coreReads, GoalsReports: goalsReports, Features: featureReads, Static: spa,
 		}),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,
@@ -160,5 +178,22 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: wealthboard <serve|migrate|migrate-status|reset-password --username <name>>")
+	return fmt.Errorf("usage: wealthboard <serve|healthcheck|migrate|migrate-status|reset-password --username <name>>")
+}
+
+func healthcheck() error {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	client := &http.Client{Timeout: 4 * time.Second}
+	response, err := client.Get("http://127.0.0.1:" + port + "/api/health/ready")
+	if err != nil {
+		return fmt.Errorf("healthcheck request: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck returned %s", response.Status)
+	}
+	return nil
 }

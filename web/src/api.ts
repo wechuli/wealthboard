@@ -115,8 +115,7 @@ export const getAccountValuations = (id: string) =>
 export const getTransactions = () =>
   request<TransactionPage>("/transactions?limit=100");
 export const getCategories = () => request<CategoryList>("/categories");
-export const getInstitutions = () =>
-  request<InstitutionList>("/institutions");
+export const getInstitutions = () => request<InstitutionList>("/institutions");
 export const getGoals = () => request<Goal[]>("/goals");
 export const getGoal = (id: string) => request<Goal>(`/goals/${id}`);
 export const getGoalMilestones = (id: string) =>
@@ -126,8 +125,7 @@ export const getReportSummary = () =>
   request<ReportSummary>("/reports/summary");
 export const getReportAllocation = () =>
   request<ReportAllocation>("/reports/allocation");
-export const getInstruments = () =>
-  request<InstrumentList>("/instruments");
+export const getInstruments = () => request<InstrumentList>("/instruments");
 export const getInstrument = (id: string) =>
   request<InstrumentDetail>(`/instruments/${id}`);
 export const getEstate = () => request<EstateWorkspace>("/estate");

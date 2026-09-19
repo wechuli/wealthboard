@@ -19,6 +19,7 @@ type ReadHandlers struct {
 	Core         *CoreReadHandler
 	GoalsReports *GoalsReportsHandler
 	Features     *FeatureReadHandler
+	Static       http.Handler
 }
 
 func NewRouter(logger *slog.Logger, ready readinessCheck) http.Handler {
@@ -93,6 +94,9 @@ func NewRouterWithReads(logger *slog.Logger, ready readinessCheck, auth *AuthHan
 		}
 		router.NotFound(problemNotFound)
 	})
+	if reads.Static != nil {
+		router.Mount("/", reads.Static)
+	}
 
 	return router
 }
