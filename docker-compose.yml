@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: wealthboard
       POSTGRES_USER: wealthboard
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - wealthboard-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -23,8 +23,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgres://wealthboard:${POSTGRES_PASSWORD}@postgres:5432/wealthboard?sslmode=disable
-      SESSION_SECRET: ${SESSION_SECRET}
+      DATABASE_URL: postgres://wealthboard:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/wealthboard?sslmode=disable
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       APP_URL: ${APP_URL:-http://localhost:3000}
       AUTH_METHODS: ${AUTH_METHODS:-local}
       OIDC_ISSUER: ${OIDC_ISSUER:-}

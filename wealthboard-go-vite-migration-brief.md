@@ -23,8 +23,11 @@ When the repository has changed since this brief was written, inspect the latest
 - [x] Add OIDC discovery, Authorization Code with PKCE, callback verification, JIT provisioning, linking, unlinking, reauthentication, and local-method transitions.
 - [x] Add scoped API-key creation, one-time secret display, listing, Bearer authentication, last-used throttling, revocation, and two-user isolation coverage.
 - [x] Complete Phase 2 backend authentication and API-key contracts; the Settings UI is part of the Vite frontend work in Phase 3.
-- [x] Start Phase 3 with the Vite SPA, authenticated session bootstrap, auth-mode-aware login/signup, responsive shell, privacy/theme controls, and owner-scoped overview/accounts reads.
-- [ ] Port product APIs and the React/Vite frontend in the phases below.
+- [x] Complete Phase 3 owner-scoped read APIs for settings, categories, institutions, accounts, activity, dashboard, goals, reports, instruments, estate, and AI review metadata.
+- [x] Complete the Phase 3 Vite SPA with generated API types, authenticated session bootstrap, auth-mode-aware login/signup, all read-only routes, responsive navigation, privacy/theme controls, and original interface styling.
+- [x] Serve the production SPA from Go with deep-link fallback outside `/api/*`, immutable hashed assets, and no-cache HTML.
+- [x] Package the Vite build and Go server in a non-root distroless image with PostgreSQL Compose orchestration and fresh-database migrations on startup.
+- [ ] Port Phase 4 mutations and the later workflows in the phases below.
 
 ## Objective
 
