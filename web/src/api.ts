@@ -1,4 +1,31 @@
-import type { AuthConfig, Overview, Problem, Session } from "./types";
+import type {
+  Account,
+  ActivityItem,
+  AIRead,
+  APIKeyMetadata,
+  AuthConfig,
+  Category,
+  CreateAPIKeyInput,
+  CreatedAPIKey,
+  Dashboard,
+  EstateSnapshot,
+  EstateWorkspace,
+  Goal,
+  GoalAlert,
+  GoalMilestone,
+  Institution,
+  Instrument,
+  InstrumentDetail,
+  Overview,
+  Page,
+  Problem,
+  ReportAllocation,
+  ReportSummary,
+  Session,
+  SettingsRead,
+  Transaction,
+  Valuation,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -74,4 +101,39 @@ export function logout(csrfToken: string) {
 
 export function getOverview() {
   return request<Overview>("/overview");
+}
+
+export const getDashboard = () => request<Dashboard>("/dashboard");
+export const getAccounts = () => request<{ items: Account[] }>("/accounts");
+export const getAccount = (id: string) => request<Account>(`/accounts/${id}`);
+export const getAccountActivity = (id: string) => request<Page<ActivityItem>>(`/accounts/${id}/activity?limit=100`);
+export const getAccountTransactions = (id: string) => request<Page<Transaction>>(`/accounts/${id}/transactions?limit=100`);
+export const getAccountValuations = (id: string) => request<Page<Valuation>>(`/accounts/${id}/valuations?limit=100`);
+export const getTransactions = () => request<Page<Transaction>>("/transactions?limit=100");
+export const getCategories = () => request<{ items: Category[] }>("/categories");
+export const getInstitutions = () => request<{ items: Institution[] }>("/institutions");
+export const getGoals = () => request<Goal[]>("/goals");
+export const getGoal = (id: string) => request<Goal>(`/goals/${id}`);
+export const getGoalMilestones = (id: string) => request<GoalMilestone[]>(`/goals/${id}/milestones`);
+export const getGoalAlerts = () => request<GoalAlert[]>("/goals/alerts");
+export const getReportSummary = () => request<ReportSummary>("/reports/summary");
+export const getReportAllocation = () => request<ReportAllocation>("/reports/allocation");
+export const getInstruments = () => request<{ instruments: Instrument[] }>("/instruments");
+export const getInstrument = (id: string) => request<InstrumentDetail>(`/instruments/${id}`);
+export const getEstate = () => request<EstateWorkspace>("/estate");
+export const getEstateSnapshot = (id: string) => request<EstateSnapshot>(`/estate/snapshots/${id}`);
+export const getAI = () => request<AIRead>("/ai");
+export const getSettings = () => request<SettingsRead>("/settings");
+export const getAPIKeys = () => request<{ keys: APIKeyMetadata[] }>("/api-keys");
+
+export function createAPIKey(input: CreateAPIKeyInput, csrfToken: string) {
+  return request<CreatedAPIKey>("/api-keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+    body: JSON.stringify(input),
+  });
+}
+
+export function revokeAPIKey(id: string, csrfToken: string) {
+  return request<void>(`/api-keys/${id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrfToken } });
 }

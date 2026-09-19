@@ -106,6 +106,9 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	authHandler := api.NewAuthHandler(authService, registration, limiter, sessions, policy, trustedOrigin)
 	authHandler.EnableAPIKeys(webauth.NewAPIKeyService(generated.New(db)))
 	overviewHandler := api.NewOverviewHandler(authHandler, service.NewOverviewService(generated.New(db)))
+	coreReads := api.NewCoreReadHandler(authHandler, service.NewCoreReadService(service.NewSQLCoreReadRepository(db)))
+	goalsReports := api.NewGoalsReportsHandler(authHandler, service.NewGoalsReportsService(service.NewSQLGoalsReportsRepository(db)))
+	featureReads := api.NewFeatureReadHandler(authHandler, service.NewFeatureReads(db))
 	var oidcClient *webauth.OIDCClient
 	if oidcConfig != nil {
 		oidcClient = webauth.NewOIDCClient(*oidcConfig, secureCookies)
@@ -119,8 +122,10 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	}
 
 	server := &http.Server{
-		Addr:              cfg.HTTP.Address,
-		Handler:           api.NewRouterWithServices(logger, ready, authHandler, overviewHandler),
+		Addr: cfg.HTTP.Address,
+		Handler: api.NewRouterWithReads(logger, ready, authHandler, overviewHandler, api.ReadHandlers{
+			Core: coreReads, GoalsReports: goalsReports, Features: featureReads,
+		}),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,
 		WriteTimeout:      cfg.HTTP.WriteTimeout,

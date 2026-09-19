@@ -15,6 +15,12 @@ import (
 
 type readinessCheck func(context.Context) error
 
+type ReadHandlers struct {
+	Core         *CoreReadHandler
+	GoalsReports *GoalsReportsHandler
+	Features     *FeatureReadHandler
+}
+
 func NewRouter(logger *slog.Logger, ready readinessCheck) http.Handler {
 	return NewRouterWithAuth(logger, ready, nil)
 }
@@ -24,6 +30,10 @@ func NewRouterWithAuth(logger *slog.Logger, ready readinessCheck, auth *AuthHand
 }
 
 func NewRouterWithServices(logger *slog.Logger, ready readinessCheck, auth *AuthHandler, overview *OverviewHandler) http.Handler {
+	return NewRouterWithReads(logger, ready, auth, overview, ReadHandlers{})
+}
+
+func NewRouterWithReads(logger *slog.Logger, ready readinessCheck, auth *AuthHandler, overview *OverviewHandler, reads ReadHandlers) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
@@ -42,6 +52,22 @@ func NewRouterWithServices(logger *slog.Logger, ready readinessCheck, auth *Auth
 			router.Route("/v1", func(router chi.Router) {
 				if overview != nil {
 					router.Get("/overview", overview.ServeHTTP)
+				}
+				if reads.Core != nil {
+					router.Get("/categories", reads.Core.Categories)
+					router.Get("/institutions", reads.Core.Institutions)
+					router.Get("/accounts", reads.Core.Accounts)
+					router.Get("/accounts/{accountID}", reads.Core.Account)
+					router.Get("/accounts/{accountID}/transactions", reads.Core.AccountTransactions)
+					router.Get("/accounts/{accountID}/valuations", reads.Core.AccountValuations)
+					router.Get("/accounts/{accountID}/activity", reads.Core.AccountActivity)
+					router.Get("/transactions", reads.Core.Transactions)
+				}
+				if reads.GoalsReports != nil {
+					RegisterGoalsReportsRoutes(router, reads.GoalsReports)
+				}
+				if reads.Features != nil {
+					RegisterFeatureReadRoutes(router, reads.Features)
 				}
 				if auth.apiKeys != nil {
 					router.Get("/api-keys", auth.ListAPIKeys)

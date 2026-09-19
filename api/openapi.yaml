@@ -24,6 +24,7 @@ paths:
     get:
       operationId: getOverview
       summary: Return the current user's read-only overview
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
       security:
         - sessionCookie: []
         - apiKey: []
@@ -34,6 +35,507 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Overview"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /categories:
+    get:
+      operationId: listCategories
+      summary: List the current user's account categories
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped categories
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Category"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /institutions:
+    get:
+      operationId: listInstitutions
+      summary: List the current user's institutions
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped institutions
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Institution"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: List the current user's accounts
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ArchivedFilter"
+      responses:
+        "200":
+          description: Owner-scoped accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /accounts/{accountID}:
+    get:
+      operationId: getAccount
+      summary: Return one account owned by the current user
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+      responses:
+        "200":
+          description: Owner-scoped account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /accounts/{accountID}/transactions:
+    get:
+      operationId: listAccountTransactions
+      summary: List transactions for one account
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/TransactionType"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Page of owner-scoped account transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /accounts/{accountID}/valuations:
+    get:
+      operationId: listAccountValuations
+      summary: List valuation snapshots for one account
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Page of owner-scoped account valuations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValuationPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /accounts/{accountID}/activity:
+    get:
+      operationId: listAccountActivity
+      summary: List combined transaction and valuation activity for one account
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Page of owner-scoped account activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /transactions:
+    get:
+      operationId: listTransactions
+      summary: List the current user's transactions
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountIDFilter"
+        - $ref: "#/components/parameters/TransactionType"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Page of owner-scoped transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /goals:
+    get:
+      operationId: listGoals
+      summary: List the current user's goals
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Goal"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /goals/{id}:
+    get:
+      operationId: getGoal
+      summary: Return one goal owned by the current user
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Owner-scoped goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /goals/{id}/milestones:
+    get:
+      operationId: listGoalMilestones
+      summary: List milestones for one goal
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Owner-scoped goal milestones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GoalMilestone"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /goals/alerts:
+    get:
+      operationId: listGoalAlerts
+      summary: List active alerts for the current user's goals
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped goal alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GoalAlert"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      summary: Return the current dashboard snapshot
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped dashboard snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /reports/summary:
+    get:
+      operationId: getReportSummary
+      summary: Return the current portfolio summary report
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped portfolio summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSummary"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /reports/allocation:
+    get:
+      operationId: getReportAllocation
+      summary: Return current portfolio allocation breakdowns
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped allocation report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportAllocation"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /settings:
+    get:
+      operationId: getSettings
+      summary: Return settings, currency configuration, rates, and authentication methods
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped settings workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsRead"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /instruments:
+    get:
+      operationId: listInstruments
+      summary: List the current user's investment instruments
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped instruments and latest prices
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [instruments]
+                properties:
+                  instruments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Instrument"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /instruments/{id}:
+    get:
+      operationId: getInstrument
+      summary: Return one investment instrument and its price history
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Owner-scoped instrument detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstrumentDetail"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /estate:
+    get:
+      operationId: getEstateWorkspace
+      summary: Return the current user's estate-planning workspace
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped estate workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstateWorkspace"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /estate/snapshots/{id}:
+    get:
+      operationId: getEstateSnapshot
+      summary: Return one immutable estate snapshot
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Owner-scoped estate snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstateSnapshot"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /ai:
+    get:
+      operationId: getAIReadModel
+      summary: Return AI provider metadata, usage, and review availability
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Stored API key secrets are never returned.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped AI configuration and usage metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIRead"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -448,6 +950,69 @@ components:
       schema:
         type: string
         minLength: 1
+    AccountID:
+      name: accountID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ArchivedFilter:
+      name: archived
+      in: query
+      description: Select active accounts, archived accounts, or both.
+      schema:
+        type: string
+        enum: [active, archived, all]
+        default: active
+    AccountIDFilter:
+      name: accountId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    TransactionType:
+      name: type
+      in: query
+      schema:
+        $ref: "#/components/schemas/TransactionType"
+    FromDate:
+      name: from
+      in: query
+      description: Inclusive start date.
+      schema:
+        type: string
+        format: date
+    ToDate:
+      name: to
+      in: query
+      description: Inclusive end date; must not precede `from`.
+      schema:
+        type: string
+        format: date
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 10000
+        default: 0
   schemas:
     AuthConfig:
       type: object
@@ -527,6 +1092,675 @@ components:
         missingCurrencies:
           type: array
           items: { type: string }
+    MinorUnits:
+      type: string
+      description: Integer monetary amount in the currency's minor units.
+      pattern: "^-?[0-9]+$"
+    DecimalString:
+      type: string
+      description: Exact decimal value serialized as a string.
+      pattern: "^-?[0-9]+(?:\\.[0-9]+)?$"
+    TransactionType:
+      type: string
+      enum:
+        - opening_balance
+        - deposit
+        - withdrawal
+        - interest
+        - dividend
+        - capital_gain
+        - capital_loss
+        - fee
+        - purchase
+        - sale
+        - manual_adjustment
+        - liability_payment
+        - liability_increase
+        - transfer
+    Category:
+      type: object
+      additionalProperties: false
+      required: [id, name, slug, icon, displayOrder, assetOrLiability, isLiquid, isInvestible, isArchived, isSystem]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        icon: { type: string }
+        displayOrder: { type: integer }
+        assetOrLiability: { type: string }
+        description: { type: string }
+        isLiquid: { type: boolean }
+        isInvestible: { type: boolean }
+        isArchived: { type: boolean }
+        isSystem: { type: boolean }
+    Institution:
+      type: object
+      additionalProperties: false
+      required: [id, name, type]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        websiteUrl: { type: string }
+        countryCode: { type: string }
+        address: { type: string }
+        notes: { type: string }
+        archivedAt: { type: string, format: date-time }
+    Account:
+      type: object
+      additionalProperties: false
+      required: [id, categoryId, name, currency, trackingMode, currentValueMinor, isLiability, isIncludedInNetWorth, categoryName]
+      properties:
+        id: { type: string, format: uuid }
+        categoryId: { type: string, format: uuid }
+        institutionId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        currency: { type: string }
+        trackingMode: { type: string }
+        currentValueMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        costBasisMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        isLiability: { type: boolean }
+        isIncludedInNetWorth: { type: boolean }
+        categoryName: { type: string }
+        institutionName: { type: string }
+        accountReference: { type: string }
+        notes: { type: string }
+        openedAt: { type: string, format: date }
+        archivedAt: { type: string, format: date-time }
+    Transaction:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, accountName, type, amountMinor, currency, transactionDate]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        accountName: { type: string }
+        type:
+          $ref: "#/components/schemas/TransactionType"
+        amountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        currency: { type: string }
+        transactionDate: { type: string, format: date }
+        description: { type: string }
+        notes: { type: string }
+        externalId: { type: string }
+        transferGroupId: { type: string, format: uuid }
+        eventGroupId: { type: string, format: uuid }
+    Valuation:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, accountName, valueMinor, currency, valuationDate]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        accountName: { type: string }
+        valueMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        currency: { type: string }
+        valuationDate: { type: string, format: date }
+        notes: { type: string }
+    ActivityItem:
+      type: object
+      additionalProperties: false
+      required: [kind, id, accountId, accountName, type, amountMinor, currency, date]
+      properties:
+        kind: { type: string, enum: [transaction, valuation] }
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        accountName: { type: string }
+        type: { type: string }
+        amountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        currency: { type: string }
+        date: { type: string, format: date }
+        description: { type: string }
+        notes: { type: string }
+    TransactionPage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0, maximum: 10000 }
+        hasMore: { type: boolean }
+    ValuationPage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Valuation"
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0, maximum: 10000 }
+        hasMore: { type: boolean }
+    ActivityPage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityItem"
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0, maximum: 10000 }
+        hasMore: { type: boolean }
+    GoalLinkedAccount:
+      type: object
+      additionalProperties: false
+      required: [id, name, currency]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        currency: { type: string }
+    GoalPlan:
+      type: object
+      additionalProperties: false
+      required: [plannedContributionMinor, frequency, startDate, endDate]
+      properties:
+        plannedContributionMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        frequency: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: [string, "null"], format: date }
+    Goal:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, targetAmountMinor, currentAmountMinor, currentAmountCurrency, currency, targetDate, linkedAccount, icon, status, priority, assumedAnnualReturnBps, progressPercent, valueIncomplete, missingCurrencies, plan]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        targetAmountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        currentAmountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        currentAmountCurrency: { type: string }
+        currency: { type: string }
+        targetDate: { type: string, format: date }
+        linkedAccount:
+          oneOf:
+            - $ref: "#/components/schemas/GoalLinkedAccount"
+            - type: "null"
+        icon: { type: string }
+        status: { type: string }
+        priority: { type: integer, format: int32 }
+        assumedAnnualReturnBps: { type: integer, format: int32 }
+        progressPercent:
+          $ref: "#/components/schemas/DecimalString"
+        valueIncomplete: { type: boolean }
+        missingCurrencies:
+          type: array
+          items: { type: string }
+        plan:
+          oneOf:
+            - $ref: "#/components/schemas/GoalPlan"
+            - type: "null"
+    GoalMilestone:
+      type: object
+      additionalProperties: false
+      required: [id, goalId, name, targetAmountMinor, targetDate, status, progressPercent, remainingMinor]
+      properties:
+        id: { type: string, format: uuid }
+        goalId: { type: string, format: uuid }
+        name: { type: string }
+        targetAmountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        targetDate: { type: [string, "null"], format: date }
+        status: { type: string }
+        progressPercent:
+          $ref: "#/components/schemas/DecimalString"
+        remainingMinor:
+          oneOf:
+            - $ref: "#/components/schemas/MinorUnits"
+            - type: "null"
+    GoalAlert:
+      type: object
+      additionalProperties: false
+      required: [goalId, goalName, currency, targetAmountMinor, currentAmountMinor, progressPercent, targetDate, alertKey, assumedAnnualReturnBps]
+      properties:
+        goalId: { type: string, format: uuid }
+        goalName: { type: string }
+        currency: { type: string }
+        targetAmountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        currentAmountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        progressPercent:
+          $ref: "#/components/schemas/DecimalString"
+        targetDate: { type: string, format: date }
+        alertKey: { type: string }
+        assumedAnnualReturnBps: { type: integer, format: int32 }
+    CurrentTotals:
+      type: object
+      additionalProperties: false
+      required: [assets, liabilities, netWorth, liquid, investible]
+      properties:
+        assets:
+          $ref: "#/components/schemas/MinorUnits"
+        liabilities:
+          $ref: "#/components/schemas/MinorUnits"
+        netWorth:
+          $ref: "#/components/schemas/MinorUnits"
+        liquid:
+          $ref: "#/components/schemas/MinorUnits"
+        investible:
+          $ref: "#/components/schemas/MinorUnits"
+    Dashboard:
+      type: object
+      additionalProperties: false
+      required: [asOf, baseCurrency, totals, accountCount, goalCount, currentComplete, missingCurrencies, historicalAvailable, historicalComplete, valueBasis]
+      properties:
+        asOf: { type: string, format: date }
+        baseCurrency: { type: string }
+        totals:
+          $ref: "#/components/schemas/CurrentTotals"
+        accountCount: { type: integer, minimum: 0 }
+        goalCount: { type: integer, minimum: 0 }
+        currentComplete: { type: boolean }
+        missingCurrencies:
+          type: array
+          items: { type: string }
+        historicalAvailable: { type: boolean }
+        historicalComplete: { type: boolean }
+        valueBasis: { type: string }
+    ReportSummary:
+      type: object
+      additionalProperties: false
+      required: [asOf, baseCurrency, totals, accountCount, goalCount, currentComplete, missingCurrencies, valueBasis]
+      properties:
+        asOf: { type: string, format: date }
+        baseCurrency: { type: string }
+        totals:
+          $ref: "#/components/schemas/CurrentTotals"
+        accountCount: { type: integer, minimum: 0 }
+        goalCount: { type: integer, minimum: 0 }
+        currentComplete: { type: boolean }
+        missingCurrencies:
+          type: array
+          items: { type: string }
+        valueBasis: { type: string }
+    AllocationItem:
+      type: object
+      additionalProperties: false
+      required: [name, valueMinor, sharePercent]
+      properties:
+        name: { type: string }
+        valueMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        sharePercent:
+          $ref: "#/components/schemas/DecimalString"
+    ReportAllocation:
+      type: object
+      additionalProperties: false
+      required: [asOf, baseCurrency, currentComplete, missingCurrencies, valueBasis, categories, institutions, currencies]
+      properties:
+        asOf: { type: string, format: date }
+        baseCurrency: { type: string }
+        currentComplete: { type: boolean }
+        missingCurrencies:
+          type: array
+          items: { type: string }
+        valueBasis: { type: string }
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllocationItem"
+        institutions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllocationItem"
+        currencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllocationItem"
+    SettingsRead:
+      type: object
+      additionalProperties: false
+      required: [settings, currencyConfiguration, exchangeRates, authMethods]
+      properties:
+        settings:
+          $ref: "#/components/schemas/UserSettings"
+        currencyConfiguration:
+          $ref: "#/components/schemas/CurrencyConfiguration"
+        exchangeRates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExchangeRate"
+        authMethods:
+          $ref: "#/components/schemas/AuthMethodState"
+    UserSettings:
+      type: object
+      additionalProperties: false
+      required: [displayName, appName, baseCurrency, supportedCurrencies, timezone, preferredDateFormat, defaultDashboardPeriod, sessionTimeoutMinutes, defaultGoalReturnBps, positionStaleDaysStock, positionStaleDaysEtf, positionStaleDaysFund, createdAt, updatedAt]
+      properties:
+        displayName: { type: string }
+        appName: { type: string }
+        baseCurrency: { type: string }
+        supportedCurrencies:
+          type: array
+          items: { type: string }
+        timezone: { type: string }
+        preferredDateFormat: { type: string }
+        defaultDashboardPeriod: { type: string }
+        sessionTimeoutMinutes: { type: integer, format: int32 }
+        defaultGoalReturnBps: { type: integer, format: int32 }
+        positionStaleDaysStock: { type: integer, format: int32 }
+        positionStaleDaysEtf: { type: integer, format: int32 }
+        positionStaleDaysFund: { type: integer, format: int32 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CurrencyConfiguration:
+      type: object
+      additionalProperties: false
+      required: [baseCurrency, enabledCurrencies, referencedCurrencies]
+      properties:
+        baseCurrency: { type: string }
+        enabledCurrencies:
+          type: array
+          items: { type: string }
+        referencedCurrencies:
+          type: array
+          items: { type: string }
+    ExchangeRate:
+      type: object
+      additionalProperties: false
+      required: [id, baseCurrency, quoteCurrency, rate, effectiveDate, source, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        baseCurrency: { type: string }
+        quoteCurrency: { type: string }
+        rate:
+          $ref: "#/components/schemas/DecimalString"
+        effectiveDate: { type: string, format: date-time }
+        source: { type: string }
+        createdAt: { type: string, format: date-time }
+    AuthMethodState:
+      type: object
+      additionalProperties: false
+      required: [status, hasPassword, oidcIdentities]
+      properties:
+        status: { type: string }
+        hasPassword: { type: boolean }
+        oidcIdentities:
+          type: array
+          items:
+            $ref: "#/components/schemas/OIDCIdentity"
+    OIDCIdentity:
+      type: object
+      additionalProperties: false
+      required: [id, issuer, createdAt, updatedAt, lastLoginAt]
+      properties:
+        id: { type: string, format: uuid }
+        issuer: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        lastLoginAt: { type: string, format: date-time }
+    SecurityPrice:
+      type: object
+      additionalProperties: false
+      required: [id, externalId, price, currency, effectiveDate, source, provenance, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        externalId: { type: [string, "null"] }
+        price:
+          $ref: "#/components/schemas/DecimalString"
+        currency: { type: string }
+        effectiveDate: { type: string, format: date-time }
+        source: { type: string }
+        provenance: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Instrument:
+      type: object
+      additionalProperties: false
+      required: [id, externalId, name, symbol, identifierType, identifier, exchangeMic, assetType, quoteCurrency, archivedAt, createdAt, updatedAt, latestPrice]
+      properties:
+        id: { type: string, format: uuid }
+        externalId: { type: [string, "null"] }
+        name: { type: string }
+        symbol: { type: [string, "null"] }
+        identifierType: { type: string }
+        identifier: { type: [string, "null"] }
+        exchangeMic: { type: [string, "null"] }
+        assetType: { type: string }
+        quoteCurrency: { type: string }
+        archivedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        latestPrice:
+          oneOf:
+            - $ref: "#/components/schemas/SecurityPrice"
+            - type: "null"
+    InstrumentDetail:
+      type: object
+      additionalProperties: false
+      required: [instrument, prices]
+      properties:
+        instrument:
+          $ref: "#/components/schemas/Instrument"
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityPrice"
+    EstatePlan:
+      type: object
+      additionalProperties: false
+      required: [id, title, jurisdiction, lastReviewedDate, reviewReminderDate, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        jurisdiction: { type: [string, "null"] }
+        lastReviewedDate: { type: [string, "null"], format: date-time }
+        reviewReminderDate: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Beneficiary:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name, relationship, contactSummary, notes, archivedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        name: { type: string }
+        relationship: { type: [string, "null"] }
+        contactSummary: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        archivedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EstateDirective:
+      type: object
+      additionalProperties: false
+      required: [id, estatePlanId, accountId, accountName, currency, currentValueMinor, isLiability, accountArchivedAt, isIncluded, ownershipShareBps, transferContext, distributionMethod, documentReference, notes, reviewedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        estatePlanId: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        accountName: { type: string }
+        currency: { type: string }
+        currentValueMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        isLiability: { type: boolean }
+        accountArchivedAt: { type: [string, "null"], format: date-time }
+        isIncluded: { type: boolean }
+        ownershipShareBps: { type: integer, format: int32 }
+        transferContext: { type: string }
+        distributionMethod: { type: string }
+        documentReference: { type: [string, "null"] }
+        notes: { type: [string, "null"] }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EstateAllocation:
+      type: object
+      additionalProperties: false
+      required: [id, estatePlanId, directiveId, beneficiaryId, tier, allocationBps, notes, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        estatePlanId: { type: string, format: uuid }
+        directiveId: { type: string, format: uuid }
+        beneficiaryId: { type: string, format: uuid }
+        tier: { type: string }
+        allocationBps: { type: integer, format: int32 }
+        notes: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ResiduaryAllocation:
+      type: object
+      additionalProperties: false
+      required: [id, estatePlanId, beneficiaryId, tier, allocationBps, notes, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        estatePlanId: { type: string, format: uuid }
+        beneficiaryId: { type: string, format: uuid }
+        tier: { type: string }
+        allocationBps: { type: integer, format: int32 }
+        notes: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EstateSnapshotMeta:
+      type: object
+      additionalProperties: false
+      required: [id, estatePlanId, version, title, valueAsOfDate, baseCurrency, contentHash, generatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        estatePlanId: { type: string, format: uuid }
+        version: { type: integer, format: int32 }
+        title: { type: string }
+        valueAsOfDate: { type: string, format: date-time }
+        baseCurrency: { type: string }
+        contentHash: { type: string }
+        generatedAt: { type: string, format: date-time }
+    EstateSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, estatePlanId, version, title, valueAsOfDate, baseCurrency, contentHash, generatedAt, content]
+      properties:
+        id: { type: string, format: uuid }
+        estatePlanId: { type: string, format: uuid }
+        version: { type: integer, format: int32 }
+        title: { type: string }
+        valueAsOfDate: { type: string, format: date-time }
+        baseCurrency: { type: string }
+        contentHash: { type: string }
+        generatedAt: { type: string, format: date-time }
+        content: {}
+    EstateWorkspace:
+      type: object
+      additionalProperties: false
+      required: [plan, beneficiaries, directives, allocations, residuaryAllocations, snapshots, currentValuesComplete, currentValuesWarning]
+      properties:
+        plan:
+          oneOf:
+            - $ref: "#/components/schemas/EstatePlan"
+            - type: "null"
+        beneficiaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Beneficiary"
+        directives:
+          type: array
+          items:
+            $ref: "#/components/schemas/EstateDirective"
+        allocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/EstateAllocation"
+        residuaryAllocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResiduaryAllocation"
+        snapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/EstateSnapshotMeta"
+        currentValuesComplete: { type: boolean }
+        currentValuesWarning: { type: string }
+    AIProviderSettings:
+      type: object
+      additionalProperties: false
+      required: [provider, baseUrl, model, hasStoredApiKey, apiKeyHint, includeExactAmounts, includeAccountNames, monthlyTokenLimit, maxOutputTokens, createdAt, updatedAt]
+      properties:
+        provider: { type: string }
+        baseUrl: { type: string }
+        model: { type: string }
+        hasStoredApiKey: { type: boolean }
+        apiKeyHint: { type: [string, "null"] }
+        includeExactAmounts: { type: boolean }
+        includeAccountNames: { type: boolean }
+        monthlyTokenLimit: { type: integer, format: int32 }
+        maxOutputTokens: { type: integer, format: int32 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AIUsageEvent:
+      type: object
+      additionalProperties: false
+      required: [id, provider, endpointHost, model, requestType, status, billingMonth, chargedTokens, inputTokens, outputTokens, latencyMs, errorCode, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string }
+        endpointHost: { type: string }
+        model: { type: string }
+        requestType: { type: string }
+        status: { type: string }
+        billingMonth: { type: string, pattern: "^[0-9]{4}-[0-9]{2}$" }
+        chargedTokens: { type: integer, format: int32 }
+        inputTokens: { type: [integer, "null"], format: int32 }
+        outputTokens: { type: [integer, "null"], format: int32 }
+        latencyMs: { type: [integer, "null"], format: int32 }
+        errorCode: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AIUsageSummary:
+      type: object
+      additionalProperties: false
+      required: [billingMonth, chargedTokens, remainingTokens, monthlyTokenLimit, successfulReviews, lastUsedAt]
+      properties:
+        billingMonth: { type: string, pattern: "^[0-9]{4}-[0-9]{2}$" }
+        chargedTokens: { type: integer, format: int64 }
+        remainingTokens: { type: integer, format: int64 }
+        monthlyTokenLimit: { type: integer, format: int32 }
+        successfulReviews: { type: integer, minimum: 0 }
+        lastUsedAt: { type: [string, "null"], format: date-time }
+    ReviewAvailability:
+      type: object
+      additionalProperties: false
+      required: [available, reason, providerConfigured, storedCredentialAvailable, sessionCredentialAccepted, cooldownUntil, budgetRemainingTokens]
+      properties:
+        available: { type: boolean }
+        reason: { type: string }
+        providerConfigured: { type: boolean }
+        storedCredentialAvailable: { type: boolean }
+        sessionCredentialAccepted: { type: boolean }
+        cooldownUntil: { type: [string, "null"], format: date-time }
+        budgetRemainingTokens: { type: integer, format: int64 }
+    AIRead:
+      type: object
+      additionalProperties: false
+      required: [settings, usage, events, reviewAvailability]
+      properties:
+        settings:
+          oneOf:
+            - $ref: "#/components/schemas/AIProviderSettings"
+            - type: "null"
+        usage:
+          $ref: "#/components/schemas/AIUsageSummary"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AIUsageEvent"
+        reviewAvailability:
+          $ref: "#/components/schemas/ReviewAvailability"
     APIKeyScope:
       type: string
       enum:
