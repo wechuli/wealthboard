@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,8 +16,8 @@ import (
 )
 
 var (
-	ErrLedgerNotFound  = errors.New("ledger resource not found")
-	ErrLedgerConflict  = errors.New("ledger conflict")
+	ErrLedgerNotFound   = errors.New("ledger resource not found")
+	ErrLedgerConflict   = errors.New("ledger conflict")
 	ErrLedgerValidation = errors.New("ledger validation failed")
 )
 
@@ -44,30 +45,30 @@ func NewLedgerService(db *sql.DB) *LedgerService {
 }
 
 type AccountMutationInput struct {
-	IdempotencyKey      *uuid.UUID
-	Name                string
-	Description         string
-	CategoryID          uuid.UUID
-	InstitutionID       *uuid.UUID
-	AccountReference    string
-	Currency            string
-	TrackingMode        string
-	OpeningValueMinor   int64
-	CostBasisMinor      *int64
+	IdempotencyKey       *uuid.UUID
+	Name                 string
+	Description          string
+	CategoryID           uuid.UUID
+	InstitutionID        *uuid.UUID
+	AccountReference     string
+	Currency             string
+	TrackingMode         string
+	OpeningValueMinor    int64
+	CostBasisMinor       *int64
 	IsIncludedInNetWorth bool
-	Notes               string
-	OpenedAt            *time.Time
+	Notes                string
+	OpenedAt             *time.Time
 }
 
 type TransactionMutationInput struct {
-	IdempotencyKey uuid.UUID
-	AccountID      uuid.UUID
-	Type           string
-	AmountMinor    int64
+	IdempotencyKey  uuid.UUID
+	AccountID       uuid.UUID
+	Type            string
+	AmountMinor     int64
 	TransactionDate time.Time
-	Description    string
-	ExternalID     string
-	Notes          string
+	Description     string
+	ExternalID      string
+	Notes           string
 }
 
 type ValuationMutationInput struct {
@@ -79,24 +80,27 @@ type ValuationMutationInput struct {
 }
 
 type TransferMutationInput struct {
-	IdempotencyKey       uuid.UUID
-	FromAccountID        uuid.UUID
-	ToAccountID          uuid.UUID
-	SourceAmountMinor    int64
+	IdempotencyKey         uuid.UUID
+	FromAccountID          uuid.UUID
+	ToAccountID            uuid.UUID
+	SourceAmountMinor      int64
 	DestinationAmountMinor int64
-	TransactionDate      time.Time
-	Description          string
+	TransactionDate        time.Time
+	Description            string
 }
 
 type ledgerAccount struct {
-	ID, CategoryID uuid.UUID
+	ID, CategoryID               uuid.UUID
 	Name, Currency, TrackingMode string
-	CurrentValueMinor int64
-	IsLiability bool
-	ArchivedAt sql.NullTime
+	CurrentValueMinor            int64
+	IsLiability                  bool
+	ArchivedAt                   sql.NullTime
 }
 
 func (service *LedgerService) CreateAccount(ctx context.Context, userID uuid.UUID, input AccountMutationInput) (uuid.UUID, error) {
+	if input.TrackingMode == "" {
+		input.TrackingMode = "balance"
+	}
 	if err := validateAccountInput(input, true); err != nil {
 		return uuid.Nil, err
 	}
@@ -161,7 +165,7 @@ func (service *LedgerService) CreateAccount(ctx context.Context, userID uuid.UUI
 	}
 	transactionDate := now
 	if input.OpenedAt != nil {
-		transactionDate = dateOnly(*input.OpenedAt)
+		transactionDate = ledgerDateOnly(*input.OpenedAt)
 	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO transactions (
@@ -202,6 +206,9 @@ func (service *LedgerService) UpdateAccount(ctx context.Context, userID, account
 	if existing.ArchivedAt.Valid {
 		return validation("archived accounts cannot be changed")
 	}
+	if input.TrackingMode == "" {
+		input.TrackingMode = existing.TrackingMode
+	}
 	if existing.Currency != input.Currency {
 		return validation("account currency cannot be changed after creation")
 	}
@@ -232,7 +239,7 @@ func (service *LedgerService) UpdateAccount(ctx context.Context, userID, account
 	if err != nil {
 		return fmt.Errorf("update account: %w", err)
 	}
-	if err := requireAffected(result); err != nil {
+	if err := requireLedgerAffected(result); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -312,7 +319,7 @@ func (service *LedgerService) DeleteAccount(ctx context.Context, userID, account
 	if err != nil {
 		return fmt.Errorf("delete account: %w", err)
 	}
-	if err := requireAffected(result); err != nil {
+	if err := requireLedgerAffected(result); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -366,7 +373,7 @@ func (service *LedgerService) CreateTransaction(ctx context.Context, userID uuid
 			description,notes,external_id,idempotency_key,created_at,updated_at
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
 	`, transactionID, userID, input.AccountID, input.Type, input.AmountMinor, account.Currency,
-		dateOnly(input.TransactionDate), nullable(input.Description), nullable(input.Notes), externalID, input.IdempotencyKey, now)
+		ledgerDateOnly(input.TransactionDate), nullable(input.Description), nullable(input.Notes), externalID, input.IdempotencyKey, now)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("insert transaction: %w", err)
 	}
@@ -415,11 +422,11 @@ func (service *LedgerService) UpdateTransaction(ctx context.Context, userID, tra
 		UPDATE transactions SET type=$3,amount_minor=$4,transaction_date=$5,
 			description=$6,notes=$7,external_id=$8,updated_at=$9
 		WHERE user_id=$1 AND id=$2
-	`, userID, transactionID, input.Type, input.AmountMinor, dateOnly(input.TransactionDate), nullable(input.Description), nullable(input.Notes), nullable(input.ExternalID), service.now().UTC())
+	`, userID, transactionID, input.Type, input.AmountMinor, ledgerDateOnly(input.TransactionDate), nullable(input.Description), nullable(input.Notes), nullable(input.ExternalID), service.now().UTC())
 	if err != nil {
 		return fmt.Errorf("update transaction: %w", err)
 	}
-	if err := requireAffected(result); err != nil {
+	if err := requireLedgerAffected(result); err != nil {
 		return err
 	}
 	if _, err := service.replayBalance(ctx, tx, userID, accountID); err != nil {
@@ -528,7 +535,7 @@ func (service *LedgerService) CreateValuation(ctx context.Context, userID uuid.U
 	}
 	valuationID := uuid.New()
 	now := service.now().UTC()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO valuation_snapshots (id,user_id,account_id,value_minor,currency,valuation_date,notes,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, valuationID, userID, input.AccountID, input.ValueMinor, account.Currency, dateOnly(input.ValuationDate), nullable(input.Notes), now); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO valuation_snapshots (id,user_id,account_id,value_minor,currency,valuation_date,notes,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, valuationID, userID, input.AccountID, input.ValueMinor, account.Currency, ledgerDateOnly(input.ValuationDate), nullable(input.Notes), now); err != nil {
 		return uuid.Nil, fmt.Errorf("insert valuation: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO idempotency_keys (user_id,key,operation,result_id,created_at) VALUES ($1,$2,'valuation',$3,$4)`, userID, input.IdempotencyKey, valuationID, now); err != nil {
@@ -623,7 +630,7 @@ func (service *LedgerService) CreateTransfer(ctx context.Context, userID uuid.UU
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO transactions (id,user_id,account_id,type,amount_minor,currency,transaction_date,description,transfer_group_id,created_at,updated_at)
 		VALUES ($1,$2,$3,'transfer',$4,$5,$6,$7,$8,$9,$9),($10,$2,$11,'transfer',$12,$13,$6,$14,$8,$9,$9)
-	`, uuid.New(), userID, source.ID, -input.SourceAmountMinor, source.Currency, dateOnly(input.TransactionDate), descriptionOut, groupID, now,
+	`, uuid.New(), userID, source.ID, -input.SourceAmountMinor, source.Currency, ledgerDateOnly(input.TransactionDate), descriptionOut, groupID, now,
 		uuid.New(), destination.ID, input.DestinationAmountMinor, destination.Currency, descriptionIn); err != nil {
 		return uuid.Nil, fmt.Errorf("insert transfer pair: %w", err)
 	}
@@ -669,7 +676,7 @@ func (service *LedgerService) replayBalance(ctx context.Context, tx sqlTx, userI
 		return 0, fmt.Errorf("load account events: %w", err)
 	}
 	defer rows.Close()
-	var balance int64
+	balance := big.NewInt(0)
 	for rows.Next() {
 		var kind, transactionType string
 		var amount int64
@@ -678,22 +685,26 @@ func (service *LedgerService) replayBalance(ctx context.Context, tx sqlTx, userI
 			return 0, fmt.Errorf("scan account event: %w", err)
 		}
 		if kind == "valuation" {
-			balance = amount
+			balance.SetInt64(amount)
 			continue
 		}
 		effect, err := transactionEffect(transactionType, amount)
 		if err != nil {
 			return 0, err
 		}
-		balance += effect
+		balance.Add(balance, big.NewInt(effect))
+		if !balance.IsInt64() {
+			return 0, validation("calculated balance is outside the supported range")
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return 0, fmt.Errorf("iterate account events: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE accounts SET current_value_minor=$3,updated_at=$4 WHERE user_id=$1 AND id=$2`, userID, accountID, balance, service.now().UTC()); err != nil {
+	value := balance.Int64()
+	if _, err := tx.ExecContext(ctx, `UPDATE accounts SET current_value_minor=$3,updated_at=$4 WHERE user_id=$1 AND id=$2`, userID, accountID, value, service.now().UTC()); err != nil {
 		return 0, fmt.Errorf("store replayed balance: %w", err)
 	}
-	return balance, nil
+	return value, nil
 }
 
 func transactionEffect(transactionType string, amount int64) (int64, error) {
@@ -703,6 +714,9 @@ func transactionEffect(transactionType string, amount int64) (int64, error) {
 	sign, ok := transactionEffects[transactionType]
 	if !ok {
 		return 0, validation("unsupported transaction type")
+	}
+	if amount == -1<<63 && sign > 0 {
+		return 0, validation("transaction amount is outside the supported range")
 	}
 	if amount < 0 {
 		amount = -amount
@@ -715,10 +729,7 @@ func validateAccountInput(input AccountMutationInput, creating bool) error {
 	if input.Name == "" || len(input.Name) > 100 || strings.ContainsAny(input.Name, "\x00\n\r\t") || input.CategoryID == uuid.Nil || !ledgerCurrencyPattern.MatchString(input.Currency) {
 		return validation("provide valid account details")
 	}
-	if input.TrackingMode == "" {
-		input.TrackingMode = "balance"
-	}
-	if input.TrackingMode != "balance" && input.TrackingMode != "positions" {
+	if input.TrackingMode != "" && input.TrackingMode != "balance" && input.TrackingMode != "positions" {
 		return validation("tracking mode must be balance or positions")
 	}
 	if creating && input.OpeningValueMinor < 0 {
@@ -896,7 +907,7 @@ func transferMatches(ctx context.Context, tx sqlTx, userID, groupID uuid.UUID, i
 }
 
 func validation(message string) error { return fmt.Errorf("%w: %s", ErrLedgerValidation, message) }
-func conflict(message string) error { return fmt.Errorf("%w: %s", ErrLedgerConflict, message) }
+func conflict(message string) error   { return fmt.Errorf("%w: %s", ErrLedgerConflict, message) }
 
 func nullable(value string) any {
 	value = strings.TrimSpace(value)
@@ -917,7 +928,7 @@ func ledgerNullTime(value *time.Time) any {
 	if value == nil {
 		return nil
 	}
-	return dateOnly(*value)
+	return ledgerDateOnly(*value)
 }
 
 func nullableInt64ForMode(value *int64, trackingMode string) any {
@@ -927,13 +938,15 @@ func nullableInt64ForMode(value *int64, trackingMode string) any {
 	return *value
 }
 
-func dateOnly(value time.Time) time.Time {
+func ledgerDateOnly(value time.Time) time.Time {
 	return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-func sameDate(left, right time.Time) bool { return left.Format(time.DateOnly) == right.Format(time.DateOnly) }
+func sameDate(left, right time.Time) bool {
+	return left.Format(time.DateOnly) == right.Format(time.DateOnly)
+}
 
-func requireAffected(result sql.Result) error {
+func requireLedgerAffected(result sql.Result) error {
 	count, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("read affected rows: %w", err)

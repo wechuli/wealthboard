@@ -22,12 +22,12 @@ var (
 	ErrInvestmentMutationValidation = errors.New("investment mutation validation failed")
 )
 
-var decimalPattern = regexp.MustCompile(`^-?\d+(?:\.\d+)?$`)
+var investmentDecimalPattern = regexp.MustCompile(`^-?\d+(?:\.\d+)?$`)
 
 var ordinaryPositionEventTypes = map[string]bool{
-	"opening_position": true,
-	"buy":              true,
-	"sell":             true,
+	"opening_position":    true,
+	"buy":                 true,
+	"sell":                true,
 	"quantity_adjustment": true,
 }
 
@@ -52,40 +52,40 @@ type InstrumentMutationInput struct {
 }
 
 type PositionEventMutationInput struct {
-	AccountID          uuid.UUID  `json:"accountId"`
-	InstrumentID       uuid.UUID  `json:"instrumentId"`
-	Type               string     `json:"type"`
-	Quantity           string     `json:"quantity"`
-	UnitPrice          string     `json:"unitPrice"`
-	TradeCurrency      string     `json:"tradeCurrency"`
-	FeeAmount          string     `json:"feeAmount"`
-	FeeCurrency        string     `json:"feeCurrency"`
-	CashEffect         string     `json:"cashEffect"`
-	AppliedExchangeRate string    `json:"appliedExchangeRate"`
-	OpeningCostBasis   string     `json:"openingCostBasis"`
-	TradeDate          time.Time  `json:"tradeDate"`
-	SettlementDate     *time.Time `json:"settlementDate"`
-	ExternalID         string     `json:"externalId"`
-	IdempotencyKey     uuid.UUID  `json:"idempotencyKey"`
-	Description        string     `json:"description"`
-	Notes              string     `json:"notes"`
+	AccountID           uuid.UUID  `json:"accountId"`
+	InstrumentID        uuid.UUID  `json:"instrumentId"`
+	Type                string     `json:"type"`
+	Quantity            string     `json:"quantity"`
+	UnitPrice           string     `json:"unitPrice"`
+	TradeCurrency       string     `json:"tradeCurrency"`
+	FeeAmount           string     `json:"feeAmount"`
+	FeeCurrency         string     `json:"feeCurrency"`
+	CashEffect          string     `json:"cashEffect"`
+	AppliedExchangeRate string     `json:"appliedExchangeRate"`
+	OpeningCostBasis    string     `json:"openingCostBasis"`
+	TradeDate           time.Time  `json:"tradeDate"`
+	SettlementDate      *time.Time `json:"settlementDate"`
+	ExternalID          string     `json:"externalId"`
+	IdempotencyKey      uuid.UUID  `json:"idempotencyKey"`
+	Description         string     `json:"description"`
+	Notes               string     `json:"notes"`
 }
 
 type SecurityPriceMutationInput struct {
-	InstrumentID uuid.UUID `json:"instrumentId"`
-	ExternalID   string    `json:"externalId"`
-	Price        string    `json:"price"`
+	InstrumentID  uuid.UUID `json:"instrumentId"`
+	ExternalID    string    `json:"externalId"`
+	Price         string    `json:"price"`
 	EffectiveDate time.Time `json:"effectiveDate"`
-	Source       string    `json:"source"`
-	Provenance   string    `json:"provenance"`
+	Source        string    `json:"source"`
+	Provenance    string    `json:"provenance"`
 }
 
 type PositionReconciliationMutationInput struct {
-	AccountID      uuid.UUID `json:"accountId"`
+	AccountID       uuid.UUID `json:"accountId"`
 	ObservationDate time.Time `json:"observationDate"`
-	ReportedCash   string    `json:"reportedCash"`
-	ReportedTotal  string    `json:"reportedTotal"`
-	Notes          string    `json:"notes"`
+	ReportedCash    string    `json:"reportedCash"`
+	ReportedTotal   string    `json:"reportedTotal"`
+	Notes           string    `json:"notes"`
 }
 
 func (service *InvestmentMutations) CreateInstrument(ctx context.Context, userID uuid.UUID, input InstrumentMutationInput) (uuid.UUID, error) {
@@ -140,7 +140,7 @@ SELECT EXISTS (
 				return fmt.Errorf("check instrument history: %w", err)
 			}
 			if hasHistory {
-				return validationError("instrument quote currency cannot change after activity exists")
+				return investmentValidationError("instrument quote currency cannot change after activity exists")
 			}
 		}
 		externalID := optionalString(validated.ExternalID)
@@ -177,7 +177,7 @@ SELECT TRUE FROM investment_instruments WHERE user_id = $1 AND id = $2 FOR UPDAT
 			}
 			for key, quantity := range quantities {
 				if key.instrumentID == instrumentID && quantity.Sign() != 0 {
-					return validationError("close every holding before archiving this instrument")
+					return investmentValidationError("close every holding before archiving this instrument")
 				}
 			}
 		}
@@ -207,13 +207,13 @@ FOR UPDATE`, userID, instrumentID).Scan(&referenced)
 			return mutationNotFound(err)
 		}
 		if referenced {
-			return conflictError("instrument is linked to position history")
+			return investmentConflictError("instrument is linked to position history")
 		}
 		result, err := tx.ExecContext(ctx, `DELETE FROM investment_instruments WHERE user_id = $1 AND id = $2`, userID, instrumentID)
 		if err != nil {
 			return mutationDatabaseError(err, "delete instrument")
 		}
-		return requireAffected(result)
+		return requireInvestmentAffected(result)
 	})
 }
 
@@ -240,7 +240,7 @@ FOR UPDATE`, userID, input.InstrumentID).Scan(&currency); err != nil {
 			source = "manual"
 		}
 		if len(source) > 100 || len(strings.TrimSpace(input.Provenance)) > 500 || len(strings.TrimSpace(input.ExternalID)) > 200 {
-			return validationError("security price metadata is too long")
+			return investmentValidationError("security price metadata is too long")
 		}
 		now := service.now().UTC()
 		return mutationDatabaseError(tx.QueryRowContext(ctx, `
@@ -253,7 +253,7 @@ SET external_id = COALESCE(EXCLUDED.external_id, security_prices.external_id),
     price = EXCLUDED.price, source = EXCLUDED.source, provenance = EXCLUDED.provenance,
     updated_at = EXCLUDED.updated_at
 RETURNING id`, id, userID, input.InstrumentID, optionalString(input.ExternalID), price, currency,
-			dateOnly(input.EffectiveDate), source, optionalString(input.Provenance), now).Scan(&id), "upsert security price")
+			investmentDateOnly(input.EffectiveDate), source, optionalString(input.Provenance), now).Scan(&id), "upsert security price")
 	})
 	return id, err
 }
@@ -263,7 +263,7 @@ func (service *InvestmentMutations) DeleteSecurityPrice(ctx context.Context, use
 	if err != nil {
 		return mutationDatabaseError(err, "delete security price")
 	}
-	return requireAffected(result)
+	return requireInvestmentAffected(result)
 }
 
 func (service *InvestmentMutations) CreatePositionEvent(ctx context.Context, userID uuid.UUID, input PositionEventMutationInput) (uuid.UUID, error) {
@@ -276,7 +276,7 @@ func (service *InvestmentMutations) UpdatePositionEvent(ctx context.Context, use
 
 func (service *InvestmentMutations) savePositionEvent(ctx context.Context, userID, eventID uuid.UUID, input PositionEventMutationInput) (uuid.UUID, error) {
 	if !ordinaryPositionEventTypes[input.Type] {
-		return uuid.Nil, validationError("use the dedicated workflow for this position activity")
+		return uuid.Nil, investmentValidationError("use the dedicated workflow for this position activity")
 	}
 	if err := service.validateDate(ctx, service.db, userID, input.TradeDate); err != nil {
 		return uuid.Nil, err
@@ -320,10 +320,10 @@ FROM position_events WHERE user_id = $1 AND id = $2 FOR UPDATE`, userID, eventID
 				return mutationNotFound(err)
 			}
 			if existingAccountID != input.AccountID {
-				return validationError("a position event cannot move between accounts")
+				return investmentValidationError("a position event cannot move between accounts")
 			}
 			if !ordinaryPositionEventTypes[existingType] || existingGroupID.Valid {
-				return conflictError("use the dedicated workflow for grouped activity")
+				return investmentConflictError("use the dedicated workflow for grouped activity")
 			}
 		} else if input.IdempotencyKey != uuid.Nil {
 			var duplicateID uuid.UUID
@@ -353,10 +353,10 @@ SELECT id FROM position_events WHERE user_id = $1 AND idempotency_key = $2`, use
 			}
 		}
 		if (input.Type == "buy" || input.Type == "sell") && unitPrice == "" {
-			return validationError("enter the execution price")
+			return investmentValidationError("enter the execution price")
 		}
 		if input.Type != "buy" && input.Type != "sell" && (strings.TrimSpace(input.FeeAmount) != "" || strings.TrimSpace(input.CashEffect) != "") {
-			return validationError("fees and settlement amounts apply only to buys and sells")
+			return investmentValidationError("fees and settlement amounts apply only to buys and sells")
 		}
 
 		var grossMinor, feeMinor *int64
@@ -376,12 +376,12 @@ SELECT id FROM position_events WHERE user_id = $1 AND idempotency_key = $2`, use
 			if err := requireEnabledCurrency(ctx, tx, userID, feeCurrency); err != nil {
 				return err
 			}
-			value, parseErr := parseMoneyMinor(input.FeeAmount, feeCurrency)
+			value, parseErr := parseInvestmentMoneyMinor(input.FeeAmount, feeCurrency)
 			if parseErr != nil {
 				return parseErr
 			}
 			if value < 0 {
-				return validationError("fee cannot be negative")
+				return investmentValidationError("fee cannot be negative")
 			}
 			feeMinor = &value
 		}
@@ -392,11 +392,11 @@ SELECT id FROM position_events WHERE user_id = $1 AND idempotency_key = $2`, use
 				return err
 			}
 			if input.Type != "buy" && input.Type != "sell" || tradeCurrency == accountCurrency {
-				return validationError("an applied settlement rate is only valid for cross-currency trades")
+				return investmentValidationError("an applied settlement rate is only valid for cross-currency trades")
 			}
 		}
 		if (input.Type == "buy" || input.Type == "sell") && tradeCurrency != accountCurrency && strings.TrimSpace(input.CashEffect) == "" && appliedRate == "" {
-			return validationError("cross-currency trades require an actual cash effect or applied settlement rate")
+			return investmentValidationError("cross-currency trades require an actual cash effect or applied settlement rate")
 		}
 		cashEffectMinor, calcErr := service.positionCashEffect(ctx, tx, userID, input, accountCurrency, tradeCurrency, feeCurrency, appliedRate, grossMinor, feeMinor)
 		if calcErr != nil {
@@ -405,23 +405,23 @@ SELECT id FROM position_events WHERE user_id = $1 AND idempotency_key = $2`, use
 		var openingCostBasis *int64
 		if strings.TrimSpace(input.OpeningCostBasis) != "" {
 			if input.Type != "opening_position" {
-				return validationError("opening cost basis applies only to an opening position")
+				return investmentValidationError("opening cost basis applies only to an opening position")
 			}
-			value, parseErr := parseMoneyMinor(input.OpeningCostBasis, accountCurrency)
+			value, parseErr := parseInvestmentMoneyMinor(input.OpeningCostBasis, accountCurrency)
 			if parseErr != nil {
 				return parseErr
 			}
 			if value < 0 {
-				return validationError("opening cost basis cannot be negative")
+				return investmentValidationError("opening cost basis cannot be negative")
 			}
 			openingCostBasis = &value
 		}
 
 		sequence := existingSequence
-		if eventID == uuid.Nil || dateOnly(existingTradeDate) != dateOnly(input.TradeDate) {
+		if eventID == uuid.Nil || investmentDateOnly(existingTradeDate) != investmentDateOnly(input.TradeDate) {
 			if err := tx.QueryRowContext(ctx, `
 SELECT COALESCE(MAX(event_sequence), 0) + 1 FROM position_events
-WHERE user_id = $1 AND account_id = $2 AND trade_date = $3`, userID, input.AccountID, dateOnly(input.TradeDate)).Scan(&sequence); err != nil {
+WHERE user_id = $1 AND account_id = $2 AND trade_date = $3`, userID, input.AccountID, investmentDateOnly(input.TradeDate)).Scan(&sequence); err != nil {
 				return fmt.Errorf("select position event sequence: %w", err)
 			}
 		}
@@ -441,7 +441,7 @@ INSERT INTO position_events (
     $15, $16, $17, $18, $19, $20, $21, $22, $22
 )`, resultID, userID, input.AccountID, input.InstrumentID, input.Type, quantity, unitPrice,
 				tradeCurrency, grossMinor, feeMinor, optionalString(feeCurrency), cashEffectMinor, appliedRate,
-				openingCostBasis, dateOnly(input.TradeDate), sequence, optionalDate(input.SettlementDate),
+				openingCostBasis, investmentDateOnly(input.TradeDate), sequence, optionalDate(input.SettlementDate),
 				optionalString(input.ExternalID), optionalUUID(input.IdempotencyKey), optionalString(input.Description),
 				optionalString(input.Notes), now)
 		} else {
@@ -458,7 +458,7 @@ SET instrument_id = $3, type = $4, quantity = $5::NUMERIC,
     action_ratio_denominator = NULL, updated_at = $20
 WHERE user_id = $1 AND id = $2`, userID, eventID, input.InstrumentID, input.Type, quantity, unitPrice,
 				tradeCurrency, grossMinor, feeMinor, optionalString(feeCurrency), cashEffectMinor, appliedRate,
-				openingCostBasis, dateOnly(input.TradeDate), sequence, optionalDate(input.SettlementDate),
+				openingCostBasis, investmentDateOnly(input.TradeDate), sequence, optionalDate(input.SettlementDate),
 				optionalString(input.ExternalID), optionalString(input.Description), optionalString(input.Notes), now)
 		}
 		if err != nil {
@@ -480,7 +480,7 @@ WHERE user_id = $1 AND id = $2 FOR UPDATE`, userID, eventID).Scan(&accountID, &e
 			return mutationNotFound(err)
 		}
 		if !ordinaryPositionEventTypes[eventType] || eventGroupID.Valid {
-			return conflictError("use the dedicated workflow for grouped activity")
+			return investmentConflictError("use the dedicated workflow for grouped activity")
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM position_events WHERE user_id = $1 AND id = $2`, userID, eventID); err != nil {
 			return mutationDatabaseError(err, "delete position event")
@@ -502,20 +502,20 @@ WHERE user_id = $1 AND id = $2 AND tracking_mode = 'positions' AND archived_at I
 FOR UPDATE`, userID, input.AccountID).Scan(&currency); err != nil {
 			return mutationNotFound(err)
 		}
-		total, err := parseMoneyMinor(input.ReportedTotal, currency)
+		total, err := parseInvestmentMoneyMinor(input.ReportedTotal, currency)
 		if err != nil {
 			return err
 		}
 		var cash *int64
 		if strings.TrimSpace(input.ReportedCash) != "" {
-			value, parseErr := parseMoneyMinor(input.ReportedCash, currency)
+			value, parseErr := parseInvestmentMoneyMinor(input.ReportedCash, currency)
 			if parseErr != nil {
 				return parseErr
 			}
 			cash = &value
 		}
 		if len(strings.TrimSpace(input.Notes)) > 2000 {
-			return validationError("notes are too long")
+			return investmentValidationError("notes are too long")
 		}
 		id = uuid.New()
 		now := service.now().UTC()
@@ -524,7 +524,7 @@ INSERT INTO position_reconciliations (
     id, user_id, account_id, observation_date, reported_cash_minor,
     reported_total_minor, notes, created_at, updated_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`, id, userID, input.AccountID,
-			dateOnly(input.ObservationDate), cash, total, optionalString(input.Notes), now)
+			investmentDateOnly(input.ObservationDate), cash, total, optionalString(input.Notes), now)
 		return mutationDatabaseError(err, "create position reconciliation")
 	})
 	return id, err
@@ -536,7 +536,7 @@ DELETE FROM position_reconciliations WHERE user_id = $1 AND id = $2`, userID, re
 	if err != nil {
 		return mutationDatabaseError(err, "delete position reconciliation")
 	}
-	return requireAffected(result)
+	return requireInvestmentAffected(result)
 }
 
 func (service *InvestmentMutations) validateInstrument(ctx context.Context, queryer interface {
@@ -549,13 +549,13 @@ func (service *InvestmentMutations) validateInstrument(ctx context.Context, quer
 	input.ExchangeMIC = strings.ToUpper(strings.TrimSpace(input.ExchangeMIC))
 	input.QuoteCurrency = domain.NormalizeCurrency(input.QuoteCurrency)
 	if input.Name == "" || len(input.Name) > 100 || len(input.ExternalID) > 200 || len(input.Symbol) > 30 || len(input.Identifier) > 100 || len(input.ExchangeMIC) > 20 {
-		return InstrumentMutationInput{}, validationError("instrument fields are invalid")
+		return InstrumentMutationInput{}, investmentValidationError("instrument fields are invalid")
 	}
 	if input.IdentifierType != "isin" && input.IdentifierType != "ticker_exchange" && input.IdentifierType != "custom" {
-		return InstrumentMutationInput{}, validationError("identifier type is invalid")
+		return InstrumentMutationInput{}, investmentValidationError("identifier type is invalid")
 	}
 	if input.AssetType != "stock" && input.AssetType != "etf" && input.AssetType != "fund" {
-		return InstrumentMutationInput{}, validationError("asset type is invalid")
+		return InstrumentMutationInput{}, investmentValidationError("asset type is invalid")
 	}
 	if err := requireEnabledCurrency(ctx, queryer, userID, input.QuoteCurrency); err != nil {
 		return InstrumentMutationInput{}, err
@@ -567,7 +567,7 @@ func (service *InvestmentMutations) validateDate(ctx context.Context, queryer in
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, userID uuid.UUID, value time.Time) error {
 	if value.IsZero() {
-		return validationError("enter a valid date")
+		return investmentValidationError("enter a valid date")
 	}
 	var timezone string
 	if err := queryer.QueryRowContext(ctx, `SELECT timezone FROM user_settings WHERE user_id = $1`, userID).Scan(&timezone); err != nil {
@@ -577,8 +577,8 @@ func (service *InvestmentMutations) validateDate(ctx context.Context, queryer in
 	if err != nil {
 		return fmt.Errorf("load user timezone: %w", err)
 	}
-	if dateOnly(value) > service.now().In(location).Format(time.DateOnly) {
-		return validationError("financial activity cannot be dated in the future")
+	if investmentDateOnly(value) > service.now().In(location).Format(time.DateOnly) {
+		return investmentValidationError("financial activity cannot be dated in the future")
 	}
 	return nil
 }
@@ -588,12 +588,12 @@ func (service *InvestmentMutations) positionCashEffect(ctx context.Context, tx *
 		return 0, nil
 	}
 	if strings.TrimSpace(input.CashEffect) != "" {
-		value, err := parseMoneyMinor(input.CashEffect, accountCurrency)
+		value, err := parseInvestmentMoneyMinor(input.CashEffect, accountCurrency)
 		if err != nil {
 			return 0, err
 		}
 		if value <= 0 {
-			return 0, validationError("cash effect must be greater than zero")
+			return 0, investmentValidationError("cash effect must be greater than zero")
 		}
 		if input.Type == "buy" {
 			return -value, nil
@@ -615,10 +615,10 @@ WHERE user_id = $1
   AND ((base_currency = $2 AND quote_currency = $3) OR (base_currency = $3 AND quote_currency = $2))
   AND effective_date <= $4
 ORDER BY effective_date DESC, created_at DESC, id
-LIMIT 1`, userID, from, accountCurrency, dateOnly(input.TradeDate)).Scan(&base, &quote, &rate)
+LIMIT 1`, userID, from, accountCurrency, investmentDateOnly(input.TradeDate)).Scan(&base, &quote, &rate)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return 0, validationError("no exchange rate is configured for this trade")
+				return 0, investmentValidationError("no exchange rate is configured for this trade")
 			}
 			return 0, fmt.Errorf("load exchange rate: %w", err)
 		}
@@ -723,14 +723,14 @@ func replayPositionEvents(events []positionEventRow, validateCorporateActions bo
 			next.Add(next, absRat(quantity))
 		}
 		if next.Sign() < 0 {
-			return nil, validationError("a position cannot have a negative quantity")
+			return nil, investmentValidationError("a position cannot have a negative quantity")
 		}
 		if validateCorporateActions {
 			var expected *big.Rat
 			switch event.eventType {
 			case "spinoff":
 				if event.relatedInstrumentID == nil {
-					return nil, conflictError("recorded spinoff is missing its source instrument")
+					return nil, investmentConflictError("recorded spinoff is missing its source instrument")
 				}
 				numerator, denominator, err := positiveRatio(event.actionRatioNumerator, event.actionRatioDenominator)
 				if err != nil {
@@ -742,7 +742,7 @@ func replayPositionEvents(events []positionEventRow, validateCorporateActions bo
 				expected = current
 			}
 			if expected != nil && expected.Cmp(quantity) != 0 {
-				return nil, conflictError("this change would invalidate a recorded corporate action")
+				return nil, investmentConflictError("this change would invalidate a recorded corporate action")
 			}
 		}
 		quantities[key] = next
@@ -763,7 +763,7 @@ func requireEnabledCurrency(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, userID uuid.UUID, currency string) error {
 	if !domain.IsSupportedCurrency(currency) {
-		return validationError("choose a valid currency")
+		return investmentValidationError("choose a valid currency")
 	}
 	var baseCurrency, supportedJSON string
 	if err := queryer.QueryRowContext(ctx, `
@@ -782,47 +782,47 @@ SELECT base_currency, supported_currencies FROM user_settings WHERE user_id = $1
 			return nil
 		}
 	}
-	return validationError("currency is not enabled")
+	return investmentValidationError("currency is not enabled")
 }
 
 func canonicalDecimal(value string, allowNegative, allowZero bool, label string) (string, error) {
 	normalized := strings.ReplaceAll(strings.TrimSpace(value), ",", "")
-	if !decimalPattern.MatchString(normalized) {
-		return "", validationError("enter a valid " + label)
+	if !investmentDecimalPattern.MatchString(normalized) {
+		return "", investmentValidationError("enter a valid " + label)
 	}
 	decimal, ok := new(big.Rat).SetString(normalized)
 	if !ok {
-		return "", validationError("enter a valid " + label)
+		return "", investmentValidationError("enter a valid " + label)
 	}
 	if !allowNegative && decimal.Sign() < 0 {
-		return "", validationError(label + " cannot be negative")
+		return "", investmentValidationError(label + " cannot be negative")
 	}
 	if !allowZero && decimal.Sign() == 0 {
-		return "", validationError(label + " must be greater than zero")
+		return "", investmentValidationError(label + " must be greater than zero")
 	}
 	return canonicalRat(decimal), nil
 }
 
-func parseMoneyMinor(value, currency string) (int64, error) {
+func parseInvestmentMoneyMinor(value, currency string) (int64, error) {
 	normalized := strings.ReplaceAll(strings.TrimSpace(value), ",", "")
-	if !decimalPattern.MatchString(normalized) {
-		return 0, validationError("enter a valid monetary amount")
+	if !investmentDecimalPattern.MatchString(normalized) {
+		return 0, investmentValidationError("enter a valid monetary amount")
 	}
-	digits := currencyDigits(currency)
+	digits := investmentCurrencyDigits(currency)
 	parts := strings.SplitN(normalized, ".", 2)
 	fraction := ""
 	if len(parts) == 2 {
 		fraction = parts[1]
 	}
 	if len(fraction) > digits {
-		return 0, validationError(fmt.Sprintf("%s supports at most %d decimal places", currency, digits))
+		return 0, investmentValidationError(fmt.Sprintf("%s supports at most %d decimal places", currency, digits))
 	}
 	negative := strings.HasPrefix(parts[0], "-")
 	whole := strings.TrimPrefix(parts[0], "-")
 	fraction += strings.Repeat("0", digits-len(fraction))
 	minor := new(big.Int)
 	if _, ok := minor.SetString(whole+fraction, 10); !ok {
-		return 0, validationError("enter a valid monetary amount")
+		return 0, investmentValidationError("enter a valid monetary amount")
 	}
 	if negative {
 		minor.Neg(minor)
@@ -834,23 +834,23 @@ func decimalProductMinor(quantity, price, currency string) (int64, error) {
 	quantityRat, _ := new(big.Rat).SetString(quantity)
 	priceRat, _ := new(big.Rat).SetString(price)
 	value := new(big.Rat).Mul(absRat(quantityRat), priceRat)
-	value.Mul(value, new(big.Rat).SetInt(pow10(currencyDigits(currency))))
+	value.Mul(value, new(big.Rat).SetInt(pow10(investmentCurrencyDigits(currency))))
 	return roundedRatInt64(value)
 }
 
 func convertMinorAtRate(amount int64, fromCurrency, toCurrency, rate string, inverse bool) (int64, error) {
 	rateRat, ok := new(big.Rat).SetString(rate)
 	if !ok || rateRat.Sign() <= 0 {
-		return 0, validationError("exchange rate must be greater than zero")
+		return 0, investmentValidationError("exchange rate must be greater than zero")
 	}
 	value := new(big.Rat).SetInt64(amount)
-	value.Quo(value, new(big.Rat).SetInt(pow10(currencyDigits(fromCurrency))))
+	value.Quo(value, new(big.Rat).SetInt(pow10(investmentCurrencyDigits(fromCurrency))))
 	if inverse {
 		value.Quo(value, rateRat)
 	} else {
 		value.Mul(value, rateRat)
 	}
-	value.Mul(value, new(big.Rat).SetInt(pow10(currencyDigits(toCurrency))))
+	value.Mul(value, new(big.Rat).SetInt(pow10(investmentCurrencyDigits(toCurrency))))
 	return roundedRatInt64(value)
 }
 
@@ -871,7 +871,7 @@ func roundedRatInt64(value *big.Rat) (int64, error) {
 
 func checkedInt64(value *big.Int) (int64, error) {
 	if !value.IsInt64() {
-		return 0, validationError("calculated value is outside the supported range")
+		return 0, investmentValidationError("calculated value is outside the supported range")
 	}
 	return value.Int64(), nil
 }
@@ -880,7 +880,7 @@ func positiveRatio(numeratorValue, denominatorValue string) (*big.Rat, *big.Rat,
 	numerator, okNumerator := new(big.Rat).SetString(numeratorValue)
 	denominator, okDenominator := new(big.Rat).SetString(denominatorValue)
 	if !okNumerator || !okDenominator || numerator.Sign() <= 0 || denominator.Sign() <= 0 {
-		return nil, nil, conflictError("recorded corporate action requires a positive ratio")
+		return nil, nil, investmentConflictError("recorded corporate action requires a positive ratio")
 	}
 	return numerator, denominator, nil
 }
@@ -909,7 +909,7 @@ func pow10(digits int) *big.Int {
 	return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(digits)), nil)
 }
 
-func currencyDigits(currency string) int {
+func investmentCurrencyDigits(currency string) int {
 	switch domain.NormalizeCurrency(currency) {
 	case "BHD", "KWD", "OMR":
 		return 3
@@ -920,7 +920,7 @@ func currencyDigits(currency string) int {
 	}
 }
 
-func dateOnly(value time.Time) string {
+func investmentDateOnly(value time.Time) string {
 	return value.Format(time.DateOnly)
 }
 
@@ -928,7 +928,7 @@ func optionalDate(value *time.Time) any {
 	if value == nil {
 		return nil
 	}
-	return dateOnly(*value)
+	return investmentDateOnly(*value)
 }
 
 func optionalString(value string) *string {
@@ -953,11 +953,11 @@ func valueOrZero(value *int64) int64 {
 	return *value
 }
 
-func validationError(detail string) error {
+func investmentValidationError(detail string) error {
 	return fmt.Errorf("%w: %s", ErrInvestmentMutationValidation, detail)
 }
 
-func conflictError(detail string) error {
+func investmentConflictError(detail string) error {
 	return fmt.Errorf("%w: %s", ErrInvestmentMutationConflict, detail)
 }
 
@@ -979,7 +979,7 @@ func mutationDatabaseError(err error, operation string) error {
 	return fmt.Errorf("%s: %w", operation, err)
 }
 
-func requireAffected(result sql.Result) error {
+func requireInvestmentAffected(result sql.Result) error {
 	count, err := result.RowsAffected()
 	if err != nil {
 		return err

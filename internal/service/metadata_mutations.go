@@ -88,7 +88,7 @@ type ExchangeRateInput struct {
 
 var (
 	metadataCurrencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
-	decimalPattern          = regexp.MustCompile(`^(?:0*[1-9]\d*)(?:\.\d+)?$|^0*\.\d*[1-9]\d*$`)
+	metadataDecimalPattern  = regexp.MustCompile(`^(?:0*[1-9]\d*)(?:\.\d+)?$|^0*\.\d*[1-9]\d*$`)
 	slugSeparator           = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
@@ -251,12 +251,13 @@ func (service *MetadataMutations) ReorderCategory(ctx context.Context, userID, c
 	if direction == "down" {
 		operator, ordering = ">", "ASC"
 	}
+	var adjacentID uuid.UUID
 	var currentOrder, adjacentOrder int
 	if err := tx.QueryRowContext(ctx, `SELECT display_order FROM categories WHERE user_id=$1 AND id=$2 FOR UPDATE`, userID, categoryID).Scan(&currentOrder); err != nil {
 		return fmt.Errorf("lock category: %w", err)
 	}
-	query := fmt.Sprintf(`SELECT display_order FROM categories WHERE user_id=$1 AND is_system=FALSE AND display_order %s $2 ORDER BY display_order %s, name, id LIMIT 1 FOR UPDATE`, operator, ordering)
-	if err := tx.QueryRowContext(ctx, query, userID, currentOrder).Scan(&adjacentOrder); errors.Is(err, sql.ErrNoRows) {
+	query := fmt.Sprintf(`SELECT id, display_order FROM categories WHERE user_id=$1 AND is_system=FALSE AND display_order %s $2 ORDER BY display_order %s, name, id LIMIT 1 FOR UPDATE`, operator, ordering)
+	if err := tx.QueryRowContext(ctx, query, userID, currentOrder).Scan(&adjacentID, &adjacentOrder); errors.Is(err, sql.ErrNoRows) {
 		return tx.Commit()
 	} else if err != nil {
 		return fmt.Errorf("find adjacent category: %w", err)
@@ -265,7 +266,7 @@ func (service *MetadataMutations) ReorderCategory(ctx context.Context, userID, c
 	if _, err := tx.ExecContext(ctx, `UPDATE categories SET display_order=$3, updated_at=$4 WHERE user_id=$1 AND id=$2`, userID, categoryID, adjacentOrder, now); err != nil {
 		return fmt.Errorf("move category: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE categories SET display_order=$3, updated_at=$4 WHERE user_id=$1 AND id<>$2 AND is_system=FALSE AND display_order=$5`, userID, categoryID, currentOrder, now, adjacentOrder); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE categories SET display_order=$3, updated_at=$4 WHERE user_id=$1 AND id=$2`, userID, adjacentID, currentOrder, now); err != nil {
 		return fmt.Errorf("move adjacent category: %w", err)
 	}
 	return tx.Commit()
@@ -457,7 +458,7 @@ func validateExchangeRate(input *ExchangeRateInput) (time.Time, error) {
 	if input.BaseCurrency == input.QuoteCurrency {
 		return time.Time{}, metadataError(MetadataValidation, "Choose two different currencies.")
 	}
-	if len(input.Rate) > 80 || !decimalPattern.MatchString(input.Rate) {
+	if len(input.Rate) > 80 || !metadataDecimalPattern.MatchString(input.Rate) {
 		return time.Time{}, metadataError(MetadataValidation, "Enter a positive decimal exchange rate.")
 	}
 	effectiveDate, err := time.Parse("2006-01-02", input.EffectiveDate)
