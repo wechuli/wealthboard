@@ -1,7 +1,13 @@
 import { KeyRound, Trash2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { createAPIKey, getAPIKeys, getSettings, revokeAPIKey } from "./api";
+import {
+  createAPIKey,
+  getAPIKeys,
+  getSettings,
+  revokeAllAPIKeys,
+  revokeAPIKey,
+} from "./api";
 import type {
   APIKeyMetadata,
   CreateAPIKeyInput,
@@ -68,6 +74,21 @@ export function SettingsPage({ session }: { session: Session }) {
                 </KeyValue>
                 <KeyValue label="Default goal return">
                   {data.settings.defaultGoalReturnBps / 100}%
+                </KeyValue>
+                <KeyValue label="Stock price stale after">
+                  {data.settings.positionStaleDaysStock} days
+                </KeyValue>
+                <KeyValue label="ETF price stale after">
+                  {data.settings.positionStaleDaysEtf} days
+                </KeyValue>
+                <KeyValue label="Fund price stale after">
+                  {data.settings.positionStaleDaysFund} days
+                </KeyValue>
+                <KeyValue label="Settings created">
+                  {formatDate(data.settings.createdAt)}
+                </KeyValue>
+                <KeyValue label="Settings updated">
+                  {formatDate(data.settings.updatedAt)}
                 </KeyValue>
               </div>
             </Card>
@@ -155,12 +176,14 @@ type APIKeyOperations = {
     csrfToken: string,
   ) => Promise<CreatedAPIKey>;
   revoke: (id: string, csrfToken: string) => Promise<void>;
+  revokeAll: (csrfToken: string) => Promise<{ revoked: number }>;
 };
 
 const defaultOperations: APIKeyOperations = {
   load: getAPIKeys,
   create: createAPIKey,
   revoke: revokeAPIKey,
+  revokeAll: revokeAllAPIKeys,
 };
 
 export function APIKeysPanel({
@@ -202,6 +225,7 @@ export function APIKeysPanel({
     const scopes = apiKeyScopes.filter((scope) =>
       form.getAll("scopes").includes(scope),
     );
+    const expiresAt = String(form.get("expiresAt") || "");
     if (!name || !scopes.length) {
       setError("Provide a name and at least one scope.");
       return;
@@ -210,7 +234,14 @@ export function APIKeysPanel({
     setError("");
     setSecret(null);
     try {
-      const created = await operations.create({ name, scopes }, csrfToken);
+      const created = await operations.create(
+        {
+          name,
+          scopes,
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+        },
+        csrfToken,
+      );
       setSecret(created.token);
       setKeys((current) => [created, ...(current || [])]);
       event.currentTarget.reset();
@@ -236,6 +267,29 @@ export function APIKeysPanel({
         caught instanceof Error
           ? caught.message
           : "The API key could not be revoked.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeAll() {
+    setBusy(true);
+    setError("");
+    try {
+      await operations.revokeAll(csrfToken);
+      const revokedAt = new Date().toISOString();
+      setKeys((current) =>
+        current?.map((key) => ({
+          ...key,
+          revokedAt: key.revokedAt || revokedAt,
+        })),
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "API keys could not be revoked.",
       );
     } finally {
       setBusy(false);
@@ -275,6 +329,10 @@ export function APIKeysPanel({
           <label htmlFor="api-key-name">Key name</label>
           <input id="api-key-name" name="name" maxLength={80} required />
         </div>
+        <div>
+          <label htmlFor="api-key-expiry">Expires (optional)</label>
+          <input id="api-key-expiry" name="expiresAt" type="datetime-local" />
+        </div>
         <fieldset>
           <legend>Scopes</legend>
           <div className="scope-grid">
@@ -302,32 +360,46 @@ export function APIKeysPanel({
       {keys === undefined ? (
         <p className="read-note">Loading API keys...</p>
       ) : keys.length ? (
-        <div className="data-list api-key-list">
-          {keys.map((key) => (
-            <div className="data-row" key={key.id}>
-              <div>
-                <strong>{key.name}</strong>
-                <span>
-                  {key.prefix} · {key.scopes.join(", ")} · created{" "}
-                  {formatDate(key.createdAt)}
-                  {key.revokedAt ? " · Revoked" : ""}
-                </span>
+        <>
+          <div className="data-list api-key-list">
+            {keys.map((key) => (
+              <div className="data-row" key={key.id}>
+                <div>
+                  <strong>{key.name}</strong>
+                  <span>
+                    {key.prefix} · {key.scopes.join(", ")} · created{" "}
+                    {formatDate(key.createdAt)}
+                    {key.expiresAt
+                      ? ` · expires ${formatDate(key.expiresAt)}`
+                      : ""}
+                    {key.revokedAt ? " · Revoked" : ""}
+                  </span>
+                </div>
+                {!key.revokedAt ? (
+                  <button
+                    className="icon-button"
+                    aria-label={`Revoke ${key.name}`}
+                    disabled={busy}
+                    onClick={() => void revoke(key.id)}
+                  >
+                    <Trash2 />
+                  </button>
+                ) : (
+                  <Badge tone="warning">Revoked</Badge>
+                )}
               </div>
-              {!key.revokedAt ? (
-                <button
-                  className="icon-button"
-                  aria-label={`Revoke ${key.name}`}
-                  disabled={busy}
-                  onClick={() => void revoke(key.id)}
-                >
-                  <Trash2 />
-                </button>
-              ) : (
-                <Badge tone="warning">Revoked</Badge>
-              )}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          {keys.some((key) => !key.revokedAt) ? (
+            <button
+              className="secondary-button danger-button"
+              disabled={busy}
+              onClick={() => void revokeAll()}
+            >
+              Revoke all active keys
+            </button>
+          ) : null}
+        </>
       ) : (
         <EmptyState
           title="No API keys"

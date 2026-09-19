@@ -153,3 +153,10 @@ export function revokeAPIKey(id: string, csrfToken: string) {
     headers: { "X-CSRF-Token": csrfToken },
   });
 }
+
+export function revokeAllAPIKeys(csrfToken: string) {
+  return request<{ revoked: number }>("/api-keys/revoke-all", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}

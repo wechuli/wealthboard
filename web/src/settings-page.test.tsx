@@ -21,6 +21,7 @@ describe("APIKeysPanel", () => {
           token,
         }),
       revoke: vi.fn(),
+      revokeAll: vi.fn(),
     };
     render(<APIKeysPanel csrfToken="csrf" operations={operations} />);
 
