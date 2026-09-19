@@ -1,10 +1,11 @@
 import type {
   Account,
-  ActivityItem,
+  AccountList,
+  ActivityPage,
   AIRead,
-  APIKeyMetadata,
+  APIKeyList,
   AuthConfig,
-  Category,
+  CategoryList,
   CreateAPIKeyInput,
   CreatedAPIKey,
   Dashboard,
@@ -13,18 +14,17 @@ import type {
   Goal,
   GoalAlert,
   GoalMilestone,
-  Institution,
-  Instrument,
+  InstitutionList,
   InstrumentDetail,
+  InstrumentList,
   Overview,
-  Page,
   Problem,
   ReportAllocation,
   ReportSummary,
   Session,
   SettingsRead,
-  Transaction,
-  Valuation,
+  TransactionPage,
+  ValuationPage,
 } from "./types";
 
 export class ApiError extends Error {
@@ -47,14 +47,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!response.ok) {
-    let problem: Problem = {};
+    let problem: Problem | undefined;
     try {
       problem = (await response.json()) as Problem;
     } catch {
       // Preserve a stable client error when the server returned no JSON body.
     }
     throw new ApiError(
-      problem.detail ?? "The request could not be completed.",
+      problem?.detail ?? "The request could not be completed.",
       response.status,
     );
   }
@@ -104,20 +104,19 @@ export function getOverview() {
 }
 
 export const getDashboard = () => request<Dashboard>("/dashboard");
-export const getAccounts = () => request<{ items: Account[] }>("/accounts");
+export const getAccounts = () => request<AccountList>("/accounts");
 export const getAccount = (id: string) => request<Account>(`/accounts/${id}`);
 export const getAccountActivity = (id: string) =>
-  request<Page<ActivityItem>>(`/accounts/${id}/activity?limit=100`);
+  request<ActivityPage>(`/accounts/${id}/activity?limit=100`);
 export const getAccountTransactions = (id: string) =>
-  request<Page<Transaction>>(`/accounts/${id}/transactions?limit=100`);
+  request<TransactionPage>(`/accounts/${id}/transactions?limit=100`);
 export const getAccountValuations = (id: string) =>
-  request<Page<Valuation>>(`/accounts/${id}/valuations?limit=100`);
+  request<ValuationPage>(`/accounts/${id}/valuations?limit=100`);
 export const getTransactions = () =>
-  request<Page<Transaction>>("/transactions?limit=100");
-export const getCategories = () =>
-  request<{ items: Category[] }>("/categories");
+  request<TransactionPage>("/transactions?limit=100");
+export const getCategories = () => request<CategoryList>("/categories");
 export const getInstitutions = () =>
-  request<{ items: Institution[] }>("/institutions");
+  request<InstitutionList>("/institutions");
 export const getGoals = () => request<Goal[]>("/goals");
 export const getGoal = (id: string) => request<Goal>(`/goals/${id}`);
 export const getGoalMilestones = (id: string) =>
@@ -128,7 +127,7 @@ export const getReportSummary = () =>
 export const getReportAllocation = () =>
   request<ReportAllocation>("/reports/allocation");
 export const getInstruments = () =>
-  request<{ instruments: Instrument[] }>("/instruments");
+  request<InstrumentList>("/instruments");
 export const getInstrument = (id: string) =>
   request<InstrumentDetail>(`/instruments/${id}`);
 export const getEstate = () => request<EstateWorkspace>("/estate");
@@ -136,8 +135,7 @@ export const getEstateSnapshot = (id: string) =>
   request<EstateSnapshot>(`/estate/snapshots/${id}`);
 export const getAI = () => request<AIRead>("/ai");
 export const getSettings = () => request<SettingsRead>("/settings");
-export const getAPIKeys = () =>
-  request<{ keys: APIKeyMetadata[] }>("/api-keys");
+export const getAPIKeys = () => request<APIKeyList>("/api-keys");
 
 export function createAPIKey(input: CreateAPIKeyInput, csrfToken: string) {
   return request<CreatedAPIKey>("/api-keys", {

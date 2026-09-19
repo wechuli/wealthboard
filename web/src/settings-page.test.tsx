@@ -10,16 +10,14 @@ describe("APIKeysPanel", () => {
     const token = "wbk_v1_created_one_time_secret";
     const operations = {
       load: vi.fn().mockResolvedValue({ keys: [] }),
-      create: vi
-        .fn()
-        .mockResolvedValue({
-          id: "key-1",
-          name: "CLI",
-          prefix: "wbk_v1_create",
-          scopes: ["portfolio:read"],
-          createdAt: "2026-09-20T00:00:00Z",
-          token,
-        }),
+      create: vi.fn().mockResolvedValue({
+        id: "key-1",
+        name: "CLI",
+        prefix: "wbk_v1_create",
+        scopes: ["portfolio:read"],
+        createdAt: "2026-09-20T00:00:00Z",
+        token,
+      }),
       revoke: vi.fn(),
       revokeAll: vi.fn(),
     };
