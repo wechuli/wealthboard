@@ -460,11 +460,28 @@ components:
     Overview:
       type: object
       additionalProperties: false
-      required: [settings, totals, accounts, accountCount, goalCount, currentComplete, missingCurrencies]
+      required:
+        [
+          settings,
+          totals,
+          accounts,
+          accountCount,
+          goalCount,
+          currentComplete,
+          missingCurrencies,
+        ]
       properties:
         settings:
           type: object
-          required: [displayName, appName, baseCurrency, timezone, preferredDateFormat, defaultDashboardPeriod]
+          required:
+            [
+              displayName,
+              appName,
+              baseCurrency,
+              timezone,
+              preferredDateFormat,
+              defaultDashboardPeriod,
+            ]
           properties:
             displayName: { type: string }
             appName: { type: string }
@@ -485,7 +502,16 @@ components:
           type: array
           items:
             type: object
-            required: [id, name, currency, currentValueMinor, isLiability, isIncludedInNetWorth, categoryName]
+            required:
+              [
+                id,
+                name,
+                currency,
+                currentValueMinor,
+                isLiability,
+                isIncludedInNetWorth,
+                categoryName,
+              ]
             properties:
               id: { type: string, format: uuid }
               name: { type: string }

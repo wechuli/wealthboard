@@ -26,7 +26,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // Preserve a stable client error when the server returned no JSON body.
     }
-    throw new ApiError(problem.detail ?? "The request could not be completed.", response.status);
+    throw new ApiError(
+      problem.detail ?? "The request could not be completed.",
+      response.status,
+    );
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

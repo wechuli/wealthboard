@@ -408,7 +408,7 @@ func (service *GoalsReportsService) mapGoal(record GoalRecord, settings GoalsRep
 		LinkedAccount: linkedAccount, Icon: record.Icon, Status: record.Status, Priority: record.Priority,
 		AssumedAnnualReturnBPS: record.AssumedAnnualReturnBPS,
 		ProgressPercent:        progressPercent(current, record.TargetAmountMinor, incomplete),
-		ValueIncomplete: incomplete, MissingCurrencies: missing, Plan: plan,
+		ValueIncomplete:        incomplete, MissingCurrencies: missing, Plan: plan,
 		createdAt: record.CreatedAt, timezone: settings.Timezone,
 	}
 }

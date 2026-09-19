@@ -593,4 +593,3 @@ The migration is complete only when all of the following are true:
 - Do not keep a Next.js or Node server as a compatibility proxy after cutover.
 - Do not delete the old implementation until parity and migration acceptance gates pass.
 - When uncertain about existing behavior, treat current services, tests, `SPEC.md`, and `docs/ARCHITECTURE.md` as evidence and preserve the safer interpretation.
-
