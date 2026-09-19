@@ -70,7 +70,15 @@ func (handler *CoreReadHandler) Accounts(response http.ResponseWriter, request *
 	if !ok {
 		return
 	}
-	result, err := handler.service.Accounts(request.Context(), principal.UserID, request.URL.Query().Get("archived"))
+	archived := request.URL.Query().Get("archived")
+	if archived == "" {
+		archived = "active"
+	}
+	if archived != "active" && archived != "archived" && archived != "all" {
+		writeProblem(response, http.StatusBadRequest, "Invalid filters", "archived must be active, archived, or all")
+		return
+	}
+	result, err := handler.service.Accounts(request.Context(), principal.UserID, archived)
 	handler.writeResult(response, map[string]any{"items": result}, err)
 }
 

@@ -28,6 +28,7 @@ type fakeCoreReadService struct {
 	transactionUserID uuid.UUID
 	transactionFilter service.ActivityFilter
 	transactionCalls  int
+	accountListCalls  int
 	accountErr        error
 }
 
@@ -44,6 +45,7 @@ func (fake *fakeCoreReadService) Institutions(context.Context, uuid.UUID) ([]ser
 }
 
 func (fake *fakeCoreReadService) Accounts(context.Context, uuid.UUID, string) ([]service.Account, error) {
+	fake.accountListCalls++
 	return []service.Account{}, nil
 }
 
@@ -142,6 +144,23 @@ func TestCoreReadRejectsOversizedPageBeforeServiceCall(t *testing.T) {
 	}
 	if reads.transactionCalls != 0 {
 		t.Fatalf("service called %d times for invalid pagination", reads.transactionCalls)
+	}
+}
+
+func TestCoreReadRejectsInvalidArchiveFilterBeforeServiceCall(t *testing.T) {
+	reads := &fakeCoreReadService{}
+	handler := NewCoreReadHandler(fakeCoreReadAuthenticator{principal: webauth.Principal{
+		UserID: uuid.New(), Method: "session",
+	}}, reads)
+	response := httptest.NewRecorder()
+
+	handler.Accounts(response, httptest.NewRequest(http.MethodGet, "/api/v1/accounts?archived=deleted", nil))
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if reads.accountListCalls != 0 {
+		t.Fatalf("service called %d times for invalid archive filter", reads.accountListCalls)
 	}
 }
 
