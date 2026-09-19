@@ -38,15 +38,6 @@ func NewCoreReadHandler(auth coreReadAuthenticator, reads coreReadService) *Core
 	return &CoreReadHandler{auth: auth, service: reads}
 }
 
-func (handler *CoreReadHandler) Settings(response http.ResponseWriter, request *http.Request) {
-	principal, ok := handler.authorize(response, request)
-	if !ok {
-		return
-	}
-	result, err := handler.service.Settings(request.Context(), principal.UserID)
-	handler.writeResult(response, result, err)
-}
-
 func (handler *CoreReadHandler) Categories(response http.ResponseWriter, request *http.Request) {
 	principal, ok := handler.authorize(response, request)
 	if !ok {

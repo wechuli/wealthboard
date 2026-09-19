@@ -18,20 +18,20 @@ FROM user_settings
 WHERE user_id = $1;
 
 -- name: ListReferencedCurrencies :many
-SELECT DISTINCT currency
+SELECT DISTINCT referenced.currency
 FROM (
-    SELECT currency FROM accounts WHERE user_id = $1
-    UNION ALL SELECT currency FROM transactions WHERE user_id = $1
-    UNION ALL SELECT currency FROM valuation_snapshots WHERE user_id = $1
-    UNION ALL SELECT currency FROM goals WHERE user_id = $1
-    UNION ALL SELECT base_currency FROM exchange_rates WHERE user_id = $1
-    UNION ALL SELECT quote_currency FROM exchange_rates WHERE user_id = $1
-    UNION ALL SELECT quote_currency FROM investment_instruments WHERE user_id = $1
-    UNION ALL SELECT trade_currency FROM position_events WHERE user_id = $1
-    UNION ALL SELECT fee_currency FROM position_events WHERE user_id = $1 AND fee_currency IS NOT NULL
-    UNION ALL SELECT currency FROM security_prices WHERE user_id = $1
+    SELECT accounts.currency FROM accounts WHERE accounts.user_id = $1
+    UNION ALL SELECT transactions.currency FROM transactions WHERE transactions.user_id = $1
+    UNION ALL SELECT valuation_snapshots.currency FROM valuation_snapshots WHERE valuation_snapshots.user_id = $1
+    UNION ALL SELECT goals.currency FROM goals WHERE goals.user_id = $1
+    UNION ALL SELECT exchange_rates.base_currency FROM exchange_rates WHERE exchange_rates.user_id = $1
+    UNION ALL SELECT exchange_rates.quote_currency FROM exchange_rates WHERE exchange_rates.user_id = $1
+    UNION ALL SELECT investment_instruments.quote_currency FROM investment_instruments WHERE investment_instruments.user_id = $1
+    UNION ALL SELECT position_events.trade_currency FROM position_events WHERE position_events.user_id = $1
+    UNION ALL SELECT position_events.fee_currency FROM position_events WHERE position_events.user_id = $1 AND position_events.fee_currency IS NOT NULL
+    UNION ALL SELECT security_prices.currency FROM security_prices WHERE security_prices.user_id = $1
 ) referenced(currency)
-ORDER BY currency;
+ORDER BY referenced.currency;
 
 -- name: ListFeatureExchangeRates :many
 SELECT id, base_currency, quote_currency, rate::TEXT, effective_date, source, created_at
