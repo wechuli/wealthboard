@@ -11,6 +11,8 @@ export default defineConfig([
     ".next-verification/**",
     "**/.vitepress/cache/**",
     "**/.vitepress/dist/**",
+    "web/dist/**",
+    "web/src/api-schema.ts",
     "coverage/**",
     "playwright-report/**",
     "test-results/**",

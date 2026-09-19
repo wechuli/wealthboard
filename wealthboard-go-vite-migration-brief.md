@@ -1,14 +1,30 @@
-# Wealthboard migration brief: React/Vite frontend and Go API
+# Wealthboard migration brief: React/Vite frontend, Go API, and PostgreSQL
 
 ## Instructions to the implementation agent
 
-You are migrating the existing repository at `https://github.com/wechuli/wealthboard` from a single-process Next.js App Router application to a client-rendered React/Vite application backed by an explicit Go HTTP API.
+You are migrating the existing repository at `https://github.com/wechuli/wealthboard` from a single-process Next.js App Router application backed by SQLite to a client-rendered React/Vite application backed by an explicit Go HTTP API and PostgreSQL.
 
 This is a compatibility-preserving migration of a mature financial application. It is not a greenfield rewrite. Read the repository instructions, `SPEC.md`, `docs/ARCHITECTURE.md`, the existing services, schema, migrations, and nearby tests before changing behavior. The product and financial invariants in those files remain authoritative except where this brief explicitly replaces the runtime architecture.
 
-Work on a dedicated branch such as `feat/go-vite-architecture`. Use small, reviewable commits. Maintain a running migration checklist in the pull request or a checked-in migration document. Do not delete the Next.js implementation until the replacement passes the required parity, isolation, migration, and end-to-end tests.
+Work on a dedicated branch such as `wechuli/migration-to-go`. Use small, reviewable commits. Maintain a running migration checklist in the pull request or a checked-in migration document. Do not delete the Next.js implementation until the replacement passes the required parity, isolation, migration, and end-to-end tests.
 
 When the repository has changed since this brief was written, inspect the latest `main` branch and adapt the file inventory while preserving the decisions and acceptance criteria below.
+
+## Implementation status
+
+- [x] Add the initial Go module, configuration loader, PostgreSQL connection pool, graceful HTTP server, structured request logging, and compatible live/ready health routes.
+- [x] Add isolated local PostgreSQL development commands without changing the current Next.js/SQLite production path.
+- [x] Add the reviewed PostgreSQL fresh-database schema, Goose integration, sqlc configuration, and generated starter query.
+- [x] Confirm that legacy SQLite data may be discarded; no SQLite-to-PostgreSQL importer or dual-write path is required.
+- [x] Add local-auth policy, bcrypt compatibility, signed-session, and secure-cookie foundations in Go.
+- [x] Add PostgreSQL-backed login throttling and CSRF-safe local login, session, and logout endpoints.
+- [x] Add rate-limited local signup with atomic user, settings, and system-category provisioning.
+- [x] Add authenticated password changes, operator password reset, and immediate session-version invalidation.
+- [x] Add OIDC discovery, Authorization Code with PKCE, callback verification, JIT provisioning, linking, unlinking, reauthentication, and local-method transitions.
+- [x] Add scoped API-key creation, one-time secret display, listing, Bearer authentication, last-used throttling, revocation, and two-user isolation coverage.
+- [x] Complete Phase 2 backend authentication and API-key contracts; the Settings UI is part of the Vite frontend work in Phase 3.
+- [x] Start Phase 3 with the Vite SPA, authenticated session bootstrap, auth-mode-aware login/signup, responsive shell, privacy/theme controls, and owner-scoped overview/accounts reads.
+- [ ] Port product APIs and the React/Vite frontend in the phases below.
 
 ## Objective
 
@@ -17,8 +33,8 @@ Replace the production Next.js/Node.js server with:
 - A client-side React application built by Vite.
 - A Go HTTP API using `github.com/go-chi/chi/v5` and ordinary `net/http` middleware.
 - `sqlc` for typed database access.
-- Goose for append-only SQLite migrations.
-- The existing SQLite database and existing persisted user data.
+- Goose for append-only PostgreSQL migrations.
+- PostgreSQL as the production database for fresh installations and the replacement application.
 - A versioned JSON API used by both the browser application and external clients.
 - Personal API keys that let a user query their own portfolio without using the frontend.
 - A production image with no Node.js runtime. Node may exist only in the frontend build stage.
@@ -38,7 +54,7 @@ Go process (Chi)
   `-- /*              embedded Vite files and SPA fallback
         |
         v
-SQLite
+PostgreSQL
 ```
 
 React must never execute on the server. There must be no React Server Components, Server Actions, Next.js image optimizer, Node production process, or server-side JavaScript request handler.
@@ -53,7 +69,7 @@ The current application is a self-hosted, multi-user wealth and goals tracker. P
 - Categories, institutions, transactions, valuations, transfers, goals, milestones, exchange rates, investment instruments, position events, prices, reconciliations, analytics, imports, exports, restores, AI review, and estate planning.
 - PWA and offline-safe behavior without caching authenticated financial responses or queuing financial mutations.
 - User-level JSON portability and CSV exports.
-- Operator-only SQLite backup and offline restore.
+- Operator-only database backup and restore, updated for PostgreSQL while preserving existing user-data portability workflows.
 - Current local-password and OIDC linking/unlinking rules.
 - Existing responsive layouts and visual design at 360, 390, 768, 1024, and 1440 pixels.
 
@@ -98,7 +114,7 @@ Inventory `app/`, `app/api/`, `lib/services/`, `lib/auth/`, `scripts/`, and the 
 
 - Derive the application user ID only from a verified browser session or verified API key.
 - Never accept `userId`, owner ID, username, or account ownership from URL parameters, request bodies, imports, or arbitrary headers as authorization evidence.
-- Every private query must include the owner predicate in SQL, normally `WHERE user_id = ? AND id = ?`.
+- Every private query must include the owner predicate in SQL, normally `WHERE user_id = $1 AND id = $2`.
 - Return `404` for a foreign resource rather than revealing that it exists.
 - Validate related resources belong to the same user inside the same database transaction.
 - Every authorization-sensitive test must use at least two users and include a negative cross-user assertion.
@@ -189,33 +205,27 @@ Keep business rules in Go services. HTTP handlers should authenticate, decode an
 
 ### Database
 
-- Continue using SQLite in WAL mode with foreign keys enabled and a configured busy timeout.
-- Prefer `database/sql` with a maintained SQLite driver that works in the final minimal container. A pure-Go driver is preferred unless compatibility testing shows a concrete reason to use CGO.
-- Configure connection counts deliberately for SQLite. Do not allow an unbounded write pool.
+- Use PostgreSQL through `database/sql` and `pgx`'s standard-library adapter.
+- Configure a bounded connection pool, connection lifetime, statement and transaction timeouts, TLS, and health checks explicitly.
 - Use sqlc-generated queries and explicit transactions.
-- Run `PRAGMA foreign_key_check` in migration tests and operator diagnostics.
-- Preserve the existing database path and volume contract unless a documented compatibility alias is provided.
+- Use PostgreSQL constraints for foreign keys, uniqueness, checks, and referential actions; do not rely only on Go validation.
+- Keep PostgreSQL credentials and connection strings out of logs and generated frontend assets.
+- Document supported PostgreSQL versions, required extensions, database creation, least-privilege roles, TLS expectations, connection limits, and upgrade operations.
 
-### Migrations and existing databases
+### PostgreSQL migrations
 
-Goose becomes the migration authority after cutover, but existing production databases must be adopted without data loss.
+Goose becomes the PostgreSQL schema-migration authority after cutover. Existing SQLite data is intentionally discarded; the replacement application starts from a fresh PostgreSQL database.
 
-Implement and test both paths:
-
-1. **Fresh database:** Goose applies a reviewed baseline schema and all later migrations.
-2. **Existing Wealthboard database:** an explicit adoption procedure verifies the known Drizzle migration history and expected schema before recording the Goose baseline as applied. It must not rerun `CREATE TABLE` statements against existing tables.
+For a fresh PostgreSQL database, Goose applies the reviewed baseline schema and all later migrations.
 
 Rules:
 
 - Preserve the existing Drizzle SQL migrations and metadata under an archival path for provenance. Do not rewrite or delete applied history.
-- Generate a reviewed `schema.sql` that reflects the current schema exactly before adding new tables.
-- Refuse automatic adoption when the database is non-empty but does not match a known schema/migration state.
-- Back up the database before first Goose adoption.
-- Perform adoption and the first Goose migration transactionally where SQLite permits.
-- Add only backward-compatible schema changes during the migration. The old application should still be able to read the database until cutover is accepted.
-- Test upgrade from a copy at every supported historical migration state, or at minimum every state currently covered by the repository migration tests.
-- Validate row counts, important aggregates, migration version, foreign keys, and representative exports after migration.
-- Never use `CREATE TABLE IF NOT EXISTS` as a substitute for verifying schema compatibility.
+- Generate a reviewed PostgreSQL `schema.sql` that preserves the current domain constraints while using PostgreSQL-native types and syntax.
+- Refuse startup when the PostgreSQL schema is missing or not at the expected Goose version.
+- Test fresh migration, repeat application, constraint behavior, and downgrade policy against disposable PostgreSQL databases.
+- Validate the migration version, constraints, representative seed data, and deterministic domain results.
+- Never use `CREATE TABLE IF NOT EXISTS` or upserts as a substitute for verifying source and target compatibility.
 
 ### Commands
 
@@ -225,14 +235,13 @@ The Go binary should provide explicit operator subcommands rather than shell scr
 wealthboard serve
 wealthboard migrate
 wealthboard migrate-status
-wealthboard migrate-adopt
 wealthboard backup
-wealthboard restore --file <path> --confirm-offline
+wealthboard restore --file <path> --confirm-maintenance
 wealthboard reset-password --username <name>   # new password from stdin or env, never argv
 wealthboard seed-demo --username <name>
 ```
 
-`serve` may run safe pending migrations at startup only after migration/adoption behavior is fully tested. Destructive restore remains offline and must refuse to run while the server is active.
+`serve` may run safe pending PostgreSQL migrations at startup only after migration behavior is fully tested. Backup and restore should use PostgreSQL-native, version-compatible tooling or documented operator procedures. Destructive restore requires maintenance mode, exclusive application access, and an explicit target database; it must refuse to run against a database serving application traffic.
 
 ## Authentication
 
@@ -246,7 +255,7 @@ Preserve local, OIDC-only, and hybrid deployment modes and all current readiness
 - Password and authentication-method changes increment `session_version` and invalidate other sessions.
 - Continue to normalize usernames only for lookup and uniqueness.
 - Return the same login error for unknown users, wrong passwords, and accounts without a local credential.
-- Preserve current password-hash compatibility so existing users can sign in without resetting passwords. Rehash on successful login if the selected Go password implementation requires an upgrade.
+- Retain bcrypt compatibility and the current cost policy so local authentication behavior remains consistent. Rehash on successful login if the selected Go password implementation later requires an upgrade.
 - Preserve exact `(issuer, subject)` OIDC identity resolution. Never merge users by email, username, display name, or other mutable claim.
 - Preserve Authorization Code flow, PKCE S256, state, nonce, exact issuer and audience validation, bounded discovery/token/JWKS operations, and RS256 verification.
 - Do not store provider access tokens, authorization codes, PKCE verifiers, or claim payloads.
@@ -411,7 +420,7 @@ The current application parses CSV, TSV, JSON, XLSX, text PDFs, and DOCX, and op
 Do not block the main migration by carelessly rewriting every parser. Choose and document one of these safe implementations:
 
 1. Port parsing to reviewed Go libraries and keep it in a separately constrained worker process; or
-2. Temporarily retain a minimal Node extraction worker containing only the required parsers, with no HTTP ingress, no SQLite access, no application secrets, no Kubernetes token, a read-only filesystem, strict CPU/memory/time/file limits, and tightly restricted egress.
+2. Temporarily retain a minimal Node extraction worker containing only the required parsers, with no HTTP ingress, no PostgreSQL access, no application secrets, no Kubernetes token, a read-only filesystem, strict CPU/memory/time/file limits, and tightly restricted egress.
 
 The Go API owns authentication, upload limits, consent, job creation, result validation, and database commits. The parser receives only the uploaded bytes and one-time document password where applicable. It returns bounded extracted text/sections. Original documents and passwords must not be persisted or sent to AI providers. Preserve the existing 5 MB source and 64 KB/1,000-section extraction limits unless the specification is deliberately revised.
 
@@ -428,12 +437,12 @@ Use a multi-stage build:
 Run as an explicit non-root UID/GID with:
 
 - Read-only root filesystem.
-- Writable mounts only for `/data`, `/backups`, and a bounded temporary directory if required.
+- Writable mounts only for a bounded temporary directory and any documented backup staging path required by an operator command.
 - `allowPrivilegeEscalation: false`.
 - All Linux capabilities dropped.
 - Runtime-default seccomp.
 - `automountServiceAccountToken: false`.
-- One replica and `Recreate` while SQLite uses a ReadWriteOnce volume.
+- Stateless API replicas with rolling deployment support; PostgreSQL runs as a separately managed service with durable storage and an explicit backup policy.
 
 Pin production images by immutable digest in deployment configuration. Add default-deny ingress and egress policies. Permit only DNS, configured OIDC endpoints, configured AI endpoints, and any explicitly required internal services. Block link-local metadata addresses.
 
@@ -447,12 +456,12 @@ Pin production images by immutable digest in deployment configuration. Add defau
 - Create representative fictional golden fixtures and exports from the current implementation.
 - Document known current failures rather than silently encoding them as new behavior.
 
-### Phase 1: Go foundation and database adoption
+### Phase 1: Go foundation and PostgreSQL migration
 
-- Add the Go module, configuration loader, structured logging, graceful server, health routes, Goose, sqlc, SQLite configuration, and operator commands.
-- Produce the exact baseline schema and database adoption procedure.
+- Add the Go module, configuration loader, structured logging, graceful server, health routes, Goose, sqlc, PostgreSQL configuration, and operator commands.
+- Produce the reviewed PostgreSQL baseline schema.
 - Add the `api_keys` migration.
-- Verify fresh database creation and upgrade of copied existing databases.
+- Verify fresh PostgreSQL creation and repeat migration application.
 - Add deterministic Go unit tests for money, transaction effects, balance replay, exchange-rate selection/conversion, date handling, goal calculations, and position replay using parity fixtures from TypeScript.
 
 ### Phase 2: authentication and API keys
@@ -481,8 +490,8 @@ Pin production images by immutable digest in deployment configuration. Add defau
 
 ### Phase 6: cutover
 
-- Run both implementations against separate copies of the same fictional database and compare API/domain results, exports, balances, positions, goals, reports, and snapshots.
-- Run the new application against a production database copy and perform migration, foreign-key, aggregate, authentication, export, backup, and restore checks.
+- Seed equivalent fictional fixtures in the old SQLite implementation and new PostgreSQL implementation; compare API/domain results, exports, balances, positions, goals, reports, and snapshots.
+- Run constraint, aggregate, authentication, export, backup, and restore checks against a disposable PostgreSQL deployment.
 - Update `SPEC.md`, `docs/ARCHITECTURE.md`, README, deployment examples, environment documentation, operations, security documentation, and product guide.
 - Remove the production Next.js server and old server-only code only after all acceptance criteria pass.
 - Retain relevant historical migrations and migration documentation.
@@ -492,9 +501,9 @@ Pin production images by immutable digest in deployment configuration. Add defau
 ### Go tests
 
 - Unit tests for every financial rule and rounding boundary.
-- Service tests using disposable SQLite databases.
+- Service tests using isolated disposable PostgreSQL databases.
 - Transaction rollback and idempotency tests.
-- Fresh migration, existing-database adoption, upgrade, downgrade policy, and foreign-key tests.
+- Fresh PostgreSQL migration, rerun policy, constraint, and downgrade-policy tests.
 - Authentication mode matrix and OIDC protocol tests using a deterministic local provider.
 - API-key hashing, scope, expiry, revocation, last-used throttling, and no-secret-logging tests.
 - At least two users for every private direct-resource path.
@@ -516,7 +525,7 @@ Pin production images by immutable digest in deployment configuration. Add defau
 - API calls using read-only and write keys.
 - Missing-scope denial and immediate revocation.
 - PWA update and offline mutation blocking.
-- Upgrade from an existing database copy followed by rollback from its pre-migration backup.
+- Fresh PostgreSQL provisioning followed by documented backup and restore verification.
 
 Do not weaken assertions, add arbitrary sleeps, disable security tests, or increase global timeouts merely to obtain a green suite.
 
@@ -544,10 +553,10 @@ The migration is complete only when all of the following are true:
 1. Production runs one Go HTTP process and no Node.js runtime.
 2. React is built by Vite and runs only in the browser.
 3. All current supported user workflows have either parity tests or an explicitly approved behavioral change.
-4. Existing SQLite databases upgrade without losing or changing financial data.
-5. Fresh installations work from an empty database.
+4. Existing SQLite data is explicitly out of scope and the replacement starts from a fresh PostgreSQL database.
+5. Fresh installations work from an empty PostgreSQL database.
 6. Every private SQL query and mutation is owner-scoped.
-7. Existing local users and OIDC identities remain usable after cutover.
+7. Local users and OIDC identities provisioned in PostgreSQL remain usable across application upgrades after cutover.
 8. Browser sessions use secure cookies and state-changing cookie requests enforce Origin and CSRF protection.
 9. Users can create scoped personal API keys, see the secret once, query their own data with `Authorization: Bearer`, and revoke access immediately.
 10. API keys cannot manage authentication methods, other API keys, backups, restores, remembered AI credentials, or another user's data.
@@ -563,7 +572,7 @@ The migration is complete only when all of the following are true:
 - Go API and operator CLI.
 - Vite React frontend preserving the existing interface.
 - sqlc schema, queries, generated code, and configuration.
-- Goose baseline, adoption mechanism, and subsequent migrations.
+- Goose PostgreSQL baseline and subsequent migrations.
 - OpenAPI 3.1 document and generated frontend API types.
 - Personal API-key Settings UI and external API documentation with `curl` examples.
 - Updated Dockerfile, Compose file, Kubernetes manifest, NetworkPolicies, and health probes.
@@ -573,7 +582,7 @@ The migration is complete only when all of the following are true:
 
 ## Constraints for the implementation agent
 
-- Do not replace SQLite with PostgreSQL.
+- Replace SQLite with PostgreSQL as part of this migration; do not retain SQLite as a production datastore or introduce a dual-write compatibility layer.
 - Do not introduce GraphQL, a generic ORM, a service mesh, microservices, or an event bus.
 - Do not add organizations, roles, invitations, shared portfolios, default users, setup credentials, or account recovery flows.
 - Do not expose raw database backup or restore through the user API.

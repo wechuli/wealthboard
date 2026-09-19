@@ -75,6 +75,10 @@ export default defineConfig({
             link: "/reference/investment-import",
           },
           { text: "AI-assisted import", link: "/reference/ai-import" },
+          {
+            text: "Go authentication and API keys",
+            link: "/reference/go-authentication",
+          },
           { text: "Security and privacy", link: "/reference/security" },
           { text: "Architecture", link: "/ARCHITECTURE" },
         ],

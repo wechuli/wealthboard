@@ -1,0 +1,684 @@
+openapi: 3.1.0
+info:
+  title: Wealthboard API
+  version: 1.0.0
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: /api/v1
+paths:
+  /auth/config:
+    get:
+      operationId: getAuthConfig
+      summary: Return enabled browser authentication methods
+      security: []
+      responses:
+        "200":
+          description: Authentication capabilities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthConfig"
+  /overview:
+    get:
+      operationId: getOverview
+      summary: Return the current user's read-only overview
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped account overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Overview"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+  /api-keys:
+    get:
+      operationId: listApiKeys
+      summary: List the current user's API keys
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: API key metadata without secrets or hashes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/APIKeyMetadata"
+        "401":
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createApiKey
+      summary: Create an API key and return its secret once
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAPIKeyRequest"
+      responses:
+        "201":
+          description: API key created; token is returned only in this response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/APIKeyMetadata"
+                  - type: object
+                    required: [token]
+                    properties:
+                      token:
+                        type: string
+                        writeOnly: true
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /api-keys/{id}:
+    delete:
+      operationId: revokeApiKey
+      summary: Revoke one API key owned by the current user
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: API key revoked
+        "404":
+          $ref: "#/components/responses/Problem"
+  /api-keys/revoke-all:
+    post:
+      operationId: revokeAllApiKeys
+      summary: Revoke every active API key owned by the current user
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: API keys revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revoked]
+                properties:
+                  revoked:
+                    type: integer
+                    minimum: 0
+        "401":
+          $ref: "#/components/responses/Problem"
+  /auth/signup:
+    post:
+      operationId: signup
+      summary: Create a local user and browser session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "200":
+          description: Account and session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+  /auth/login:
+    post:
+      operationId: login
+      summary: Create a local browser session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "429":
+          $ref: "#/components/responses/Problem"
+  /auth/oidc/start:
+    get:
+      operationId: startOidcLogin
+      summary: Start an OIDC Authorization Code with PKCE sign-in
+      security: []
+      parameters:
+        - name: next
+          in: query
+          schema:
+            type: string
+            default: /
+      responses:
+        "303":
+          description: Redirect to the configured OIDC provider
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        "404":
+          $ref: "#/components/responses/Problem"
+  /auth/oidc/callback:
+    get:
+      operationId: completeOidcAuthentication
+      summary: Complete an OIDC login, link, or reauthentication transaction
+      security: []
+      parameters:
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session established and browser handoff returned
+          content:
+            text/html:
+              schema:
+                type: string
+        "303":
+          description: Login failure redirected to the login page
+        "404":
+          $ref: "#/components/responses/Problem"
+  /auth/oidc/link:
+    post:
+      operationId: startOidcLink
+      summary: Start linking the configured OIDC provider after local password verification
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OidcLinkRequest"
+      responses:
+        "303":
+          description: Redirect to the configured OIDC provider
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: unlinkOidcIdentity
+      summary: Unlink OIDC after local password verification
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordConfirmationRequest"
+      responses:
+        "200":
+          description: OIDC unlinked and replacement session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /auth/oidc/reauth:
+    post:
+      operationId: startOidcReauthentication
+      summary: Start fresh OIDC authentication for local credential management
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+        - name: next
+          in: query
+          schema:
+            type: string
+            default: /settings
+      responses:
+        "303":
+          description: Redirect to the configured OIDC provider
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /auth/local-credential:
+    post:
+      operationId: enableLocalCredential
+      summary: Enable local sign-in after fresh OIDC reauthentication
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnableLocalCredentialRequest"
+      responses:
+        "200":
+          description: Local credential enabled and replacement session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeLocalCredential
+      summary: Remove local sign-in after fresh OIDC reauthentication
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: Local credential removed and replacement session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: End the current browser session
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    const: signed_out
+        "401":
+          $ref: "#/components/responses/Problem"
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      summary: Change the current user's local password
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed and replacement session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /auth/principal:
+    get:
+      operationId: getPrincipal
+      summary: Inspect the effective browser-session or API-key principal
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Effective authenticated principal
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [userId, username, authMethod, scopes]
+                properties:
+                  userId:
+                    type: string
+                    format: uuid
+                  username:
+                    type: string
+                  authMethod:
+                    type: string
+                    enum: [session, api_key]
+                  scopes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/APIKeyScope"
+        "401":
+          $ref: "#/components/responses/Problem"
+  /session:
+    get:
+      operationId: getSession
+      summary: Return the current browser session
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Current session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Problem"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: wealthboard_session
+    apiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: wbk_v1
+  parameters:
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    AuthConfig:
+      type: object
+      additionalProperties: false
+      required: [localEnabled, oidcEnabled, providerName]
+      properties:
+        localEnabled: { type: boolean }
+        oidcEnabled: { type: boolean }
+        providerName: { type: string }
+    Overview:
+      type: object
+      additionalProperties: false
+      required: [settings, totals, accounts, accountCount, goalCount, currentComplete, missingCurrencies]
+      properties:
+        settings:
+          type: object
+          required: [displayName, appName, baseCurrency, timezone, preferredDateFormat, defaultDashboardPeriod]
+          properties:
+            displayName: { type: string }
+            appName: { type: string }
+            baseCurrency: { type: string }
+            timezone: { type: string }
+            preferredDateFormat: { type: string }
+            defaultDashboardPeriod: { type: string }
+        totals:
+          type: object
+          required: [assets, liabilities, netWorth, liquid, investible]
+          properties:
+            assets: { type: string, pattern: "^-?[0-9]+$" }
+            liabilities: { type: string, pattern: "^-?[0-9]+$" }
+            netWorth: { type: string, pattern: "^-?[0-9]+$" }
+            liquid: { type: string, pattern: "^-?[0-9]+$" }
+            investible: { type: string, pattern: "^-?[0-9]+$" }
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [id, name, currency, currentValueMinor, isLiability, isIncludedInNetWorth, categoryName]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              currency: { type: string }
+              currentValueMinor: { type: string, pattern: "^-?[0-9]+$" }
+              isLiability: { type: boolean }
+              isIncludedInNetWorth: { type: boolean }
+              categoryName: { type: string }
+              institutionName: { type: string }
+        accountCount: { type: integer, minimum: 0 }
+        goalCount: { type: integer, minimum: 0 }
+        currentComplete: { type: boolean }
+        missingCurrencies:
+          type: array
+          items: { type: string }
+    APIKeyScope:
+      type: string
+      enum:
+        - portfolio:read
+        - portfolio:write
+        - imports:write
+        - exports:read
+        - ai:invoke
+    APIKeyMetadata:
+      type: object
+      additionalProperties: false
+      required: [id, name, prefix, scopes, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        prefix:
+          type: string
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/APIKeyScope"
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        lastUsedAt:
+          type: [string, "null"]
+          format: date-time
+        revokedAt:
+          type: [string, "null"]
+          format: date-time
+    CreateAPIKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          default: [portfolio:read]
+          items:
+            $ref: "#/components/schemas/APIKeyScope"
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          pattern: "^[a-z0-9._-]{3,32}$"
+        password:
+          type: string
+          minLength: 1
+          maxLength: 256
+    SignupRequest:
+      type: object
+      additionalProperties: false
+      required: [username, displayName, password, confirmPassword]
+      properties:
+        username:
+          type: string
+          pattern: "^[a-z0-9._-]{3,32}$"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        baseCurrency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          default: KES
+        password:
+          type: string
+          minLength: 12
+          maxLength: 256
+        confirmPassword:
+          type: string
+          minLength: 12
+          maxLength: 256
+    SessionResponse:
+      type: object
+      additionalProperties: false
+      required: [user, csrfToken]
+      properties:
+        user:
+          type: object
+          additionalProperties: false
+          required: [id, username]
+          properties:
+            id:
+              type: string
+              format: uuid
+            username:
+              type: string
+        csrfToken:
+          type: string
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword, confirmPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 256
+        newPassword:
+          type: string
+          minLength: 12
+          maxLength: 256
+        confirmPassword:
+          type: string
+          minLength: 12
+          maxLength: 256
+    PasswordConfirmationRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 256
+    OidcLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 256
+        next:
+          type: string
+          default: /settings
+    EnableLocalCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password, confirmPassword]
+      properties:
+        username:
+          type: string
+          pattern: "^[a-z0-9._-]{3,32}$"
+        password:
+          type: string
+          minLength: 12
+          maxLength: 256
+        confirmPassword:
+          type: string
+          minLength: 12
+          maxLength: 256
+  responses:
+    Problem:
+      description: Request failed
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, detail]
+            properties:
+              type:
+                type: string
+              title:
+                type: string
+              status:
+                type: integer
+              detail:
+                type: string
