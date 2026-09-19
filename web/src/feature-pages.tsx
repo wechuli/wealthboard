@@ -16,7 +16,6 @@ import {
   getInstrument,
   getInstruments,
 } from "./api";
-import { MoneyValue } from "./privacy";
 import { MoneyValue, PrivateValue } from "./privacy";
 import type { EstateWorkspace, SecurityPrice } from "./types";
 import {
@@ -164,7 +163,13 @@ export function InstrumentsPage() {
                   </div>
                   <div className="account-value">
                     <strong>
-                      {item.latestPrice ? <PrivateValue>{item.latestPrice.currency} {item.latestPrice.price}</PrivateValue> : "No price"}
+                      {item.latestPrice ? (
+                        <PrivateValue>
+                          {item.latestPrice.currency} {item.latestPrice.price}
+                        </PrivateValue>
+                      ) : (
+                        "No price"
+                      )}
                     </strong>
                     <span>
                       {item.latestPrice
@@ -254,7 +259,9 @@ function PriceHistory({ prices }: { prices: SecurityPrice[] }) {
                 </span>
               </div>
               <strong>
-                <PrivateValue>{price.currency} {price.price}</PrivateValue>
+                <PrivateValue>
+                  {price.currency} {price.price}
+                </PrivateValue>
               </strong>
             </div>
           ))}

@@ -35,7 +35,17 @@ export function MoneyValue({
   );
 }
 
-export function PrivateValue({ children, className }: { children: ReactNode; className?: string }) {
+export function PrivateValue({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   const hidden = useContext(PrivacyContext);
-  return <span className={hidden ? `${className ?? ""} masked`.trim() : className}>{hidden ? MASKED_VALUE : children}</span>;
+  return (
+    <span className={hidden ? `${className ?? ""} masked`.trim() : className}>
+      {hidden ? MASKED_VALUE : children}
+    </span>
+  );
 }
