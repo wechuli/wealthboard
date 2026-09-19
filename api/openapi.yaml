@@ -1120,7 +1120,19 @@ components:
     Category:
       type: object
       additionalProperties: false
-      required: [id, name, slug, icon, displayOrder, assetOrLiability, isLiquid, isInvestible, isArchived, isSystem]
+      required:
+        [
+          id,
+          name,
+          slug,
+          icon,
+          displayOrder,
+          assetOrLiability,
+          isLiquid,
+          isInvestible,
+          isArchived,
+          isSystem,
+        ]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1149,7 +1161,18 @@ components:
     Account:
       type: object
       additionalProperties: false
-      required: [id, categoryId, name, currency, trackingMode, currentValueMinor, isLiability, isIncludedInNetWorth, categoryName]
+      required:
+        [
+          id,
+          categoryId,
+          name,
+          currency,
+          trackingMode,
+          currentValueMinor,
+          isLiability,
+          isIncludedInNetWorth,
+          categoryName,
+        ]
       properties:
         id: { type: string, format: uuid }
         categoryId: { type: string, format: uuid }
@@ -1173,7 +1196,16 @@ components:
     Transaction:
       type: object
       additionalProperties: false
-      required: [id, accountId, accountName, type, amountMinor, currency, transactionDate]
+      required:
+        [
+          id,
+          accountId,
+          accountName,
+          type,
+          amountMinor,
+          currency,
+          transactionDate,
+        ]
       properties:
         id: { type: string, format: uuid }
         accountId: { type: string, format: uuid }
@@ -1192,7 +1224,8 @@ components:
     Valuation:
       type: object
       additionalProperties: false
-      required: [id, accountId, accountName, valueMinor, currency, valuationDate]
+      required:
+        [id, accountId, accountName, valueMinor, currency, valuationDate]
       properties:
         id: { type: string, format: uuid }
         accountId: { type: string, format: uuid }
@@ -1205,7 +1238,8 @@ components:
     ActivityItem:
       type: object
       additionalProperties: false
-      required: [kind, id, accountId, accountName, type, amountMinor, currency, date]
+      required:
+        [kind, id, accountId, accountName, type, amountMinor, currency, date]
       properties:
         kind: { type: string, enum: [transaction, valuation] }
         id: { type: string, format: uuid }
@@ -1275,7 +1309,26 @@ components:
     Goal:
       type: object
       additionalProperties: false
-      required: [id, name, description, targetAmountMinor, currentAmountMinor, currentAmountCurrency, currency, targetDate, linkedAccount, icon, status, priority, assumedAnnualReturnBps, progressPercent, valueIncomplete, missingCurrencies, plan]
+      required:
+        [
+          id,
+          name,
+          description,
+          targetAmountMinor,
+          currentAmountMinor,
+          currentAmountCurrency,
+          currency,
+          targetDate,
+          linkedAccount,
+          icon,
+          status,
+          priority,
+          assumedAnnualReturnBps,
+          progressPercent,
+          valueIncomplete,
+          missingCurrencies,
+          plan,
+        ]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1308,7 +1361,17 @@ components:
     GoalMilestone:
       type: object
       additionalProperties: false
-      required: [id, goalId, name, targetAmountMinor, targetDate, status, progressPercent, remainingMinor]
+      required:
+        [
+          id,
+          goalId,
+          name,
+          targetAmountMinor,
+          targetDate,
+          status,
+          progressPercent,
+          remainingMinor,
+        ]
       properties:
         id: { type: string, format: uuid }
         goalId: { type: string, format: uuid }
@@ -1326,7 +1389,18 @@ components:
     GoalAlert:
       type: object
       additionalProperties: false
-      required: [goalId, goalName, currency, targetAmountMinor, currentAmountMinor, progressPercent, targetDate, alertKey, assumedAnnualReturnBps]
+      required:
+        [
+          goalId,
+          goalName,
+          currency,
+          targetAmountMinor,
+          currentAmountMinor,
+          progressPercent,
+          targetDate,
+          alertKey,
+          assumedAnnualReturnBps,
+        ]
       properties:
         goalId: { type: string, format: uuid }
         goalName: { type: string }
@@ -1358,7 +1432,19 @@ components:
     Dashboard:
       type: object
       additionalProperties: false
-      required: [asOf, baseCurrency, totals, accountCount, goalCount, currentComplete, missingCurrencies, historicalAvailable, historicalComplete, valueBasis]
+      required:
+        [
+          asOf,
+          baseCurrency,
+          totals,
+          accountCount,
+          goalCount,
+          currentComplete,
+          missingCurrencies,
+          historicalAvailable,
+          historicalComplete,
+          valueBasis,
+        ]
       properties:
         asOf: { type: string, format: date }
         baseCurrency: { type: string }
@@ -1376,7 +1462,17 @@ components:
     ReportSummary:
       type: object
       additionalProperties: false
-      required: [asOf, baseCurrency, totals, accountCount, goalCount, currentComplete, missingCurrencies, valueBasis]
+      required:
+        [
+          asOf,
+          baseCurrency,
+          totals,
+          accountCount,
+          goalCount,
+          currentComplete,
+          missingCurrencies,
+          valueBasis,
+        ]
       properties:
         asOf: { type: string, format: date }
         baseCurrency: { type: string }
@@ -1402,7 +1498,17 @@ components:
     ReportAllocation:
       type: object
       additionalProperties: false
-      required: [asOf, baseCurrency, currentComplete, missingCurrencies, valueBasis, categories, institutions, currencies]
+      required:
+        [
+          asOf,
+          baseCurrency,
+          currentComplete,
+          missingCurrencies,
+          valueBasis,
+          categories,
+          institutions,
+          currencies,
+        ]
       properties:
         asOf: { type: string, format: date }
         baseCurrency: { type: string }
@@ -1441,7 +1547,23 @@ components:
     UserSettings:
       type: object
       additionalProperties: false
-      required: [displayName, appName, baseCurrency, supportedCurrencies, timezone, preferredDateFormat, defaultDashboardPeriod, sessionTimeoutMinutes, defaultGoalReturnBps, positionStaleDaysStock, positionStaleDaysEtf, positionStaleDaysFund, createdAt, updatedAt]
+      required:
+        [
+          displayName,
+          appName,
+          baseCurrency,
+          supportedCurrencies,
+          timezone,
+          preferredDateFormat,
+          defaultDashboardPeriod,
+          sessionTimeoutMinutes,
+          defaultGoalReturnBps,
+          positionStaleDaysStock,
+          positionStaleDaysEtf,
+          positionStaleDaysFund,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         displayName: { type: string }
         appName: { type: string }
@@ -1474,7 +1596,16 @@ components:
     ExchangeRate:
       type: object
       additionalProperties: false
-      required: [id, baseCurrency, quoteCurrency, rate, effectiveDate, source, createdAt]
+      required:
+        [
+          id,
+          baseCurrency,
+          quoteCurrency,
+          rate,
+          effectiveDate,
+          source,
+          createdAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         baseCurrency: { type: string }
@@ -1508,7 +1639,18 @@ components:
     SecurityPrice:
       type: object
       additionalProperties: false
-      required: [id, externalId, price, currency, effectiveDate, source, provenance, createdAt, updatedAt]
+      required:
+        [
+          id,
+          externalId,
+          price,
+          currency,
+          effectiveDate,
+          source,
+          provenance,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         externalId: { type: [string, "null"] }
@@ -1523,7 +1665,22 @@ components:
     Instrument:
       type: object
       additionalProperties: false
-      required: [id, externalId, name, symbol, identifierType, identifier, exchangeMic, assetType, quoteCurrency, archivedAt, createdAt, updatedAt, latestPrice]
+      required:
+        [
+          id,
+          externalId,
+          name,
+          symbol,
+          identifierType,
+          identifier,
+          exchangeMic,
+          assetType,
+          quoteCurrency,
+          archivedAt,
+          createdAt,
+          updatedAt,
+          latestPrice,
+        ]
       properties:
         id: { type: string, format: uuid }
         externalId: { type: [string, "null"] }
@@ -1555,7 +1712,16 @@ components:
     EstatePlan:
       type: object
       additionalProperties: false
-      required: [id, title, jurisdiction, lastReviewedDate, reviewReminderDate, createdAt, updatedAt]
+      required:
+        [
+          id,
+          title,
+          jurisdiction,
+          lastReviewedDate,
+          reviewReminderDate,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
@@ -1567,7 +1733,18 @@ components:
     Beneficiary:
       type: object
       additionalProperties: false
-      required: [id, kind, name, relationship, contactSummary, notes, archivedAt, createdAt, updatedAt]
+      required:
+        [
+          id,
+          kind,
+          name,
+          relationship,
+          contactSummary,
+          notes,
+          archivedAt,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         kind: { type: string }
@@ -1581,7 +1758,26 @@ components:
     EstateDirective:
       type: object
       additionalProperties: false
-      required: [id, estatePlanId, accountId, accountName, currency, currentValueMinor, isLiability, accountArchivedAt, isIncluded, ownershipShareBps, transferContext, distributionMethod, documentReference, notes, reviewedAt, createdAt, updatedAt]
+      required:
+        [
+          id,
+          estatePlanId,
+          accountId,
+          accountName,
+          currency,
+          currentValueMinor,
+          isLiability,
+          accountArchivedAt,
+          isIncluded,
+          ownershipShareBps,
+          transferContext,
+          distributionMethod,
+          documentReference,
+          notes,
+          reviewedAt,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         estatePlanId: { type: string, format: uuid }
@@ -1604,7 +1800,18 @@ components:
     EstateAllocation:
       type: object
       additionalProperties: false
-      required: [id, estatePlanId, directiveId, beneficiaryId, tier, allocationBps, notes, createdAt, updatedAt]
+      required:
+        [
+          id,
+          estatePlanId,
+          directiveId,
+          beneficiaryId,
+          tier,
+          allocationBps,
+          notes,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         estatePlanId: { type: string, format: uuid }
@@ -1618,7 +1825,17 @@ components:
     ResiduaryAllocation:
       type: object
       additionalProperties: false
-      required: [id, estatePlanId, beneficiaryId, tier, allocationBps, notes, createdAt, updatedAt]
+      required:
+        [
+          id,
+          estatePlanId,
+          beneficiaryId,
+          tier,
+          allocationBps,
+          notes,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         estatePlanId: { type: string, format: uuid }
@@ -1631,7 +1848,17 @@ components:
     EstateSnapshotMeta:
       type: object
       additionalProperties: false
-      required: [id, estatePlanId, version, title, valueAsOfDate, baseCurrency, contentHash, generatedAt]
+      required:
+        [
+          id,
+          estatePlanId,
+          version,
+          title,
+          valueAsOfDate,
+          baseCurrency,
+          contentHash,
+          generatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         estatePlanId: { type: string, format: uuid }
@@ -1644,7 +1871,18 @@ components:
     EstateSnapshot:
       type: object
       additionalProperties: false
-      required: [id, estatePlanId, version, title, valueAsOfDate, baseCurrency, contentHash, generatedAt, content]
+      required:
+        [
+          id,
+          estatePlanId,
+          version,
+          title,
+          valueAsOfDate,
+          baseCurrency,
+          contentHash,
+          generatedAt,
+          content,
+        ]
       properties:
         id: { type: string, format: uuid }
         estatePlanId: { type: string, format: uuid }
@@ -1658,7 +1896,17 @@ components:
     EstateWorkspace:
       type: object
       additionalProperties: false
-      required: [plan, beneficiaries, directives, allocations, residuaryAllocations, snapshots, currentValuesComplete, currentValuesWarning]
+      required:
+        [
+          plan,
+          beneficiaries,
+          directives,
+          allocations,
+          residuaryAllocations,
+          snapshots,
+          currentValuesComplete,
+          currentValuesWarning,
+        ]
       properties:
         plan:
           oneOf:
@@ -1689,7 +1937,20 @@ components:
     AIProviderSettings:
       type: object
       additionalProperties: false
-      required: [provider, baseUrl, model, hasStoredApiKey, apiKeyHint, includeExactAmounts, includeAccountNames, monthlyTokenLimit, maxOutputTokens, createdAt, updatedAt]
+      required:
+        [
+          provider,
+          baseUrl,
+          model,
+          hasStoredApiKey,
+          apiKeyHint,
+          includeExactAmounts,
+          includeAccountNames,
+          monthlyTokenLimit,
+          maxOutputTokens,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         provider: { type: string }
         baseUrl: { type: string }
@@ -1705,7 +1966,23 @@ components:
     AIUsageEvent:
       type: object
       additionalProperties: false
-      required: [id, provider, endpointHost, model, requestType, status, billingMonth, chargedTokens, inputTokens, outputTokens, latencyMs, errorCode, createdAt, updatedAt]
+      required:
+        [
+          id,
+          provider,
+          endpointHost,
+          model,
+          requestType,
+          status,
+          billingMonth,
+          chargedTokens,
+          inputTokens,
+          outputTokens,
+          latencyMs,
+          errorCode,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         provider: { type: string }
@@ -1724,7 +2001,15 @@ components:
     AIUsageSummary:
       type: object
       additionalProperties: false
-      required: [billingMonth, chargedTokens, remainingTokens, monthlyTokenLimit, successfulReviews, lastUsedAt]
+      required:
+        [
+          billingMonth,
+          chargedTokens,
+          remainingTokens,
+          monthlyTokenLimit,
+          successfulReviews,
+          lastUsedAt,
+        ]
       properties:
         billingMonth: { type: string, pattern: "^[0-9]{4}-[0-9]{2}$" }
         chargedTokens: { type: integer, format: int64 }
@@ -1735,7 +2020,16 @@ components:
     ReviewAvailability:
       type: object
       additionalProperties: false
-      required: [available, reason, providerConfigured, storedCredentialAvailable, sessionCredentialAccepted, cooldownUntil, budgetRemainingTokens]
+      required:
+        [
+          available,
+          reason,
+          providerConfigured,
+          storedCredentialAvailable,
+          sessionCredentialAccepted,
+          cooldownUntil,
+          budgetRemainingTokens,
+        ]
       properties:
         available: { type: boolean }
         reason: { type: string }

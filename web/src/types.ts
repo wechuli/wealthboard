@@ -114,46 +114,264 @@ export type Goal = {
   progressPercent: string;
   valueIncomplete: boolean;
   missingCurrencies: string[];
-  plan: { plannedContributionMinor: string; frequency: string; startDate: string; endDate: string | null } | null;
+  plan: {
+    plannedContributionMinor: string;
+    frequency: string;
+    startDate: string;
+    endDate: string | null;
+  } | null;
 };
 
-export type GoalMilestone = { id: string; goalId: string; name: string; targetAmountMinor: string; targetDate: string | null; status: string; progressPercent: string; remainingMinor: string | null };
-export type GoalAlert = { goalId: string; goalName: string; currency: string; targetAmountMinor: string; currentAmountMinor: string; progressPercent: string; targetDate: string; alertKey: string; assumedAnnualReturnBps: number };
-export type Totals = { assets: string; liabilities: string; netWorth: string; liquid: string; investible: string };
-export type Dashboard = { asOf: string; baseCurrency: string; totals: Totals; accountCount: number; goalCount: number; currentComplete: boolean; missingCurrencies: string[]; historicalAvailable: boolean; historicalComplete: boolean; valueBasis: string };
-export type ReportSummary = Omit<Dashboard, "historicalAvailable" | "historicalComplete">;
-export type AllocationItem = { name: string; valueMinor: string; sharePercent: string };
-export type ReportAllocation = { asOf: string; baseCurrency: string; currentComplete: boolean; missingCurrencies: string[]; valueBasis: string; categories: AllocationItem[]; institutions: AllocationItem[]; currencies: AllocationItem[] };
+export type GoalMilestone = {
+  id: string;
+  goalId: string;
+  name: string;
+  targetAmountMinor: string;
+  targetDate: string | null;
+  status: string;
+  progressPercent: string;
+  remainingMinor: string | null;
+};
+export type GoalAlert = {
+  goalId: string;
+  goalName: string;
+  currency: string;
+  targetAmountMinor: string;
+  currentAmountMinor: string;
+  progressPercent: string;
+  targetDate: string;
+  alertKey: string;
+  assumedAnnualReturnBps: number;
+};
+export type Totals = {
+  assets: string;
+  liabilities: string;
+  netWorth: string;
+  liquid: string;
+  investible: string;
+};
+export type Dashboard = {
+  asOf: string;
+  baseCurrency: string;
+  totals: Totals;
+  accountCount: number;
+  goalCount: number;
+  currentComplete: boolean;
+  missingCurrencies: string[];
+  historicalAvailable: boolean;
+  historicalComplete: boolean;
+  valueBasis: string;
+};
+export type ReportSummary = Omit<
+  Dashboard,
+  "historicalAvailable" | "historicalComplete"
+>;
+export type AllocationItem = {
+  name: string;
+  valueMinor: string;
+  sharePercent: string;
+};
+export type ReportAllocation = {
+  asOf: string;
+  baseCurrency: string;
+  currentComplete: boolean;
+  missingCurrencies: string[];
+  valueBasis: string;
+  categories: AllocationItem[];
+  institutions: AllocationItem[];
+  currencies: AllocationItem[];
+};
 
-export type SecurityPrice = { id: string; externalId: string | null; price: string; currency: string; effectiveDate: string; source: string; provenance: string | null; createdAt: string; updatedAt: string };
-export type Instrument = { id: string; externalId: string | null; name: string; symbol: string | null; identifierType: string; identifier: string | null; exchangeMic: string | null; assetType: string; quoteCurrency: string; archivedAt: string | null; createdAt: string; updatedAt: string; latestPrice: SecurityPrice | null };
-export type InstrumentDetail = { instrument: Instrument; prices: SecurityPrice[] };
+export type SecurityPrice = {
+  id: string;
+  externalId: string | null;
+  price: string;
+  currency: string;
+  effectiveDate: string;
+  source: string;
+  provenance: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+export type Instrument = {
+  id: string;
+  externalId: string | null;
+  name: string;
+  symbol: string | null;
+  identifierType: string;
+  identifier: string | null;
+  exchangeMic: string | null;
+  assetType: string;
+  quoteCurrency: string;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  latestPrice: SecurityPrice | null;
+};
+export type InstrumentDetail = {
+  instrument: Instrument;
+  prices: SecurityPrice[];
+};
 
 export type SettingsRead = {
-  settings: { displayName: string; appName: string; baseCurrency: string; supportedCurrencies: string[]; timezone: string; preferredDateFormat: string; defaultDashboardPeriod: string; sessionTimeoutMinutes: number; defaultGoalReturnBps: number; positionStaleDaysStock: number; positionStaleDaysEtf: number; positionStaleDaysFund: number; createdAt: string; updatedAt: string };
-  currencyConfiguration: { baseCurrency: string; enabledCurrencies: string[]; referencedCurrencies: string[] };
-  exchangeRates: { id: string; baseCurrency: string; quoteCurrency: string; rate: string; effectiveDate: string; source: string; createdAt: string }[];
-  authMethods: { status: string; hasPassword: boolean; oidcIdentities: { id: string; issuer: string; createdAt: string; updatedAt: string; lastLoginAt: string }[] };
+  settings: {
+    displayName: string;
+    appName: string;
+    baseCurrency: string;
+    supportedCurrencies: string[];
+    timezone: string;
+    preferredDateFormat: string;
+    defaultDashboardPeriod: string;
+    sessionTimeoutMinutes: number;
+    defaultGoalReturnBps: number;
+    positionStaleDaysStock: number;
+    positionStaleDaysEtf: number;
+    positionStaleDaysFund: number;
+    createdAt: string;
+    updatedAt: string;
+  };
+  currencyConfiguration: {
+    baseCurrency: string;
+    enabledCurrencies: string[];
+    referencedCurrencies: string[];
+  };
+  exchangeRates: {
+    id: string;
+    baseCurrency: string;
+    quoteCurrency: string;
+    rate: string;
+    effectiveDate: string;
+    source: string;
+    createdAt: string;
+  }[];
+  authMethods: {
+    status: string;
+    hasPassword: boolean;
+    oidcIdentities: {
+      id: string;
+      issuer: string;
+      createdAt: string;
+      updatedAt: string;
+      lastLoginAt: string;
+    }[];
+  };
 };
 
 export type EstateWorkspace = {
-  plan: { id: string; title: string; jurisdiction: string | null; lastReviewedDate: string | null; reviewReminderDate: string | null; createdAt: string; updatedAt: string } | null;
-  beneficiaries: { id: string; kind: string; name: string; relationship: string | null; contactSummary: string | null; notes: string | null; archivedAt: string | null }[];
-  directives: { id: string; estatePlanId: string; accountId: string; accountName: string; currency: string; currentValueMinor: string; isLiability: boolean; accountArchivedAt: string | null; isIncluded: boolean; ownershipShareBps: number; transferContext: string; distributionMethod: string; documentReference: string | null; notes: string | null; reviewedAt: string | null }[];
-  allocations: { id: string; estatePlanId: string; directiveId: string; beneficiaryId: string; tier: string; allocationBps: number; notes: string | null }[];
-  residuaryAllocations: { id: string; estatePlanId: string; beneficiaryId: string; tier: string; allocationBps: number; notes: string | null }[];
+  plan: {
+    id: string;
+    title: string;
+    jurisdiction: string | null;
+    lastReviewedDate: string | null;
+    reviewReminderDate: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  beneficiaries: {
+    id: string;
+    kind: string;
+    name: string;
+    relationship: string | null;
+    contactSummary: string | null;
+    notes: string | null;
+    archivedAt: string | null;
+  }[];
+  directives: {
+    id: string;
+    estatePlanId: string;
+    accountId: string;
+    accountName: string;
+    currency: string;
+    currentValueMinor: string;
+    isLiability: boolean;
+    accountArchivedAt: string | null;
+    isIncluded: boolean;
+    ownershipShareBps: number;
+    transferContext: string;
+    distributionMethod: string;
+    documentReference: string | null;
+    notes: string | null;
+    reviewedAt: string | null;
+  }[];
+  allocations: {
+    id: string;
+    estatePlanId: string;
+    directiveId: string;
+    beneficiaryId: string;
+    tier: string;
+    allocationBps: number;
+    notes: string | null;
+  }[];
+  residuaryAllocations: {
+    id: string;
+    estatePlanId: string;
+    beneficiaryId: string;
+    tier: string;
+    allocationBps: number;
+    notes: string | null;
+  }[];
   snapshots: EstateSnapshotMeta[];
   currentValuesComplete: boolean;
   currentValuesWarning: string;
 };
-export type EstateSnapshotMeta = { id: string; estatePlanId: string; version: number; title: string; valueAsOfDate: string; baseCurrency: string; contentHash: string; generatedAt: string };
+export type EstateSnapshotMeta = {
+  id: string;
+  estatePlanId: string;
+  version: number;
+  title: string;
+  valueAsOfDate: string;
+  baseCurrency: string;
+  contentHash: string;
+  generatedAt: string;
+};
 export type EstateSnapshot = EstateSnapshotMeta & { content: unknown };
 
 export type AIRead = {
-  settings: { provider: string; baseUrl: string; model: string; hasStoredApiKey: boolean; apiKeyHint: string | null; includeExactAmounts: boolean; includeAccountNames: boolean; monthlyTokenLimit: number; maxOutputTokens: number; createdAt: string; updatedAt: string } | null;
-  usage: { billingMonth: string; chargedTokens: number; remainingTokens: number; monthlyTokenLimit: number; successfulReviews: number; lastUsedAt: string | null };
-  events: { id: string; provider: string; endpointHost: string; model: string; requestType: string; status: string; billingMonth: string; chargedTokens: number; inputTokens: number | null; outputTokens: number | null; latencyMs: number | null; errorCode: string | null; createdAt: string }[];
-  reviewAvailability: { available: boolean; reason: string; providerConfigured: boolean; storedCredentialAvailable: boolean; sessionCredentialAccepted: boolean; cooldownUntil: string | null; budgetRemainingTokens: number };
+  settings: {
+    provider: string;
+    baseUrl: string;
+    model: string;
+    hasStoredApiKey: boolean;
+    apiKeyHint: string | null;
+    includeExactAmounts: boolean;
+    includeAccountNames: boolean;
+    monthlyTokenLimit: number;
+    maxOutputTokens: number;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  usage: {
+    billingMonth: string;
+    chargedTokens: number;
+    remainingTokens: number;
+    monthlyTokenLimit: number;
+    successfulReviews: number;
+    lastUsedAt: string | null;
+  };
+  events: {
+    id: string;
+    provider: string;
+    endpointHost: string;
+    model: string;
+    requestType: string;
+    status: string;
+    billingMonth: string;
+    chargedTokens: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    latencyMs: number | null;
+    errorCode: string | null;
+    createdAt: string;
+  }[];
+  reviewAvailability: {
+    available: boolean;
+    reason: string;
+    providerConfigured: boolean;
+    storedCredentialAvailable: boolean;
+    sessionCredentialAccepted: boolean;
+    cooldownUntil: string | null;
+    budgetRemainingTokens: number;
+  };
 };
 
 export type Problem = {

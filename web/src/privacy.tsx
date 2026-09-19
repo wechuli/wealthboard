@@ -14,9 +14,7 @@ export function PrivacyBoundary({
   children: ReactNode;
 }) {
   return (
-    <PrivacyContext.Provider value={hidden}>
-      {children}
-    </PrivacyContext.Provider>
+    <PrivacyContext.Provider value={hidden}>{children}</PrivacyContext.Provider>
   );
 }
 

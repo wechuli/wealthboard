@@ -5,7 +5,10 @@ export type ResourceState<T> =
   | { status: "ready"; data: T }
   | { status: "error"; message: string };
 
-export function useResource<T>(load: () => Promise<T>, dependencies: unknown[] = []): ResourceState<T> {
+export function useResource<T>(
+  load: () => Promise<T>,
+  dependencies: unknown[] = [],
+): ResourceState<T> {
   const [state, setState] = useState<ResourceState<T>>({ status: "loading" });
 
   useEffect(() => {
@@ -16,7 +19,14 @@ export function useResource<T>(load: () => Promise<T>, dependencies: unknown[] =
         if (active) startTransition(() => setState({ status: "ready", data }));
       })
       .catch((error: unknown) => {
-        if (active) setState({ status: "error", message: error instanceof Error ? error.message : "Data is temporarily unavailable." });
+        if (active)
+          setState({
+            status: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Data is temporarily unavailable.",
+          });
       });
     return () => {
       active = false;
