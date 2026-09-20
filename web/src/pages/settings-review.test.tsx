@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AccountHistoryAiPrompt } from "@/components/review/ai-prompts";
 import { PortfolioReviewWorkspace } from "@/pages/review";
-import { OriginalSettingsPage } from "@/pages/settings";
+import { SettingsPage } from "@/pages/settings";
 import { PrivacyProvider, PrivacyToggle } from "@/components/providers/privacy-provider";
 import type { AIRead, Session, SettingsRead } from "@/lib/types";
 
@@ -115,7 +115,7 @@ describe("original settings page", () => {
     };
     render(
       <MemoryRouter>
-        <OriginalSettingsPage session={session} operations={operations} />
+        <SettingsPage session={session} operations={operations} />
       </MemoryRouter>,
     );
 

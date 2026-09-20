@@ -33,7 +33,7 @@ import {
   Label,
   PageHeader,
   Select,
-} from "@/components/ui/original";
+} from "@/components/ui/primitives";
 import type { AIRead, Session } from "@/lib/types";
 import { usePrivacy } from "@/components/providers/privacy-provider";
 import { ErrorState, LoadingState } from "@/components/ui/resource";
@@ -261,7 +261,7 @@ function FindingGroup({
   );
 }
 
-export function OriginalPortfolioReviewPage({
+export function PortfolioReviewPage({
   session,
   operations = defaultOperations,
 }: {

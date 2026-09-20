@@ -97,7 +97,7 @@ function CardHeader({
   );
 }
 
-export function PortedGoalsPage({ session }: { session: Session }) {
+export function GoalsPage({ session }: { session: Session }) {
   const [refresh, setRefresh] = useState(0);
   const state = useResource(
     () => Promise.all([getGoals(), getGoalAlerts(), getAccounts()]),
@@ -273,7 +273,7 @@ function GoalCard({ goal }: { goal: Goal }) {
   );
 }
 
-export function PortedNewGoalPage({ session }: { session: Session }) {
+export function NewGoalPage({ session }: { session: Session }) {
   const navigate = useNavigate();
   const state = useResource(getAccounts);
   return (
@@ -300,7 +300,7 @@ export function PortedNewGoalPage({ session }: { session: Session }) {
   );
 }
 
-export function PortedEditGoalPage({ session }: { session: Session }) {
+export function EditGoalPage({ session }: { session: Session }) {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const state = useResource(
@@ -332,7 +332,7 @@ export function PortedEditGoalPage({ session }: { session: Session }) {
   );
 }
 
-export function PortedGoalDetailPage({ session }: { session: Session }) {
+export function GoalDetailPage({ session }: { session: Session }) {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const [refresh, setRefresh] = useState(0);
@@ -1044,7 +1044,7 @@ function ScenarioValue({
   );
 }
 
-export function PortedReportsPage() {
+export function ReportsPage() {
   const state = useResource(() =>
     Promise.all([getReportSummary(), getReportAllocation()]),
   );
@@ -1299,7 +1299,7 @@ function ReportLine({
   );
 }
 
-export function PortedCategoriesPage({ session }: { session: Session }) {
+export function CategoriesPage({ session }: { session: Session }) {
   const [refresh, setRefresh] = useState(0);
   const state = useResource(getCategories, [refresh]);
   return (
@@ -1321,7 +1321,7 @@ export function PortedCategoriesPage({ session }: { session: Session }) {
   );
 }
 
-export function PortedInstitutionsPage({ session }: { session: Session }) {
+export function InstitutionsPage({ session }: { session: Session }) {
   const [refresh, setRefresh] = useState(0);
   const state = useResource(getInstitutions, [refresh]);
   return (
@@ -1343,7 +1343,7 @@ export function PortedInstitutionsPage({ session }: { session: Session }) {
   );
 }
 
-export function PortedInstrumentsPage({ session }: { session: Session }) {
+export function InstrumentsPage({ session }: { session: Session }) {
   const [refresh, setRefresh] = useState(0);
   const state = useResource(getInstruments, [refresh]);
   const run = (action: () => Promise<unknown>) =>
@@ -1467,7 +1467,7 @@ export function PortedInstrumentsPage({ session }: { session: Session }) {
   );
 }
 
-export function PortedNewInstrumentPage({ session }: { session: Session }) {
+export function NewInstrumentPage({ session }: { session: Session }) {
   const navigate = useNavigate();
   return (
     <div className="mx-auto max-w-3xl">
@@ -1488,7 +1488,7 @@ export function PortedNewInstrumentPage({ session }: { session: Session }) {
   );
 }
 
-export function PortedEditInstrumentPage({ session }: { session: Session }) {
+export function EditInstrumentPage({ session }: { session: Session }) {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const state = useResource(() => getInstrument(id), [id]);
@@ -1516,42 +1516,42 @@ export function PortedEditInstrumentPage({ session }: { session: Session }) {
   );
 }
 
-export function PortedPlanningRoutes({ session }: { session: Session }) {
+export function PlanningRoutes({ session }: { session: Session }) {
   return (
     <Routes>
-      <Route path="/goals" element={<PortedGoalsPage session={session} />} />
+      <Route path="/goals" element={<GoalsPage session={session} />} />
       <Route
         path="/goals/new"
-        element={<PortedNewGoalPage session={session} />}
+        element={<NewGoalPage session={session} />}
       />
       <Route
         path="/goals/:id"
-        element={<PortedGoalDetailPage session={session} />}
+        element={<GoalDetailPage session={session} />}
       />
       <Route
         path="/goals/:id/edit"
-        element={<PortedEditGoalPage session={session} />}
+        element={<EditGoalPage session={session} />}
       />
-      <Route path="/reports" element={<PortedReportsPage />} />
+      <Route path="/reports" element={<ReportsPage />} />
       <Route
         path="/categories"
-        element={<PortedCategoriesPage session={session} />}
+        element={<CategoriesPage session={session} />}
       />
       <Route
         path="/institutions"
-        element={<PortedInstitutionsPage session={session} />}
+        element={<InstitutionsPage session={session} />}
       />
       <Route
         path="/instruments"
-        element={<PortedInstrumentsPage session={session} />}
+        element={<InstrumentsPage session={session} />}
       />
       <Route
         path="/instruments/new"
-        element={<PortedNewInstrumentPage session={session} />}
+        element={<NewInstrumentPage session={session} />}
       />
       <Route
         path="/instruments/:id/edit"
-        element={<PortedEditInstrumentPage session={session} />}
+        element={<EditInstrumentPage session={session} />}
       />
     </Routes>
   );

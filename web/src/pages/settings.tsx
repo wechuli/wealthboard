@@ -51,7 +51,7 @@ import {
   Label,
   PageHeader,
   Select,
-} from "@/components/ui/original";
+} from "@/components/ui/primitives";
 import { PrivateValue } from "@/components/privacy";
 import type {
   AIRead,
@@ -158,7 +158,7 @@ function useNotice() {
   return { state, pending, run };
 }
 
-export function OriginalSettingsPage({
+export function SettingsPage({
   session,
   reauthenticated = false,
   feedback,

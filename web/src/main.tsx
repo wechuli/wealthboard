@@ -2,13 +2,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
-import { PortedApp } from "@/app/router";
+import { App } from "@/app/router";
 import "./original-styles.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <PortedApp />
+      <App />
     </BrowserRouter>
   </StrictMode>,
 );

@@ -4,11 +4,11 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  PortedAccountDetailPage,
-  PortedAccountsPage,
-  PortedDashboardPage,
-  PortedTransactionsPage,
-  portedCoreRouteIntents,
+  AccountDetailPage,
+  AccountsPage,
+  DashboardPage,
+  TransactionsPage,
+  coreRouteIntents,
 } from "@/pages/core";
 import { PrivacyBoundary } from "@/components/privacy";
 
@@ -177,7 +177,7 @@ afterEach(cleanup);
 
 describe("ported core pages", () => {
   it("preserves the prominent dashboard hierarchy", async () => {
-    renderPage(<PortedDashboardPage />);
+    renderPage(<DashboardPage />);
 
     expect(
       await screen.findByRole("heading", { name: "Overview" }),
@@ -203,7 +203,7 @@ describe("ported core pages", () => {
 
   it("preserves account filters and both source views", async () => {
     const user = userEvent.setup();
-    renderPage(<PortedAccountsPage />);
+    renderPage(<AccountsPage />);
 
     expect(
       await screen.findByRole("heading", { name: "Accounts & assets" }),
@@ -233,7 +233,7 @@ describe("ported core pages", () => {
 
   it("preserves transaction filters, export, create, and row actions", async () => {
     renderPage(
-      <PortedTransactionsPage
+      <TransactionsPage
         session={{ csrfToken: "csrf", username: "owner" } as never}
       />,
     );
@@ -276,7 +276,7 @@ describe("ported core pages", () => {
         <Route
           path="/accounts/:id"
           element={
-            <PortedAccountDetailPage
+            <AccountDetailPage
               session={{ csrfToken: "csrf", username: "owner" } as never}
             />
           }
@@ -340,7 +340,7 @@ describe("ported core pages", () => {
         <Route
           path="/accounts/:id"
           element={
-            <PortedAccountDetailPage session={{ csrfToken: "csrf" } as never} />
+            <AccountDetailPage session={{ csrfToken: "csrf" } as never} />
           }
         />
       </Routes>,
@@ -353,8 +353,8 @@ describe("ported core pages", () => {
   });
 
   it("keeps every original page as a separate route intent", () => {
-    expect(portedCoreRouteIntents).toHaveLength(18);
-    expect(portedCoreRouteIntents).toEqual(
+    expect(coreRouteIntents).toHaveLength(18);
+    expect(coreRouteIntents).toEqual(
       expect.arrayContaining([
         "/",
         "/accounts",

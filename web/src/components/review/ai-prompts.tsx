@@ -17,7 +17,7 @@ import {
   Label,
   Select,
   Textarea,
-} from "@/components/ui/original";
+} from "@/components/ui/primitives";
 
 export type AccountHistoryPromptFormat = "csv" | "json";
 

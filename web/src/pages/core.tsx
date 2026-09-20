@@ -126,7 +126,7 @@ const transactionTypes = Object.keys(transactionLabels).filter(
   (type) => type !== "opening_balance",
 );
 
-type PortedPageProps = { session: Session };
+type PageProps = { session: Session };
 
 function IncompleteValue({ className }: { className?: string }) {
   return <span className={className ?? "text-amber-300"}>Incomplete data</span>;
@@ -185,7 +185,7 @@ function DashboardMetric({
   );
 }
 
-export function PortedDashboardPage() {
+export function DashboardPage() {
   const [searchParams] = useSearchParams();
   const requestedRange = searchParams.get("range") ?? "1y";
   const range = ["1m", "3m", "6m", "1y", "all"].includes(requestedRange)
@@ -540,7 +540,7 @@ export function PortedDashboardPage() {
 
 type AccountView = "cards" | "table";
 
-function PortedAccountsList({
+function AccountsList({
   accounts,
   baseCurrency,
 }: {
@@ -834,7 +834,7 @@ function PortedAccountsList({
   );
 }
 
-export function PortedAccountsPage() {
+export function AccountsPage() {
   const state = useResource(() => Promise.all([getAccounts(), getSettings()]));
   return (
     <>
@@ -860,7 +860,7 @@ export function PortedAccountsPage() {
       />
       <ResourceView state={state}>
         {([accounts, settings]) => (
-          <PortedAccountsList
+          <AccountsList
             accounts={accounts.items}
             baseCurrency={settings.settings.baseCurrency}
           />
@@ -909,7 +909,7 @@ function DeleteTransactionButton({
   );
 }
 
-export function PortedTransactionsPage({ session }: PortedPageProps) {
+export function TransactionsPage({ session }: PageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [refresh, setRefresh] = useState(0);
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
@@ -1343,7 +1343,7 @@ function ActivityRows({ items }: { items: ActivityItem[] }) {
   );
 }
 
-export function PortedAccountDetailPage({ session }: PortedPageProps) {
+export function AccountDetailPage({ session }: PageProps) {
   const { id = "" } = useParams();
   const [refresh, setRefresh] = useState(0);
   const state = useResource(
@@ -1751,7 +1751,7 @@ function ValuationRow({
 
 function AccountRouteData({
   children,
-}: PortedPageProps & {
+}: PageProps & {
   children: (
     data: Awaited<ReturnType<typeof getAccounts>>["items"],
     categories: Awaited<ReturnType<typeof getCategories>>["items"],
@@ -1770,7 +1770,7 @@ function AccountRouteData({
   );
 }
 
-export function PortedNewAccountPage({ session }: PortedPageProps) {
+export function NewAccountPage({ session }: PageProps) {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
@@ -1791,7 +1791,7 @@ export function PortedNewAccountPage({ session }: PortedPageProps) {
   );
 }
 
-export function PortedEditAccountPage({ session }: PortedPageProps) {
+export function EditAccountPage({ session }: PageProps) {
   const { id = "" } = useParams();
   const state = useResource(() =>
     Promise.all([getAccount(id), getCategories(), getInstitutions()]),
@@ -1819,7 +1819,7 @@ export function PortedEditAccountPage({ session }: PortedPageProps) {
   );
 }
 
-export function PortedNewTransactionPage({ session }: PortedPageProps) {
+export function NewTransactionPage({ session }: PageProps) {
   const [searchParams] = useSearchParams();
   const state = useResource(getAccounts);
   return (
@@ -1862,7 +1862,7 @@ export function PortedNewTransactionPage({ session }: PortedPageProps) {
   );
 }
 
-export function PortedEditTransactionPage({ session }: PortedPageProps) {
+export function EditTransactionPage({ session }: PageProps) {
   const { id = "" } = useParams();
   const state = useResource(() =>
     Promise.all([getTransactions(), getAccounts()]),
@@ -1911,7 +1911,7 @@ function AccountWorkflowPage({
   title,
   description,
   mode,
-}: PortedPageProps & {
+}: PageProps & {
   title: (account: Account) => string;
   description: (account: Account) => string;
   mode:
@@ -2005,7 +2005,7 @@ function AccountWorkflowPage({
   );
 }
 
-export function PortedValuationPage(props: PortedPageProps) {
+export function ValuationPage(props: PageProps) {
   return (
     <AccountWorkflowPage
       {...props}
@@ -2017,7 +2017,7 @@ export function PortedValuationPage(props: PortedPageProps) {
     />
   );
 }
-export function PortedConvertAccountPage(props: PortedPageProps) {
+export function ConvertAccountPage(props: PageProps) {
   return (
     <AccountWorkflowPage
       {...props}
@@ -2029,7 +2029,7 @@ export function PortedConvertAccountPage(props: PortedPageProps) {
     />
   );
 }
-export function PortedReconcilePositionAccountPage(props: PortedPageProps) {
+export function ReconcilePositionAccountPage(props: PageProps) {
   return (
     <AccountWorkflowPage
       {...props}
@@ -2041,7 +2041,7 @@ export function PortedReconcilePositionAccountPage(props: PortedPageProps) {
     />
   );
 }
-export function PortedAccountHistoryImportPage(props: PortedPageProps) {
+export function AccountHistoryImportPage(props: PageProps) {
   return (
     <AccountWorkflowPage
       {...props}
@@ -2053,7 +2053,7 @@ export function PortedAccountHistoryImportPage(props: PortedPageProps) {
     />
   );
 }
-export function PortedInvestmentActionsPage(props: PortedPageProps) {
+export function InvestmentActionsPage(props: PageProps) {
   return (
     <AccountWorkflowPage
       {...props}
@@ -2065,7 +2065,7 @@ export function PortedInvestmentActionsPage(props: PortedPageProps) {
     />
   );
 }
-export function PortedNewPositionEventPage(props: PortedPageProps) {
+export function NewPositionEventPage(props: PageProps) {
   const [searchParams] = useSearchParams();
   const type = searchParams.get("type");
   return (
@@ -2083,7 +2083,7 @@ export function PortedNewPositionEventPage(props: PortedPageProps) {
     />
   );
 }
-export function PortedEditPositionEventPage(props: PortedPageProps) {
+export function EditPositionEventPage(props: PageProps) {
   return (
     <AccountWorkflowPage
       {...props}
@@ -2096,7 +2096,7 @@ export function PortedEditPositionEventPage(props: PortedPageProps) {
   );
 }
 
-export function PortedNewInstrumentPage({ session }: PortedPageProps) {
+export function NewAccountInstrumentPage({ session }: PageProps) {
   const { id = "" } = useParams();
   const state = useResource(() => getAccount(id));
   return (
@@ -2123,7 +2123,7 @@ export function PortedNewInstrumentPage({ session }: PortedPageProps) {
   );
 }
 
-export function PortedNewSecurityPricePage({ session }: PortedPageProps) {
+export function NewSecurityPricePage({ session }: PageProps) {
   const { id = "" } = useParams();
   const [searchParams] = useSearchParams();
   const instrumentID = searchParams.get("instrumentId") ?? "";
@@ -2175,7 +2175,7 @@ export function PortedNewSecurityPricePage({ session }: PortedPageProps) {
   );
 }
 
-export function PortedArchivedAccountsPage({}: PortedPageProps) {
+export function ArchivedAccountsPage({}: PageProps) {
   return (
     <>
       <PageHeader
@@ -2194,7 +2194,7 @@ export function PortedArchivedAccountsPage({}: PortedPageProps) {
   );
 }
 
-export const portedCoreRouteIntents = [
+export const coreRouteIntents = [
   "/",
   "/accounts",
   "/accounts/archived",
@@ -2215,4 +2215,4 @@ export const portedCoreRouteIntents = [
   "/transactions/:id/edit",
 ] as const;
 
-export type PortedCoreRouteIntent = (typeof portedCoreRouteIntents)[number];
+export type CoreRouteIntent = (typeof coreRouteIntents)[number];

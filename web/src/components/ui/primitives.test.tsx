@@ -12,7 +12,7 @@ import {
   Input,
   Label,
   Progress,
-} from "@/components/ui/original";
+} from "@/components/ui/primitives";
 
 describe("original UI primitives", () => {
   it("preserves the Next.js card and form markup classes", () => {

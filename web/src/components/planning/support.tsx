@@ -31,7 +31,7 @@ import {
   Label,
   Select,
   Textarea,
-} from "@/components/ui/original";
+} from "@/components/ui/primitives";
 import { Badge, Button, Card } from "@/components/ui/core";
 import type {
   Account,

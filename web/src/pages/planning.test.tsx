@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
-import { PortedPlanningRoutes } from "@/pages/planning";
+import { PlanningRoutes } from "@/pages/planning";
 import { PrivacyBoundary } from "@/components/privacy";
 import type { Session } from "@/lib/types";
 
@@ -173,7 +173,7 @@ function renderRoute(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <PrivacyBoundary hidden={false}>
-        <PortedPlanningRoutes session={session} />
+        <PlanningRoutes session={session} />
       </PrivacyBoundary>
     </MemoryRouter>,
   );
@@ -192,7 +192,7 @@ function expectNoLegacyClasses(container: HTMLElement) {
 
 afterEach(cleanup);
 
-describe("PortedPlanningRoutes", () => {
+describe("PlanningRoutes", () => {
   it("preserves the goals list header and dedicated create route", async () => {
     const view = renderRoute("/goals");
 

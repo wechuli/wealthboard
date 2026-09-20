@@ -266,4 +266,4 @@ export function Progress({
   );
 }
 
-export type PortedLinkElement = ReactElement<{ className?: string }>;
+export type LinkElement = ReactElement<{ className?: string }>;
