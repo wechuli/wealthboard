@@ -32,7 +32,9 @@ import type {
   GoalMilestoneInput,
   MutationID,
   MutationStatus,
+  PositionEventPage,
   PositionEventInput,
+  PositionReconciliationPage,
   PositionReconciliationInput,
   ReportAllocation,
   ReportSummary,
@@ -151,6 +153,12 @@ export const getAccountTransactions = (id: string) =>
   request<TransactionPage>(`/accounts/${id}/transactions?limit=100`);
 export const getAccountValuations = (id: string) =>
   request<ValuationPage>(`/accounts/${id}/valuations?limit=100`);
+export const getAccountPositionEvents = (id: string) =>
+  request<PositionEventPage>(`/accounts/${id}/position-events?limit=100`);
+export const getAccountPositionReconciliations = (id: string) =>
+  request<PositionReconciliationPage>(
+    `/accounts/${id}/position-reconciliations?limit=100`,
+  );
 export const getTransactions = () =>
   request<TransactionPage>("/transactions?limit=100");
 export const getCategories = () => request<CategoryList>("/categories");

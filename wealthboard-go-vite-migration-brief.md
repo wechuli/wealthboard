@@ -27,7 +27,11 @@ When the repository has changed since this brief was written, inspect the latest
 - [x] Complete the Phase 3 Vite SPA with generated API types, authenticated session bootstrap, auth-mode-aware login/signup, all read-only routes, responsive navigation, privacy/theme controls, and original interface styling.
 - [x] Serve the production SPA from Go with deep-link fallback outside `/api/*`, immutable hashed assets, and no-cache HTML.
 - [x] Package the Vite build and Go server in a non-root distroless image with PostgreSQL Compose orchestration and fresh-database migrations on startup.
-- [ ] Port Phase 4 mutations and the later workflows in the phases below.
+- [x] Complete Phase 4 owner-scoped mutations for settings, categories, institutions, exchange rates, accounts, transactions, valuations, transfers, goals, milestones, instruments, prices, position events, and reconciliations.
+- [x] Preserve balance and position replay, valuation reset semantics, atomic paired transfers, archive restrictions, strict minor-unit/decimal handling, CSRF and `portfolio:write` authorization, and idempotent creation workflows with PostgreSQL coverage.
+- [x] Complete account conversion preview and atomic execution with exact reconciliation, explicit difference confirmation, source archival, opening positions, and idempotent replay.
+- [x] Document Phase 4 in OpenAPI, regenerate frontend types, and add responsive Vite forms using the original interface styling, including persisted position-event and reconciliation management after reload.
+- [ ] Port Phase 5 advanced workflows and complete the later cutover work below.
 
 ## Objective
 

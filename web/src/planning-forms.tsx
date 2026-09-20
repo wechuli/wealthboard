@@ -793,7 +793,9 @@ export function InstrumentManager({
               </div>
               <div className="page-actions">
                 <strong>
-                  <PrivateValue>{price.currency} {price.price}</PrivateValue>
+                  <PrivateValue>
+                    {price.currency} {price.price}
+                  </PrivateValue>
                 </strong>
                 <button
                   className="icon-button"

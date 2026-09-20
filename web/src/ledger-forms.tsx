@@ -41,14 +41,16 @@ import type {
   Category,
   Institution,
   Instrument,
+  PositionEvent,
   PositionEventInput,
+  PositionReconciliation,
   Session,
   Transaction,
   TransactionInput,
   Valuation,
 } from "./types";
-import { MoneyValue } from "./privacy";
-import { Card, CardHeader } from "./ui";
+import { MoneyValue, PrivateValue } from "./privacy";
+import { Card, CardHeader, humanize } from "./ui";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -1284,37 +1286,55 @@ const positionSchema = z.object({
 export function PositionTools({
   account,
   instruments,
+  events,
+  reconciliations,
   session,
   onChanged,
+  operations = {
+    createEvent: createPositionEvent,
+    updateEvent: updatePositionEvent,
+    deleteEvent: deletePositionEvent,
+    createReconciliation: createPositionReconciliation,
+    deleteReconciliation: deletePositionReconciliation,
+  },
 }: {
   account: Account;
   instruments: Instrument[];
+  events: PositionEvent[];
+  reconciliations: PositionReconciliation[];
   session: Session;
   onChanged: () => void;
+  operations?: {
+    createEvent: typeof createPositionEvent;
+    updateEvent: typeof updatePositionEvent;
+    deleteEvent: typeof deletePositionEvent;
+    createReconciliation: typeof createPositionReconciliation;
+    deleteReconciliation: typeof deletePositionReconciliation;
+  };
 }) {
   const [eventKey, setEventKey] = useState(() => crypto.randomUUID());
   const [eventID, setEventID] = useState("");
-  const [reconciliationID, setReconciliationID] = useState("");
   const [error, setError] = useState("");
+  const blankEvent = {
+    instrumentId: instruments[0]?.id ?? "",
+    type: "buy" as const,
+    quantity: "",
+    unitPrice: "",
+    tradeCurrency: account.currency,
+    feeAmount: "0",
+    feeCurrency: account.currency,
+    cashEffect: "",
+    appliedExchangeRate: "",
+    openingCostBasis: "",
+    tradeDate: today(),
+    settlementDate: "",
+    externalId: "",
+    description: "",
+    notes: "",
+  };
   const eventForm = useForm<z.infer<typeof positionSchema>>({
     resolver: zodResolver(positionSchema),
-    defaultValues: {
-      instrumentId: instruments[0]?.id ?? "",
-      type: "buy",
-      quantity: "",
-      unitPrice: "",
-      tradeCurrency: account.currency,
-      feeAmount: "0",
-      feeCurrency: account.currency,
-      cashEffect: "",
-      appliedExchangeRate: "",
-      openingCostBasis: "",
-      tradeDate: today(),
-      settlementDate: "",
-      externalId: "",
-      description: "",
-      notes: "",
-    },
+    defaultValues: blankEvent,
   });
   const reconciliationSchema = z.object({
     observationDate: z.iso.date(),
@@ -1338,12 +1358,58 @@ export function PositionTools({
     ...values,
     idempotencyKey: eventKey,
   });
+  const editEvent = (event: PositionEvent) => {
+    setEventID(event.id);
+    eventForm.reset({
+      instrumentId: event.instrumentId,
+      type: event.type as z.infer<typeof positionSchema>["type"],
+      quantity: event.quantity,
+      unitPrice: event.unitPrice ?? "",
+      tradeCurrency: event.tradeCurrency,
+      feeAmount: event.feeAmountMinor
+        ? minorUnitsToDecimal(event.feeAmountMinor)
+        : "",
+      feeCurrency: event.feeCurrency ?? account.currency,
+      cashEffect:
+        event.cashEffectMinor === "0"
+          ? ""
+          : minorUnitsToDecimal(event.cashEffectMinor.replace("-", "")),
+      appliedExchangeRate: event.appliedExchangeRate ?? "",
+      openingCostBasis: event.openingCostBasisMinor
+        ? minorUnitsToDecimal(event.openingCostBasisMinor)
+        : "",
+      tradeDate: event.tradeDate,
+      settlementDate: event.settlementDate ?? "",
+      externalId: event.externalId ?? "",
+      description: event.description ?? "",
+      notes: event.notes ?? "",
+    });
+  };
+  const resetEvent = () => {
+    setEventID("");
+    setEventKey(crypto.randomUUID());
+    eventForm.reset(blankEvent);
+  };
+  const remove = async (label: string, action: () => Promise<void>) => {
+    if (!window.confirm(`Delete this ${label}?`)) return;
+    setError("");
+    try {
+      await action();
+      onChanged();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : `The ${label} could not be deleted.`,
+      );
+    }
+  };
   return (
     <div className="settings-stack section-block">
       <ErrorNotice message={error} />
       <Card>
         <CardHeader
-          title="Position event"
+          title={eventID ? "Edit position event" : "Position event"}
           description="Record or revise a long-only holding event."
         />
         <form
@@ -1352,17 +1418,17 @@ export function PositionTools({
             setError("");
             try {
               const result = eventID
-                ? await updatePositionEvent(
+                ? await operations.updateEvent(
                     eventID,
                     eventInput(values),
                     session.csrfToken,
                   )
-                : await createPositionEvent(
+                : await operations.createEvent(
                     eventInput(values),
                     session.csrfToken,
                   );
-              setEventID(result.id);
-              if (!eventID) setEventKey(crypto.randomUUID());
+              if (!result.id) throw new Error("The saved event has no ID.");
+              resetEvent();
               onChanged();
             } catch (caught) {
               setError(
@@ -1504,21 +1570,88 @@ export function PositionTools({
               {eventID ? "Update position event" : "Record position event"}
             </button>
             {eventID ? (
-              <button
-                type="button"
-                className="secondary-button danger-button"
-                onClick={async () => {
-                  if (!window.confirm("Delete this position event?")) return;
-                  await deletePositionEvent(eventID, session.csrfToken);
-                  setEventID("");
-                  onChanged();
-                }}
-              >
-                <Trash2 size={16} /> Delete event
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={resetEvent}
+                >
+                  Cancel edit
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button danger-button"
+                  onClick={() =>
+                    void remove("position event", async () => {
+                      await operations.deleteEvent(
+                        eventID,
+                        session.csrfToken,
+                      );
+                      resetEvent();
+                    })
+                  }
+                >
+                  <Trash2 size={16} /> Delete event
+                </button>
+              </>
             ) : null}
           </div>
         </form>
+        <div className="data-list">
+          {events.map((event) => {
+            const editable =
+              !event.eventGroupId &&
+              [
+                "opening_position",
+                "buy",
+                "sell",
+                "quantity_adjustment",
+              ].includes(event.type);
+            const instrument = instruments.find(
+              (item) => item.id === event.instrumentId,
+            );
+            return (
+              <div className="data-row" key={event.id}>
+                <div>
+                  <strong>
+                    {humanize(event.type)} · {instrument?.symbol || instrument?.name || "Instrument"}
+                  </strong>
+                  <span>
+                    {event.tradeDate} · <PrivateValue>{event.quantity} units</PrivateValue>
+                    {event.unitPrice ? (
+                      <> · <PrivateValue>{event.tradeCurrency} {event.unitPrice}</PrivateValue></>
+                    ) : null}
+                  </span>
+                </div>
+                {editable ? (
+                  <div className="page-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => editEvent(event)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Delete ${humanize(event.type)} event from ${event.tradeDate}`}
+                      onClick={() =>
+                        void remove("position event", () =>
+                          operations.deleteEvent(event.id, session.csrfToken),
+                        )
+                      }
+                    >
+                      <Trash2 />
+                    </button>
+                  </div>
+                ) : (
+                  <span>Managed workflow</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </Card>
       <Card>
         <CardHeader
@@ -1530,11 +1663,13 @@ export function PositionTools({
           onSubmit={reconciliationForm.handleSubmit(async (values) => {
             setError("");
             try {
-              const result = await createPositionReconciliation(
+              const result = await operations.createReconciliation(
                 { accountId: account.id, ...values },
                 session.csrfToken,
               );
-              setReconciliationID(result.id);
+              if (!result.id)
+                throw new Error("The saved reconciliation has no ID.");
+              reconciliationForm.reset();
               onChanged();
             } catch (caught) {
               setError(
@@ -1585,25 +1720,39 @@ export function PositionTools({
             >
               <Plus size={16} /> Save reconciliation
             </button>
-            {reconciliationID ? (
-              <button
-                type="button"
-                className="secondary-button danger-button"
-                onClick={async () => {
-                  if (!window.confirm("Delete this reconciliation?")) return;
-                  await deletePositionReconciliation(
-                    reconciliationID,
-                    session.csrfToken,
-                  );
-                  setReconciliationID("");
-                  onChanged();
-                }}
-              >
-                <Trash2 size={16} /> Delete reconciliation
-              </button>
-            ) : null}
           </div>
         </form>
+        <div className="data-list">
+          {reconciliations.map((item) => (
+            <div className="data-row" key={item.id}>
+              <div>
+                <strong>{item.observationDate}</strong>
+                <span>{item.notes || "Statement reconciliation"}</span>
+              </div>
+              <div className="page-actions">
+                <MoneyValue
+                  amount={item.reportedTotalMinor}
+                  currency={account.currency}
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={`Delete reconciliation from ${item.observationDate}`}
+                  onClick={() =>
+                    void remove("reconciliation", () =>
+                      operations.deleteReconciliation(
+                        item.id,
+                        session.csrfToken,
+                      ),
+                    )
+                  }
+                >
+                  <Trash2 />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </Card>
     </div>
   );

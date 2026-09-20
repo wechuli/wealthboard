@@ -2,8 +2,19 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AccountConversionForm, TransactionForm } from "./ledger-forms";
-import type { Account, Instrument, Session } from "./types";
+import {
+  AccountConversionForm,
+  PositionTools,
+  TransactionForm,
+} from "./ledger-forms";
+import { PrivacyBoundary } from "./privacy";
+import type {
+  Account,
+  Instrument,
+  PositionEvent,
+  PositionReconciliation,
+  Session,
+} from "./types";
 
 const account = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -19,6 +30,33 @@ const instrument = {
   quoteCurrency: "KES",
 } as Instrument;
 const session = { csrfToken: "csrf" } as Session;
+const positionAccount = { ...account, trackingMode: "positions" } as Account;
+const positionEvent = {
+  id: "33333333-3333-4333-8333-333333333333",
+  accountId: account.id,
+  instrumentId: instrument.id,
+  type: "buy",
+  quantity: "10",
+  unitPrice: "125.50",
+  tradeCurrency: "KES",
+  feeAmountMinor: "250",
+  feeCurrency: "KES",
+  cashEffectMinor: "-125750",
+  tradeDate: "2026-09-19",
+  eventSequence: 1,
+  createdAt: "2026-09-19T12:00:00Z",
+  updatedAt: "2026-09-19T12:00:00Z",
+} as PositionEvent;
+const reconciliation = {
+  id: "44444444-4444-4444-8444-444444444444",
+  accountId: account.id,
+  observationDate: "2026-09-20",
+  reportedCashMinor: "2500",
+  reportedTotalMinor: "125000",
+  notes: "Broker statement",
+  createdAt: "2026-09-20T12:00:00Z",
+  updatedAt: "2026-09-20T12:00:00Z",
+} as PositionReconciliation;
 
 afterEach(cleanup);
 
@@ -123,6 +161,86 @@ describe("TransactionForm", () => {
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[0][0].idempotencyKey).toBe(
       create.mock.calls[1][0].idempotencyKey,
+    );
+  });
+});
+
+describe("PositionTools", () => {
+  it("loads a persisted event for editing after reload", async () => {
+    const user = userEvent.setup();
+    const updateEvent = vi.fn().mockResolvedValue({ id: positionEvent.id });
+    const onChanged = vi.fn();
+    render(
+      <PositionTools
+        account={positionAccount}
+        instruments={[instrument]}
+        events={[positionEvent]}
+        reconciliations={[reconciliation]}
+        session={session}
+        onChanged={onChanged}
+        operations={{
+          createEvent: vi.fn(),
+          updateEvent,
+          deleteEvent: vi.fn(),
+          createReconciliation: vi.fn(),
+          deleteReconciliation: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Broker statement")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByLabelText("Quantity")).toHaveValue("10");
+    expect(screen.getByLabelText("Fee amount")).toHaveValue("2.50");
+    expect(screen.getByLabelText("Cash effect")).toHaveValue("1257.50");
+    await user.clear(screen.getByLabelText("Quantity"));
+    await user.type(screen.getByLabelText("Quantity"), "12");
+    await user.click(
+      screen.getByRole("button", { name: "Update position event" }),
+    );
+
+    expect(updateEvent).toHaveBeenCalledWith(
+      positionEvent.id,
+      expect.objectContaining({ quantity: "12", accountId: account.id }),
+      "csrf",
+    );
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it("deletes a persisted reconciliation and masks private values", async () => {
+    const user = userEvent.setup();
+    const deleteReconciliation = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(
+      <PrivacyBoundary hidden>
+        <PositionTools
+          account={positionAccount}
+          instruments={[instrument]}
+          events={[positionEvent]}
+          reconciliations={[reconciliation]}
+          session={session}
+          onChanged={vi.fn()}
+          operations={{
+            createEvent: vi.fn(),
+            updateEvent: vi.fn(),
+            deleteEvent: vi.fn(),
+            createReconciliation: vi.fn(),
+            deleteReconciliation,
+          }}
+        />
+      </PrivacyBoundary>,
+    );
+
+    expect(screen.queryByText("10 units")).not.toBeInTheDocument();
+    expect(screen.queryByText("KES 1,250.00")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Delete reconciliation from 2026-09-20",
+      }),
+    );
+    expect(deleteReconciliation).toHaveBeenCalledWith(
+      reconciliation.id,
+      "csrf",
     );
   });
 });

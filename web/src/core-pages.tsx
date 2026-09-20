@@ -5,6 +5,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   getAccount,
   getAccountActivity,
+  getAccountPositionEvents,
+  getAccountPositionReconciliations,
   getAccounts,
   getAccountTransactions,
   getAccountValuations,
@@ -204,6 +206,8 @@ export function AccountDetailPage({ session }: { session: Session }) {
         getCategories(),
         getInstitutions(),
         getInstruments(),
+        getAccountPositionEvents(id),
+        getAccountPositionReconciliations(id),
       ]),
     [id, refresh],
   );
@@ -218,6 +222,8 @@ export function AccountDetailPage({ session }: { session: Session }) {
         categories,
         institutions,
         instruments,
+        positionEvents,
+        positionReconciliations,
       ]) => (
         <>
           <PageHeader
@@ -278,6 +284,8 @@ export function AccountDetailPage({ session }: { session: Session }) {
             <PositionTools
               account={account}
               instruments={instruments.instruments}
+              events={positionEvents.items}
+              reconciliations={positionReconciliations.items}
               session={session}
               onChanged={() => setRefresh((value) => value + 1)}
             />

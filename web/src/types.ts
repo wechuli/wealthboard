@@ -45,6 +45,12 @@ export type SecurityPrice = components["schemas"]["SecurityPrice"];
 export type Instrument = components["schemas"]["Instrument"];
 export type InstrumentDetail = components["schemas"]["InstrumentDetail"];
 export type InstrumentList = OperationJsonResponse<"listInstruments", 200>;
+export type PositionEvent = components["schemas"]["PositionEvent"];
+export type PositionEventPage = components["schemas"]["PositionEventPage"];
+export type PositionReconciliation =
+  components["schemas"]["PositionReconciliation"];
+export type PositionReconciliationPage =
+  components["schemas"]["PositionReconciliationPage"];
 
 export type SettingsRead = components["schemas"]["SettingsRead"];
 

@@ -2970,7 +2970,18 @@ components:
           {
             type: string,
             enum:
-              [opening_position, buy, sell, quantity_adjustment, transfer_in, transfer_out, split, spinoff, merger_in, merger_out],
+              [
+                opening_position,
+                buy,
+                sell,
+                quantity_adjustment,
+                transfer_in,
+                transfer_out,
+                split,
+                spinoff,
+                merger_in,
+                merger_out,
+              ],
           }
         quantity:
           $ref: "#/components/schemas/DecimalString"
@@ -3017,7 +3028,14 @@ components:
       type: object
       additionalProperties: false
       required:
-        [id, accountId, observationDate, reportedTotalMinor, createdAt, updatedAt]
+        [
+          id,
+          accountId,
+          observationDate,
+          reportedTotalMinor,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         accountId: { type: string, format: uuid }
