@@ -765,10 +765,12 @@ export function ExchangeRateManager({
   data,
   csrfToken,
   onChanged,
+  operations = { create: createExchangeRate, remove: deleteExchangeRate },
 }: {
   data: SettingsRead;
   csrfToken: string;
   onChanged: () => void;
+  operations?: { create: typeof createExchangeRate; remove: typeof deleteExchangeRate };
 }) {
   const [error, setError] = useState("");
   const {
@@ -814,7 +816,7 @@ export function ExchangeRateManager({
       <form
         className="auth-form"
         onSubmit={handleSubmit(async (values) => {
-          if (await run(() => createExchangeRate(values, csrfToken)))
+          if (await run(() => operations.create(values, csrfToken)))
             reset({ ...values, rate: "" });
         })}
       >
@@ -863,7 +865,7 @@ export function ExchangeRateManager({
                 aria-label={`Delete ${rate.baseCurrency} to ${rate.quoteCurrency} rate`}
                 onClick={() => {
                   if (window.confirm("Delete this exchange rate?"))
-                    void run(() => deleteExchangeRate(rate.id, csrfToken));
+                      void run(() => operations.remove(rate.id, csrfToken));
                 }}
               >
                 <Trash2 />

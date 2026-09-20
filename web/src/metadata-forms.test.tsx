@@ -1,8 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { CategoryManager } from "./metadata-forms";
+import { CategoryManager, ExchangeRateManager } from "./metadata-forms";
+import type { SettingsRead } from "./types";
+
+afterEach(cleanup);
 
 const category = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -65,5 +68,24 @@ describe("CategoryManager", () => {
     expect(window.confirm).toHaveBeenCalled();
     expect(operations.archive).toHaveBeenCalledWith(category.id, true, "csrf");
     expect(onChanged).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("ExchangeRateManager", () => {
+  it("confirms deletion and refreshes after success", async () => {
+    const user = userEvent.setup();
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const onChanged = vi.fn();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const data = {
+      settings: { baseCurrency: "KES" },
+      exchangeRates: [{ id: "rate-1", baseCurrency: "KES", quoteCurrency: "USD", rate: "0.0077", effectiveDate: "2026-09-20", source: "manual" }],
+    } as SettingsRead;
+    render(<ExchangeRateManager data={data} csrfToken="csrf" onChanged={onChanged} operations={{ create: vi.fn(), remove }} />);
+
+    await user.click(screen.getByRole("button", { name: "Delete KES to USD rate" }));
+    expect(window.confirm).toHaveBeenCalledWith("Delete this exchange rate?");
+    expect(remove).toHaveBeenCalledWith("rate-1", "csrf");
+    expect(onChanged).toHaveBeenCalledOnce();
   });
 });

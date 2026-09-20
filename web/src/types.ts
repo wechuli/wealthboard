@@ -57,59 +57,12 @@ export type APIKeyList = OperationJsonResponse<"listApiKeys", 200>;
 export type Problem =
   components["responses"]["Problem"]["content"]["application/problem+json"];
 
-export type MutationID = { id: string };
-export type MutationStatus = { status: string };
-
-export type SettingsInput = {
-  displayName: string;
-  appName: string;
-  baseCurrency: string;
-  supportedCurrencies: string[];
-  timezone: string;
-  preferredDateFormat: string;
-  defaultDashboardPeriod: string;
-  sessionTimeoutMinutes: number;
-  defaultGoalReturnBps: number;
-  positionStaleDaysStock: number;
-  positionStaleDaysEtf: number;
-  positionStaleDaysFund: number;
-};
-
-export type CategoryInput = {
-  name: string;
-  icon: string;
-  assetOrLiability: "asset" | "liability";
-  description: string;
-  isLiquid: boolean;
-  isInvestible: boolean;
-};
-
-export type InstitutionInput = {
-  name: string;
-  type:
-    | "bank"
-    | "credit_union"
-    | "brokerage"
-    | "asset_manager"
-    | "pension_provider"
-    | "insurer"
-    | "lender"
-    | "digital_wallet"
-    | "government"
-    | "employer"
-    | "other";
-  websiteUrl: string;
-  countryCode: string;
-  address: string;
-  notes: string;
-};
-
-export type ExchangeRateInput = {
-  baseCurrency: string;
-  quoteCurrency: string;
-  rate: string;
-  effectiveDate: string;
-};
+export type MutationID = components["schemas"]["ResourceIDResponse"];
+export type MutationStatus = components["schemas"]["MutationStatusResponse"];
+export type SettingsInput = components["schemas"]["SettingsMutationRequest"];
+export type CategoryInput = components["schemas"]["CategoryMutationRequest"];
+export type InstitutionInput = components["schemas"]["InstitutionMutationRequest"];
+export type ExchangeRateInput = components["schemas"]["ExchangeRateMutationRequest"];
 
 export type AccountInput = {
   idempotencyKey?: string;
@@ -138,23 +91,8 @@ export type TransactionInput = {
   notes: string;
 };
 
-export type ValuationInput = {
-  idempotencyKey: string;
-  accountId: string;
-  valueMinor: string;
-  valuationDate: string;
-  notes: string;
-};
-
-export type TransferInput = {
-  idempotencyKey: string;
-  fromAccountId: string;
-  toAccountId: string;
-  sourceAmountMinor: string;
-  destinationAmountMinor: string;
-  transactionDate: string;
-  description: string;
-};
+export type ValuationInput = components["schemas"]["ValuationCreateRequest"];
+export type TransferInput = components["schemas"]["TransferCreateRequest"];
 
 export type GoalInput = {
   idempotencyKey?: string;
@@ -175,59 +113,11 @@ export type GoalInput = {
   planEndDate: string;
 };
 
-export type GoalMilestoneInput = {
-  name: string;
-  targetAmount: string;
-  targetDate: string;
-};
-
-export type InstrumentInput = {
-  externalId: string;
-  name: string;
-  symbol: string;
-  identifierType: "isin" | "ticker_exchange" | "custom";
-  identifier: string;
-  exchangeMic: string;
-  assetType: "stock" | "etf" | "fund";
-  quoteCurrency: string;
-};
-
-export type SecurityPriceInput = {
-  instrumentId: string;
-  externalId: string;
-  price: string;
-  effectiveDate: string;
-  source: string;
-  provenance: string;
-};
-
-export type PositionEventInput = {
-  accountId: string;
-  instrumentId: string;
-  type: string;
-  quantity: string;
-  unitPrice: string;
-  tradeCurrency: string;
-  feeAmount: string;
-  feeCurrency: string;
-  cashEffect: string;
-  appliedExchangeRate: string;
-  openingCostBasis: string;
-  tradeDate: string;
-  settlementDate: string;
-  externalId: string;
-  idempotencyKey: string;
-  description: string;
-  notes: string;
-};
-
-export type PositionReconciliationInput = {
-  accountId: string;
-  observationDate: string;
-  reportedCash: string;
-  reportedTotal: string;
-  notes: string;
-};
+export type GoalMilestoneInput = components["schemas"]["GoalMilestoneCreateRequest"];
+export type InstrumentInput = components["schemas"]["InstrumentMutationRequest"];
+export type SecurityPriceInput = components["schemas"]["SecurityPriceMutationRequest"];
+export type PositionEventInput = components["schemas"]["PositionEventCreateRequest"];
+export type PositionReconciliationInput = components["schemas"]["PositionReconciliationCreateRequest"];
 
 export type AccountConversionHoldingInput = {
   instrumentId: string;
@@ -248,27 +138,5 @@ export type AccountConversionInput = {
   confirmDifference: boolean;
 };
 
-export type AccountConversionPreview = {
-  sourceAccountId: string;
-  sourceAccountName: string;
-  currency: string;
-  conversionDate: string;
-  sourceBalanceMinor: string;
-  openingCashMinor: string;
-  positionsMinor: string;
-  projectedTotalMinor: string;
-  differenceMinor: string;
-  holdings: Array<{
-    instrumentId: string;
-    name: string;
-    symbol: string | null;
-    quantity: string;
-    price: string;
-    quoteCurrency: string;
-  }>;
-};
-
-export type AccountConversionResult = {
-  targetAccountId: string;
-  replayed: boolean;
-};
+export type AccountConversionPreview = components["schemas"]["AccountConversionPreview"];
+export type AccountConversionResult = components["schemas"]["AccountConversionResult"];

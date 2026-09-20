@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Archive, Plus, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import {
@@ -307,6 +308,7 @@ export function GoalManager({
   session: Session;
   onChanged: () => void;
 }) {
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const milestoneSchema = z.object({
@@ -363,7 +365,7 @@ export function GoalManager({
               if (window.confirm(`Delete ${goal.name}?`))
                 void run(() =>
                   deleteGoal(goal.id, session.csrfToken).then(() =>
-                    window.location.assign("/goals"),
+                    navigate("/goals"),
                   ),
                 );
             }}
@@ -467,6 +469,7 @@ const instrumentSchema = z.object({
   assetType: z.enum(["stock", "etf", "fund"]),
   quoteCurrency: z.string().regex(/^[A-Z]{3}$/),
 });
+type InstrumentValues = z.infer<typeof instrumentSchema>;
 export function InstrumentForm({
   session,
   onChanged,
@@ -482,7 +485,7 @@ export function InstrumentForm({
     handleSubmit,
     reset,
     formState: { isSubmitting },
-  } = useForm<InstrumentInput>({
+  } = useForm<InstrumentValues>({
     resolver: zodResolver(instrumentSchema),
     defaultValues: instrument
       ? {
@@ -634,6 +637,7 @@ export function InstrumentManager({
   session: Session;
   onChanged: () => void;
 }) {
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const priceSchema = z.object({
@@ -704,7 +708,7 @@ export function InstrumentManager({
               if (window.confirm(`Delete ${instrument.name}?`))
                 void run(() =>
                   deleteInstrument(instrument.id, session.csrfToken).then(() =>
-                    window.location.assign("/instruments"),
+                    navigate("/instruments"),
                   ),
                 );
             }}

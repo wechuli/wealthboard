@@ -1,6 +1,6 @@
 import { Landmark } from "lucide-react";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   getAccount,
@@ -191,6 +191,7 @@ function AccountList({ accounts }: { accounts: Account[] }) {
 
 export function AccountDetailPage({ session }: { session: Session }) {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const [refresh, setRefresh] = useState(0);
   const state = useResource(
     () =>
@@ -285,9 +286,7 @@ export function AccountDetailPage({ session }: { session: Session }) {
               account={account}
               instruments={instruments.instruments}
               session={session}
-              onConverted={(targetID) =>
-                window.location.assign(`/accounts/${targetID}`)
-              }
+              onConverted={(targetID) => navigate(`/accounts/${targetID}`)}
             />
           )}
         </>

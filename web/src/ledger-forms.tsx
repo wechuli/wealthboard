@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import {
@@ -31,6 +32,7 @@ import {
   updatePositionEvent,
   updateTransaction,
 } from "./api";
+import { minorUnitsToDecimal } from "./format";
 import type {
   Account,
   AccountConversionInput,
@@ -163,7 +165,7 @@ function AccountForm({
           trackingMode: account.trackingMode as "balance" | "positions",
           openingValue: "0",
           costBasis: account.costBasisMinor
-            ? String(Number(account.costBasisMinor) / 100)
+            ? minorUnitsToDecimal(account.costBasisMinor)
             : "",
           isIncludedInNetWorth: account.isIncludedInNetWorth,
           notes: account.notes ?? "",
@@ -385,6 +387,7 @@ export function AccountControls({
   session: Session;
   onChanged: () => void;
 }) {
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   return (
@@ -439,7 +442,7 @@ export function AccountControls({
                 confirmationName,
                 session.csrfToken,
               );
-              window.location.assign("/accounts");
+              navigate("/accounts");
             } catch (caught) {
               setError(
                 caught instanceof Error
@@ -518,7 +521,7 @@ export function TransactionForm({
     defaultValues: transaction
       ? {
           type: transaction.type as TransactionValues["type"],
-          amount: String(Number(transaction.amountMinor) / 100),
+          amount: minorUnitsToDecimal(transaction.amountMinor),
           transactionDate: transaction.transactionDate,
           description: transaction.description ?? "",
           externalId: transaction.externalId ?? "",
@@ -783,7 +786,7 @@ function ValuationManager({
   } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
-      value: String(Number(account.currentValueMinor) / 100),
+      value: minorUnitsToDecimal(account.currentValueMinor),
       valuationDate: today(),
       notes: "",
     },
