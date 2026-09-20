@@ -100,10 +100,6 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByLabel("Opening value").fill("650000");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByLabel("Account or asset name")).toHaveValue("");
-  await page.goto("/accounts");
-  await expect(
-    page.getByText("Home renovation loan", { exact: true }),
-  ).toBeVisible();
 
   await page.goto("/");
   await capturePage(page, "dashboard-overview.png");
@@ -114,6 +110,9 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.goto("/accounts");
+  await expect(
+    page.getByText("Home renovation loan", { exact: true }),
+  ).toBeVisible();
   await capturePage(page, "accounts-workspace.png");
 
   await page.getByText("Southern Bypass Land", { exact: true }).first().click();

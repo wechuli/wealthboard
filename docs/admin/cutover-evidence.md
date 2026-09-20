@@ -16,7 +16,7 @@ documentation, and Phase 5 browser gates passed.
   `ea2728c30b2e22d3698a3ce2453f93d4a76e048fd82d37b4ed04272ba8d9ff99`
 - Frozen normalized outcome: `tests/fixtures/phase6-parity-expected.json`
 - Normalized outcome SHA-256:
-  `3a3a825d597a25cc260e726168664c624d0fba4d6dcb2b4b289c70a54be411d9`
+  `9d8f60178c1d6c6fe133cf6b62c17c96a28349aaa50e60242186fff793a32bd7`
 
 `TestPhase6ParityEvidence` restores the source archive into a disposable
 PostgreSQL database and compares exports, balances, positions, goals, reports,

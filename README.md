@@ -281,9 +281,10 @@ can run or inspect them separately with `make migrate` and
 `make migrate-status`. Never edit an applied migration.
 
 PostgreSQL is a fresh-start boundary. There is no SQLite-to-PostgreSQL importer,
-dual-write mode, or supported in-place conversion. Legacy Next.js, Drizzle, and
-SQLite files remain in the repository only for migration provenance until the
-[cutover checklist](docs/admin/cutover.md) authorizes their removal.
+dual-write mode, or supported in-place conversion. The legacy Next.js, Drizzle,
+and SQLite runtime was removed after the
+[cutover checklist](docs/admin/cutover.md) passed. Historical Drizzle migrations
+remain under `docs/archive` as non-executable provenance.
 
 ## Operator commands
 
