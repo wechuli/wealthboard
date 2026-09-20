@@ -593,6 +593,54 @@ paths:
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
+  /accounts/{accountID}/position-events:
+    get:
+      operationId: listAccountPositionEvents
+      summary: List position events for one account
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Page of owner-scoped account position events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionEventPage"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /accounts/{accountID}/position-reconciliations:
+    get:
+      operationId: listAccountPositionReconciliations
+      summary: List position reconciliations for one account
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Page of owner-scoped account position reconciliations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionReconciliationPage"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /transactions:
     get:
       operationId: listTransactions
@@ -2895,6 +2943,101 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ActivityItem"
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0, maximum: 10000 }
+        hasMore: { type: boolean }
+    PositionEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - instrumentId
+        - type
+        - quantity
+        - tradeCurrency
+        - cashEffectMinor
+        - tradeDate
+        - eventSequence
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        instrumentId: { type: string, format: uuid }
+        relatedInstrumentId: { type: string, format: uuid }
+        type:
+          {
+            type: string,
+            enum:
+              [opening_position, buy, sell, quantity_adjustment, transfer_in, transfer_out, split, spinoff, merger_in, merger_out],
+          }
+        quantity:
+          $ref: "#/components/schemas/DecimalString"
+        unitPrice:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        tradeCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        feeAmountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        feeCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        cashEffectMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        appliedExchangeRate:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        openingCostBasisMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        actionRatioNumerator:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        actionRatioDenominator:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        tradeDate: { type: string, format: date }
+        eventSequence: { type: integer, minimum: 0 }
+        settlementDate: { type: string, format: date }
+        externalId: { type: string }
+        eventGroupId: { type: string, format: uuid }
+        description: { type: string }
+        notes: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PositionEventPage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PositionEvent"
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0, maximum: 10000 }
+        hasMore: { type: boolean }
+    PositionReconciliation:
+      type: object
+      additionalProperties: false
+      required:
+        [id, accountId, observationDate, reportedTotalMinor, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        observationDate: { type: string, format: date }
+        reportedCashMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        reportedTotalMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        notes: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PositionReconciliationPage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, offset, hasMore]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PositionReconciliation"
         limit: { type: integer, minimum: 1, maximum: 100 }
         offset: { type: integer, minimum: 0, maximum: 10000 }
         hasMore: { type: boolean }

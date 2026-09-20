@@ -29,7 +29,8 @@ import type {
   SecurityPrice,
   Session,
 } from "./types";
-import { MoneyValue } from "./privacy";
+import { minorUnitsToDecimal } from "./format";
+import { MoneyValue, PrivateValue } from "./privacy";
 import { Card, CardHeader } from "./ui";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -82,15 +83,15 @@ export function GoalForm({
       ? {
           name: goal.name,
           description: goal.description ?? "",
-          targetAmount: String(Number(goal.targetAmountMinor) / 100),
-          currentAmount: String(Number(goal.currentAmountMinor) / 100),
+          targetAmount: minorUnitsToDecimal(goal.targetAmountMinor),
+          currentAmount: minorUnitsToDecimal(goal.currentAmountMinor),
           currency: goal.currency,
           targetDate: goal.targetDate,
           linkedAccountId: goal.linkedAccount?.id ?? "",
           status: goal.status as GoalValues["status"],
           assumedAnnualReturn: Number(goal.assumedAnnualReturnBps) / 100,
-          plannedContribution: String(
-            Number(goal.plan?.plannedContributionMinor ?? "0") / 100,
+          plannedContribution: minorUnitsToDecimal(
+            goal.plan?.plannedContributionMinor ?? "0",
           ),
           frequency: (goal.plan?.frequency ??
             "monthly") as GoalValues["frequency"],
@@ -792,7 +793,7 @@ export function InstrumentManager({
               </div>
               <div className="page-actions">
                 <strong>
-                  {price.currency} {price.price}
+                  <PrivateValue>{price.currency} {price.price}</PrivateValue>
                 </strong>
                 <button
                   className="icon-button"

@@ -361,6 +361,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{accountID}/position-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List position events for one account
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listAccountPositionEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountID}/position-reconciliations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List position reconciliations for one account
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+         */
+        get: operations["listAccountPositionReconciliations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/transactions": {
         parameters: {
             query?: never;
@@ -1748,6 +1788,69 @@ export interface components {
             offset: number;
             hasMore: boolean;
         };
+        PositionEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            accountId: string;
+            /** Format: uuid */
+            instrumentId: string;
+            /** Format: uuid */
+            relatedInstrumentId?: string;
+            /** @enum {string} */
+            type: "opening_position" | "buy" | "sell" | "quantity_adjustment" | "transfer_in" | "transfer_out" | "split" | "spinoff" | "merger_in" | "merger_out";
+            quantity: components["schemas"]["DecimalString"];
+            unitPrice?: components["schemas"]["PositiveDecimalString"];
+            tradeCurrency: components["schemas"]["CurrencyCode"];
+            feeAmountMinor?: components["schemas"]["MinorUnits"];
+            feeCurrency?: components["schemas"]["CurrencyCode"];
+            cashEffectMinor: components["schemas"]["MinorUnits"];
+            appliedExchangeRate?: components["schemas"]["PositiveDecimalString"];
+            openingCostBasisMinor?: components["schemas"]["MinorUnits"];
+            actionRatioNumerator?: components["schemas"]["PositiveDecimalString"];
+            actionRatioDenominator?: components["schemas"]["PositiveDecimalString"];
+            /** Format: date */
+            tradeDate: string;
+            eventSequence: number;
+            /** Format: date */
+            settlementDate?: string;
+            externalId?: string;
+            /** Format: uuid */
+            eventGroupId?: string;
+            description?: string;
+            notes?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PositionEventPage: {
+            items: components["schemas"]["PositionEvent"][];
+            limit: number;
+            offset: number;
+            hasMore: boolean;
+        };
+        PositionReconciliation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            accountId: string;
+            /** Format: date */
+            observationDate: string;
+            reportedCashMinor?: components["schemas"]["MinorUnits"];
+            reportedTotalMinor: components["schemas"]["MinorUnits"];
+            notes?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PositionReconciliationPage: {
+            items: components["schemas"]["PositionReconciliation"][];
+            limit: number;
+            offset: number;
+            hasMore: boolean;
+        };
         GoalLinkedAccount: {
             /** Format: uuid */
             id: string;
@@ -2948,6 +3051,66 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listAccountPositionEvents: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of owner-scoped account position events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionEventPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listAccountPositionReconciliations: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of owner-scoped account position reconciliations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionReconciliationPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listTransactions: {

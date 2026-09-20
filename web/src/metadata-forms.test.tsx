@@ -79,11 +79,29 @@ describe("ExchangeRateManager", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const data = {
       settings: { baseCurrency: "KES" },
-      exchangeRates: [{ id: "rate-1", baseCurrency: "KES", quoteCurrency: "USD", rate: "0.0077", effectiveDate: "2026-09-20", source: "manual" }],
+      exchangeRates: [
+        {
+          id: "rate-1",
+          baseCurrency: "KES",
+          quoteCurrency: "USD",
+          rate: "0.0077",
+          effectiveDate: "2026-09-20",
+          source: "manual",
+        },
+      ],
     } as SettingsRead;
-    render(<ExchangeRateManager data={data} csrfToken="csrf" onChanged={onChanged} operations={{ create: vi.fn(), remove }} />);
+    render(
+      <ExchangeRateManager
+        data={data}
+        csrfToken="csrf"
+        onChanged={onChanged}
+        operations={{ create: vi.fn(), remove }}
+      />,
+    );
 
-    await user.click(screen.getByRole("button", { name: "Delete KES to USD rate" }));
+    await user.click(
+      screen.getByRole("button", { name: "Delete KES to USD rate" }),
+    );
     expect(window.confirm).toHaveBeenCalledWith("Delete this exchange rate?");
     expect(remove).toHaveBeenCalledWith("rate-1", "csrf");
     expect(onChanged).toHaveBeenCalledOnce();

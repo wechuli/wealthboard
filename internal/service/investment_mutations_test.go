@@ -144,6 +144,26 @@ WHERE user_id = $1 AND instrument_id = $2 AND effective_date = DATE '2026-09-19'
 		}
 	})
 
+	t.Run("position event reads are owner scoped and paginated", func(t *testing.T) {
+		if _, err := mutations.PositionEvents(ctx, foreignID, accountID, ReadPage{}); !errors.Is(err, ErrInvestmentMutationNotFound) {
+			t.Fatalf("foreign event read error = %v, want not found", err)
+		}
+		first, err := mutations.PositionEvents(ctx, ownerID, accountID, ReadPage{Limit: 1})
+		if err != nil {
+			t.Fatalf("owner event read: %v", err)
+		}
+		if len(first.Items) != 1 || !first.HasMore || first.Items[0].Type != "sell" || first.Items[0].UnitPrice != "10.25" {
+			t.Fatalf("first event page = %+v", first)
+		}
+		second, err := mutations.PositionEvents(ctx, ownerID, accountID, ReadPage{Limit: 1, Offset: 1})
+		if err != nil {
+			t.Fatalf("second event page: %v", err)
+		}
+		if len(second.Items) != 1 || second.HasMore || second.Items[0].Type != "opening_position" || second.Items[0].OpeningCostBasisMinor == nil || *second.Items[0].OpeningCostBasisMinor != "10000" {
+			t.Fatalf("second event page = %+v", second)
+		}
+	})
+
 	t.Run("reconciliation is owner scoped", func(t *testing.T) {
 		input := PositionReconciliationMutationInput{
 			AccountID: accountID, ObservationDate: testInvestmentDate(2026, 9, 19), ReportedCash: "25.00", ReportedTotal: "125.00",
@@ -154,6 +174,16 @@ WHERE user_id = $1 AND instrument_id = $2 AND effective_date = DATE '2026-09-19'
 		id, err := mutations.CreatePositionReconciliation(ctx, ownerID, input)
 		if err != nil {
 			t.Fatalf("owner create reconciliation: %v", err)
+		}
+		if _, err := mutations.PositionReconciliations(ctx, foreignID, accountID, ReadPage{}); !errors.Is(err, ErrInvestmentMutationNotFound) {
+			t.Fatalf("foreign reconciliation read error = %v, want not found", err)
+		}
+		page, err := mutations.PositionReconciliations(ctx, ownerID, accountID, ReadPage{Limit: 1})
+		if err != nil {
+			t.Fatalf("owner reconciliation read: %v", err)
+		}
+		if len(page.Items) != 1 || page.Items[0].ID != id || page.Items[0].ReportedCashMinor == nil || *page.Items[0].ReportedCashMinor != "2500" || page.Items[0].ReportedTotalMinor != "12500" {
+			t.Fatalf("reconciliation page = %+v", page)
 		}
 		if err := mutations.DeletePositionReconciliation(ctx, foreignID, id); !errors.Is(err, ErrInvestmentMutationNotFound) {
 			t.Fatalf("foreign delete error = %v, want not found", err)

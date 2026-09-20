@@ -770,7 +770,10 @@ export function ExchangeRateManager({
   data: SettingsRead;
   csrfToken: string;
   onChanged: () => void;
-  operations?: { create: typeof createExchangeRate; remove: typeof deleteExchangeRate };
+  operations?: {
+    create: typeof createExchangeRate;
+    remove: typeof deleteExchangeRate;
+  };
 }) {
   const [error, setError] = useState("");
   const {
@@ -865,7 +868,7 @@ export function ExchangeRateManager({
                 aria-label={`Delete ${rate.baseCurrency} to ${rate.quoteCurrency} rate`}
                 onClick={() => {
                   if (window.confirm("Delete this exchange rate?"))
-                      void run(() => operations.remove(rate.id, csrfToken));
+                    void run(() => operations.remove(rate.id, csrfToken));
                 }}
               >
                 <Trash2 />

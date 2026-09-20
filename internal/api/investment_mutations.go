@@ -18,6 +18,8 @@ type investmentMutationAuthenticator interface {
 }
 
 type investmentMutationService interface {
+	PositionEvents(context.Context, uuid.UUID, uuid.UUID, service.ReadPage) (service.Page[service.PositionEvent], error)
+	PositionReconciliations(context.Context, uuid.UUID, uuid.UUID, service.ReadPage) (service.Page[service.PositionReconciliation], error)
 	CreateInstrument(context.Context, uuid.UUID, service.InstrumentMutationInput) (uuid.UUID, error)
 	UpdateInstrument(context.Context, uuid.UUID, uuid.UUID, service.InstrumentMutationInput) error
 	SetInstrumentArchived(context.Context, uuid.UUID, uuid.UUID, bool) error
@@ -42,6 +44,8 @@ func NewInvestmentMutationHandler(auth investmentMutationAuthenticator, mutation
 }
 
 func RegisterInvestmentMutationRoutes(router chi.Router, handler *InvestmentMutationHandler) {
+	router.Get("/accounts/{accountID}/position-events", handler.PositionEvents)
+	router.Get("/accounts/{accountID}/position-reconciliations", handler.PositionReconciliations)
 	router.Post("/instruments", handler.CreateInstrument)
 	router.Put("/instruments/{id}", handler.UpdateInstrument)
 	router.Patch("/instruments/{id}/archive", handler.ArchiveInstrument)
@@ -53,6 +57,24 @@ func RegisterInvestmentMutationRoutes(router chi.Router, handler *InvestmentMuta
 	router.Delete("/position-events/{id}", handler.DeletePositionEvent)
 	router.Post("/position-reconciliations", handler.CreatePositionReconciliation)
 	router.Delete("/position-reconciliations/{id}", handler.DeletePositionReconciliation)
+}
+
+func (handler *InvestmentMutationHandler) PositionEvents(response http.ResponseWriter, request *http.Request) {
+	principal, accountID, page, ok := handler.authorizePositionRead(response, request)
+	if !ok {
+		return
+	}
+	result, err := handler.service.PositionEvents(request.Context(), principal.UserID, accountID, page)
+	handler.writeReadResult(response, result, err)
+}
+
+func (handler *InvestmentMutationHandler) PositionReconciliations(response http.ResponseWriter, request *http.Request) {
+	principal, accountID, page, ok := handler.authorizePositionRead(response, request)
+	if !ok {
+		return
+	}
+	result, err := handler.service.PositionReconciliations(request.Context(), principal.UserID, accountID, page)
+	handler.writeReadResult(response, result, err)
 }
 
 func (handler *InvestmentMutationHandler) CreateInstrument(response http.ResponseWriter, request *http.Request) {
@@ -229,6 +251,45 @@ func (handler *InvestmentMutationHandler) authorize(response http.ResponseWriter
 		}
 	}
 	return principal, true
+}
+
+func (handler *InvestmentMutationHandler) authorizePositionRead(response http.ResponseWriter, request *http.Request) (webauth.Principal, uuid.UUID, service.ReadPage, bool) {
+	principal, err := handler.auth.AuthenticateRequest(request)
+	if err != nil {
+		writeProblem(response, http.StatusUnauthorized, "Unauthorized", "Valid authentication is required.")
+		return webauth.Principal{}, uuid.Nil, service.ReadPage{}, false
+	}
+	if !principal.HasScope(webauth.ScopePortfolioRead) {
+		writeProblem(response, http.StatusForbidden, "Forbidden", "The credential does not grant portfolio:read.")
+		return webauth.Principal{}, uuid.Nil, service.ReadPage{}, false
+	}
+	accountID, ok := pathAccountID(response, request)
+	if !ok {
+		return webauth.Principal{}, uuid.Nil, service.ReadPage{}, false
+	}
+	limit, err := parseBoundedInt(request.URL.Query().Get("limit"), service.DefaultReadLimit, 1, service.MaxReadLimit)
+	if err != nil {
+		writeProblem(response, http.StatusBadRequest, "Invalid filters", "limit must be between 1 and 100")
+		return webauth.Principal{}, uuid.Nil, service.ReadPage{}, false
+	}
+	offset, err := parseBoundedInt(request.URL.Query().Get("offset"), 0, 0, service.MaxReadOffset)
+	if err != nil {
+		writeProblem(response, http.StatusBadRequest, "Invalid filters", "offset must be between 0 and 10000")
+		return webauth.Principal{}, uuid.Nil, service.ReadPage{}, false
+	}
+	return principal, accountID, service.ReadPage{Limit: limit, Offset: offset}, true
+}
+
+func (handler *InvestmentMutationHandler) writeReadResult(response http.ResponseWriter, result any, err error) {
+	if errors.Is(err, service.ErrInvestmentMutationNotFound) {
+		writeProblem(response, http.StatusNotFound, "Not Found", "The requested resource does not exist.")
+		return
+	}
+	if err != nil {
+		writeProblem(response, http.StatusServiceUnavailable, "Service unavailable", "The requested data is temporarily unavailable.")
+		return
+	}
+	writeJSON(response, http.StatusOK, result)
 }
 
 func (handler *InvestmentMutationHandler) writeID(response http.ResponseWriter, status int, id uuid.UUID, err error) {

@@ -61,8 +61,10 @@ export type MutationID = components["schemas"]["ResourceIDResponse"];
 export type MutationStatus = components["schemas"]["MutationStatusResponse"];
 export type SettingsInput = components["schemas"]["SettingsMutationRequest"];
 export type CategoryInput = components["schemas"]["CategoryMutationRequest"];
-export type InstitutionInput = components["schemas"]["InstitutionMutationRequest"];
-export type ExchangeRateInput = components["schemas"]["ExchangeRateMutationRequest"];
+export type InstitutionInput =
+  components["schemas"]["InstitutionMutationRequest"];
+export type ExchangeRateInput =
+  components["schemas"]["ExchangeRateMutationRequest"];
 
 export type AccountInput = {
   idempotencyKey?: string;
@@ -113,11 +115,16 @@ export type GoalInput = {
   planEndDate: string;
 };
 
-export type GoalMilestoneInput = components["schemas"]["GoalMilestoneCreateRequest"];
-export type InstrumentInput = components["schemas"]["InstrumentMutationRequest"];
-export type SecurityPriceInput = components["schemas"]["SecurityPriceMutationRequest"];
-export type PositionEventInput = components["schemas"]["PositionEventCreateRequest"];
-export type PositionReconciliationInput = components["schemas"]["PositionReconciliationCreateRequest"];
+export type GoalMilestoneInput =
+  components["schemas"]["GoalMilestoneCreateRequest"];
+export type InstrumentInput =
+  components["schemas"]["InstrumentMutationRequest"];
+export type SecurityPriceInput =
+  components["schemas"]["SecurityPriceMutationRequest"];
+export type PositionEventInput =
+  components["schemas"]["PositionEventCreateRequest"];
+export type PositionReconciliationInput =
+  components["schemas"]["PositionReconciliationCreateRequest"];
 
 export type AccountConversionHoldingInput = {
   instrumentId: string;
@@ -138,5 +145,7 @@ export type AccountConversionInput = {
   confirmDifference: boolean;
 };
 
-export type AccountConversionPreview = components["schemas"]["AccountConversionPreview"];
-export type AccountConversionResult = components["schemas"]["AccountConversionResult"];
+export type AccountConversionPreview =
+  components["schemas"]["AccountConversionPreview"];
+export type AccountConversionResult =
+  components["schemas"]["AccountConversionResult"];

@@ -19,8 +19,20 @@ type fakeInvestmentMutationService struct {
 	resultID    uuid.UUID
 	err         error
 	lastUserID  uuid.UUID
+	lastAccount uuid.UUID
+	lastPage    service.ReadPage
 	lastEvent   service.PositionEventMutationInput
 	createCalls int
+}
+
+func (fake *fakeInvestmentMutationService) PositionEvents(_ context.Context, userID, accountID uuid.UUID, page service.ReadPage) (service.Page[service.PositionEvent], error) {
+	fake.lastUserID, fake.lastAccount, fake.lastPage = userID, accountID, page
+	return service.Page[service.PositionEvent]{Items: []service.PositionEvent{}, Limit: page.Limit, Offset: page.Offset}, fake.err
+}
+
+func (fake *fakeInvestmentMutationService) PositionReconciliations(_ context.Context, userID, accountID uuid.UUID, page service.ReadPage) (service.Page[service.PositionReconciliation], error) {
+	fake.lastUserID, fake.lastAccount, fake.lastPage = userID, accountID, page
+	return service.Page[service.PositionReconciliation]{Items: []service.PositionReconciliation{}, Limit: page.Limit, Offset: page.Offset}, fake.err
 }
 
 func (fake *fakeInvestmentMutationService) CreateInstrument(_ context.Context, userID uuid.UUID, _ service.InstrumentMutationInput) (uuid.UUID, error) {
@@ -156,6 +168,51 @@ func TestInvestmentMutationParsesEventAndMapsForeignNotFound(t *testing.T) {
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("foreign delete status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestInvestmentPositionReadsRequireReadScopeAndPassOwnerPagination(t *testing.T) {
+	ownerID, accountID := uuid.New(), uuid.New()
+	fake := &fakeInvestmentMutationService{}
+	router := investmentMutationRouter(fakeFeatureAuthenticator{principal: webauth.Principal{
+		UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioRead},
+	}}, fake)
+
+	request := httptest.NewRequest(http.MethodGet, "/accounts/"+accountID.String()+"/position-events?limit=25&offset=5", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || fake.lastUserID != ownerID || fake.lastAccount != accountID || fake.lastPage != (service.ReadPage{Limit: 25, Offset: 5}) {
+		t.Fatalf("event read status = %d, owner = %s, account = %s, page = %+v", response.Code, fake.lastUserID, fake.lastAccount, fake.lastPage)
+	}
+
+	fake.err = ErrInvestmentMutationNotFoundForTest()
+	request = httptest.NewRequest(http.MethodGet, "/accounts/"+accountID.String()+"/position-reconciliations", nil)
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("foreign reconciliation read status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestInvestmentPositionReadsRejectWriteOnlyScopeAndInvalidPagination(t *testing.T) {
+	accountID := uuid.New()
+	fake := &fakeInvestmentMutationService{}
+	router := investmentMutationRouter(fakeFeatureAuthenticator{principal: webauth.Principal{
+		UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite},
+	}}, fake)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/accounts/"+accountID.String()+"/position-events", nil))
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("write-only read status = %d, want 403", response.Code)
+	}
+
+	router = investmentMutationRouter(fakeFeatureAuthenticator{principal: webauth.Principal{
+		UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioRead},
+	}}, fake)
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/accounts/"+accountID.String()+"/position-events?limit=101", nil))
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid pagination status = %d, want 400", response.Code)
 	}
 }
 

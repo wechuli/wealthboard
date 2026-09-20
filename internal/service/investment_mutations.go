@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,6 +87,182 @@ type PositionReconciliationMutationInput struct {
 	ReportedCash    string    `json:"reportedCash"`
 	ReportedTotal   string    `json:"reportedTotal"`
 	Notes           string    `json:"notes"`
+}
+
+type PositionEvent struct {
+	ID                     uuid.UUID  `json:"id"`
+	AccountID              uuid.UUID  `json:"accountId"`
+	InstrumentID           uuid.UUID  `json:"instrumentId"`
+	RelatedInstrumentID    *uuid.UUID `json:"relatedInstrumentId,omitempty"`
+	Type                   string     `json:"type"`
+	Quantity               string     `json:"quantity"`
+	UnitPrice              string     `json:"unitPrice,omitempty"`
+	TradeCurrency          string     `json:"tradeCurrency"`
+	FeeAmountMinor         *string    `json:"feeAmountMinor,omitempty"`
+	FeeCurrency            string     `json:"feeCurrency,omitempty"`
+	CashEffectMinor        string     `json:"cashEffectMinor"`
+	AppliedExchangeRate    string     `json:"appliedExchangeRate,omitempty"`
+	OpeningCostBasisMinor  *string    `json:"openingCostBasisMinor,omitempty"`
+	ActionRatioNumerator   string     `json:"actionRatioNumerator,omitempty"`
+	ActionRatioDenominator string     `json:"actionRatioDenominator,omitempty"`
+	TradeDate              string     `json:"tradeDate"`
+	EventSequence          int        `json:"eventSequence"`
+	SettlementDate         string     `json:"settlementDate,omitempty"`
+	ExternalID             string     `json:"externalId,omitempty"`
+	EventGroupID           *uuid.UUID `json:"eventGroupId,omitempty"`
+	Description            string     `json:"description,omitempty"`
+	Notes                  string     `json:"notes,omitempty"`
+	CreatedAt              time.Time  `json:"createdAt"`
+	UpdatedAt              time.Time  `json:"updatedAt"`
+}
+
+type PositionReconciliation struct {
+	ID                 uuid.UUID `json:"id"`
+	AccountID          uuid.UUID `json:"accountId"`
+	ObservationDate    string    `json:"observationDate"`
+	ReportedCashMinor  *string   `json:"reportedCashMinor,omitempty"`
+	ReportedTotalMinor string    `json:"reportedTotalMinor"`
+	Notes              string    `json:"notes,omitempty"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+func (service *InvestmentMutations) PositionEvents(ctx context.Context, userID, accountID uuid.UUID, page ReadPage) (Page[PositionEvent], error) {
+	page, err := page.normalized()
+	if err != nil {
+		return Page[PositionEvent]{}, err
+	}
+	if err := service.requirePositionAccount(ctx, userID, accountID); err != nil {
+		return Page[PositionEvent]{}, err
+	}
+	rows, err := service.db.QueryContext(ctx, `
+SELECT id, account_id, instrument_id, related_instrument_id, type, quantity::TEXT,
+       unit_price::TEXT, trade_currency, fee_amount_minor, fee_currency,
+       cash_effect_minor, applied_exchange_rate::TEXT, opening_cost_basis_minor,
+       action_ratio_numerator::TEXT, action_ratio_denominator::TEXT, trade_date,
+       event_sequence, settlement_date, external_id, event_group_id, description,
+       notes, created_at, updated_at
+FROM position_events
+WHERE user_id = $1 AND account_id = $2
+ORDER BY trade_date DESC, event_sequence DESC, created_at DESC, id DESC
+LIMIT $3 OFFSET $4`, userID, accountID, page.Limit+1, page.Offset)
+	if err != nil {
+		return Page[PositionEvent]{}, fmt.Errorf("list position events: %w", err)
+	}
+	defer rows.Close()
+	items := make([]PositionEvent, 0, page.Limit)
+	for rows.Next() {
+		var item PositionEvent
+		var relatedID, eventGroupID uuid.NullUUID
+		var unitPrice, feeCurrency, appliedRate, ratioNumerator, ratioDenominator sql.NullString
+		var feeMinor, openingCostBasis sql.NullInt64
+		var settlementDate sql.NullTime
+		var externalID, description, notes sql.NullString
+		var cashEffect int64
+		var tradeDate time.Time
+		if err := rows.Scan(&item.ID, &item.AccountID, &item.InstrumentID, &relatedID, &item.Type,
+			&item.Quantity, &unitPrice, &item.TradeCurrency, &feeMinor, &feeCurrency, &cashEffect,
+			&appliedRate, &openingCostBasis, &ratioNumerator, &ratioDenominator, &tradeDate,
+			&item.EventSequence, &settlementDate, &externalID, &eventGroupID, &description,
+			&notes, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return Page[PositionEvent]{}, fmt.Errorf("scan position event: %w", err)
+		}
+		item.RelatedInstrumentID = uuidPointer(relatedID)
+		item.EventGroupID = uuidPointer(eventGroupID)
+		item.UnitPrice = unitPrice.String
+		item.FeeCurrency = feeCurrency.String
+		item.CashEffectMinor = strconv.FormatInt(cashEffect, 10)
+		item.AppliedExchangeRate = appliedRate.String
+		item.ActionRatioNumerator = ratioNumerator.String
+		item.ActionRatioDenominator = ratioDenominator.String
+		item.TradeDate = tradeDate.Format(time.DateOnly)
+		item.SettlementDate = formatInvestmentOptionalDate(settlementDate)
+		item.ExternalID = externalID.String
+		item.Description = description.String
+		item.Notes = notes.String
+		item.FeeAmountMinor = optionalInt64String(feeMinor)
+		item.OpeningCostBasisMinor = optionalInt64String(openingCostBasis)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return Page[PositionEvent]{}, fmt.Errorf("iterate position events: %w", err)
+	}
+	hasMore := len(items) > page.Limit
+	if hasMore {
+		items = items[:page.Limit]
+	}
+	return Page[PositionEvent]{Items: items, Limit: page.Limit, Offset: page.Offset, HasMore: hasMore}, nil
+}
+
+func (service *InvestmentMutations) PositionReconciliations(ctx context.Context, userID, accountID uuid.UUID, page ReadPage) (Page[PositionReconciliation], error) {
+	page, err := page.normalized()
+	if err != nil {
+		return Page[PositionReconciliation]{}, err
+	}
+	if err := service.requirePositionAccount(ctx, userID, accountID); err != nil {
+		return Page[PositionReconciliation]{}, err
+	}
+	rows, err := service.db.QueryContext(ctx, `
+SELECT id, account_id, observation_date, reported_cash_minor, reported_total_minor,
+       notes, created_at, updated_at
+FROM position_reconciliations
+WHERE user_id = $1 AND account_id = $2
+ORDER BY observation_date DESC, created_at DESC, id DESC
+LIMIT $3 OFFSET $4`, userID, accountID, page.Limit+1, page.Offset)
+	if err != nil {
+		return Page[PositionReconciliation]{}, fmt.Errorf("list position reconciliations: %w", err)
+	}
+	defer rows.Close()
+	items := make([]PositionReconciliation, 0, page.Limit)
+	for rows.Next() {
+		var item PositionReconciliation
+		var observationDate time.Time
+		var reportedCash sql.NullInt64
+		var reportedTotal int64
+		var notes sql.NullString
+		if err := rows.Scan(&item.ID, &item.AccountID, &observationDate, &reportedCash,
+			&reportedTotal, &notes, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return Page[PositionReconciliation]{}, fmt.Errorf("scan position reconciliation: %w", err)
+		}
+		item.ObservationDate = observationDate.Format(time.DateOnly)
+		item.ReportedCashMinor = optionalInt64String(reportedCash)
+		item.ReportedTotalMinor = strconv.FormatInt(reportedTotal, 10)
+		item.Notes = notes.String
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return Page[PositionReconciliation]{}, fmt.Errorf("iterate position reconciliations: %w", err)
+	}
+	hasMore := len(items) > page.Limit
+	if hasMore {
+		items = items[:page.Limit]
+	}
+	return Page[PositionReconciliation]{Items: items, Limit: page.Limit, Offset: page.Offset, HasMore: hasMore}, nil
+}
+
+func (service *InvestmentMutations) requirePositionAccount(ctx context.Context, userID, accountID uuid.UUID) error {
+	var exists bool
+	if err := service.db.QueryRowContext(ctx, `
+SELECT TRUE FROM accounts
+WHERE user_id = $1 AND id = $2`, userID, accountID).Scan(&exists); err != nil {
+		return mutationNotFound(err)
+	}
+	return nil
+}
+
+func optionalInt64String(value sql.NullInt64) *string {
+	if !value.Valid {
+		return nil
+	}
+	formatted := strconv.FormatInt(value.Int64, 10)
+	return &formatted
+}
+
+func formatInvestmentOptionalDate(value sql.NullTime) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.Time.Format(time.DateOnly)
 }
 
 func (service *InvestmentMutations) CreateInstrument(ctx context.Context, userID uuid.UUID, input InstrumentMutationInput) (uuid.UUID, error) {
