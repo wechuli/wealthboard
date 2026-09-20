@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -14,10 +15,6 @@ import (
 )
 
 func TestPhase6ParityPostgreSQLObserver(t *testing.T) {
-	outputPath := os.Getenv("PARITY_OUTPUT")
-	if outputPath == "" {
-		t.Skip("PARITY_OUTPUT is not set")
-	}
 	db := openPhase5TestDatabase(t)
 	ctx := context.Background()
 	userID := uuid.New()
@@ -139,8 +136,20 @@ VALUES ($1,$2,'Phase Six Go','KES','["KES"]','UTC',$3,$3)`, uuid.New(), userID, 
 	if err != nil {
 		t.Fatalf("encode parity outcome: %v", err)
 	}
-	if err := os.WriteFile(outputPath, append(data, '\n'), 0o600); err != nil {
-		t.Fatalf("write parity outcome: %v", err)
+	expected, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "phase6-parity-expected.json"))
+	if err != nil {
+		t.Fatalf("read parity expectation: %v", err)
+	}
+	var expectedOutcome any
+	if err := json.Unmarshal(expected, &expectedOutcome); err != nil {
+		t.Fatalf("decode parity expectation: %v", err)
+	}
+	var actualOutcome any
+	if err := json.Unmarshal(data, &actualOutcome); err != nil {
+		t.Fatalf("decode parity outcome: %v", err)
+	}
+	if !reflect.DeepEqual(actualOutcome, expectedOutcome) {
+		t.Fatalf("PostgreSQL outcome differs from frozen Phase 6 parity evidence\nactual: %s\nexpected: %s", data, expected)
 	}
 }
 

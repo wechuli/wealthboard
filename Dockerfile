@@ -3,7 +3,6 @@ WORKDIR /app
 COPY web/package.json web/package-lock.json ./web/
 RUN npm --prefix web ci --no-audit --no-fund
 COPY api ./api
-COPY app/globals.css ./app/globals.css
 COPY web ./web
 RUN npm --prefix web run build
 

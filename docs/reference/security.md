@@ -113,6 +113,6 @@ executor portal, or replace legal documents and provider beneficiary forms.
 - Back up regularly and test restore into a disposable location.
 - Keep every replica on the same migration-compatible release.
 - Follow the [cutover checklist](../admin/cutover) before removing retained
-	legacy code or rollback artifacts.
+  legacy code or rollback artifacts.
 - Review production dependency and image scan results.
 - Disable users deliberately when access should end.

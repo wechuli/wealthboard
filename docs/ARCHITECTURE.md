@@ -238,17 +238,17 @@ it is not a financial write path. Strict v1 contracts and the browser-only
 manual prompt workflow remain unchanged. OCR/image processing remains backlog AI3.
 
 1. The account import UI offers direct structured import or explicit AI
-  conversion. Go exposes `/api/v1/ai/import/extract` and
-  `/api/v1/ai/import/convert` for bounded extraction and model conversion.
-  Browser calls require the verified session, trusted origin, and CSRF token;
-  API keys require `ai:invoke`. The later account-scoped preview and commit
-  routes resolve the active account by session-derived `userId` and account ID
-  before any financial write and return not found for foreign accounts.
+   conversion. Go exposes `/api/v1/ai/import/extract` and
+   `/api/v1/ai/import/convert` for bounded extraction and model conversion.
+   Browser calls require the verified session, trusted origin, and CSRF token;
+   API keys require `ai:invoke`. The later account-scoped preview and commit
+   routes resolve the active account by session-derived `userId` and account ID
+   before any financial write and return not found for foreign accounts.
 2. Bounded local parsers prepare source text/tables and stable page/sheet/row
-  references for user review, selection, and redaction before external
-  submission. `internal/aiworkflow/extraction.go` handles UTF-8 CSV, TSV, JSON,
-  and TXT; a terminable Node worker or isolated socket daemon handles XLSX,
-  text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
+   references for user review, selection, and redaction before external
+   submission. `internal/aiworkflow/extraction.go` handles UTF-8 CSV, TSV, JSON,
+   and TXT; a terminable Node worker or isolated socket daemon handles XLSX,
+   text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
    XLSX numeric cells remain original strings. Formula caches and excluded
    image/Word/PDF content have review warnings; no OCR is performed. Enforce
    extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
@@ -272,7 +272,7 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    Reject unsupported encryption, corrupt, or over-limit input rather than
    silently truncating.
 3. After explicit per-request consent, `internal/aiworkflow.Service` resolves
-  the current user's provider and credentials. Reuse encrypted-key
+   the current user's provider and credentials. Reuse encrypted-key
    handling, endpoint allowlisting, disabled redirects, cancellation, and safe
    errors. Existing usage reservation/completion functions enforce shared
    review/conversion rate and monthly token budgets. The settings form, Zod
@@ -287,8 +287,8 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    conversion when usage is unknown. Requests have bounded streaming body reads
    and active preparations are limited to one per user/four per module instance.
 4. The Go AI workflow exposes a separate conversion operation and validates its
-  bounded request and response models independently of the portfolio-review
-  snapshot builder. OpenAI uses native structured output through Responses;
+   bounded request and response models independently of the portfolio-review
+   snapshot builder. OpenAI uses native structured output through Responses;
    DeepSeek/custom models must support text Chat Completions and JSON output.
    The configured model ID is not discovered or probed during settings save;
    incompatible requests fail without model/provider substitution. Both paths

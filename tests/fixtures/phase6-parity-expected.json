@@ -1,0 +1,92 @@
+{
+  "export": {
+    "format": "wealthboard-user-json",
+    "version": 8,
+    "settings": {
+      "displayName": "Phase Six Example",
+      "baseCurrency": "KES",
+      "supportedCurrencies": "[\"KES\",\"USD\"]",
+      "timezone": "UTC",
+      "preferredDateFormat": "dd MMM yyyy",
+      "appName": "Wealthboard",
+      "defaultDashboardPeriod": "1y",
+      "sessionTimeoutMinutes": 10080,
+      "defaultGoalReturnBps": 800,
+      "positionStaleDaysStock": 14,
+      "positionStaleDaysEtf": 14,
+      "positionStaleDaysFund": 45
+    },
+    "counts": {
+      "accounts": 2,
+      "transactions": 2,
+      "valuations": 1,
+      "goals": 1,
+      "positionEvents": 1,
+      "snapshots": 1
+    },
+    "accounts": [
+      { "name": "Brokerage", "currency": "KES", "trackingMode": "positions", "currentValueMinor": "25000" },
+      { "name": "Everyday Cash", "currency": "KES", "trackingMode": "balance", "currentValueMinor": "1250" }
+    ],
+    "transactions": [
+      { "account": "Everyday Cash", "type": "opening_balance", "amountMinor": "1000", "date": "2026-01-01", "externalId": "cash-opening" },
+      { "account": "Everyday Cash", "type": "deposit", "amountMinor": "50", "date": "2026-01-03", "externalId": "cash-deposit" }
+    ],
+    "positionEvents": [
+      { "account": "Brokerage", "instrument": "Example Equity", "type": "opening_position", "quantity": "2", "cashEffectMinor": "0", "date": "2026-01-01" }
+    ],
+    "snapshots": [
+      {
+        "title": "Family plan",
+        "valueAsOfDate": "2026-01-02",
+        "baseCurrency": "KES",
+        "content": { "format": "wealthboard-estate-summary", "version": 1, "assets": [], "beneficiaries": [], "reviewItems": [] },
+        "contentHash": "619b10f7db6b6eb83ad6dd463883b4b1766b582db02d18c0e44757810f05dda0"
+      }
+    ]
+  },
+  "balances": [
+    { "name": "Brokerage", "currentValueMinor": "25000" },
+    { "name": "Everyday Cash", "currentValueMinor": "1250" }
+  ],
+  "positions": {
+    "account": "Brokerage",
+    "cashMinor": "0",
+    "positionsMinor": "25000",
+    "totalMinor": "25000",
+    "complete": true,
+    "holdings": [
+      { "instrument": "Example Equity", "quantity": "2", "price": "125", "valueMinor": "25000" }
+    ]
+  },
+  "goals": [
+    { "name": "Reserve", "targetAmountMinor": "10000", "currentAmountMinor": "1250", "currency": "KES", "targetDate": "2027-01-01", "linkedAccount": "Everyday Cash", "progressPercent": "12.5" }
+  ],
+  "reports": {
+    "baseCurrency": "KES",
+    "totals": {
+      "assets": "26250",
+      "liabilities": "0",
+      "netWorth": "26250",
+      "liquid": "26250",
+      "investible": "26250",
+      "contributions": "1050",
+      "withdrawals": "0",
+      "income": "0",
+      "fees": "0",
+      "capitalGrowth": "200"
+    },
+    "allocation": [{ "name": "Assets", "valueMinor": "26250" }],
+    "institutionAllocation": [{ "name": "Example Bank", "valueMinor": "26250" }],
+    "instrumentAllocation": [{ "name": "EXM", "valueMinor": "25000" }]
+  },
+  "estateSnapshots": [
+    {
+      "title": "Family plan",
+      "valueAsOfDate": "2026-01-02",
+      "baseCurrency": "KES",
+      "content": { "format": "wealthboard-estate-summary", "version": 1, "assets": [], "beneficiaries": [], "reviewItems": [] },
+      "contentHash": "619b10f7db6b6eb83ad6dd463883b4b1766b582db02d18c0e44757810f05dda0"
+    }
+  ]
+}

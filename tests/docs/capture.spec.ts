@@ -13,7 +13,6 @@ async function settle(page: Page) {
   await page.waitForLoadState("networkidle");
   await page.addStyleTag({
     content: `
-      nextjs-portal { display: none !important; }
       [data-sonner-toaster] { display: none !important; }
       * { caret-color: transparent !important; }
     `,
@@ -80,14 +79,12 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
-  const seed = spawnSync("npm", ["run", "db:seed:demo"], {
+  const seed = spawnSync("make", ["seed-demo", "DEMO_DATA=true", "TARGET_USERNAME=guide-user"], {
     cwd: projectRoot,
     encoding: "utf8",
     env: {
       ...process.env,
-      DATABASE_PATH: "./data/docs-capture.db",
-      DEMO_DATA: "true",
-      TARGET_USERNAME: "guide-user",
+      DATABASE_URL: "postgres://wealthboard_e2e:wealthboard_e2e@127.0.0.1:55433/wealthboard_e2e?sslmode=disable",
     },
   });
   expect(seed.status, seed.stderr || seed.stdout).toBe(0);
@@ -123,7 +120,7 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await capturePage(page, "goal-planning.png");
 
   const portfolioBeforeConversion = (await (
-    await page.request.get("/api/export/json")
+    await page.request.get("/api/v1/exports/user")
   ).json()) as {
     accounts: Array<{ id: string; name: string }>;
   };
@@ -319,7 +316,7 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await capturePage(page, "estate-beneficiaries.png");
 
   const archive = (await (
-    await page.request.get("/api/export/json")
+    await page.request.get("/api/v1/exports/user")
   ).json()) as {
     accounts: Array<{
       id: string;
