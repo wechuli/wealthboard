@@ -272,14 +272,12 @@ function AIReviewForm({
               goalCount: dashboard.goalCount,
             },
         allocations: allocation,
-        topAccounts: accounts.items
-          .slice(0, 10)
-          .map((account, index) => ({
-            reference: `account-${index + 1}`,
-            name: includeNames ? account.name : undefined,
-            valueMinor: includeAmounts ? account.currentValueMinor : undefined,
-            currency: account.currency,
-          })),
+        topAccounts: accounts.items.slice(0, 10).map((account, index) => ({
+          reference: `account-${index + 1}`,
+          name: includeNames ? account.name : undefined,
+          valueMinor: includeAmounts ? account.currentValueMinor : undefined,
+          currency: account.currency,
+        })),
         cashFlow: {},
         goals: goals.map((goal, index) => ({
           reference: `goal-${index + 1}`,
