@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -14,6 +15,7 @@ const appPort = process.env.E2E_GO_PORT || "3200";
 const appUrl = `http://127.0.0.1:${appPort}`;
 const databaseUrl = `postgres://wealthboard_e2e:wealthboard_e2e@127.0.0.1:${postgresPort}/wealthboard_e2e?sslmode=disable`;
 const compose = ["compose", "-p", project, "-f", composeFile];
+const binaryPath = path.join(root, "test-results/wealthboard-go-e2e");
 let server;
 let stopping = false;
 
@@ -40,6 +42,7 @@ function cleanup(exitCode = 0) {
     env: process.env,
     stdio: "inherit",
   });
+  fs.rmSync(binaryPath, { force: true });
   process.exit(exitCode);
 }
 
@@ -56,15 +59,16 @@ run("docker", [...compose, "up", "--detach", "--wait"]);
 if (process.env.E2E_SKIP_WEB_BUILD !== "1") {
   run("npm", ["--prefix", "web", "run", "build"]);
 }
+fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
 run("go", [
   "build",
   "-trimpath",
   "-o",
-  "bin/wealthboard-e2e",
+  binaryPath,
   "./cmd/wealthboard",
 ]);
 
-server = spawn(path.join(root, "bin/wealthboard-e2e"), ["serve"], {
+server = spawn(binaryPath, ["serve"], {
   cwd: root,
   env: {
     ...process.env,

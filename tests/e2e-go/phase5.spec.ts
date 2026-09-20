@@ -341,7 +341,10 @@ test("stores only AI credential metadata and converts redacted extracted text", 
     apiKey: "fixture-import-key",
   });
   expect(credential.ok()).toBeTruthy();
-  const credentialMetadata = await credential.json();
+  const credentialMetadata = (await credential.json()) as {
+    hasStoredApiKey: boolean;
+    updatedAt: string;
+  };
   expect(credentialMetadata).toEqual(
     expect.objectContaining({ hasStoredApiKey: true }),
   );
@@ -375,7 +378,7 @@ test("stores only AI credential metadata and converts redacted extracted text", 
         settings.baseUrl,
         settings.model,
         settings.maxOutputTokens,
-        settings.updatedAt,
+        credentialMetadata.updatedAt,
         "balance",
         "KES",
       ]),

@@ -23,7 +23,7 @@ describe("validation workflows", () => {
     "make test",
     "make migrate-check",
     "make security",
-    "make test-e2e",
+    "make test-e2e-go",
   ])("runs %s", (command) => {
     expect(validationWorkflow).toContain(command);
   });

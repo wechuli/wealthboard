@@ -866,6 +866,11 @@ func insertPortableRow(ctx context.Context, tx *sql.Tx, userID uuid.UUID, table 
 		values = append(values, portableColumnValue(table.columns[index], value))
 		placeholders[index+1] = fmt.Sprintf("$%d", index+2)
 	}
+	if table.name == "institutions" {
+		columns = append(columns, "normalized_name")
+		values = append(values, normalizeInstitutionName(stringValue(row["name"])))
+		placeholders = append(placeholders, fmt.Sprintf("$%d", len(values)))
+	}
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", table.name, strings.Join(columns, ","), strings.Join(placeholders, ","))
 	_, err := tx.ExecContext(ctx, query, values...)
 	return err
