@@ -46,8 +46,18 @@ const fixtures = vi.hoisted(() => ({
       endDate: null,
     },
     projection: [
-      { date: "2026-09-20T00:00:00Z", projectedMinor: "2500000", contributionsMinor: "2500000", targetMinor: "10000000" },
-      { date: "2028-09-20T00:00:00Z", projectedMinor: "10000000", contributionsMinor: "4900000", targetMinor: "10000000" },
+      {
+        date: "2026-09-20T00:00:00Z",
+        projectedMinor: "2500000",
+        contributionsMinor: "2500000",
+        targetMinor: "10000000",
+      },
+      {
+        date: "2028-09-20T00:00:00Z",
+        projectedMinor: "10000000",
+        contributionsMinor: "4900000",
+        targetMinor: "10000000",
+      },
     ],
   },
   instrument: {
@@ -106,9 +116,7 @@ vi.mock("@/api/client", () => ({
     investibleCategories: [
       { name: "Investments", valueMinor: "2500000", sharePercent: "100" },
     ],
-    instruments: [
-      { name: "EEF", valueMinor: "2500000", sharePercent: "100" },
-    ],
+    instruments: [{ name: "EEF", valueMinor: "2500000", sharePercent: "100" }],
   }),
   getReportSummary: vi.fn().mockResolvedValue({
     asOf: "2026-09-20",
@@ -131,8 +139,26 @@ vi.mock("@/api/client", () => ({
     missingCurrencies: [],
     valueBasis: "current",
     history: [
-      { date: "2025-09-20T00:00:00Z", assetsMinor: "2000000", liabilitiesMinor: "0", netWorthMinor: "2000000", liquidMinor: "0", investibleMinor: "2000000", complete: true, missingCurrencies: [] },
-      { date: "2026-09-20T00:00:00Z", assetsMinor: "2500000", liabilitiesMinor: "0", netWorthMinor: "2500000", liquidMinor: "0", investibleMinor: "2500000", complete: true, missingCurrencies: [] },
+      {
+        date: "2025-09-20T00:00:00Z",
+        assetsMinor: "2000000",
+        liabilitiesMinor: "0",
+        netWorthMinor: "2000000",
+        liquidMinor: "0",
+        investibleMinor: "2000000",
+        complete: true,
+        missingCurrencies: [],
+      },
+      {
+        date: "2026-09-20T00:00:00Z",
+        assetsMinor: "2500000",
+        liabilitiesMinor: "0",
+        netWorthMinor: "2500000",
+        liquidMinor: "0",
+        investibleMinor: "2500000",
+        complete: true,
+        missingCurrencies: [],
+      },
     ],
     historicalComplete: true,
     compositionComplete: true,

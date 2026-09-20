@@ -111,16 +111,43 @@ function AuthenticatedRoutes({
       <Suspense fallback={<RouteLoadingScreen />}>
         <Routes>
           <Route path="/" element={<CoreRoutes session={session} />} />
-          <Route path="/accounts/*" element={<CoreRoutes session={session} />} />
-          <Route path="/transactions/*" element={<CoreRoutes session={session} />} />
-          <Route path="/goals/*" element={<PlanningRoutes session={session} />} />
-          <Route path="/reports" element={<PlanningRoutes session={session} />} />
-          <Route path="/categories" element={<PlanningRoutes session={session} />} />
-          <Route path="/institutions" element={<PlanningRoutes session={session} />} />
-          <Route path="/instruments/*" element={<PlanningRoutes session={session} />} />
-          <Route path="/estate/*" element={<EstateRoutes session={session} />} />
+          <Route
+            path="/accounts/*"
+            element={<CoreRoutes session={session} />}
+          />
+          <Route
+            path="/transactions/*"
+            element={<CoreRoutes session={session} />}
+          />
+          <Route
+            path="/goals/*"
+            element={<PlanningRoutes session={session} />}
+          />
+          <Route
+            path="/reports"
+            element={<PlanningRoutes session={session} />}
+          />
+          <Route
+            path="/categories"
+            element={<PlanningRoutes session={session} />}
+          />
+          <Route
+            path="/institutions"
+            element={<PlanningRoutes session={session} />}
+          />
+          <Route
+            path="/instruments/*"
+            element={<PlanningRoutes session={session} />}
+          />
+          <Route
+            path="/estate/*"
+            element={<EstateRoutes session={session} />}
+          />
           <Route path="/review" element={<ReviewRoute session={session} />} />
-          <Route path="/settings" element={<SettingsRoute session={session} />} />
+          <Route
+            path="/settings"
+            element={<SettingsRoute session={session} />}
+          />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="/signup" element={<Navigate to="/" replace />} />
           <Route path="/offline" element={<OfflinePage />} />
@@ -144,7 +171,10 @@ function LoadingScreen() {
 
 function RouteLoadingScreen() {
   return (
-    <div className="flex min-h-56 items-center justify-center gap-3 text-slate-400" role="status">
+    <div
+      className="flex min-h-56 items-center justify-center gap-3 text-slate-400"
+      role="status"
+    >
       <CircleDollarSign className="text-emerald-300" />
       <span>Loading view</span>
     </div>

@@ -19,7 +19,12 @@ import { z } from "zod";
 import type { AuthConfig, Session } from "@/lib/types";
 import { CURRENCY_CATALOG, DEFAULT_BASE_CURRENCY } from "@/lib/currencies";
 import { Button } from "@/components/ui/button";
-import { FieldError, Input, Label, Select } from "@/components/ui/form-controls";
+import {
+  FieldError,
+  Input,
+  Label,
+  Select,
+} from "@/components/ui/form-controls";
 
 const loginSchema = z.object({
   username: z

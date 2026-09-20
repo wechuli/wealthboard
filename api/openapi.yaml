@@ -4778,7 +4778,19 @@ components:
     CurrentTotals:
       type: object
       additionalProperties: false
-      required: [assets, liabilities, netWorth, liquid, investible, contributions, withdrawals, income, fees, capitalGrowth]
+      required:
+        [
+          assets,
+          liabilities,
+          netWorth,
+          liquid,
+          investible,
+          contributions,
+          withdrawals,
+          income,
+          fees,
+          capitalGrowth,
+        ]
       properties:
         assets:
           $ref: "#/components/schemas/MinorUnits"
@@ -4803,7 +4815,17 @@ components:
     HistoricalPoint:
       type: object
       additionalProperties: false
-      required: [date, assetsMinor, liabilitiesMinor, netWorthMinor, liquidMinor, investibleMinor, complete, missingCurrencies]
+      required:
+        [
+          date,
+          assetsMinor,
+          liabilitiesMinor,
+          netWorthMinor,
+          liquidMinor,
+          investibleMinor,
+          complete,
+          missingCurrencies,
+        ]
       properties:
         date: { type: string, format: date-time }
         assetsMinor: { $ref: "#/components/schemas/MinorUnits" }
@@ -4978,7 +5000,16 @@ components:
     AccountAnalytics:
       type: object
       additionalProperties: false
-      required: [accountId, currency, history, historyComplete, movementAttributionAvailable, movementAttribution, completenessReasons]
+      required:
+        [
+          accountId,
+          currency,
+          history,
+          historyComplete,
+          movementAttributionAvailable,
+          movementAttribution,
+          completenessReasons,
+        ]
       properties:
         accountId: { type: string, format: uuid }
         currency: { type: string }
@@ -4997,7 +5028,27 @@ components:
     PositionMovementAttribution:
       type: object
       additionalProperties: false
-      required: [from, to, startValueMinor, endValueMinor, changeMinor, externalCashMinor, incomeMinor, feesMinor, cashAdjustmentsMinor, internalTradeCashMinor, quantityMovementMinor, priceMovementMinor, currencyMovementMinor, unattributedMinor, complete, methodology, returnStatus, returnMessage]
+      required:
+        [
+          from,
+          to,
+          startValueMinor,
+          endValueMinor,
+          changeMinor,
+          externalCashMinor,
+          incomeMinor,
+          feesMinor,
+          cashAdjustmentsMinor,
+          internalTradeCashMinor,
+          quantityMovementMinor,
+          priceMovementMinor,
+          currencyMovementMinor,
+          unattributedMinor,
+          complete,
+          methodology,
+          returnStatus,
+          returnMessage,
+        ]
       properties:
         from: { type: string, format: date-time }
         to: { type: string, format: date-time }

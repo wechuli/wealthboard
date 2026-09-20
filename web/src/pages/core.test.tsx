@@ -128,8 +128,26 @@ beforeEach(() => {
     historicalComplete: true,
     valueBasis: "effective_dated_replay",
     history: [
-      { date: "2026-08-20T23:59:59Z", assetsMinor: "120000", liabilitiesMinor: "0", netWorthMinor: "120000", liquidMinor: "120000", investibleMinor: "0", complete: true, missingCurrencies: [] },
-      { date: "2026-09-20T23:59:59Z", assetsMinor: "125000", liabilitiesMinor: "0", netWorthMinor: "125000", liquidMinor: "125000", investibleMinor: "0", complete: true, missingCurrencies: [] },
+      {
+        date: "2026-08-20T23:59:59Z",
+        assetsMinor: "120000",
+        liabilitiesMinor: "0",
+        netWorthMinor: "120000",
+        liquidMinor: "120000",
+        investibleMinor: "0",
+        complete: true,
+        missingCurrencies: [],
+      },
+      {
+        date: "2026-09-20T23:59:59Z",
+        assetsMinor: "125000",
+        liabilitiesMinor: "0",
+        netWorthMinor: "125000",
+        liquidMinor: "125000",
+        investibleMinor: "0",
+        complete: true,
+        missingCurrencies: [],
+      },
     ],
     allocation: [{ name: "Cash", valueMinor: "125000", sharePercent: "100" }],
     investibleAllocation: [],
@@ -313,12 +331,18 @@ describe("ported core pages", () => {
         complete: true,
         methodology: "position_bridge_v1",
         returnStatus: "unavailable",
-        returnMessage: "Annualized return is unavailable until cash-flow-aware TWR methodology is implemented.",
+        returnMessage:
+          "Annualized return is unavailable until cash-flow-aware TWR methodology is implemented.",
       },
     });
     renderPage(
       <Routes>
-        <Route path="/accounts/:id" element={<PortedAccountDetailPage session={{ csrfToken: "csrf" } as never} />} />
+        <Route
+          path="/accounts/:id"
+          element={
+            <PortedAccountDetailPage session={{ csrfToken: "csrf" } as never} />
+          }
+        />
       </Routes>,
       ["/accounts/account-1"],
     );

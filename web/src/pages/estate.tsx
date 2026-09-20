@@ -2,7 +2,12 @@ import { ListPlus } from "lucide-react";
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 
-import { getAccounts, getEstate, getEstateSnapshot, getOverview } from "@/api/client";
+import {
+  getAccounts,
+  getEstate,
+  getEstateSnapshot,
+  getOverview,
+} from "@/api/client";
 import { BeneficiaryManager } from "@/components/estate/beneficiary-manager";
 import { EstateDistributionWorkspace } from "@/components/estate/distribution-workspace";
 import { EstateNavigation } from "@/components/estate/navigation";

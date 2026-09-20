@@ -13,9 +13,18 @@ export default function EstateRoutes({ session }: { session: Session }) {
   return (
     <Routes>
       <Route path="/estate" element={<EstateIndexPage />} />
-      <Route path="/estate/beneficiaries" element={<EstateBeneficiariesPage session={session} />} />
-      <Route path="/estate/distribution" element={<EstateDistributionPage session={session} />} />
-      <Route path="/estate/summary" element={<EstateSummaryPage session={session} />} />
+      <Route
+        path="/estate/beneficiaries"
+        element={<EstateBeneficiariesPage session={session} />}
+      />
+      <Route
+        path="/estate/distribution"
+        element={<EstateDistributionPage session={session} />}
+      />
+      <Route
+        path="/estate/summary"
+        element={<EstateSummaryPage session={session} />}
+      />
       <Route path="/estate/snapshots/:id" element={<EstateSnapshotPage />} />
     </Routes>
   );
