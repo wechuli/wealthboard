@@ -191,13 +191,14 @@ export function DashboardPage() {
   const range = ["1m", "3m", "6m", "1y", "all"].includes(requestedRange)
     ? requestedRange
     : "1y";
-  const state = useResource(() =>
-    Promise.all([
-      getDashboard(range),
-      getGoals(),
-      getGoalAlerts(),
-      getTransactions(),
-    ]),
+  const state = useResource(
+    () =>
+      Promise.all([
+        getDashboard(range),
+        getGoals(),
+        getGoalAlerts(),
+        getTransactions(),
+      ]),
     [range],
   );
 
@@ -364,10 +365,15 @@ export function DashboardPage() {
                     <CardContent>
                       {!data.historicalComplete ? (
                         <p className="mb-3 text-xs text-amber-200">
-                          Incomplete history: one or more effective-dated prices or exchange rates are unavailable.
+                          Incomplete history: one or more effective-dated prices
+                          or exchange rates are unavailable.
                         </p>
                       ) : null}
-                      <NetWorthChart data={data.history} currency={data.baseCurrency} range={range} />
+                      <NetWorthChart
+                        data={data.history}
+                        currency={data.baseCurrency}
+                        range={range}
+                      />
                     </CardContent>
                   </Card>
                   <Card>
@@ -375,7 +381,11 @@ export function DashboardPage() {
                       <CardTitle>Asset allocation</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <AllocationChart total={data.allocation} investible={data.investibleAllocation} currency={data.baseCurrency} />
+                      <AllocationChart
+                        total={data.allocation}
+                        investible={data.investibleAllocation}
+                        currency={data.baseCurrency}
+                      />
                     </CardContent>
                   </Card>
                 </div>
@@ -385,7 +395,11 @@ export function DashboardPage() {
                       <CardTitle>Assets versus liabilities</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <AssetsLiabilitiesChart assetsMinor={data.totals.assets} liabilitiesMinor={data.totals.liabilities} currency={data.baseCurrency} />
+                      <AssetsLiabilitiesChart
+                        assetsMinor={data.totals.assets}
+                        liabilitiesMinor={data.totals.liabilities}
+                        currency={data.baseCurrency}
+                      />
                     </CardContent>
                   </Card>
                   <Card>
@@ -399,15 +413,26 @@ export function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                       {!data.compositionComplete ? (
-                        <p className="mb-3 text-xs text-amber-200">{data.completenessReasons.join(" ")}</p>
+                        <p className="mb-3 text-xs text-amber-200">
+                          {data.completenessReasons.join(" ")}
+                        </p>
                       ) : null}
                       <ContributionsGrowthChart
                         currency={data.baseCurrency}
                         values={[
-                          { name: "Contributions", valueMinor: data.totals.contributions },
+                          {
+                            name: "Contributions",
+                            valueMinor: data.totals.contributions,
+                          },
                           { name: "Income", valueMinor: data.totals.income },
-                          { name: "Capital", valueMinor: data.totals.capitalGrowth },
-                          { name: "Withdrawals", valueMinor: `-${data.totals.withdrawals}` },
+                          {
+                            name: "Capital",
+                            valueMinor: data.totals.capitalGrowth,
+                          },
+                          {
+                            name: "Withdrawals",
+                            valueMinor: `-${data.totals.withdrawals}`,
+                          },
                           { name: "Fees", valueMinor: `-${data.totals.fees}` },
                         ]}
                       />
@@ -1423,36 +1448,75 @@ export function AccountDetailPage({ session }: PageProps) {
                 currency={account.currency}
               />
             </div>
-            {account.trackingMode === "positions" && analytics.movementAttribution ? (
+            {account.trackingMode === "positions" &&
+            analytics.movementAttribution ? (
               <Card className="mt-5">
                 <CardHeader>
                   <div>
                     <CardTitle>Movement attribution</CardTitle>
-                    <p className="mt-1 text-xs text-slate-500">Exact bridge from recorded cash, quantities, prices, and currencies.</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Exact bridge from recorded cash, quantities, prices, and
+                      currencies.
+                    </p>
                   </div>
-                  <Badge tone={analytics.movementAttribution.complete ? "positive" : "warning"}>
-                    {analytics.movementAttribution.complete ? "Complete" : "Incomplete"}
+                  <Badge
+                    tone={
+                      analytics.movementAttribution.complete
+                        ? "positive"
+                        : "warning"
+                    }
+                  >
+                    {analytics.movementAttribution.complete
+                      ? "Complete"
+                      : "Incomplete"}
                   </Badge>
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     {[
-                      ["External cash", analytics.movementAttribution.externalCashMinor],
+                      [
+                        "External cash",
+                        analytics.movementAttribution.externalCashMinor,
+                      ],
                       ["Income", analytics.movementAttribution.incomeMinor],
                       ["Fees", analytics.movementAttribution.feesMinor],
-                      ["Internal trade cash", analytics.movementAttribution.internalTradeCashMinor],
-                      ["Quantity changes", analytics.movementAttribution.quantityMovementMinor],
-                      ["Price movement", analytics.movementAttribution.priceMovementMinor],
-                      ["Currency movement", analytics.movementAttribution.currencyMovementMinor],
-                      ["Unattributed", analytics.movementAttribution.unattributedMinor],
+                      [
+                        "Internal trade cash",
+                        analytics.movementAttribution.internalTradeCashMinor,
+                      ],
+                      [
+                        "Quantity changes",
+                        analytics.movementAttribution.quantityMovementMinor,
+                      ],
+                      [
+                        "Price movement",
+                        analytics.movementAttribution.priceMovementMinor,
+                      ],
+                      [
+                        "Currency movement",
+                        analytics.movementAttribution.currencyMovementMinor,
+                      ],
+                      [
+                        "Unattributed",
+                        analytics.movementAttribution.unattributedMinor,
+                      ],
                     ].map(([label, amount]) => (
-                      <div key={label} className="rounded-lg border border-white/10 p-3">
+                      <div
+                        key={label}
+                        className="rounded-lg border border-white/10 p-3"
+                      >
                         <p className="text-xs text-slate-500">{label}</p>
-                        <MoneyValue amount={amount} currency={account.currency} className="mt-1 font-semibold" />
+                        <MoneyValue
+                          amount={amount}
+                          currency={account.currency}
+                          className="mt-1 font-semibold"
+                        />
                       </div>
                     ))}
                   </div>
-                  <p className="mt-4 text-xs text-amber-200">{analytics.movementAttribution.returnMessage}</p>
+                  <p className="mt-4 text-xs text-amber-200">
+                    {analytics.movementAttribution.returnMessage}
+                  </p>
                 </CardContent>
               </Card>
             ) : null}
@@ -1469,10 +1533,16 @@ export function AccountDetailPage({ session }: PageProps) {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {!analytics.historyComplete && analytics.completenessReasons.length ? (
-                    <p className="mb-3 text-xs text-amber-200">{analytics.completenessReasons.join(" ")}</p>
+                  {!analytics.historyComplete &&
+                  analytics.completenessReasons.length ? (
+                    <p className="mb-3 text-xs text-amber-200">
+                      {analytics.completenessReasons.join(" ")}
+                    </p>
                   ) : null}
-                  <AccountHistoryChart data={analytics.history} currency={analytics.currency} />
+                  <AccountHistoryChart
+                    data={analytics.history}
+                    currency={analytics.currency}
+                  />
                 </CardContent>
               </Card>
               <Card>

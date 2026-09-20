@@ -31,7 +31,10 @@ When the repository has changed since this brief was written, inspect the latest
 - [x] Preserve balance and position replay, valuation reset semantics, atomic paired transfers, archive restrictions, strict minor-unit/decimal handling, CSRF and `portfolio:write` authorization, and idempotent creation workflows with PostgreSQL coverage.
 - [x] Complete account conversion preview and atomic execution with exact reconciliation, explicit difference confirmation, source archival, opening positions, and idempotent replay.
 - [x] Document Phase 4 in OpenAPI, regenerate frontend types, and add responsive Vite forms using the original interface styling, including persisted position-event and reconciliation management after reload.
-- [ ] Port Phase 5 advanced workflows and complete the later cutover work below.
+- [x] Complete Phase 5 corporate actions, bounded account and investment imports, versioned user portability, estate mutations and immutable snapshots, encrypted AI workflows, PostgreSQL operator commands, extraction isolation, and PWA safeguards.
+- [x] Port the existing Next.js interface faithfully to Vite, preserving its route structure, responsive shell, forms, charts, labels, controls, and visual styling while replacing only framework and data bindings.
+- [x] Organize the Vite client into `app`, `api`, `components`, `hooks`, `lib`, and `pages` domains with stable aliases, colocated tests, and route-level code splitting.
+- [ ] Complete Phase 6 cutover and remove the superseded Next.js runtime after all acceptance gates pass.
 
 ## Objective
 
