@@ -3,7 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const root = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
 
 export default function teardown() {
   const composeFile = path.join(root, "tests/e2e-go/docker-compose.yml");
@@ -22,5 +25,7 @@ export default function teardown() {
     ],
     { cwd: root, env: process.env, stdio: "inherit" },
   );
-  fs.rmSync(path.join(root, "test-results/wealthboard-go-e2e"), { force: true });
+  fs.rmSync(path.join(root, "test-results/wealthboard-go-e2e"), {
+    force: true,
+  });
 }
