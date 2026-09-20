@@ -302,11 +302,6 @@ export function AccountDetailPage({ session }: { session: Session }) {
                 session={session}
                 onChanged={() => setRefresh((value) => value + 1)}
               />
-              <ImportWorkspace
-                account={account}
-                session={session}
-                onChanged={() => setRefresh((value) => value + 1)}
-              />
             </>
           ) : (
             <AccountConversionForm
@@ -316,6 +311,11 @@ export function AccountDetailPage({ session }: { session: Session }) {
               onConverted={(targetID) => navigate(`/accounts/${targetID}`)}
             />
           )}
+          <ImportWorkspace
+            account={account}
+            session={session}
+            onChanged={() => setRefresh((value) => value + 1)}
+          />
         </>
       )}
     </ResourceView>

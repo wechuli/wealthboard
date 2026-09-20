@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CircleDollarSign, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { z } from "zod";
@@ -14,28 +14,73 @@ import {
   logout,
   signup,
 } from "./api";
-import {
-  AccountDetailPage,
-  AccountsPage,
-  DashboardPage,
-  GoalDetailPage,
-  GoalsPage,
-  ReportsPage,
-  TransactionsPage,
-} from "./core-pages";
-import {
-  CategoriesPage,
-  EstatePage,
-  EstateSnapshotPage,
-  InstitutionsPage,
-  InstrumentDetailPage,
-  InstrumentsPage,
-  ReviewPage,
-} from "./feature-pages";
 import { AppShell, clearUserState } from "./shell";
 import { OfflinePage } from "./pwa";
-import { SettingsPage } from "./settings-page";
 import type { AuthConfig, Overview, Session } from "./types";
+
+const DashboardPage = lazy(() =>
+  import("./core-pages").then((module) => ({ default: module.DashboardPage })),
+);
+const AccountsPage = lazy(() =>
+  import("./core-pages").then((module) => ({ default: module.AccountsPage })),
+);
+const AccountDetailPage = lazy(() =>
+  import("./core-pages").then((module) => ({
+    default: module.AccountDetailPage,
+  })),
+);
+const TransactionsPage = lazy(() =>
+  import("./core-pages").then((module) => ({
+    default: module.TransactionsPage,
+  })),
+);
+const GoalsPage = lazy(() =>
+  import("./core-pages").then((module) => ({ default: module.GoalsPage })),
+);
+const GoalDetailPage = lazy(() =>
+  import("./core-pages").then((module) => ({
+    default: module.GoalDetailPage,
+  })),
+);
+const ReportsPage = lazy(() =>
+  import("./core-pages").then((module) => ({ default: module.ReportsPage })),
+);
+const CategoriesPage = lazy(() =>
+  import("./feature-pages").then((module) => ({
+    default: module.CategoriesPage,
+  })),
+);
+const InstitutionsPage = lazy(() =>
+  import("./feature-pages").then((module) => ({
+    default: module.InstitutionsPage,
+  })),
+);
+const InstrumentsPage = lazy(() =>
+  import("./feature-pages").then((module) => ({
+    default: module.InstrumentsPage,
+  })),
+);
+const InstrumentDetailPage = lazy(() =>
+  import("./feature-pages").then((module) => ({
+    default: module.InstrumentDetailPage,
+  })),
+);
+const EstatePage = lazy(() =>
+  import("./feature-pages").then((module) => ({ default: module.EstatePage })),
+);
+const EstateSnapshotPage = lazy(() =>
+  import("./feature-pages").then((module) => ({
+    default: module.EstateSnapshotPage,
+  })),
+);
+const ReviewPage = lazy(() =>
+  import("./feature-pages").then((module) => ({ default: module.ReviewPage })),
+);
+const SettingsPage = lazy(() =>
+  import("./settings-page").then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
 
 const loginSchema = z.object({
   username: z
@@ -323,43 +368,66 @@ function AuthenticatedApp({
       displayName={displayName}
       onSignOut={signOut}
     >
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/accounts" element={<AccountsPage session={session} />} />
-        <Route
-          path="/accounts/:id"
-          element={<AccountDetailPage session={session} />}
-        />
-        <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/goals" element={<GoalsPage session={session} />} />
-        <Route
-          path="/goals/:id"
-          element={<GoalDetailPage session={session} />}
-        />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route
-          path="/categories"
-          element={<CategoriesPage session={session} />}
-        />
-        <Route
-          path="/institutions"
-          element={<InstitutionsPage session={session} />}
-        />
-        <Route
-          path="/instruments"
-          element={<InstrumentsPage session={session} />}
-        />
-        <Route
-          path="/instruments/:id"
-          element={<InstrumentDetailPage session={session} />}
-        />
-        <Route path="/estate" element={<EstatePage session={session} />} />
-        <Route path="/estate/snapshots/:id" element={<EstateSnapshotPage />} />
-        <Route path="/review" element={<ReviewPage session={session} />} />
-        <Route path="/settings" element={<SettingsPage session={session} />} />
-        <Route path="/offline" element={<OfflinePage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteLoadingScreen />}>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route
+            path="/accounts"
+            element={<AccountsPage session={session} />}
+          />
+          <Route
+            path="/accounts/:id"
+            element={<AccountDetailPage session={session} />}
+          />
+          <Route
+            path="/transactions"
+            element={<TransactionsPage />}
+          />
+          <Route
+            path="/goals"
+            element={<GoalsPage session={session} />}
+          />
+          <Route
+            path="/goals/:id"
+            element={<GoalDetailPage session={session} />}
+          />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route
+            path="/categories"
+            element={<CategoriesPage session={session} />}
+          />
+          <Route
+            path="/institutions"
+            element={<InstitutionsPage session={session} />}
+          />
+          <Route
+            path="/instruments"
+            element={<InstrumentsPage session={session} />}
+          />
+          <Route
+            path="/instruments/:id"
+            element={<InstrumentDetailPage session={session} />}
+          />
+          <Route
+            path="/estate"
+            element={<EstatePage session={session} />}
+          />
+          <Route
+            path="/estate/snapshots/:id"
+            element={<EstateSnapshotPage />}
+          />
+          <Route
+            path="/review"
+            element={<ReviewPage session={session} />}
+          />
+          <Route
+            path="/settings"
+            element={<SettingsPage session={session} />}
+          />
+          <Route path="/offline" element={<OfflinePage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </AppShell>
   );
 }
@@ -370,5 +438,14 @@ function LoadingScreen() {
       <CircleDollarSign />
       <span>Loading Wealthboard</span>
     </main>
+  );
+}
+
+function RouteLoadingScreen() {
+  return (
+    <div className="loading-screen" role="status">
+      <CircleDollarSign />
+      <span>Loading view</span>
+    </div>
   );
 }

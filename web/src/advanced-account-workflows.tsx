@@ -421,12 +421,14 @@ export function ImportWorkspace({
         session={session}
         onChanged={onChanged}
       />
+    {account.trackingMode === "positions" ? (
       <ImportPanel
         kind="investment"
         account={account}
         session={session}
         onChanged={onChanged}
       />
+    ) : null}
     </div>
   );
 }
