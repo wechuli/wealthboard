@@ -88,25 +88,33 @@ type GoalsReportsService struct {
 }
 
 type GoalRead struct {
-	ID                     uuid.UUID          `json:"id"`
-	Name                   string             `json:"name"`
-	Description            *string            `json:"description"`
-	TargetAmountMinor      string             `json:"targetAmountMinor"`
-	CurrentAmountMinor     string             `json:"currentAmountMinor"`
-	CurrentAmountCurrency  string             `json:"currentAmountCurrency"`
-	Currency               string             `json:"currency"`
-	TargetDate             string             `json:"targetDate"`
-	LinkedAccount          *GoalLinkedAccount `json:"linkedAccount"`
-	Icon                   string             `json:"icon"`
-	Status                 string             `json:"status"`
-	Priority               int32              `json:"priority"`
-	AssumedAnnualReturnBPS int32              `json:"assumedAnnualReturnBps"`
-	ProgressPercent        string             `json:"progressPercent"`
-	ValueIncomplete        bool               `json:"valueIncomplete"`
-	MissingCurrencies      []string           `json:"missingCurrencies"`
-	Plan                   *GoalPlanRead      `json:"plan"`
+	ID                     uuid.UUID                 `json:"id"`
+	Name                   string                    `json:"name"`
+	Description            *string                   `json:"description"`
+	TargetAmountMinor      string                    `json:"targetAmountMinor"`
+	CurrentAmountMinor     string                    `json:"currentAmountMinor"`
+	CurrentAmountCurrency  string                    `json:"currentAmountCurrency"`
+	Currency               string                    `json:"currency"`
+	TargetDate             string                    `json:"targetDate"`
+	LinkedAccount          *GoalLinkedAccount        `json:"linkedAccount"`
+	Icon                   string                    `json:"icon"`
+	Status                 string                    `json:"status"`
+	Priority               int32                     `json:"priority"`
+	AssumedAnnualReturnBPS int32                     `json:"assumedAnnualReturnBps"`
+	ProgressPercent        string                    `json:"progressPercent"`
+	ValueIncomplete        bool                      `json:"valueIncomplete"`
+	MissingCurrencies      []string                  `json:"missingCurrencies"`
+	Plan                   *GoalPlanRead             `json:"plan"`
+	Projection             []GoalProjectionPointRead `json:"projection"`
 	createdAt              time.Time
 	timezone               string
+}
+
+type GoalProjectionPointRead struct {
+	Date               string `json:"date"`
+	ProjectedMinor     string `json:"projectedMinor"`
+	ContributionsMinor string `json:"contributionsMinor"`
+	TargetMinor        string `json:"targetMinor"`
 }
 
 type GoalLinkedAccount struct {
@@ -146,35 +154,63 @@ type GoalAlertRead struct {
 }
 
 type CurrentTotals struct {
-	Assets      string `json:"assets"`
-	Liabilities string `json:"liabilities"`
-	NetWorth    string `json:"netWorth"`
-	Liquid      string `json:"liquid"`
-	Investible  string `json:"investible"`
+	Assets        string `json:"assets"`
+	Liabilities   string `json:"liabilities"`
+	NetWorth      string `json:"netWorth"`
+	Liquid        string `json:"liquid"`
+	Investible    string `json:"investible"`
+	Contributions string `json:"contributions"`
+	Withdrawals   string `json:"withdrawals"`
+	Income        string `json:"income"`
+	Fees          string `json:"fees"`
+	CapitalGrowth string `json:"capitalGrowth"`
+}
+
+type HistoricalPointRead struct {
+	Date              string   `json:"date"`
+	AssetsMinor       string   `json:"assetsMinor"`
+	LiabilitiesMinor  string   `json:"liabilitiesMinor"`
+	NetWorthMinor     string   `json:"netWorthMinor"`
+	LiquidMinor       string   `json:"liquidMinor"`
+	InvestibleMinor   string   `json:"investibleMinor"`
+	Complete          bool     `json:"complete"`
+	MissingCurrencies []string `json:"missingCurrencies"`
 }
 
 type DashboardRead struct {
-	AsOf                string        `json:"asOf"`
-	BaseCurrency        string        `json:"baseCurrency"`
-	Totals              CurrentTotals `json:"totals"`
-	AccountCount        int           `json:"accountCount"`
-	GoalCount           int64         `json:"goalCount"`
-	CurrentComplete     bool          `json:"currentComplete"`
-	MissingCurrencies   []string      `json:"missingCurrencies"`
-	HistoricalAvailable bool          `json:"historicalAvailable"`
-	HistoricalComplete  bool          `json:"historicalComplete"`
-	ValueBasis          string        `json:"valueBasis"`
+	AsOf                  string                `json:"asOf"`
+	BaseCurrency          string                `json:"baseCurrency"`
+	Totals                CurrentTotals         `json:"totals"`
+	AccountCount          int                   `json:"accountCount"`
+	GoalCount             int64                 `json:"goalCount"`
+	CurrentComplete       bool                  `json:"currentComplete"`
+	MissingCurrencies     []string              `json:"missingCurrencies"`
+	HistoricalAvailable   bool                  `json:"historicalAvailable"`
+	HistoricalComplete    bool                  `json:"historicalComplete"`
+	ValueBasis            string                `json:"valueBasis"`
+	History               []HistoricalPointRead `json:"history"`
+	Allocation            []AllocationItemRead  `json:"allocation"`
+	InvestibleAllocation  []AllocationItemRead  `json:"investibleAllocation"`
+	InstitutionAllocation []AllocationItemRead  `json:"institutionAllocation"`
+	CurrencyAllocation    []AllocationItemRead  `json:"currencyAllocation"`
+	InstrumentAllocation  []AllocationItemRead  `json:"instrumentAllocation"`
+	CompositionComplete   bool                  `json:"compositionComplete"`
+	CompletenessReasons   []string              `json:"completenessReasons"`
 }
 
 type ReportSummaryRead struct {
-	AsOf              string        `json:"asOf"`
-	BaseCurrency      string        `json:"baseCurrency"`
-	Totals            CurrentTotals `json:"totals"`
-	AccountCount      int           `json:"accountCount"`
-	GoalCount         int64         `json:"goalCount"`
-	CurrentComplete   bool          `json:"currentComplete"`
-	MissingCurrencies []string      `json:"missingCurrencies"`
-	ValueBasis        string        `json:"valueBasis"`
+	AsOf                string                `json:"asOf"`
+	BaseCurrency        string                `json:"baseCurrency"`
+	Totals              CurrentTotals         `json:"totals"`
+	AccountCount        int                   `json:"accountCount"`
+	GoalCount           int64                 `json:"goalCount"`
+	CurrentComplete     bool                  `json:"currentComplete"`
+	MissingCurrencies   []string              `json:"missingCurrencies"`
+	ValueBasis          string                `json:"valueBasis"`
+	History             []HistoricalPointRead `json:"history"`
+	HistoricalComplete  bool                  `json:"historicalComplete"`
+	CompositionComplete bool                  `json:"compositionComplete"`
+	CompletenessReasons []string              `json:"completenessReasons"`
 }
 
 type AllocationItemRead struct {
@@ -184,14 +220,53 @@ type AllocationItemRead struct {
 }
 
 type ReportAllocationRead struct {
-	AsOf              string               `json:"asOf"`
-	BaseCurrency      string               `json:"baseCurrency"`
-	CurrentComplete   bool                 `json:"currentComplete"`
-	MissingCurrencies []string             `json:"missingCurrencies"`
-	ValueBasis        string               `json:"valueBasis"`
-	Categories        []AllocationItemRead `json:"categories"`
-	Institutions      []AllocationItemRead `json:"institutions"`
-	Currencies        []AllocationItemRead `json:"currencies"`
+	AsOf                 string               `json:"asOf"`
+	BaseCurrency         string               `json:"baseCurrency"`
+	CurrentComplete      bool                 `json:"currentComplete"`
+	MissingCurrencies    []string             `json:"missingCurrencies"`
+	ValueBasis           string               `json:"valueBasis"`
+	Categories           []AllocationItemRead `json:"categories"`
+	Institutions         []AllocationItemRead `json:"institutions"`
+	Currencies           []AllocationItemRead `json:"currencies"`
+	InvestibleCategories []AllocationItemRead `json:"investibleCategories"`
+	Instruments          []AllocationItemRead `json:"instruments"`
+}
+
+type AccountHistoryPointRead struct {
+	Date       string `json:"date"`
+	ValueMinor string `json:"valueMinor"`
+	Complete   bool   `json:"complete"`
+}
+
+type AccountAnalyticsRead struct {
+	AccountID                    uuid.UUID                        `json:"accountId"`
+	Currency                     string                           `json:"currency"`
+	History                      []AccountHistoryPointRead        `json:"history"`
+	HistoryComplete              bool                             `json:"historyComplete"`
+	MovementAttributionAvailable bool                             `json:"movementAttributionAvailable"`
+	MovementAttribution          *PositionMovementAttributionRead `json:"movementAttribution"`
+	CompletenessReasons          []string                         `json:"completenessReasons"`
+}
+
+type PositionMovementAttributionRead struct {
+	From                   string `json:"from"`
+	To                     string `json:"to"`
+	StartValueMinor        string `json:"startValueMinor"`
+	EndValueMinor          string `json:"endValueMinor"`
+	ChangeMinor            string `json:"changeMinor"`
+	ExternalCashMinor      string `json:"externalCashMinor"`
+	IncomeMinor            string `json:"incomeMinor"`
+	FeesMinor              string `json:"feesMinor"`
+	CashAdjustmentsMinor   string `json:"cashAdjustmentsMinor"`
+	InternalTradeCashMinor string `json:"internalTradeCashMinor"`
+	QuantityMovementMinor  string `json:"quantityMovementMinor"`
+	PriceMovementMinor     string `json:"priceMovementMinor"`
+	CurrencyMovementMinor  string `json:"currencyMovementMinor"`
+	UnattributedMinor      string `json:"unattributedMinor"`
+	Complete               bool   `json:"complete"`
+	Methodology            string `json:"methodology"`
+	ReturnStatus           string `json:"returnStatus"`
+	ReturnMessage          string `json:"returnMessage"`
 }
 
 type currentSnapshot struct {
@@ -312,7 +387,14 @@ func (service *GoalsReportsService) ListAlerts(ctx context.Context, userID uuid.
 	return result, nil
 }
 
-func (service *GoalsReportsService) Dashboard(ctx context.Context, userID uuid.UUID) (DashboardRead, error) {
+func (service *GoalsReportsService) Dashboard(ctx context.Context, userID uuid.UUID, rangeName ...string) (DashboardRead, error) {
+	rangeValue := "1y"
+	if len(rangeName) > 0 {
+		rangeValue = rangeName[0]
+	}
+	if result, supported, err := service.chartDashboard(ctx, userID, rangeValue); supported {
+		return result, err
+	}
 	snapshot, err := service.loadCurrentSnapshot(ctx, userID)
 	if err != nil {
 		return DashboardRead{}, err
@@ -322,10 +404,24 @@ func (service *GoalsReportsService) Dashboard(ctx context.Context, userID uuid.U
 		Totals: snapshot.totals, AccountCount: len(snapshot.accounts), GoalCount: snapshot.goalCount,
 		CurrentComplete: snapshot.currentComplete, MissingCurrencies: snapshot.missingCurrencies,
 		HistoricalAvailable: false, HistoricalComplete: false, ValueBasis: "current_cached_account_values",
+		History: []HistoricalPointRead{}, Allocation: []AllocationItemRead{}, InvestibleAllocation: []AllocationItemRead{},
+		InstitutionAllocation: []AllocationItemRead{}, CurrencyAllocation: []AllocationItemRead{},
+		InstrumentAllocation: []AllocationItemRead{},
+		CompositionComplete:  false, CompletenessReasons: []string{"Historical replay is unavailable from this repository."},
 	}, nil
 }
 
 func (service *GoalsReportsService) ReportSummary(ctx context.Context, userID uuid.UUID) (ReportSummaryRead, error) {
+	if dashboard, supported, err := service.chartDashboard(ctx, userID, "all"); supported {
+		if err != nil {
+			return ReportSummaryRead{}, err
+		}
+		return ReportSummaryRead{AsOf: dashboard.AsOf, BaseCurrency: dashboard.BaseCurrency, Totals: dashboard.Totals,
+			AccountCount: dashboard.AccountCount, GoalCount: dashboard.GoalCount, CurrentComplete: dashboard.CurrentComplete,
+			MissingCurrencies: dashboard.MissingCurrencies, ValueBasis: dashboard.ValueBasis, History: dashboard.History,
+			HistoricalComplete: dashboard.HistoricalComplete, CompositionComplete: dashboard.CompositionComplete,
+			CompletenessReasons: dashboard.CompletenessReasons}, nil
+	}
 	snapshot, err := service.loadCurrentSnapshot(ctx, userID)
 	if err != nil {
 		return ReportSummaryRead{}, err
@@ -334,11 +430,22 @@ func (service *GoalsReportsService) ReportSummary(ctx context.Context, userID uu
 		AsOf: service.now().UTC().Format(time.RFC3339), BaseCurrency: snapshot.settings.BaseCurrency,
 		Totals: snapshot.totals, AccountCount: len(snapshot.accounts), GoalCount: snapshot.goalCount,
 		CurrentComplete: snapshot.currentComplete, MissingCurrencies: snapshot.missingCurrencies,
-		ValueBasis: "current_cached_account_values",
+		ValueBasis: "current_cached_account_values", History: []HistoricalPointRead{}, HistoricalComplete: false,
+		CompositionComplete: false, CompletenessReasons: []string{"Historical replay is unavailable from this repository."},
 	}, nil
 }
 
 func (service *GoalsReportsService) ReportAllocation(ctx context.Context, userID uuid.UUID) (ReportAllocationRead, error) {
+	if dashboard, supported, err := service.chartDashboard(ctx, userID, "all"); supported {
+		if err != nil {
+			return ReportAllocationRead{}, err
+		}
+		return ReportAllocationRead{AsOf: dashboard.AsOf, BaseCurrency: dashboard.BaseCurrency,
+			CurrentComplete: dashboard.CurrentComplete, MissingCurrencies: dashboard.MissingCurrencies, ValueBasis: dashboard.ValueBasis,
+			Categories: dashboard.Allocation, Institutions: dashboard.InstitutionAllocation,
+			Currencies: dashboard.CurrencyAllocation, InvestibleCategories: dashboard.InvestibleAllocation,
+			Instruments: dashboard.InstrumentAllocation}, nil
+	}
 	snapshot, err := service.loadCurrentSnapshot(ctx, userID)
 	if err != nil {
 		return ReportAllocationRead{}, err
@@ -357,10 +464,12 @@ func (service *GoalsReportsService) ReportAllocation(ctx context.Context, userID
 	return ReportAllocationRead{
 		AsOf: service.now().UTC().Format(time.RFC3339), BaseCurrency: snapshot.settings.BaseCurrency,
 		CurrentComplete: snapshot.currentComplete, MissingCurrencies: snapshot.missingCurrencies,
-		ValueBasis:   "current_cached_account_values",
-		Categories:   allocationItems(categories, snapshot.assetTotal),
-		Institutions: allocationItems(institutions, snapshot.assetTotal),
-		Currencies:   allocationItems(currencies, snapshot.assetTotal),
+		ValueBasis:           "current_cached_account_values",
+		Categories:           allocationItems(categories, snapshot.assetTotal),
+		Institutions:         allocationItems(institutions, snapshot.assetTotal),
+		Currencies:           allocationItems(currencies, snapshot.assetTotal),
+		InvestibleCategories: []AllocationItemRead{},
+		Instruments:          []AllocationItemRead{},
 	}, nil
 }
 
@@ -400,7 +509,7 @@ func (service *GoalsReportsService) mapGoal(record GoalRecord, settings GoalsRep
 			EndDate: formatGoalsReportsDate(record.PlanEndDate),
 		}
 	}
-	return GoalRead{
+	goal := GoalRead{
 		ID: record.ID, Name: record.Name, Description: record.Description,
 		TargetAmountMinor:  strconv.FormatInt(record.TargetAmountMinor, 10),
 		CurrentAmountMinor: strconv.FormatInt(current, 10), CurrentAmountCurrency: currentCurrency,
@@ -411,6 +520,8 @@ func (service *GoalsReportsService) mapGoal(record GoalRecord, settings GoalsRep
 		ValueIncomplete:        incomplete, MissingCurrencies: missing, Plan: plan,
 		createdAt: record.CreatedAt, timezone: settings.Timezone,
 	}
+	goal.Projection = goalProjection(goal, service.now())
+	return goal
 }
 
 func (service *GoalsReportsService) loadCurrentSnapshot(ctx context.Context, userID uuid.UUID) (currentSnapshot, error) {

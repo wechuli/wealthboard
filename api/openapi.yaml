@@ -1104,6 +1104,13 @@ paths:
       security:
         - sessionCookie: []
         - apiKey: []
+      parameters:
+        - name: range
+          in: query
+          schema:
+            type: string
+            enum: [1m, 3m, 6m, 1y, all]
+            default: 1y
       responses:
         "200":
           description: Owner-scoped dashboard snapshot
@@ -1115,6 +1122,26 @@ paths:
           $ref: "#/components/responses/Problem"
         "403":
           $ref: "#/components/responses/Problem"
+  /accounts/{accountID}/analytics:
+    get:
+      operationId: getAccountAnalytics
+      summary: Return replayed value history for an owner-scoped account
+      description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+      responses:
+        "200":
+          description: Owner-scoped account analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountAnalytics"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /reports/summary:
     get:
       operationId: getReportSummary
@@ -4645,6 +4672,7 @@ components:
           valueIncomplete,
           missingCurrencies,
           plan,
+          projection,
         ]
       properties:
         id: { type: string, format: uuid }
@@ -4675,6 +4703,22 @@ components:
           oneOf:
             - $ref: "#/components/schemas/GoalPlan"
             - type: "null"
+        projection:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoalProjectionPoint"
+    GoalProjectionPoint:
+      type: object
+      additionalProperties: false
+      required: [date, projectedMinor, contributionsMinor, targetMinor]
+      properties:
+        date: { type: string, format: date-time }
+        projectedMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        contributionsMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        targetMinor:
+          $ref: "#/components/schemas/MinorUnits"
     GoalMilestone:
       type: object
       additionalProperties: false
@@ -4734,7 +4778,7 @@ components:
     CurrentTotals:
       type: object
       additionalProperties: false
-      required: [assets, liabilities, netWorth, liquid, investible]
+      required: [assets, liabilities, netWorth, liquid, investible, contributions, withdrawals, income, fees, capitalGrowth]
       properties:
         assets:
           $ref: "#/components/schemas/MinorUnits"
@@ -4746,6 +4790,31 @@ components:
           $ref: "#/components/schemas/MinorUnits"
         investible:
           $ref: "#/components/schemas/MinorUnits"
+        contributions:
+          $ref: "#/components/schemas/MinorUnits"
+        withdrawals:
+          $ref: "#/components/schemas/MinorUnits"
+        income:
+          $ref: "#/components/schemas/MinorUnits"
+        fees:
+          $ref: "#/components/schemas/MinorUnits"
+        capitalGrowth:
+          $ref: "#/components/schemas/MinorUnits"
+    HistoricalPoint:
+      type: object
+      additionalProperties: false
+      required: [date, assetsMinor, liabilitiesMinor, netWorthMinor, liquidMinor, investibleMinor, complete, missingCurrencies]
+      properties:
+        date: { type: string, format: date-time }
+        assetsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        liabilitiesMinor: { $ref: "#/components/schemas/MinorUnits" }
+        netWorthMinor: { $ref: "#/components/schemas/MinorUnits" }
+        liquidMinor: { $ref: "#/components/schemas/MinorUnits" }
+        investibleMinor: { $ref: "#/components/schemas/MinorUnits" }
+        complete: { type: boolean }
+        missingCurrencies:
+          type: array
+          items: { type: string }
     Dashboard:
       type: object
       additionalProperties: false
@@ -4761,6 +4830,14 @@ components:
           historicalAvailable,
           historicalComplete,
           valueBasis,
+          history,
+          allocation,
+          investibleAllocation,
+          institutionAllocation,
+          currencyAllocation,
+          instrumentAllocation,
+          compositionComplete,
+          completenessReasons,
         ]
       properties:
         asOf: { type: string, format: date }
@@ -4776,6 +4853,28 @@ components:
         historicalAvailable: { type: boolean }
         historicalComplete: { type: boolean }
         valueBasis: { type: string }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/HistoricalPoint" }
+        allocation:
+          type: array
+          items: { $ref: "#/components/schemas/AllocationItem" }
+        investibleAllocation:
+          type: array
+          items: { $ref: "#/components/schemas/AllocationItem" }
+        institutionAllocation:
+          type: array
+          items: { $ref: "#/components/schemas/AllocationItem" }
+        currencyAllocation:
+          type: array
+          items: { $ref: "#/components/schemas/AllocationItem" }
+        instrumentAllocation:
+          type: array
+          items: { $ref: "#/components/schemas/AllocationItem" }
+        compositionComplete: { type: boolean }
+        completenessReasons:
+          type: array
+          items: { type: string }
     ReportSummary:
       type: object
       additionalProperties: false
@@ -4789,6 +4888,10 @@ components:
           currentComplete,
           missingCurrencies,
           valueBasis,
+          history,
+          historicalComplete,
+          compositionComplete,
+          completenessReasons,
         ]
       properties:
         asOf: { type: string, format: date }
@@ -4802,6 +4905,14 @@ components:
           type: array
           items: { type: string }
         valueBasis: { type: string }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/HistoricalPoint" }
+        historicalComplete: { type: boolean }
+        compositionComplete: { type: boolean }
+        completenessReasons:
+          type: array
+          items: { type: string }
     AllocationItem:
       type: object
       additionalProperties: false
@@ -4825,6 +4936,8 @@ components:
           categories,
           institutions,
           currencies,
+          investibleCategories,
+          instruments,
         ]
       properties:
         asOf: { type: string, format: date }
@@ -4846,6 +4959,64 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AllocationItem"
+        investibleCategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllocationItem"
+        instruments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllocationItem"
+    AccountHistoryPoint:
+      type: object
+      additionalProperties: false
+      required: [date, valueMinor, complete]
+      properties:
+        date: { type: string, format: date }
+        valueMinor: { $ref: "#/components/schemas/MinorUnits" }
+        complete: { type: boolean }
+    AccountAnalytics:
+      type: object
+      additionalProperties: false
+      required: [accountId, currency, history, historyComplete, movementAttributionAvailable, movementAttribution, completenessReasons]
+      properties:
+        accountId: { type: string, format: uuid }
+        currency: { type: string }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/AccountHistoryPoint" }
+        historyComplete: { type: boolean }
+        movementAttributionAvailable: { type: boolean }
+        movementAttribution:
+          oneOf:
+            - $ref: "#/components/schemas/PositionMovementAttribution"
+            - type: "null"
+        completenessReasons:
+          type: array
+          items: { type: string }
+    PositionMovementAttribution:
+      type: object
+      additionalProperties: false
+      required: [from, to, startValueMinor, endValueMinor, changeMinor, externalCashMinor, incomeMinor, feesMinor, cashAdjustmentsMinor, internalTradeCashMinor, quantityMovementMinor, priceMovementMinor, currencyMovementMinor, unattributedMinor, complete, methodology, returnStatus, returnMessage]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        startValueMinor: { $ref: "#/components/schemas/MinorUnits" }
+        endValueMinor: { $ref: "#/components/schemas/MinorUnits" }
+        changeMinor: { $ref: "#/components/schemas/MinorUnits" }
+        externalCashMinor: { $ref: "#/components/schemas/MinorUnits" }
+        incomeMinor: { $ref: "#/components/schemas/MinorUnits" }
+        feesMinor: { $ref: "#/components/schemas/MinorUnits" }
+        cashAdjustmentsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        internalTradeCashMinor: { $ref: "#/components/schemas/MinorUnits" }
+        quantityMovementMinor: { $ref: "#/components/schemas/MinorUnits" }
+        priceMovementMinor: { $ref: "#/components/schemas/MinorUnits" }
+        currencyMovementMinor: { $ref: "#/components/schemas/MinorUnits" }
+        unattributedMinor: { $ref: "#/components/schemas/MinorUnits" }
+        complete: { type: boolean }
+        methodology: { type: string, const: position_bridge_v1 }
+        returnStatus: { type: string, const: unavailable }
+        returnMessage: { type: string }
     SettingsRead:
       type: object
       additionalProperties: false

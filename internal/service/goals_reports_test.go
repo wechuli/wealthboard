@@ -145,3 +145,81 @@ func TestDashboardAndAllocationReportIncompleteCurrencies(t *testing.T) {
 		t.Fatalf("allocation = %+v", allocation)
 	}
 }
+
+func TestChartPointUsesReplayAndEffectiveDatedRates(t *testing.T) {
+	accountID := uuid.New()
+	data := chartData{
+		Accounts:     []chartAccount{{ID: accountID, Currency: "USD", TrackingMode: "balance", IsIncludedInNetWorth: true}},
+		Transactions: []chartTransaction{{AccountID: accountID, Type: "opening_balance", Amount: 100, Currency: "USD", Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}},
+		Valuations:   []chartValuation{{AccountID: accountID, Value: 150, Date: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)}},
+		Rates: []chartRate{
+			{Base: "USD", Quote: "KES", Rate: "2", EffectiveDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{Base: "USD", Quote: "KES", Rate: "3", EffectiveDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)},
+		},
+	}
+	january, err := chartPointAt(data, "KES", time.Date(2026, 1, 15, 23, 59, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("January chart point: %v", err)
+	}
+	february, err := chartPointAt(data, "KES", time.Date(2026, 2, 15, 23, 59, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("February chart point: %v", err)
+	}
+	if january.NetWorthMinor != "200" || february.NetWorthMinor != "450" || !january.Complete || !february.Complete {
+		t.Fatalf("effective-dated points = January %+v, February %+v", january, february)
+	}
+}
+
+func TestGoalProjectionUsesExactMinorUnitsAndContributionWindow(t *testing.T) {
+	goal := GoalRead{CurrentAmountMinor: "100", TargetAmountMinor: "1000", TargetDate: "2026-03-20", Plan: &GoalPlanRead{
+		PlannedContributionMinor: "10", StartDate: "2026-01-20", Frequency: "monthly",
+	}}
+	points := goalProjection(goal, time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC))
+	if len(points) != 3 || points[len(points)-1].ProjectedMinor != "120" || points[len(points)-1].ContributionsMinor != "120" {
+		t.Fatalf("projection = %+v", points)
+	}
+}
+
+func TestChartFlowsReplayMultipleValuationsOnce(t *testing.T) {
+	accountID := uuid.New()
+	data := chartData{
+		Accounts: []chartAccount{{ID: accountID, Currency: "KES", TrackingMode: "balance", IsIncludedInNetWorth: true}},
+		Transactions: []chartTransaction{
+			{AccountID: accountID, Type: "opening_balance", Amount: 100, Currency: "KES", Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{AccountID: accountID, Type: "deposit", Amount: 20, Currency: "KES", Date: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)},
+		},
+		Valuations: []chartValuation{
+			{AccountID: accountID, Value: 150, Date: time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)},
+			{AccountID: accountID, Value: 200, Date: time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)},
+		},
+	}
+	flows, complete, missing, err := chartFlows(data, "KES")
+	if err != nil {
+		t.Fatalf("chart flows: %v", err)
+	}
+	if !complete || len(missing) != 0 || flows.Contributions != "120" || flows.CapitalGrowth != "80" {
+		t.Fatalf("chart flows = %+v, complete=%v, missing=%v", flows, complete, missing)
+	}
+}
+
+func TestPositionMovementAttributionBridgesPriceChange(t *testing.T) {
+	accountID, instrumentID := uuid.New(), uuid.New()
+	data := chartData{
+		Accounts: []chartAccount{{ID: accountID, Currency: "KES", TrackingMode: "positions", IsIncludedInNetWorth: true}},
+		PositionEvents: []chartPositionEvent{{positionEventRow: positionEventRow{
+			id: uuid.New(), accountID: accountID, instrumentID: instrumentID, eventType: "opening_position",
+			quantity: "10", tradeDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), createdAt: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC),
+		}}},
+		Prices: []chartPrice{
+			{InstrumentID: instrumentID, Currency: "KES", Price: "100", EffectiveDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{InstrumentID: instrumentID, Currency: "KES", Price: "120", EffectiveDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)},
+		},
+	}
+	attribution, err := chartMovementAttribution(data, data.Accounts[0], endOfChartDay(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)), endOfChartDay(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatalf("movement attribution: %v", err)
+	}
+	if !attribution.Complete || attribution.ChangeMinor != "20000" || attribution.PriceMovementMinor != "20000" || attribution.UnattributedMinor != "0" {
+		t.Fatalf("movement attribution = %+v", attribution)
+	}
+}

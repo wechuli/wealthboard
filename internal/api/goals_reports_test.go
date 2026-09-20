@@ -51,9 +51,14 @@ func (reader *fakeGoalsReportsReader) ListAlerts(_ context.Context, userID uuid.
 	return []service.GoalAlertRead{}, nil
 }
 
-func (reader *fakeGoalsReportsReader) Dashboard(_ context.Context, userID uuid.UUID) (service.DashboardRead, error) {
+func (reader *fakeGoalsReportsReader) Dashboard(_ context.Context, userID uuid.UUID, _ ...string) (service.DashboardRead, error) {
 	reader.lastUserID = userID
 	return service.DashboardRead{BaseCurrency: "KES", CurrentComplete: true}, nil
+}
+
+func (reader *fakeGoalsReportsReader) AccountAnalytics(_ context.Context, userID, accountID uuid.UUID) (service.AccountAnalyticsRead, error) {
+	reader.lastUserID, reader.lastGoalID = userID, accountID
+	return service.AccountAnalyticsRead{AccountID: accountID, Currency: "KES", History: []service.AccountHistoryPointRead{}}, reader.getGoalErr
 }
 
 func (reader *fakeGoalsReportsReader) ReportSummary(_ context.Context, userID uuid.UUID) (service.ReportSummaryRead, error) {
@@ -84,6 +89,26 @@ func TestGoalsReportsRoutesAuthenticateAndPropagateOwner(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `"targetAmountMinor":"10000"`) || !strings.Contains(response.Body.String(), `"currentAmountMinor":"2500"`) {
 		t.Fatalf("money values were not JSON strings: %s", response.Body.String())
+	}
+}
+
+func TestAccountAnalyticsRoutePropagatesOwnerAndHidesForeignAccount(t *testing.T) {
+	userID, accountID := uuid.New(), uuid.New()
+	reader := &fakeGoalsReportsReader{}
+	router := chi.NewRouter()
+	RegisterGoalsReportsRoutes(router, NewGoalsReportsHandler(fakeRequestAuthenticator{principal: webauth.Principal{
+		UserID: userID, Scopes: []webauth.Scope{webauth.ScopePortfolioRead},
+	}}, reader))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/accounts/"+accountID.String()+"/analytics", nil))
+	if response.Code != http.StatusOK || reader.lastUserID != userID || reader.lastGoalID != accountID {
+		t.Fatalf("owner analytics status/identifiers = %d %s/%s", response.Code, reader.lastUserID, reader.lastGoalID)
+	}
+	reader.getGoalErr = service.ErrGoalsReportsNotFound
+	foreign := httptest.NewRecorder()
+	router.ServeHTTP(foreign, httptest.NewRequest(http.MethodGet, "/accounts/"+uuid.NewString()+"/analytics", nil))
+	if foreign.Code != http.StatusNotFound {
+		t.Fatalf("foreign analytics status = %d, body = %s", foreign.Code, foreign.Body.String())
 	}
 }
 

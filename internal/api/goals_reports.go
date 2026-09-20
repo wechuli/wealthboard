@@ -21,9 +21,10 @@ type GoalsReportsReader interface {
 	GetGoal(context.Context, uuid.UUID, uuid.UUID) (service.GoalRead, error)
 	ListMilestones(context.Context, uuid.UUID, uuid.UUID) ([]service.GoalMilestoneRead, error)
 	ListAlerts(context.Context, uuid.UUID) ([]service.GoalAlertRead, error)
-	Dashboard(context.Context, uuid.UUID) (service.DashboardRead, error)
+	Dashboard(context.Context, uuid.UUID, ...string) (service.DashboardRead, error)
 	ReportSummary(context.Context, uuid.UUID) (service.ReportSummaryRead, error)
 	ReportAllocation(context.Context, uuid.UUID) (service.ReportAllocationRead, error)
+	AccountAnalytics(context.Context, uuid.UUID, uuid.UUID) (service.AccountAnalyticsRead, error)
 }
 
 type GoalsReportsHandler struct {
@@ -41,6 +42,7 @@ func RegisterGoalsReportsRoutes(router chi.Router, handler *GoalsReportsHandler)
 	router.Get("/goals/{id}", handler.GoalDetail)
 	router.Get("/goals", handler.Goals)
 	router.Get("/dashboard", handler.Dashboard)
+	router.Get("/accounts/{accountID}/analytics", handler.AccountAnalytics)
 	router.Get("/reports/summary", handler.ReportSummary)
 	router.Get("/reports/allocation", handler.ReportAllocation)
 }
@@ -79,7 +81,18 @@ func (handler *GoalsReportsHandler) GoalAlerts(response http.ResponseWriter, req
 
 func (handler *GoalsReportsHandler) Dashboard(response http.ResponseWriter, request *http.Request) {
 	handler.authorizedRead(response, request, func(ctx context.Context, userID uuid.UUID) (any, error) {
-		return handler.service.Dashboard(ctx, userID)
+		return handler.service.Dashboard(ctx, userID, request.URL.Query().Get("range"))
+	})
+}
+
+func (handler *GoalsReportsHandler) AccountAnalytics(response http.ResponseWriter, request *http.Request) {
+	accountID, err := uuid.Parse(chi.URLParam(request, "accountID"))
+	if err != nil {
+		writeProblem(response, http.StatusNotFound, "Not Found", "The requested resource does not exist.")
+		return
+	}
+	handler.authorizedRead(response, request, func(ctx context.Context, userID uuid.UUID) (any, error) {
+		return handler.service.AccountAnalytics(ctx, userID, accountID)
 	})
 }
 
