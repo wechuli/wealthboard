@@ -26,6 +26,7 @@ import {
   ResourceView,
 } from "./ui";
 import { useResource } from "./use-resource";
+import { ExchangeRateManager, SettingsEditor } from "./metadata-forms";
 
 const apiKeyScopes = [
   "portfolio:read",
@@ -36,7 +37,8 @@ const apiKeyScopes = [
 ] as const;
 
 export function SettingsPage({ session }: { session: Session }) {
-  const state = useResource(getSettings);
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(getSettings, [refresh]);
   return (
     <>
       <PageHeader
@@ -47,6 +49,7 @@ export function SettingsPage({ session }: { session: Session }) {
       <ResourceView state={state}>
         {(data) => (
           <div className="settings-stack">
+            <SettingsEditor data={data} csrfToken={session.csrfToken} onChanged={() => setRefresh((value) => value + 1)} />
             <Card>
               <CardHeader
                 title="General"
@@ -92,6 +95,7 @@ export function SettingsPage({ session }: { session: Session }) {
                 </KeyValue>
               </div>
             </Card>
+            <ExchangeRateManager data={data} csrfToken={session.csrfToken} onChanged={() => setRefresh((value) => value + 1)} />
             <Card>
               <CardHeader
                 title="Currencies"

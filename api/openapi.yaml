@@ -65,6 +65,125 @@ paths:
           $ref: "#/components/responses/Problem"
         "403":
           $ref: "#/components/responses/Problem"
+    post:
+      operationId: createCategory
+      summary: Create an account category
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryMutationRequest"
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /categories/{id}:
+    put:
+      operationId: updateCategory
+      summary: Replace an account category
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryMutationRequest"
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /categories/{id}/archive:
+    patch:
+      operationId: setCategoryArchived
+      summary: Archive or restore an account category
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. An omitted `archived` value restores the category.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveMutationRequest"
+      responses:
+        "200":
+          description: Category archive state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /categories/{id}/reorder:
+    post:
+      operationId: reorderCategory
+      summary: Move an account category one position
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryReorderRequest"
+      responses:
+        "200":
+          description: Category order updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /institutions:
     get:
       operationId: listInstitutions
@@ -91,6 +210,141 @@ paths:
           $ref: "#/components/responses/Problem"
         "403":
           $ref: "#/components/responses/Problem"
+    post:
+      operationId: createInstitution
+      summary: Create a financial institution
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstitutionMutationRequest"
+      responses:
+        "201":
+          description: Institution created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Institution"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /institutions/{id}:
+    put:
+      operationId: updateInstitution
+      summary: Replace a financial institution
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstitutionMutationRequest"
+      responses:
+        "200":
+          description: Institution updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /institutions/{id}/archive:
+    patch:
+      operationId: setInstitutionArchived
+      summary: Archive or restore a financial institution
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. An omitted `archived` value restores the institution.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveMutationRequest"
+      responses:
+        "200":
+          description: Institution archive state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /exchange-rates:
+    post:
+      operationId: createExchangeRate
+      summary: Create a dated manual exchange rate
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Rates are exact positive decimal strings.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExchangeRateMutationRequest"
+      responses:
+        "201":
+          description: Exchange rate created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeRate"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /exchange-rates/{id}:
+    delete:
+      operationId: deleteExchangeRate
+      summary: Delete a manual exchange rate
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Exchange rate deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /accounts:
     get:
       operationId: listAccounts
@@ -121,6 +375,35 @@ paths:
           $ref: "#/components/responses/Problem"
         "403":
           $ref: "#/components/responses/Problem"
+    post:
+      operationId: createAccount
+      summary: Create an account and opening balance
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Monetary values are integer minor-unit strings; idempotency is supplied in the JSON body.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountCreateRequest"
+      responses:
+        "201":
+          description: Account created or an identical request replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /accounts/{accountID}:
     get:
       operationId: getAccount
@@ -146,6 +429,82 @@ paths:
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateAccount
+      summary: Update an account
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Currency and tracking mode cannot change after creation.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountUpdateRequest"
+      responses:
+        "204": { description: Account updated }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteAccount
+      summary: Permanently delete an archived account
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeleteRequest"
+      responses:
+        "204": { description: Account deleted }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /accounts/{accountID}/archive:
+    post:
+      operationId: setAccountArchived
+      summary: Archive or restore an account
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequiredArchiveMutationRequest"
+      responses:
+        "204": { description: Account archive state updated }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /accounts/{accountID}/transactions:
     get:
       operationId: listAccountTransactions
@@ -264,6 +623,156 @@ paths:
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
+    post:
+      operationId: createTransaction
+      summary: Create a ledger transaction
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Amounts are integer minor-unit strings; idempotency is supplied in the JSON body.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionCreateRequest"
+      responses:
+        "201":
+          description: Transaction created or an identical request replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /transactions/{id}:
+    patch:
+      operationId: updateTransaction
+      summary: Update a ledger transaction
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Opening balances, transfers, and grouped investment activity cannot be edited here.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionUpdateRequest"
+      responses:
+        "204": { description: Transaction updated }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteTransaction
+      summary: Delete a ledger transaction or paired transfer
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Transaction or transfer pair deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /valuations:
+    post:
+      operationId: createValuation
+      summary: Create an absolute account valuation
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Values are non-negative integer minor-unit strings; idempotency is supplied in the JSON body.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValuationCreateRequest"
+      responses:
+        "201":
+          description: Valuation created or an identical request replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /valuations/{id}:
+    delete:
+      operationId: deleteValuation
+      summary: Delete an account valuation
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Valuation deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /transfers:
+    post:
+      operationId: createTransfer
+      summary: Create an atomic paired-account transfer
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Amounts are integer minor-unit strings; omit `destinationAmountMinor` to derive it from currency and dated rates.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferCreateRequest"
+      responses:
+        "201":
+          description: Transfer created or an identical request replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /goals:
     get:
       operationId: listGoals
@@ -285,6 +794,42 @@ paths:
           $ref: "#/components/responses/Problem"
         "403":
           $ref: "#/components/responses/Problem"
+    post:
+      operationId: createGoal
+      summary: Create a financial goal and contribution plan
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Monetary inputs are major-unit decimal strings. Idempotency may be supplied in the body or `Idempotency-Key`; when both are present they must match.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoalMutationRequest"
+      responses:
+        "200":
+          description: An idempotent goal creation was replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoalMutationResult"
+        "201":
+          description: Goal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoalMutationResult"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /goals/{id}:
     get:
       operationId: getGoal
@@ -308,6 +853,82 @@ paths:
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateGoal
+      summary: Replace a financial goal and contribution plan
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Any body idempotency key is ignored.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoalMutationRequest"
+      responses:
+        "200":
+          description: Goal updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteGoal
+      summary: Delete a financial goal
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Goal deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /goals/{id}/status:
+    patch:
+      operationId: setGoalStatus
+      summary: Set a financial goal status
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoalStatusRequest"
+      responses:
+        "200":
+          description: Goal status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /goals/{id}/milestones:
     get:
       operationId: listGoalMilestones
@@ -333,6 +954,79 @@ paths:
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
+    post:
+      operationId: createGoalMilestone
+      summary: Create a milestone for a financial goal
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The target amount is a major-unit decimal string in the goal currency.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoalMilestoneCreateRequest"
+      responses:
+        "201":
+          description: Goal milestone created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /goals/{id}/milestones/{milestoneId}:
+    delete:
+      operationId: deleteGoalMilestone
+      summary: Delete a milestone from a financial goal
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - name: milestoneId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Goal milestone deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /goals/{id}/alerts/dismiss:
+    post:
+      operationId: dismissGoalAlert
+      summary: Dismiss the current monthly alert for a goal
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "200":
+          description: Goal alert dismissed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /goals/alerts:
     get:
       operationId: listGoalAlerts
@@ -430,6 +1124,35 @@ paths:
           $ref: "#/components/responses/Problem"
         "403":
           $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateSettings
+      summary: Replace the current user's application settings
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsMutationRequest"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MutationStatusResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /instruments:
     get:
       operationId: listInstruments
@@ -456,6 +1179,35 @@ paths:
           $ref: "#/components/responses/Problem"
         "403":
           $ref: "#/components/responses/Problem"
+    post:
+      operationId: createInstrument
+      summary: Create an investment instrument
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstrumentMutationRequest"
+      responses:
+        "201":
+          description: Instrument created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /instruments/{id}:
     get:
       operationId: getInstrument
@@ -479,6 +1231,320 @@ paths:
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateInstrument
+      summary: Replace an investment instrument
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstrumentMutationRequest"
+      responses:
+        "204": { description: Instrument updated }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteInstrument
+      summary: Delete an unreferenced investment instrument
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Instrument deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /instruments/{id}/archive:
+    patch:
+      operationId: setInstrumentArchived
+      summary: Archive or restore an investment instrument
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveMutationRequest"
+      responses:
+        "204": { description: Instrument archive state updated }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /security-prices:
+    put:
+      operationId: upsertSecurityPrice
+      summary: Create or replace an instrument price for a date
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Price is an exact positive decimal string.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecurityPriceMutationRequest"
+      responses:
+        "200":
+          description: Security price upserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /security-prices/{id}:
+    delete:
+      operationId: deleteSecurityPrice
+      summary: Delete an instrument price
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Security price deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /position-events:
+    post:
+      operationId: createPositionEvent
+      summary: Create ordinary investment position activity
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Quantities, prices, monetary values, and exchange rates are exact decimal strings; idempotency is supplied in the JSON body.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PositionEventCreateRequest"
+      responses:
+        "201":
+          description: Position event created or an existing idempotent event returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /position-events/{id}:
+    put:
+      operationId: updatePositionEvent
+      summary: Replace ordinary investment position activity
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The event cannot move between accounts.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PositionEventUpdateRequest"
+      responses:
+        "200":
+          description: Position event updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deletePositionEvent
+      summary: Delete ordinary investment position activity
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Position event deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /position-reconciliations:
+    post:
+      operationId: createPositionReconciliation
+      summary: Record a reported position-account total
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Reported amounts are major-unit decimal strings in the account currency.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PositionReconciliationCreateRequest"
+      responses:
+        "201":
+          description: Position reconciliation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceIDResponse"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /position-reconciliations/{id}:
+    delete:
+      operationId: deletePositionReconciliation
+      summary: Delete a position-account reconciliation
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MutationCSRFToken"
+      responses:
+        "204": { description: Position reconciliation deleted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /account-conversions/preview:
+    post:
+      operationId: previewAccountConversion
+      summary: Preview converting a balance account into a position account
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Monetary inputs are major-unit decimal strings; preview also requires a UUID idempotency key in the body or `Idempotency-Key` header.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountConversionRequest"
+      responses:
+        "200":
+          description: Account conversion preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountConversionPreview"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /account-conversions:
+    post:
+      operationId: executeAccountConversion
+      summary: Convert a balance account into a position account
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Supply a UUID in the body or `Idempotency-Key`; when both are present they must match.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/MutationCSRFToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountConversionRequest"
+      responses:
+        "200":
+          description: An idempotent account conversion was replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountConversionResult"
+        "201":
+          description: Account converted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountConversionResult"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /estate:
     get:
       operationId: getEstateWorkspace
@@ -950,6 +2016,22 @@ components:
       schema:
         type: string
         minLength: 1
+    MutationCSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Required when authenticating with `sessionCookie`; ignored for Bearer API keys.
+      schema:
+        type: string
+        minLength: 1
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: UUID request key. When also supplied in the JSON body, both values must match.
+      schema:
+        type: string
+        format: uuid
     AccountID:
       name: accountID
       in: path
@@ -1100,6 +2182,447 @@ components:
       type: string
       description: Exact decimal value serialized as a string.
       pattern: "^-?[0-9]+(?:\\.[0-9]+)?$"
+    NonNegativeDecimalString:
+      type: string
+      description: Exact non-negative decimal value serialized as a string.
+      pattern: "^[0-9]+(?:\\.[0-9]+)?$"
+    PositiveDecimalString:
+      type: string
+      description: Exact positive decimal value serialized as a string.
+      pattern: "^(?:0*[1-9][0-9]*)(?:\\.[0-9]+)?$|^0*\\.[0-9]*[1-9][0-9]*$"
+    CurrencyCode:
+      type: string
+      pattern: "^[A-Z]{3}$"
+    ResourceIDResponse:
+      type: object
+      additionalProperties: false
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+    MutationStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string }
+    SettingsMutationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [displayName, appName, baseCurrency, timezone, preferredDateFormat, defaultDashboardPeriod, sessionTimeoutMinutes, positionStaleDaysStock, positionStaleDaysEtf, positionStaleDaysFund]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 80 }
+        appName: { type: string, minLength: 1, maxLength: 80 }
+        baseCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        supportedCurrencies:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/CurrencyCode"
+        timezone: { type: string, minLength: 1 }
+        preferredDateFormat:
+          type: string
+          enum: [dd MMM yyyy, dd/MM/yyyy, MM/dd/yyyy, yyyy-MM-dd]
+        defaultDashboardPeriod:
+          type: string
+          enum: [1m, 3m, 6m, 1y, all]
+        sessionTimeoutMinutes: { type: integer, minimum: 15, maximum: 525600 }
+        defaultGoalReturnBps: { type: integer, minimum: 0, maximum: 10000 }
+        positionStaleDaysStock: { type: integer, minimum: 1 }
+        positionStaleDaysEtf: { type: integer, minimum: 1 }
+        positionStaleDaysFund: { type: integer, minimum: 1 }
+    CategoryMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [name, icon, assetOrLiability]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        icon: { type: string, minLength: 1, maxLength: 100 }
+        assetOrLiability: { type: string, enum: [asset, liability] }
+        description: { type: string, maxLength: 2000 }
+        isLiquid: { type: boolean }
+        isInvestible: { type: boolean }
+    InstitutionMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        type:
+          type: string
+          enum: [bank, credit_union, brokerage, asset_manager, pension_provider, insurer, lender, digital_wallet, government, employer, other]
+        websiteUrl: { type: string, format: uri, maxLength: 500 }
+        countryCode: { type: string, pattern: "^[A-Z]{2}$" }
+        address: { type: string, maxLength: 500 }
+        notes: { type: string, maxLength: 2000 }
+    ExchangeRateMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [baseCurrency, quoteCurrency, rate, effectiveDate]
+      properties:
+        baseCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        quoteCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        rate:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        effectiveDate: { type: string, format: date }
+    ArchiveMutationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        archived: { type: boolean }
+    RequiredArchiveMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [archived]
+      properties:
+        archived: { type: boolean }
+    CategoryReorderRequest:
+      type: object
+      additionalProperties: false
+      required: [direction]
+      properties:
+        direction: { type: string, enum: [up, down] }
+    AccountCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [idempotencyKey, name, categoryId, currency, openingValueMinor]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 2000 }
+        categoryId: { type: string, format: uuid }
+        institutionId: { type: [string, "null"], format: uuid }
+        accountReference: { type: string, maxLength: 50 }
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        trackingMode: { type: string, enum: [balance, positions], default: balance }
+        openingValueMinor:
+          allOf:
+            - $ref: "#/components/schemas/MinorUnits"
+            - pattern: "^[0-9]+$"
+        costBasisMinor:
+          oneOf:
+            - $ref: "#/components/schemas/MinorUnits"
+            - type: "null"
+        isIncludedInNetWorth: { type: boolean }
+        notes: { type: string, maxLength: 2000 }
+        openedAt: { type: [string, "null"], format: date }
+    AccountUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, categoryId, currency]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 2000 }
+        categoryId: { type: string, format: uuid }
+        institutionId: { type: [string, "null"], format: uuid }
+        accountReference: { type: string, maxLength: 50 }
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        trackingMode: { type: string, enum: [balance, positions] }
+        openingValueMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        costBasisMinor:
+          oneOf:
+            - $ref: "#/components/schemas/MinorUnits"
+            - type: "null"
+        isIncludedInNetWorth: { type: boolean }
+        notes: { type: string, maxLength: 2000 }
+        openedAt: { type: [string, "null"], format: date }
+    AccountDeleteRequest:
+      type: object
+      additionalProperties: false
+      required: [confirmationName]
+      properties:
+        confirmationName: { type: string }
+    TransactionCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [idempotencyKey, accountId, type, amountMinor, transactionDate]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        type:
+          $ref: "#/components/schemas/MutableTransactionType"
+        amountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        transactionDate: { type: string, format: date }
+        description: { type: string, maxLength: 200 }
+        externalId: { type: string, maxLength: 200 }
+        notes: { type: string, maxLength: 2000 }
+    TransactionUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [type, amountMinor, transactionDate]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        type:
+          $ref: "#/components/schemas/MutableTransactionType"
+        amountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        transactionDate: { type: string, format: date }
+        description: { type: string, maxLength: 200 }
+        externalId: { type: string, maxLength: 200 }
+        notes: { type: string, maxLength: 2000 }
+    MutableTransactionType:
+      type: string
+      enum: [deposit, withdrawal, interest, dividend, capital_gain, capital_loss, fee, purchase, sale, manual_adjustment, liability_payment, liability_increase]
+    ValuationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [idempotencyKey, accountId, valueMinor, valuationDate]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        valueMinor:
+          allOf:
+            - $ref: "#/components/schemas/MinorUnits"
+            - pattern: "^[0-9]+$"
+        valuationDate: { type: string, format: date }
+        notes: { type: string, maxLength: 2000 }
+    TransferCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [idempotencyKey, fromAccountId, toAccountId, sourceAmountMinor, transactionDate]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        fromAccountId: { type: string, format: uuid }
+        toAccountId: { type: string, format: uuid }
+        sourceAmountMinor:
+          allOf:
+            - $ref: "#/components/schemas/MinorUnits"
+            - pattern: "^[1-9][0-9]*$"
+        destinationAmountMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        transactionDate: { type: string, format: date }
+        description: { type: string, maxLength: 200 }
+    GoalMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [name, targetAmount, currency, targetDate, assumedAnnualReturn, plannedContribution, planStartDate]
+      properties:
+        idempotencyKey: { type: [string, "null"], format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: [string, "null"], maxLength: 500 }
+        targetAmount:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        currentAmount:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        targetDate: { type: string, format: date }
+        linkedAccountId: { type: [string, "null"], format: uuid }
+        icon: { type: string, maxLength: 50, default: Target }
+        status: { type: string, enum: [active, paused, completed, cancelled], default: active }
+        priority: { type: integer, minimum: 0, maximum: 100 }
+        assumedAnnualReturn: { type: number, minimum: 0, maximum: 100 }
+        plannedContribution:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        frequency: { type: string, enum: [weekly, monthly, quarterly, annually, custom], default: monthly }
+        planStartDate: { type: string, format: date }
+        planEndDate: { type: string, format: date }
+    GoalMutationResult:
+      type: object
+      additionalProperties: false
+      required: [id, replayed]
+      properties:
+        id: { type: string, format: uuid }
+        replayed: { type: boolean }
+    GoalStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [active, paused, completed, cancelled] }
+    GoalMilestoneCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, targetAmount]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        targetAmount:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        targetDate: { type: string, format: date }
+    InstrumentMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [name, identifierType, assetType, quoteCurrency]
+      properties:
+        externalId: { type: string, maxLength: 200 }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        symbol: { type: string, maxLength: 30 }
+        identifierType: { type: string, enum: [isin, ticker_exchange, custom] }
+        identifier: { type: string, maxLength: 100 }
+        exchangeMic: { type: string, maxLength: 20 }
+        assetType: { type: string, enum: [stock, etf, fund] }
+        quoteCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+    SecurityPriceMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [instrumentId, price, effectiveDate]
+      properties:
+        instrumentId: { type: string, format: uuid }
+        externalId: { type: string, maxLength: 200 }
+        price:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        effectiveDate: { type: string, format: date }
+        source: { type: string, maxLength: 100, default: manual }
+        provenance: { type: string, maxLength: 500 }
+    PositionEventCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [accountId, instrumentId, type, quantity, tradeDate, idempotencyKey]
+      properties:
+        accountId: { type: string, format: uuid }
+        instrumentId: { type: string, format: uuid }
+        type: { type: string, enum: [opening_position, buy, sell, quantity_adjustment] }
+        quantity:
+          $ref: "#/components/schemas/DecimalString"
+        unitPrice:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        tradeCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        feeAmount:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        feeCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        cashEffect:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        appliedExchangeRate:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        openingCostBasis:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        tradeDate: { type: string, format: date }
+        settlementDate: { type: string, format: date }
+        externalId: { type: string, maxLength: 200 }
+        idempotencyKey: { type: string, format: uuid }
+        description: { type: string, maxLength: 200 }
+        notes: { type: string, maxLength: 2000 }
+    PositionEventUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [accountId, instrumentId, type, quantity, tradeDate]
+      properties:
+        accountId: { type: string, format: uuid }
+        instrumentId: { type: string, format: uuid }
+        type: { type: string, enum: [opening_position, buy, sell, quantity_adjustment] }
+        quantity:
+          $ref: "#/components/schemas/DecimalString"
+        unitPrice:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        tradeCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        feeAmount:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        feeCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        cashEffect:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        appliedExchangeRate:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        openingCostBasis:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        tradeDate: { type: string, format: date }
+        settlementDate: { type: string, format: date }
+        externalId: { type: string, maxLength: 200 }
+        idempotencyKey: { type: string, format: uuid }
+        description: { type: string, maxLength: 200 }
+        notes: { type: string, maxLength: 2000 }
+    PositionReconciliationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [accountId, observationDate, reportedTotal]
+      properties:
+        accountId: { type: string, format: uuid }
+        observationDate: { type: string, format: date }
+        reportedCash:
+          $ref: "#/components/schemas/DecimalString"
+        reportedTotal:
+          $ref: "#/components/schemas/DecimalString"
+        notes: { type: string, maxLength: 2000 }
+    AccountConversionHoldingRequest:
+      type: object
+      additionalProperties: false
+      required: [instrumentId, quantity, price]
+      properties:
+        instrumentId: { type: string, format: uuid }
+        quantity:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        price:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        openingCostBasis:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        priceSource: { type: string, maxLength: 100, default: conversion }
+        priceProvenance: { type: string, maxLength: 500 }
+    AccountConversionRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceAccountId, targetName, conversionDate, openingCash, holdings]
+      properties:
+        sourceAccountId: { type: string, format: uuid }
+        targetName: { type: string, minLength: 1, maxLength: 100 }
+        conversionDate: { type: string, format: date }
+        openingCash:
+          $ref: "#/components/schemas/NonNegativeDecimalString"
+        holdings:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/AccountConversionHoldingRequest"
+        idempotencyKey: { type: [string, "null"], format: uuid }
+        confirmDifference: { type: boolean }
+    AccountConversionHoldingPreview:
+      type: object
+      additionalProperties: false
+      required: [instrumentId, name, symbol, quantity, price, quoteCurrency]
+      properties:
+        instrumentId: { type: string, format: uuid }
+        name: { type: string }
+        symbol: { type: [string, "null"] }
+        quantity:
+          $ref: "#/components/schemas/DecimalString"
+        price:
+          $ref: "#/components/schemas/DecimalString"
+        quoteCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+    AccountConversionPreview:
+      type: object
+      additionalProperties: false
+      required: [sourceAccountId, sourceAccountName, currency, conversionDate, sourceBalanceMinor, openingCashMinor, positionsMinor, projectedTotalMinor, differenceMinor, holdings]
+      properties:
+        sourceAccountId: { type: string, format: uuid }
+        sourceAccountName: { type: string }
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        conversionDate: { type: string, format: date }
+        sourceBalanceMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        openingCashMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        positionsMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        projectedTotalMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        differenceMinor:
+          $ref: "#/components/schemas/MinorUnits"
+        holdings:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountConversionHoldingPreview"
+    AccountConversionResult:
+      type: object
+      additionalProperties: false
+      required: [targetAccountId, replayed]
+      properties:
+        targetAccountId: { type: string, format: uuid }
+        replayed: { type: boolean }
     TransactionType:
       type: string
       enum:

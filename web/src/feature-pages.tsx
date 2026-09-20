@@ -24,9 +24,14 @@ import {
   ResourceView,
 } from "./ui";
 import { useResource } from "./use-resource";
+import { CategoryManager, InstitutionManager } from "./metadata-forms";
+import type { Session } from "./types";
+import { useState } from "react";
+import { InstrumentForm, InstrumentManager } from "./planning-forms";
 
-export function CategoriesPage() {
-  const state = useResource(getCategories);
+export function CategoriesPage({ session }: { session: Session }) {
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(getCategories, [refresh]);
   return (
     <>
       <PageHeader
@@ -35,44 +40,15 @@ export function CategoriesPage() {
         description="Asset and liability classifications used across the portfolio."
       />
       <ResourceView state={state}>
-        {({ items }) =>
-          items.length ? (
-            <div className="card-grid">
-              {items.map((item) => (
-                <Card key={item.id}>
-                  <CardHeader
-                    title={item.name}
-                    description={item.description || item.slug}
-                    aside={
-                      <Badge tone={item.isArchived ? "warning" : "neutral"}>
-                        {item.isArchived
-                          ? "Archived"
-                          : humanize(item.assetOrLiability)}
-                      </Badge>
-                    }
-                  />
-                  <div className="tag-row">
-                    {item.isLiquid ? <Badge>Liquid</Badge> : null}
-                    {item.isInvestible ? <Badge>Investible</Badge> : null}
-                    {item.isSystem ? <Badge>System</Badge> : null}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No categories"
-              description="No category records are available."
-            />
-          )
-        }
+        {({ items }) => <CategoryManager categories={items} csrfToken={session.csrfToken} onChanged={() => setRefresh((value) => value + 1)} />}
       </ResourceView>
     </>
   );
 }
 
-export function InstitutionsPage() {
-  const state = useResource(getInstitutions);
+export function InstitutionsPage({ session }: { session: Session }) {
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(getInstitutions, [refresh]);
   return (
     <>
       <PageHeader
@@ -81,52 +57,15 @@ export function InstitutionsPage() {
         description="Financial institutions associated with tracked accounts."
       />
       <ResourceView state={state}>
-        {({ items }) =>
-          items.length ? (
-            <div className="card-grid">
-              {items.map((item) => (
-                <Card key={item.id}>
-                  <CardHeader
-                    title={item.name}
-                    description={[humanize(item.type), item.countryCode]
-                      .filter(Boolean)
-                      .join(" · ")}
-                    aside={
-                      item.archivedAt ? (
-                        <Badge tone="warning">Archived</Badge>
-                      ) : undefined
-                    }
-                  />
-                  {item.websiteUrl ? (
-                    <a
-                      className="text-link"
-                      href={item.websiteUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Visit website
-                    </a>
-                  ) : null}
-                  {item.address ? (
-                    <p className="read-note">{item.address}</p>
-                  ) : null}
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No institutions"
-              description="No institution records are available."
-            />
-          )
-        }
+        {({ items }) => <InstitutionManager institutions={items} csrfToken={session.csrfToken} onChanged={() => setRefresh((value) => value + 1)} />}
       </ResourceView>
     </>
   );
 }
 
-export function InstrumentsPage() {
-  const state = useResource(getInstruments);
+export function InstrumentsPage({ session }: { session: Session }) {
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(getInstruments, [refresh]);
   return (
     <>
       <PageHeader
@@ -135,9 +74,9 @@ export function InstrumentsPage() {
         description="Securities, identifiers, and latest recorded prices."
       />
       <ResourceView state={state}>
-        {({ instruments }) =>
-          instruments.length ? (
-            <div className="account-list">
+        {({ instruments }) => <div className="settings-stack">
+          <Card><CardHeader title="Create instrument" /><InstrumentForm session={session} onChanged={() => setRefresh((value) => value + 1)} /></Card>
+          {instruments.length ? <div className="account-list">
               {instruments.map((item) => (
                 <Link
                   className="account-row"
@@ -173,22 +112,17 @@ export function InstrumentsPage() {
                   </div>
                 </Link>
               ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No instruments"
-              description="No investment instruments are configured."
-            />
-          )
-        }
+            </div> : <EmptyState title="No instruments" description="No investment instruments are configured." />}
+        </div>}
       </ResourceView>
     </>
   );
 }
 
-export function InstrumentDetailPage() {
+export function InstrumentDetailPage({ session }: { session: Session }) {
   const { id = "" } = useParams();
-  const state = useResource(() => getInstrument(id), [id]);
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(() => getInstrument(id), [id, refresh]);
   return (
     <ResourceView state={state} loadingLabel="Loading instrument...">
       {({ instrument, prices }) => (
@@ -228,6 +162,7 @@ export function InstrumentDetailPage() {
             />
           </div>
           <PriceHistory prices={prices} />
+          <InstrumentManager instrument={instrument} prices={prices} session={session} onChanged={() => setRefresh((value) => value + 1)} />
         </>
       )}
     </ResourceView>

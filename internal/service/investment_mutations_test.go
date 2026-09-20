@@ -28,7 +28,7 @@ func TestReplayPositionEventsRejectsNegativeQuantity(t *testing.T) {
 func TestReplayPositionEventsValidatesExistingMerger(t *testing.T) {
 	accountID, instrumentID := uuid.New(), uuid.New()
 	events := []positionEventRow{
-		{id: uuid.New(), accountID: accountID, instrumentID: instrumentID, eventType: "opening_position", quantity: "4"},
+		{id: uuid.New(), accountID: accountID, instrumentID: instrumentID, eventType: "opening_position", quantity: "6"},
 		{id: uuid.New(), accountID: accountID, instrumentID: instrumentID, eventType: "merger_out", quantity: "5"},
 	}
 
@@ -134,6 +134,13 @@ WHERE user_id = $1 AND instrument_id = $2 AND effective_date = DATE '2026-09-19'
 		}
 		if stored != "5" {
 			t.Fatalf("rolled-back opening quantity = %s, want 5", stored)
+		}
+		var currentValue int64
+		if err := db.QueryRowContext(ctx, `SELECT current_value_minor FROM accounts WHERE user_id = $1 AND id = $2`, ownerID, accountID).Scan(&currentValue); err != nil {
+			t.Fatalf("read recalculated account value: %v", err)
+		}
+		if currentValue != 987654325199 {
+			t.Fatalf("recalculated account value = %d, want 987654325199", currentValue)
 		}
 	})
 

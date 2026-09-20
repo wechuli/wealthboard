@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,6 +41,21 @@ func TestLedgerPostgreSQLReplayTransfersIdempotencyAndOwnership(t *testing.T) {
 	sourceID := createLedgerAccount(t, ctx, service, userOne, categoryOne, "Source", 1000, opened, uuid.New())
 	destinationID := createLedgerAccount(t, ctx, service, userOne, categoryOne, "Destination", 200, opened, uuid.New())
 	foreignID := createLedgerAccount(t, ctx, service, userTwo, categoryTwo, "Foreign", 9999, opened, uuid.New())
+	positionKey := uuid.New()
+	positionID, err := service.CreateAccount(ctx, userOne, AccountMutationInput{
+		IdempotencyKey: &positionKey, Name: "Positions", CategoryID: categoryOne, Currency: "KES",
+		TrackingMode: "positions", OpeningValueMinor: 50, IsIncludedInNetWorth: true, OpenedAt: &opened,
+	})
+	if err != nil {
+		t.Fatalf("create position account: %v", err)
+	}
+	if _, err := service.CreateTransaction(ctx, userOne, TransactionMutationInput{
+		IdempotencyKey: uuid.New(), AccountID: positionID, Type: "deposit", AmountMinor: 25,
+		TransactionDate: time.Date(2026, time.September, 8, 0, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("create position cash transaction: %v", err)
+	}
+	assertLedgerBalance(t, ctx, db, userOne, positionID, 75)
 
 	depositKey := uuid.New()
 	depositInput := TransactionMutationInput{
@@ -57,6 +74,33 @@ func TestLedgerPostgreSQLReplayTransfersIdempotencyAndOwnership(t *testing.T) {
 	incompatible.AmountMinor = 101
 	if _, err := service.CreateTransaction(ctx, userOne, incompatible); !errors.Is(err, ErrLedgerConflict) {
 		t.Fatalf("incompatible idempotency error = %v, want conflict", err)
+	}
+	if _, err := service.CreateValuation(ctx, userOne, ValuationMutationInput{
+		IdempotencyKey: depositKey, AccountID: sourceID, ValueMinor: 100,
+		ValuationDate: depositInput.TransactionDate,
+	}); !errors.Is(err, ErrLedgerConflict) {
+		t.Fatalf("cross-operation idempotency error = %v, want conflict", err)
+	}
+
+	concurrentInput := depositInput
+	concurrentInput.IdempotencyKey = uuid.New()
+	concurrentInput.TransactionDate = time.Date(2026, time.September, 9, 0, 0, 0, 0, time.UTC)
+	var concurrentIDs [2]uuid.UUID
+	var concurrentErrors [2]error
+	var wait sync.WaitGroup
+	for index := range concurrentIDs {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			concurrentIDs[index], concurrentErrors[index] = service.CreateTransaction(ctx, userOne, concurrentInput)
+		}()
+	}
+	wait.Wait()
+	if concurrentErrors[0] != nil || concurrentErrors[1] != nil || concurrentIDs[0] != concurrentIDs[1] {
+		t.Fatalf("concurrent idempotent results = %v/%v and %s/%s", concurrentErrors[0], concurrentErrors[1], concurrentIDs[0], concurrentIDs[1])
+	}
+	if err := service.DeleteTransaction(ctx, userOne, concurrentIDs[0]); err != nil {
+		t.Fatalf("delete concurrent idempotency probe: %v", err)
 	}
 
 	valuationID, err := service.CreateValuation(ctx, userOne, ValuationMutationInput{
@@ -81,8 +125,8 @@ func TestLedgerPostgreSQLReplayTransfersIdempotencyAndOwnership(t *testing.T) {
 
 	transferInput := TransferMutationInput{
 		IdempotencyKey: uuid.New(), FromAccountID: sourceID, ToAccountID: destinationID,
-		SourceAmountMinor: 300, DestinationAmountMinor: 300,
-		TransactionDate: time.Date(2026, time.September, 13, 0, 0, 0, 0, time.UTC),
+		SourceAmountMinor: 300,
+		TransactionDate:   time.Date(2026, time.September, 13, 0, 0, 0, 0, time.UTC),
 	}
 	groupID, err := service.CreateTransfer(ctx, userOne, transferInput)
 	if err != nil {
@@ -98,6 +142,37 @@ func TestLedgerPostgreSQLReplayTransfersIdempotencyAndOwnership(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM transactions WHERE user_id=$1 AND transfer_group_id=$2`, userOne, groupID).Scan(&transferRows); err != nil || transferRows != 2 {
 		t.Fatalf("transfer row count = %d, %v; want 2", transferRows, err)
 	}
+	usdKey := uuid.New()
+	usdAccountID, err := service.CreateAccount(ctx, userOne, AccountMutationInput{
+		IdempotencyKey: &usdKey, Name: "USD", CategoryID: categoryOne, Currency: "USD",
+		TrackingMode: "balance", OpeningValueMinor: 0, IsIncludedInNetWorth: true, OpenedAt: &opened,
+	})
+	if err != nil {
+		t.Fatalf("create USD account: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO exchange_rates (id,user_id,base_currency,quote_currency,rate,effective_date,source,created_at)
+		VALUES ($1,$2,'KES','USD',0.01,'2026-09-01','test',now())
+	`, uuid.New(), userOne); err != nil {
+		t.Fatalf("insert transfer exchange rate: %v", err)
+	}
+	if _, err := service.CreateTransfer(ctx, userOne, TransferMutationInput{
+		IdempotencyKey: uuid.New(), FromAccountID: sourceID, ToAccountID: usdAccountID,
+		SourceAmountMinor: 100, TransactionDate: time.Date(2026, time.September, 14, 0, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("create converted transfer: %v", err)
+	}
+	assertLedgerBalance(t, ctx, db, userOne, sourceID, 650)
+	assertLedgerBalance(t, ctx, db, userOne, usdAccountID, 1)
+	if err := service.SetAccountArchived(ctx, userOne, sourceID, true); err != nil {
+		t.Fatalf("archive transferred account: %v", err)
+	}
+	if err := service.DeleteAccount(ctx, userOne, sourceID, "Source"); !errors.Is(err, ErrLedgerConflict) {
+		t.Fatalf("linked transfer account deletion error = %v, want conflict", err)
+	}
+	if err := service.SetAccountArchived(ctx, userOne, sourceID, false); err != nil {
+		t.Fatalf("restore transferred account: %v", err)
+	}
 
 	failedKey := uuid.New()
 	_, err = service.CreateTransfer(ctx, userOne, TransferMutationInput{
@@ -111,7 +186,21 @@ func TestLedgerPostgreSQLReplayTransfersIdempotencyAndOwnership(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM idempotency_keys WHERE user_id=$1 AND key=$2`, userOne, failedKey).Scan(&failedRows); err != nil || failedRows != 0 {
 		t.Fatalf("failed transfer persisted %d idempotency rows, err %v", failedRows, err)
 	}
-	assertLedgerBalance(t, ctx, db, userOne, sourceID, 750)
+	assertLedgerBalance(t, ctx, db, userOne, sourceID, 650)
+	overflowID := createLedgerAccount(t, ctx, service, userOne, categoryOne, "Overflow", math.MaxInt64, opened, uuid.New())
+	rollbackKey := uuid.New()
+	if _, err := service.CreateTransfer(ctx, userOne, TransferMutationInput{
+		IdempotencyKey: rollbackKey, FromAccountID: sourceID, ToAccountID: overflowID,
+		SourceAmountMinor: 1, DestinationAmountMinor: 1,
+		TransactionDate: time.Date(2026, time.September, 15, 0, 0, 0, 0, time.UTC),
+	}); !errors.Is(err, ErrLedgerValidation) {
+		t.Fatalf("overflow transfer error = %v, want validation", err)
+	}
+	assertLedgerBalance(t, ctx, db, userOne, sourceID, 650)
+	assertLedgerBalance(t, ctx, db, userOne, overflowID, math.MaxInt64)
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM idempotency_keys WHERE user_id=$1 AND key=$2`, userOne, rollbackKey).Scan(&failedRows); err != nil || failedRows != 0 {
+		t.Fatalf("rolled-back transfer persisted %d idempotency rows, err %v", failedRows, err)
+	}
 
 	if err := service.UpdateAccount(ctx, userTwo, sourceID, AccountMutationInput{
 		Name: "Stolen", CategoryID: categoryTwo, Currency: "KES", TrackingMode: "balance", IsIncludedInNetWorth: true,

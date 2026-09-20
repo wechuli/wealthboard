@@ -28,6 +28,7 @@ type fakeLedgerMutator struct {
 	createdID            uuid.UUID
 	lastUserID           uuid.UUID
 	lastTransaction      service.TransactionMutationInput
+	updatedTransaction   service.TransactionMutationInput
 	deleteTransactionErr error
 }
 
@@ -48,7 +49,9 @@ func (fake *fakeLedgerMutator) CreateTransaction(_ context.Context, userID uuid.
 	fake.lastUserID, fake.lastTransaction = userID, input
 	return fake.createdID, nil
 }
-func (fake *fakeLedgerMutator) UpdateTransaction(context.Context, uuid.UUID, uuid.UUID, service.TransactionMutationInput) error {
+
+func (fake *fakeLedgerMutator) UpdateTransaction(_ context.Context, _ uuid.UUID, _ uuid.UUID, input service.TransactionMutationInput) error {
+	fake.updatedTransaction = input
 	return nil
 }
 func (fake *fakeLedgerMutator) DeleteTransaction(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
@@ -126,6 +129,25 @@ func TestLedgerRouteRejectsJSONNumberForMinorUnits(t *testing.T) {
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400; body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestLedgerTransactionUpdateDoesNotRequireAccountOrIdempotencyKey(t *testing.T) {
+	fake := &fakeLedgerMutator{}
+	transactionID := uuid.New()
+	router := chi.NewRouter()
+	RegisterLedgerRoutes(router, NewLedgerHandler(ledgerFakeAuthenticator{principal: webauth.Principal{
+		UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite},
+	}}, fake, "https://wealth.test"))
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPatch, "/transactions/"+transactionID.String(), strings.NewReader(`{"type":"fee","amountMinor":"25","transactionDate":"2026-09-20"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if fake.updatedTransaction.Type != "fee" || fake.updatedTransaction.AmountMinor != 25 {
+		t.Fatalf("updated transaction = %+v", fake.updatedTransaction)
 	}
 }
 

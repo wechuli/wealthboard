@@ -91,6 +91,7 @@ type TransferMutationInput struct {
 
 type ledgerAccount struct {
 	ID, CategoryID               uuid.UUID
+	InstitutionID                uuid.NullUUID
 	Name, Currency, TrackingMode string
 	CurrentValueMinor            int64
 	IsLiability                  bool
@@ -115,6 +116,9 @@ func (service *LedgerService) CreateAccount(ctx context.Context, userID uuid.UUI
 	}
 	defer tx.Rollback()
 	if input.IdempotencyKey != nil {
+		if err := lockLedgerIdempotency(ctx, tx, userID, *input.IdempotencyKey); err != nil {
+			return uuid.Nil, err
+		}
 		resultID, operation, found, lookupErr := lookupIdempotency(ctx, tx, userID, *input.IdempotencyKey)
 		if lookupErr != nil {
 			return uuid.Nil, lookupErr
@@ -222,7 +226,11 @@ func (service *LedgerService) UpdateAccount(ctx context.Context, userID, account
 	if input.TrackingMode == "positions" && isLiability {
 		return validation("liability accounts cannot track positions")
 	}
-	if err := validateLedgerInstitution(ctx, tx, userID, input.InstitutionID, nil); err != nil {
+	var currentInstitutionID *uuid.UUID
+	if existing.InstitutionID.Valid {
+		currentInstitutionID = &existing.InstitutionID.UUID
+	}
+	if err := validateLedgerInstitution(ctx, tx, userID, input.InstitutionID, currentInstitutionID); err != nil {
 		return err
 	}
 	if err := validateEnabledCurrency(ctx, tx, userID, input.Currency); err != nil {
@@ -262,9 +270,6 @@ func (service *LedgerService) SetAccountArchived(ctx context.Context, userID, ac
 		if exists {
 			return conflict("a converted source account cannot be restored")
 		}
-		if _, err := service.replayBalance(ctx, tx, userID, accountID); err != nil {
-			return err
-		}
 	}
 	var archivedAt any
 	if archived {
@@ -273,6 +278,11 @@ func (service *LedgerService) SetAccountArchived(ctx context.Context, userID, ac
 	_, err = tx.ExecContext(ctx, `UPDATE accounts SET archived_at=$3,updated_at=$4 WHERE user_id=$1 AND id=$2`, userID, accountID, archivedAt, service.now().UTC())
 	if err != nil {
 		return fmt.Errorf("set account archive state: %w", err)
+	}
+	if !archived {
+		if _, err := service.replayBalance(ctx, tx, userID, accountID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -295,19 +305,32 @@ func (service *LedgerService) DeleteAccount(ctx context.Context, userID, account
 	}
 	var linked bool
 	err = tx.QueryRowContext(ctx, `
+		WITH owned_transfers AS (
+			SELECT transfer_group_id FROM transactions
+			WHERE user_id=$1 AND account_id=$2 AND transfer_group_id IS NOT NULL
+		), owned_events AS (
+			SELECT event_group_id FROM transactions
+			WHERE user_id=$1 AND account_id=$2 AND event_group_id IS NOT NULL
+			UNION
+			SELECT event_group_id FROM position_events
+			WHERE user_id=$1 AND account_id=$2 AND event_group_id IS NOT NULL
+		)
 		SELECT EXISTS (
-			SELECT 1 FROM transactions owned
-			JOIN transactions linked ON linked.user_id=owned.user_id
-				AND linked.transfer_group_id=owned.transfer_group_id
-			WHERE owned.user_id=$1 AND owned.account_id=$2
-				AND owned.transfer_group_id IS NOT NULL AND linked.account_id<>$2
+			SELECT 1 FROM transactions linked
+			WHERE linked.user_id=$1 AND linked.account_id<>$2
+				AND (linked.transfer_group_id IN (SELECT transfer_group_id FROM owned_transfers)
+					OR linked.event_group_id IN (SELECT event_group_id FROM owned_events))
+		) OR EXISTS (
+			SELECT 1 FROM position_events linked
+			WHERE linked.user_id=$1 AND linked.account_id<>$2
+				AND linked.event_group_id IN (SELECT event_group_id FROM owned_events)
 		)
 	`, userID, accountID).Scan(&linked)
 	if err != nil {
 		return fmt.Errorf("check linked transfers: %w", err)
 	}
 	if linked {
-		return conflict("remove linked transfers before deleting this account")
+		return conflict("remove linked transfers or investment activity before deleting this account")
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE goals SET linked_account_id=NULL,current_amount_minor=0,updated_at=$3 WHERE user_id=$1 AND linked_account_id=$2`, userID, accountID, service.now().UTC()); err != nil {
 		return fmt.Errorf("unlink account goals: %w", err)
@@ -337,16 +360,34 @@ func (service *LedgerService) CreateTransaction(ctx context.Context, userID uuid
 		return uuid.Nil, fmt.Errorf("begin transaction creation: %w", err)
 	}
 	defer tx.Rollback()
+	if err := lockLedgerIdempotency(ctx, tx, userID, input.IdempotencyKey); err != nil {
+		return uuid.Nil, err
+	}
+	externalID := strings.TrimSpace(input.ExternalID)
+	if externalID == "" {
+		externalID = fmt.Sprintf("derived-%s-%s-%d", input.TransactionDate.Format(time.DateOnly), input.Type, input.AmountMinor)
+	}
+	if resultID, operation, found, lookupErr := lookupIdempotency(ctx, tx, userID, input.IdempotencyKey); lookupErr != nil {
+		return uuid.Nil, lookupErr
+	} else if found && operation != "transaction" {
+		return uuid.Nil, conflict("idempotency key was already used for another request")
+	} else if found && resultID == nil {
+		return uuid.Nil, conflict("idempotency result no longer exists")
+	}
 	var existingID, existingAccount uuid.UUID
 	var existingType string
 	var existingAmount int64
 	var existingDate time.Time
+	var existingDescription, existingNotes sql.NullString
+	var existingExternalID string
 	err = tx.QueryRowContext(ctx, `
-		SELECT id,account_id,type,amount_minor,transaction_date
+		SELECT id,account_id,type,amount_minor,transaction_date,description,notes,external_id
 		FROM transactions WHERE user_id=$1 AND idempotency_key=$2
-	`, userID, input.IdempotencyKey).Scan(&existingID, &existingAccount, &existingType, &existingAmount, &existingDate)
+	`, userID, input.IdempotencyKey).Scan(&existingID, &existingAccount, &existingType, &existingAmount, &existingDate, &existingDescription, &existingNotes, &existingExternalID)
 	if err == nil {
-		if existingAccount != input.AccountID || existingType != input.Type || existingAmount != input.AmountMinor || !sameDate(existingDate, input.TransactionDate) {
+		if existingAccount != input.AccountID || existingType != input.Type || existingAmount != input.AmountMinor ||
+			!sameDate(existingDate, input.TransactionDate) || existingDescription.String != strings.TrimSpace(input.Description) ||
+			existingNotes.String != strings.TrimSpace(input.Notes) || existingExternalID != externalID {
 			return uuid.Nil, conflict("idempotency key was reused with incompatible transaction data")
 		}
 		return existingID, nil
@@ -363,10 +404,6 @@ func (service *LedgerService) CreateTransaction(ctx context.Context, userID uuid
 	}
 	transactionID := uuid.New()
 	now := service.now().UTC()
-	externalID := strings.TrimSpace(input.ExternalID)
-	if externalID == "" {
-		externalID = fmt.Sprintf("derived-%s-%s-%d", input.TransactionDate.Format(time.DateOnly), input.Type, input.AmountMinor)
-	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO transactions (
 			id,user_id,account_id,type,amount_minor,currency,transaction_date,
@@ -475,6 +512,10 @@ func (service *LedgerService) DeleteTransaction(ctx context.Context, userID, tra
 			}
 			affected = append(affected, id)
 		}
+		if rowsErr := rows.Err(); rowsErr != nil {
+			rows.Close()
+			return fmt.Errorf("iterate transfer accounts: %w", rowsErr)
+		}
 		rows.Close()
 		_, err = tx.ExecContext(ctx, `DELETE FROM transactions WHERE user_id=$1 AND transfer_group_id=$2`, userID, transferGroupID.UUID)
 	} else {
@@ -492,7 +533,7 @@ func (service *LedgerService) DeleteTransaction(ctx context.Context, userID, tra
 }
 
 func (service *LedgerService) CreateValuation(ctx context.Context, userID uuid.UUID, input ValuationMutationInput) (uuid.UUID, error) {
-	if input.IdempotencyKey == uuid.Nil || input.AccountID == uuid.Nil || input.ValueMinor < 0 || input.ValuationDate.IsZero() {
+	if input.IdempotencyKey == uuid.Nil || input.AccountID == uuid.Nil || input.ValueMinor < 0 || input.ValuationDate.IsZero() || !validLedgerText(input.Notes, 2000) {
 		return uuid.Nil, validation("provide a valid valuation")
 	}
 	if err := service.validateDate(ctx, userID, input.ValuationDate); err != nil {
@@ -503,6 +544,9 @@ func (service *LedgerService) CreateValuation(ctx context.Context, userID uuid.U
 		return uuid.Nil, fmt.Errorf("begin valuation creation: %w", err)
 	}
 	defer tx.Rollback()
+	if err := lockLedgerIdempotency(ctx, tx, userID, input.IdempotencyKey); err != nil {
+		return uuid.Nil, err
+	}
 	resultID, operation, found, err := lookupIdempotency(ctx, tx, userID, input.IdempotencyKey)
 	if err != nil {
 		return uuid.Nil, err
@@ -514,14 +558,15 @@ func (service *LedgerService) CreateValuation(ctx context.Context, userID uuid.U
 		var accountID uuid.UUID
 		var value int64
 		var date time.Time
-		err = tx.QueryRowContext(ctx, `SELECT account_id,value_minor,valuation_date FROM valuation_snapshots WHERE user_id=$1 AND id=$2`, userID, *resultID).Scan(&accountID, &value, &date)
+		var notes sql.NullString
+		err = tx.QueryRowContext(ctx, `SELECT account_id,value_minor,valuation_date,notes FROM valuation_snapshots WHERE user_id=$1 AND id=$2`, userID, *resultID).Scan(&accountID, &value, &date, &notes)
 		if errors.Is(err, sql.ErrNoRows) {
 			return uuid.Nil, conflict("idempotency result no longer exists")
 		}
 		if err != nil {
 			return uuid.Nil, fmt.Errorf("load idempotent valuation: %w", err)
 		}
-		if accountID != input.AccountID || value != input.ValueMinor || !sameDate(date, input.ValuationDate) {
+		if accountID != input.AccountID || value != input.ValueMinor || !sameDate(date, input.ValuationDate) || notes.String != strings.TrimSpace(input.Notes) {
 			return uuid.Nil, conflict("idempotency key was reused with incompatible valuation data")
 		}
 		return *resultID, nil
@@ -577,7 +622,7 @@ func (service *LedgerService) DeleteValuation(ctx context.Context, userID, valua
 }
 
 func (service *LedgerService) CreateTransfer(ctx context.Context, userID uuid.UUID, input TransferMutationInput) (uuid.UUID, error) {
-	if input.IdempotencyKey == uuid.Nil || input.FromAccountID == uuid.Nil || input.ToAccountID == uuid.Nil || input.FromAccountID == input.ToAccountID || input.SourceAmountMinor <= 0 || input.DestinationAmountMinor <= 0 || input.TransactionDate.IsZero() {
+	if input.IdempotencyKey == uuid.Nil || input.FromAccountID == uuid.Nil || input.ToAccountID == uuid.Nil || input.FromAccountID == input.ToAccountID || input.SourceAmountMinor <= 0 || input.DestinationAmountMinor < 0 || input.TransactionDate.IsZero() || !validLedgerText(input.Description, 200) {
 		return uuid.Nil, validation("provide a valid transfer")
 	}
 	if err := service.validateDate(ctx, userID, input.TransactionDate); err != nil {
@@ -588,6 +633,9 @@ func (service *LedgerService) CreateTransfer(ctx context.Context, userID uuid.UU
 		return uuid.Nil, fmt.Errorf("begin transfer: %w", err)
 	}
 	defer tx.Rollback()
+	if err := lockLedgerIdempotency(ctx, tx, userID, input.IdempotencyKey); err != nil {
+		return uuid.Nil, err
+	}
 	resultID, operation, found, err := lookupIdempotency(ctx, tx, userID, input.IdempotencyKey)
 	if err != nil {
 		return uuid.Nil, err
@@ -616,8 +664,19 @@ func (service *LedgerService) CreateTransfer(ctx context.Context, userID uuid.UU
 	if source.IsLiability || destination.IsLiability {
 		return uuid.Nil, validation("transfers are available only between asset accounts")
 	}
-	if source.TrackingMode != "balance" || destination.TrackingMode != "balance" {
-		return uuid.Nil, validation("this ledger transfer workflow supports balance accounts only")
+	if input.DestinationAmountMinor == 0 {
+		if source.Currency == destination.Currency {
+			input.DestinationAmountMinor = input.SourceAmountMinor
+		} else {
+			converted, found, convertErr := investmentConvertMinor(ctx, tx, userID, input.SourceAmountMinor, source.Currency, destination.Currency, input.TransactionDate)
+			if convertErr != nil {
+				return uuid.Nil, convertErr
+			}
+			if !found || converted <= 0 {
+				return uuid.Nil, validation("a historical exchange rate is required for this transfer")
+			}
+			input.DestinationAmountMinor = converted
+		}
 	}
 	groupID := uuid.New()
 	now := service.now().UTC()
@@ -655,13 +714,27 @@ type sqlTx interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
-func (service *LedgerService) replayBalance(ctx context.Context, tx sqlTx, userID, accountID uuid.UUID) (int64, error) {
+func (service *LedgerService) replayBalance(ctx context.Context, tx *sql.Tx, userID, accountID uuid.UUID) (int64, error) {
 	account, err := getLedgerAccount(ctx, tx, userID, accountID, true)
 	if err != nil {
 		return 0, err
 	}
+	if account.ArchivedAt.Valid {
+		return account.CurrentValueMinor, nil
+	}
+	if account.TrackingMode == "positions" {
+		investments := &InvestmentMutations{db: service.db, now: service.now}
+		if err := investments.recalculatePositionAccount(ctx, tx, userID, accountID); err != nil {
+			return 0, err
+		}
+		var value int64
+		if err := tx.QueryRowContext(ctx, `SELECT current_value_minor FROM accounts WHERE user_id=$1 AND id=$2`, userID, accountID).Scan(&value); err != nil {
+			return 0, fmt.Errorf("load recalculated position account value: %w", err)
+		}
+		return value, nil
+	}
 	if account.TrackingMode != "balance" {
-		return 0, validation("balance replay is unavailable for position accounts")
+		return 0, validation("unsupported account tracking mode")
 	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT kind,type,amount_minor,event_date FROM (
@@ -726,7 +799,9 @@ func transactionEffect(transactionType string, amount int64) (int64, error) {
 
 func validateAccountInput(input AccountMutationInput, creating bool) error {
 	input.Name = strings.TrimSpace(input.Name)
-	if input.Name == "" || len(input.Name) > 100 || strings.ContainsAny(input.Name, "\x00\n\r\t") || input.CategoryID == uuid.Nil || !ledgerCurrencyPattern.MatchString(input.Currency) {
+	if input.Name == "" || len(input.Name) > 100 || strings.ContainsAny(input.Name, "\x00\n\r\t") ||
+		!validLedgerText(input.Description, 2000) || !validLedgerText(input.AccountReference, 50) ||
+		!validLedgerText(input.Notes, 2000) || input.CategoryID == uuid.Nil || !ledgerCurrencyPattern.MatchString(input.Currency) {
 		return validation("provide valid account details")
 	}
 	if input.TrackingMode != "" && input.TrackingMode != "balance" && input.TrackingMode != "positions" {
@@ -739,8 +814,11 @@ func validateAccountInput(input AccountMutationInput, creating bool) error {
 }
 
 func validateTransactionInput(input TransactionMutationInput, creating bool) error {
-	if input.AccountID == uuid.Nil || input.TransactionDate.IsZero() || (creating && input.IdempotencyKey == uuid.Nil) {
+	if input.TransactionDate.IsZero() || (creating && (input.AccountID == uuid.Nil || input.IdempotencyKey == uuid.Nil)) {
 		return validation("provide a valid transaction")
+	}
+	if !validLedgerText(input.Description, 200) || !validLedgerText(input.ExternalID, 200) || !validLedgerText(input.Notes, 2000) {
+		return validation("transaction text exceeds the supported length")
 	}
 	if input.Type == "opening_balance" || input.Type == "transfer" {
 		return validation("use the dedicated workflow for this transaction type")
@@ -760,9 +838,6 @@ func validateTransactionInput(input TransactionMutationInput, creating bool) err
 func validateTransactionForAccount(transactionType, trackingMode string) error {
 	if trackingMode == "positions" && !positionCashTypes[transactionType] {
 		return validation("use the position workflow for this activity")
-	}
-	if trackingMode == "positions" {
-		return validation("cash replay for position accounts is not available in this ledger slice")
 	}
 	return nil
 }
@@ -785,12 +860,12 @@ func (service *LedgerService) validateDate(ctx context.Context, userID uuid.UUID
 }
 
 func getLedgerAccount(ctx context.Context, tx sqlTx, userID, accountID uuid.UUID, includeArchived bool) (ledgerAccount, error) {
-	query := `SELECT id,category_id,name,currency,tracking_mode,current_value_minor,is_liability,archived_at FROM accounts WHERE user_id=$1 AND id=$2`
+	query := `SELECT id,category_id,institution_id,name,currency,tracking_mode,current_value_minor,is_liability,archived_at FROM accounts WHERE user_id=$1 AND id=$2`
 	if !includeArchived {
 		query += ` AND archived_at IS NULL`
 	}
 	var account ledgerAccount
-	err := tx.QueryRowContext(ctx, query, userID, accountID).Scan(&account.ID, &account.CategoryID, &account.Name, &account.Currency, &account.TrackingMode, &account.CurrentValueMinor, &account.IsLiability, &account.ArchivedAt)
+	err := tx.QueryRowContext(ctx, query, userID, accountID).Scan(&account.ID, &account.CategoryID, &account.InstitutionID, &account.Name, &account.Currency, &account.TrackingMode, &account.CurrentValueMinor, &account.IsLiability, &account.ArchivedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ledgerAccount{}, ErrLedgerNotFound
 	}
@@ -854,7 +929,15 @@ func lookupIdempotency(ctx context.Context, tx sqlTx, userID, key uuid.UUID) (*u
 	var result uuid.NullUUID
 	err := tx.QueryRowContext(ctx, `SELECT operation,result_id FROM idempotency_keys WHERE user_id=$1 AND key=$2`, userID, key).Scan(&operation, &result)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, "", false, nil
+		var transactionID uuid.UUID
+		transactionErr := tx.QueryRowContext(ctx, `SELECT id FROM transactions WHERE user_id=$1 AND idempotency_key=$2`, userID, key).Scan(&transactionID)
+		if errors.Is(transactionErr, sql.ErrNoRows) {
+			return nil, "", false, nil
+		}
+		if transactionErr != nil {
+			return nil, "", false, fmt.Errorf("check transaction idempotency key: %w", transactionErr)
+		}
+		return &transactionID, "transaction", true, nil
 	}
 	if err != nil {
 		return nil, "", false, fmt.Errorf("check idempotency key: %w", err)
@@ -865,26 +948,74 @@ func lookupIdempotency(ctx context.Context, tx sqlTx, userID, key uuid.UUID) (*u
 	return nil, operation, true, nil
 }
 
+func lockLedgerIdempotency(ctx context.Context, tx sqlTx, userID, key uuid.UUID) error {
+	lockKey := userID.String() + ":" + key.String()
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return fmt.Errorf("lock idempotency key: %w", err)
+	}
+	return nil
+}
+
 func accountCreateMatches(ctx context.Context, tx sqlTx, userID, accountID uuid.UUID, input AccountMutationInput) (bool, error) {
 	var name, currency, trackingMode string
+	var description, accountReference, notes sql.NullString
 	var categoryID uuid.UUID
+	var institutionID uuid.NullUUID
+	var costBasis sql.NullInt64
+	var included bool
+	var openedAt sql.NullTime
 	var opening int64
+	var openingDate time.Time
 	err := tx.QueryRowContext(ctx, `
-		SELECT a.name,a.category_id,a.currency,a.tracking_mode,t.amount_minor
+		SELECT a.name,a.description,a.category_id,a.institution_id,a.account_reference,
+			a.currency,a.tracking_mode,a.cost_basis_minor,a.is_included_in_net_worth,
+			a.notes,a.opened_at,t.amount_minor,t.transaction_date
 		FROM accounts a JOIN transactions t ON t.user_id=a.user_id AND t.account_id=a.id AND t.type='opening_balance'
 		WHERE a.user_id=$1 AND a.id=$2
-	`, userID, accountID).Scan(&name, &categoryID, &currency, &trackingMode, &opening)
+	`, userID, accountID).Scan(&name, &description, &categoryID, &institutionID, &accountReference,
+		&currency, &trackingMode, &costBasis, &included, &notes, &openedAt, &opening, &openingDate)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, conflict("idempotency result no longer exists")
 	}
 	if err != nil {
 		return false, fmt.Errorf("load idempotent account: %w", err)
 	}
-	return name == strings.TrimSpace(input.Name) && categoryID == input.CategoryID && currency == input.Currency && trackingMode == input.TrackingMode && opening == input.OpeningValueMinor, nil
+	if name != strings.TrimSpace(input.Name) || description.String != strings.TrimSpace(input.Description) ||
+		categoryID != input.CategoryID || !sameOptionalUUID(institutionID, input.InstitutionID) ||
+		accountReference.String != strings.TrimSpace(input.AccountReference) || currency != input.Currency ||
+		trackingMode != input.TrackingMode || !sameOptionalInt64(costBasis, nullableCostBasis(input.CostBasisMinor, input.TrackingMode)) ||
+		included != input.IsIncludedInNetWorth || notes.String != strings.TrimSpace(input.Notes) || opening != input.OpeningValueMinor {
+		return false, nil
+	}
+	if input.OpenedAt == nil {
+		return !openedAt.Valid, nil
+	}
+	return openedAt.Valid && sameDate(openedAt.Time, *input.OpenedAt) && sameDate(openingDate, *input.OpenedAt), nil
 }
 
-func transferMatches(ctx context.Context, tx sqlTx, userID, groupID uuid.UUID, input TransferMutationInput) (bool, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT account_id,amount_minor,transaction_date FROM transactions WHERE user_id=$1 AND transfer_group_id=$2 ORDER BY amount_minor`, userID, groupID)
+func transferMatches(ctx context.Context, tx *sql.Tx, userID, groupID uuid.UUID, input TransferMutationInput) (bool, error) {
+	var sourceName, sourceCurrency, destinationName, destinationCurrency string
+	if err := tx.QueryRowContext(ctx, `SELECT name,currency FROM accounts WHERE user_id=$1 AND id=$2`, userID, input.FromAccountID).Scan(&sourceName, &sourceCurrency); err != nil {
+		return false, fmt.Errorf("load idempotent transfer source: %w", err)
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT name,currency FROM accounts WHERE user_id=$1 AND id=$2`, userID, input.ToAccountID).Scan(&destinationName, &destinationCurrency); err != nil {
+		return false, fmt.Errorf("load idempotent transfer destination: %w", err)
+	}
+	if input.DestinationAmountMinor == 0 {
+		if sourceCurrency == destinationCurrency {
+			input.DestinationAmountMinor = input.SourceAmountMinor
+		} else {
+			converted, found, convertErr := investmentConvertMinor(ctx, tx, userID, input.SourceAmountMinor, sourceCurrency, destinationCurrency, input.TransactionDate)
+			if convertErr != nil {
+				return false, convertErr
+			}
+			if !found || converted <= 0 {
+				return false, validation("a historical exchange rate is required for this transfer")
+			}
+			input.DestinationAmountMinor = converted
+		}
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT account_id,amount_minor,transaction_date,description FROM transactions WHERE user_id=$1 AND transfer_group_id=$2 ORDER BY amount_minor`, userID, groupID)
 	if err != nil {
 		return false, fmt.Errorf("load idempotent transfer: %w", err)
 	}
@@ -894,10 +1025,18 @@ func transferMatches(ctx context.Context, tx sqlTx, userID, groupID uuid.UUID, i
 		var accountID uuid.UUID
 		var amount int64
 		var date time.Time
-		if err := rows.Scan(&accountID, &amount, &date); err != nil {
+		var description sql.NullString
+		if err := rows.Scan(&accountID, &amount, &date, &description); err != nil {
 			return false, fmt.Errorf("scan idempotent transfer: %w", err)
 		}
-		matches := (accountID == input.FromAccountID && amount == -input.SourceAmountMinor) || (accountID == input.ToAccountID && amount == input.DestinationAmountMinor)
+		expectedDescription := strings.TrimSpace(input.Description)
+		if expectedDescription == "" && accountID == input.FromAccountID {
+			expectedDescription = "Transfer to " + destinationName
+		}
+		if expectedDescription == "" && accountID == input.ToAccountID {
+			expectedDescription = "Transfer from " + sourceName
+		}
+		matches := ((accountID == input.FromAccountID && amount == -input.SourceAmountMinor) || (accountID == input.ToAccountID && amount == input.DestinationAmountMinor)) && description.String == expectedDescription
 		if !matches || !sameDate(date, input.TransactionDate) {
 			return false, nil
 		}
@@ -908,6 +1047,10 @@ func transferMatches(ctx context.Context, tx sqlTx, userID, groupID uuid.UUID, i
 
 func validation(message string) error { return fmt.Errorf("%w: %s", ErrLedgerValidation, message) }
 func conflict(message string) error   { return fmt.Errorf("%w: %s", ErrLedgerConflict, message) }
+
+func validLedgerText(value string, maximum int) bool {
+	return len(strings.TrimSpace(value)) <= maximum && !strings.ContainsRune(value, '\x00')
+}
 
 func nullable(value string) any {
 	value = strings.TrimSpace(value)
@@ -936,6 +1079,21 @@ func nullableInt64ForMode(value *int64, trackingMode string) any {
 		return nil
 	}
 	return *value
+}
+
+func nullableCostBasis(value *int64, trackingMode string) *int64 {
+	if value == nil || trackingMode != "balance" {
+		return nil
+	}
+	return value
+}
+
+func sameOptionalUUID(actual uuid.NullUUID, expected *uuid.UUID) bool {
+	return (!actual.Valid && expected == nil) || (actual.Valid && expected != nil && actual.UUID == *expected)
+}
+
+func sameOptionalInt64(actual sql.NullInt64, expected *int64) bool {
+	return (!actual.Valid && expected == nil) || (actual.Valid && expected != nil && actual.Int64 == *expected)
 }
 
 func ledgerDateOnly(value time.Time) time.Time {

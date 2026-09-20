@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -268,7 +269,7 @@ func (body goalWriteRequest) input(headerKey string) (service.GoalMutationInput,
 }
 
 func fmtGoalValidation(detail string) error {
-	return errors.Join(service.ErrGoalMutationValidation, errors.New(detail))
+	return fmt.Errorf("%w: %s", service.ErrGoalMutationValidation, detail)
 }
 
 func writeGoalMutationError(response http.ResponseWriter, err error) {

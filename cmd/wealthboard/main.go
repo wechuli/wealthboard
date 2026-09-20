@@ -119,6 +119,13 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	coreReads := api.NewCoreReadHandler(authHandler, service.NewCoreReadService(service.NewSQLCoreReadRepository(db)))
 	goalsReports := api.NewGoalsReportsHandler(authHandler, service.NewGoalsReportsService(service.NewSQLGoalsReportsRepository(db)))
 	featureReads := api.NewFeatureReadHandler(authHandler, service.NewFeatureReads(db))
+	mutations := api.MutationHandlers{
+		Metadata:   api.NewMetadataMutationHandler(authHandler, service.NewMetadataMutations(db)),
+		Ledger:     api.NewLedgerHandler(authHandler, service.NewLedgerService(db), trustedOrigin),
+		Goals:      api.NewGoalMutationHandler(authHandler, service.NewGoalMutationService(service.NewSQLGoalMutationRepository(db))),
+		Investment: api.NewInvestmentMutationHandler(authHandler, service.NewInvestmentMutations(db), trustedOrigin),
+		Conversion: api.NewAccountConversionHandler(authHandler, service.NewAccountConversionService(db)),
+	}
 	distPath := os.Getenv("WEB_DIST_PATH")
 	if distPath == "" {
 		distPath = "web/dist"
@@ -142,7 +149,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	server := &http.Server{
 		Addr: cfg.HTTP.Address,
 		Handler: api.NewRouterWithReads(logger, ready, authHandler, overviewHandler, api.ReadHandlers{
-			Core: coreReads, GoalsReports: goalsReports, Features: featureReads, Static: spa,
+			Core: coreReads, GoalsReports: goalsReports, Features: featureReads, Static: spa, Mutations: mutations,
 		}),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,

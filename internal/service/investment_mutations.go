@@ -171,7 +171,13 @@ SELECT TRUE FROM investment_instruments WHERE user_id = $1 AND id = $2 FOR UPDAT
 			if err != nil {
 				return err
 			}
-			quantities, err := replayPositionEvents(rows, true)
+			targetRows := make([]positionEventRow, 0, len(rows))
+			for _, row := range rows {
+				if row.instrumentID == instrumentID {
+					targetRows = append(targetRows, row)
+				}
+			}
+			quantities, err := replayPositionEvents(targetRows, false)
 			if err != nil {
 				return err
 			}
@@ -243,7 +249,7 @@ FOR UPDATE`, userID, input.InstrumentID).Scan(&currency); err != nil {
 			return investmentValidationError("security price metadata is too long")
 		}
 		now := service.now().UTC()
-		return mutationDatabaseError(tx.QueryRowContext(ctx, `
+		if err := mutationDatabaseError(tx.QueryRowContext(ctx, `
 INSERT INTO security_prices (
     id, user_id, instrument_id, external_id, price, currency, effective_date,
     source, provenance, created_at, updated_at
@@ -253,17 +259,26 @@ SET external_id = COALESCE(EXCLUDED.external_id, security_prices.external_id),
     price = EXCLUDED.price, source = EXCLUDED.source, provenance = EXCLUDED.provenance,
     updated_at = EXCLUDED.updated_at
 RETURNING id`, id, userID, input.InstrumentID, optionalString(input.ExternalID), price, currency,
-			investmentDateOnly(input.EffectiveDate), source, optionalString(input.Provenance), now).Scan(&id), "upsert security price")
+			investmentDateOnly(input.EffectiveDate), source, optionalString(input.Provenance), now).Scan(&id), "upsert security price"); err != nil {
+			return err
+		}
+		return service.recalculateInstrumentAccounts(ctx, tx, userID, input.InstrumentID)
 	})
 	return id, err
 }
 
 func (service *InvestmentMutations) DeleteSecurityPrice(ctx context.Context, userID, priceID uuid.UUID) error {
-	result, err := service.db.ExecContext(ctx, `DELETE FROM security_prices WHERE user_id = $1 AND id = $2`, userID, priceID)
-	if err != nil {
-		return mutationDatabaseError(err, "delete security price")
-	}
-	return requireInvestmentAffected(result)
+	return service.withTx(ctx, func(tx *sql.Tx) error {
+		var instrumentID uuid.UUID
+		if err := tx.QueryRowContext(ctx, `
+SELECT instrument_id FROM security_prices WHERE user_id = $1 AND id = $2 FOR UPDATE`, userID, priceID).Scan(&instrumentID); err != nil {
+			return mutationNotFound(err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM security_prices WHERE user_id = $1 AND id = $2`, userID, priceID); err != nil {
+			return mutationDatabaseError(err, "delete security price")
+		}
+		return service.recalculateInstrumentAccounts(ctx, tx, userID, instrumentID)
+	})
 }
 
 func (service *InvestmentMutations) CreatePositionEvent(ctx context.Context, userID uuid.UUID, input PositionEventMutationInput) (uuid.UUID, error) {
@@ -277,6 +292,12 @@ func (service *InvestmentMutations) UpdatePositionEvent(ctx context.Context, use
 func (service *InvestmentMutations) savePositionEvent(ctx context.Context, userID, eventID uuid.UUID, input PositionEventMutationInput) (uuid.UUID, error) {
 	if !ordinaryPositionEventTypes[input.Type] {
 		return uuid.Nil, investmentValidationError("use the dedicated workflow for this position activity")
+	}
+	if eventID == uuid.Nil && input.IdempotencyKey == uuid.Nil {
+		return uuid.Nil, investmentValidationError("idempotency key is required")
+	}
+	if len(strings.TrimSpace(input.ExternalID)) > 200 || len(strings.TrimSpace(input.Description)) > 200 || len(strings.TrimSpace(input.Notes)) > 2000 {
+		return uuid.Nil, investmentValidationError("position event metadata is too long")
 	}
 	if err := service.validateDate(ctx, service.db, userID, input.TradeDate); err != nil {
 		return uuid.Nil, err
@@ -464,7 +485,10 @@ WHERE user_id = $1 AND id = $2`, userID, eventID, input.InstrumentID, input.Type
 		if err != nil {
 			return mutationDatabaseError(err, "save position event")
 		}
-		return validateAccountPositionReplay(ctx, tx, userID, input.AccountID)
+		if err := validateAccountPositionReplay(ctx, tx, userID, input.AccountID); err != nil {
+			return err
+		}
+		return service.recalculatePositionAccount(ctx, tx, userID, input.AccountID)
 	})
 	return resultID, err
 }
@@ -485,7 +509,10 @@ WHERE user_id = $1 AND id = $2 FOR UPDATE`, userID, eventID).Scan(&accountID, &e
 		if _, err := tx.ExecContext(ctx, `DELETE FROM position_events WHERE user_id = $1 AND id = $2`, userID, eventID); err != nil {
 			return mutationDatabaseError(err, "delete position event")
 		}
-		return validateAccountPositionReplay(ctx, tx, userID, accountID)
+		if err := validateAccountPositionReplay(ctx, tx, userID, accountID); err != nil {
+			return err
+		}
+		return service.recalculatePositionAccount(ctx, tx, userID, accountID)
 	})
 }
 
@@ -759,6 +786,177 @@ func validateAccountPositionReplay(ctx context.Context, tx *sql.Tx, userID, acco
 	return err
 }
 
+func (service *InvestmentMutations) recalculateInstrumentAccounts(ctx context.Context, tx *sql.Tx, userID, instrumentID uuid.UUID) error {
+	rows, err := tx.QueryContext(ctx, `
+SELECT DISTINCT account_id FROM position_events
+WHERE user_id = $1 AND instrument_id = $2`, userID, instrumentID)
+	if err != nil {
+		return fmt.Errorf("list affected position accounts: %w", err)
+	}
+	var accountIDs []uuid.UUID
+	for rows.Next() {
+		var accountID uuid.UUID
+		if err := rows.Scan(&accountID); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan affected position account: %w", err)
+		}
+		accountIDs = append(accountIDs, accountID)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close affected position accounts: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate affected position accounts: %w", err)
+	}
+	for _, accountID := range accountIDs {
+		if err := service.recalculatePositionAccount(ctx, tx, userID, accountID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (service *InvestmentMutations) recalculatePositionAccount(ctx context.Context, tx *sql.Tx, userID, accountID uuid.UUID) error {
+	var accountCurrency string
+	var archivedAt sql.NullTime
+	if err := tx.QueryRowContext(ctx, `
+SELECT currency, archived_at FROM accounts
+WHERE user_id = $1 AND id = $2 AND tracking_mode = 'positions'`, userID, accountID).Scan(&accountCurrency, &archivedAt); err != nil {
+		return mutationNotFound(err)
+	}
+	if archivedAt.Valid {
+		return nil
+	}
+	events, err := loadPositionEvents(ctx, tx, userID, &accountID)
+	if err != nil {
+		return err
+	}
+	quantities, err := replayPositionEvents(events, true)
+	if err != nil {
+		return err
+	}
+
+	total := new(big.Int)
+	transactionRows, err := tx.QueryContext(ctx, `
+SELECT type, amount_minor FROM transactions
+WHERE user_id = $1 AND account_id = $2`, userID, accountID)
+	if err != nil {
+		return fmt.Errorf("load position account cash transactions: %w", err)
+	}
+	for transactionRows.Next() {
+		var transactionType string
+		var amount int64
+		if err := transactionRows.Scan(&transactionType, &amount); err != nil {
+			transactionRows.Close()
+			return fmt.Errorf("scan position account cash transaction: %w", err)
+		}
+		total.Add(total, investmentTransactionEffect(transactionType, amount))
+	}
+	if err := transactionRows.Close(); err != nil {
+		return fmt.Errorf("close position account cash transactions: %w", err)
+	}
+	if err := transactionRows.Err(); err != nil {
+		return fmt.Errorf("iterate position account cash transactions: %w", err)
+	}
+	var tradeCash int64
+	if err := tx.QueryRowContext(ctx, `
+SELECT COALESCE(SUM(cash_effect_minor), 0) FROM position_events
+WHERE user_id = $1 AND account_id = $2`, userID, accountID).Scan(&tradeCash); err != nil {
+		return fmt.Errorf("sum position account trade cash: %w", err)
+	}
+	total.Add(total, big.NewInt(tradeCash))
+
+	for key, quantity := range quantities {
+		if key.accountID != accountID || quantity.Sign() == 0 {
+			continue
+		}
+		var instrumentCurrency, price string
+		err := tx.QueryRowContext(ctx, `
+SELECT instrument.quote_currency, price.price::TEXT
+FROM investment_instruments instrument
+JOIN LATERAL (
+    SELECT price, effective_date
+    FROM security_prices
+    WHERE user_id = instrument.user_id AND instrument_id = instrument.id
+      AND effective_date <= $3
+      AND effective_date >= COALESCE((
+          SELECT MAX(trade_date) FROM position_events
+          WHERE user_id = $1 AND account_id = $2 AND instrument_id = instrument.id AND type = 'split'
+      ), effective_date)
+    ORDER BY effective_date DESC, created_at DESC, id
+    LIMIT 1
+) price ON TRUE
+WHERE instrument.user_id = $1 AND instrument.id = $4`, userID, accountID, investmentDateOnly(service.now().UTC()), key.instrumentID).
+			Scan(&instrumentCurrency, &price)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("load position price: %w", err)
+		}
+		quoteMinor, err := decimalProductMinor(canonicalRat(quantity), price, instrumentCurrency)
+		if err != nil {
+			return err
+		}
+		accountMinor, found, err := investmentConvertMinor(ctx, tx, userID, quoteMinor, instrumentCurrency, accountCurrency, service.now().UTC())
+		if err != nil {
+			return err
+		}
+		if found {
+			total.Add(total, big.NewInt(accountMinor))
+		}
+	}
+	value, err := checkedInt64(total)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
+UPDATE accounts SET current_value_minor = $3, updated_at = $4
+WHERE user_id = $1 AND id = $2`, userID, accountID, value, service.now().UTC())
+	if err != nil {
+		return fmt.Errorf("store position account value: %w", err)
+	}
+	return nil
+}
+
+func investmentConvertMinor(ctx context.Context, tx *sql.Tx, userID uuid.UUID, amount int64, fromCurrency, toCurrency string, asOf time.Time) (int64, bool, error) {
+	if fromCurrency == toCurrency {
+		return amount, true, nil
+	}
+	var baseCurrency, rate string
+	err := tx.QueryRowContext(ctx, `
+SELECT base_currency, rate::TEXT FROM exchange_rates
+WHERE user_id = $1
+  AND ((base_currency = $2 AND quote_currency = $3) OR (base_currency = $3 AND quote_currency = $2))
+  AND effective_date <= $4
+ORDER BY effective_date DESC, created_at DESC, id
+LIMIT 1`, userID, fromCurrency, toCurrency, investmentDateOnly(asOf)).Scan(&baseCurrency, &rate)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("load position exchange rate: %w", err)
+	}
+	converted, err := convertMinorAtRate(amount, fromCurrency, toCurrency, rate, baseCurrency != fromCurrency)
+	return converted, true, err
+}
+
+func investmentTransactionEffect(transactionType string, amount int64) *big.Int {
+	value := big.NewInt(amount)
+	if transactionType == "manual_adjustment" || transactionType == "transfer" {
+		return value
+	}
+	value.Abs(value)
+	switch transactionType {
+	case "opening_balance", "deposit", "interest", "dividend", "capital_gain", "purchase", "liability_increase":
+		return value
+	case "withdrawal", "capital_loss", "fee", "sale", "liability_payment":
+		return value.Neg(value)
+	default:
+		return new(big.Int)
+	}
+}
+
 func requireEnabledCurrency(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, userID uuid.UUID, currency string) error {
@@ -787,7 +985,7 @@ SELECT base_currency, supported_currencies FROM user_settings WHERE user_id = $1
 
 func canonicalDecimal(value string, allowNegative, allowZero bool, label string) (string, error) {
 	normalized := strings.ReplaceAll(strings.TrimSpace(value), ",", "")
-	if !investmentDecimalPattern.MatchString(normalized) {
+	if len(normalized) > 100 || !investmentDecimalPattern.MatchString(normalized) {
 		return "", investmentValidationError("enter a valid " + label)
 	}
 	decimal, ok := new(big.Rat).SetString(normalized)

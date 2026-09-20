@@ -54,7 +54,71 @@ export interface paths {
          */
         get: operations["listCategories"];
         put?: never;
+        /**
+         * Create an account category
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        post: operations["createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace an account category
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        put: operations["updateCategory"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive or restore an account category
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. An omitted `archived` value restores the category.
+         */
+        patch: operations["setCategoryArchived"];
+        trace?: never;
+    };
+    "/categories/{id}/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move an account category one position
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        post: operations["reorderCategory"];
         delete?: never;
         options?: never;
         head?: never;
@@ -74,8 +138,92 @@ export interface paths {
          */
         get: operations["listInstitutions"];
         put?: never;
+        /**
+         * Create a financial institution
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        post: operations["createInstitution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/institutions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a financial institution
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        put: operations["updateInstitution"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/institutions/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive or restore a financial institution
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. An omitted `archived` value restores the institution.
+         */
+        patch: operations["setInstitutionArchived"];
+        trace?: never;
+    };
+    "/exchange-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a dated manual exchange rate
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Rates are exact positive decimal strings.
+         */
+        post: operations["createExchangeRate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exchange-rates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a manual exchange rate
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deleteExchangeRate"];
         options?: never;
         head?: never;
         patch?: never;
@@ -94,7 +242,11 @@ export interface paths {
          */
         get: operations["listAccounts"];
         put?: never;
-        post?: never;
+        /**
+         * Create an account and opening balance
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Monetary values are integer minor-unit strings; idempotency is supplied in the JSON body.
+         */
+        post: operations["createAccount"];
         delete?: never;
         options?: never;
         head?: never;
@@ -115,6 +267,34 @@ export interface paths {
         get: operations["getAccount"];
         put?: never;
         post?: never;
+        /**
+         * Permanently delete an archived account
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deleteAccount"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an account
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Currency and tracking mode cannot change after creation.
+         */
+        patch: operations["updateAccount"];
+        trace?: never;
+    };
+    "/accounts/{accountID}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive or restore an account
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        post: operations["setAccountArchived"];
         delete?: never;
         options?: never;
         head?: never;
@@ -194,7 +374,95 @@ export interface paths {
          */
         get: operations["listTransactions"];
         put?: never;
+        /**
+         * Create a ledger transaction
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Amounts are integer minor-unit strings; idempotency is supplied in the JSON body.
+         */
+        post: operations["createTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transactions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         post?: never;
+        /**
+         * Delete a ledger transaction or paired transfer
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deleteTransaction"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a ledger transaction
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Opening balances, transfers, and grouped investment activity cannot be edited here.
+         */
+        patch: operations["updateTransaction"];
+        trace?: never;
+    };
+    "/valuations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an absolute account valuation
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Values are non-negative integer minor-unit strings; idempotency is supplied in the JSON body.
+         */
+        post: operations["createValuation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/valuations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an account valuation
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deleteValuation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an atomic paired-account transfer
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Amounts are integer minor-unit strings; omit `destinationAmountMinor` to derive it from currency and dated rates.
+         */
+        post: operations["createTransfer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -214,7 +482,11 @@ export interface paths {
          */
         get: operations["listGoals"];
         put?: never;
-        post?: never;
+        /**
+         * Create a financial goal and contribution plan
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Monetary inputs are major-unit decimal strings. Idempotency may be supplied in the body or `Idempotency-Key`; when both are present they must match.
+         */
+        post: operations["createGoal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -233,12 +505,40 @@ export interface paths {
          * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
          */
         get: operations["getGoal"];
+        /**
+         * Replace a financial goal and contribution plan
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Any body idempotency key is ignored.
+         */
+        put: operations["updateGoal"];
+        post?: never;
+        /**
+         * Delete a financial goal
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deleteGoal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Set a financial goal status
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        patch: operations["setGoalStatus"];
         trace?: never;
     };
     "/goals/{id}/milestones": {
@@ -254,7 +554,51 @@ export interface paths {
          */
         get: operations["listGoalMilestones"];
         put?: never;
+        /**
+         * Create a milestone for a financial goal
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The target amount is a major-unit decimal string in the goal currency.
+         */
+        post: operations["createGoalMilestone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{id}/milestones/{milestoneId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         post?: never;
+        /**
+         * Delete a milestone from a financial goal
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deleteGoalMilestone"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals/{id}/alerts/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss the current monthly alert for a goal
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        post: operations["dismissGoalAlert"];
         delete?: never;
         options?: never;
         head?: never;
@@ -353,7 +697,11 @@ export interface paths {
          * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
          */
         get: operations["getSettings"];
-        put?: never;
+        /**
+         * Replace the current user's application settings
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        put: operations["updateSettings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -374,7 +722,11 @@ export interface paths {
          */
         get: operations["listInstruments"];
         put?: never;
-        post?: never;
+        /**
+         * Create an investment instrument
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        post: operations["createInstrument"];
         delete?: never;
         options?: never;
         head?: never;
@@ -393,8 +745,200 @@ export interface paths {
          * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
          */
         get: operations["getInstrument"];
+        /**
+         * Replace an investment instrument
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        put: operations["updateInstrument"];
+        post?: never;
+        /**
+         * Delete an unreferenced investment instrument
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deleteInstrument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instruments/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive or restore an investment instrument
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        patch: operations["setInstrumentArchived"];
+        trace?: never;
+    };
+    "/security-prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Create or replace an instrument price for a date
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Price is an exact positive decimal string.
+         */
+        put: operations["upsertSecurityPrice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/security-prices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an instrument price
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deleteSecurityPrice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/position-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create ordinary investment position activity
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Quantities, prices, monetary values, and exchange rates are exact decimal strings; idempotency is supplied in the JSON body.
+         */
+        post: operations["createPositionEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/position-events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace ordinary investment position activity
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The event cannot move between accounts.
+         */
+        put: operations["updatePositionEvent"];
+        post?: never;
+        /**
+         * Delete ordinary investment position activity
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deletePositionEvent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/position-reconciliations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a reported position-account total
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Reported amounts are major-unit decimal strings in the account currency.
+         */
+        post: operations["createPositionReconciliation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/position-reconciliations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a position-account reconciliation
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`.
+         */
+        delete: operations["deletePositionReconciliation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account-conversions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview converting a balance account into a position account
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Monetary inputs are major-unit decimal strings; preview also requires a UUID idempotency key in the body or `Idempotency-Key` header.
+         */
+        post: operations["previewAccountConversion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account-conversions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert a balance account into a position account
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Supply a UUID in the body or `Idempotency-Key`; when both are present they must match.
+         */
+        post: operations["executeAccountConversion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -747,6 +1291,346 @@ export interface components {
         MinorUnits: string;
         /** @description Exact decimal value serialized as a string. */
         DecimalString: string;
+        /** @description Exact non-negative decimal value serialized as a string. */
+        NonNegativeDecimalString: string;
+        /** @description Exact positive decimal value serialized as a string. */
+        PositiveDecimalString: string;
+        CurrencyCode: string;
+        ResourceIDResponse: {
+            /** Format: uuid */
+            id: string;
+        };
+        MutationStatusResponse: {
+            status: string;
+        };
+        SettingsMutationRequest: {
+            displayName: string;
+            appName: string;
+            baseCurrency: components["schemas"]["CurrencyCode"];
+            supportedCurrencies?: components["schemas"]["CurrencyCode"][];
+            timezone: string;
+            /** @enum {string} */
+            preferredDateFormat: "dd MMM yyyy" | "dd/MM/yyyy" | "MM/dd/yyyy" | "yyyy-MM-dd";
+            /** @enum {string} */
+            defaultDashboardPeriod: "1m" | "3m" | "6m" | "1y" | "all";
+            sessionTimeoutMinutes: number;
+            defaultGoalReturnBps?: number;
+            positionStaleDaysStock: number;
+            positionStaleDaysEtf: number;
+            positionStaleDaysFund: number;
+        };
+        CategoryMutationRequest: {
+            name: string;
+            icon: string;
+            /** @enum {string} */
+            assetOrLiability: "asset" | "liability";
+            description?: string;
+            isLiquid?: boolean;
+            isInvestible?: boolean;
+        };
+        InstitutionMutationRequest: {
+            name: string;
+            /** @enum {string} */
+            type: "bank" | "credit_union" | "brokerage" | "asset_manager" | "pension_provider" | "insurer" | "lender" | "digital_wallet" | "government" | "employer" | "other";
+            /** Format: uri */
+            websiteUrl?: string;
+            countryCode?: string;
+            address?: string;
+            notes?: string;
+        };
+        ExchangeRateMutationRequest: {
+            baseCurrency: components["schemas"]["CurrencyCode"];
+            quoteCurrency: components["schemas"]["CurrencyCode"];
+            rate: components["schemas"]["PositiveDecimalString"];
+            /** Format: date */
+            effectiveDate: string;
+        };
+        ArchiveMutationRequest: {
+            archived?: boolean;
+        };
+        RequiredArchiveMutationRequest: {
+            archived: boolean;
+        };
+        CategoryReorderRequest: {
+            /** @enum {string} */
+            direction: "up" | "down";
+        };
+        AccountCreateRequest: {
+            /** Format: uuid */
+            idempotencyKey: string;
+            name: string;
+            description?: string;
+            /** Format: uuid */
+            categoryId: string;
+            /** Format: uuid */
+            institutionId?: string | null;
+            accountReference?: string;
+            currency: components["schemas"]["CurrencyCode"];
+            /**
+             * @default balance
+             * @enum {string}
+             */
+            trackingMode: "balance" | "positions";
+            openingValueMinor: components["schemas"]["MinorUnits"] & unknown;
+            costBasisMinor?: components["schemas"]["MinorUnits"] | null;
+            isIncludedInNetWorth?: boolean;
+            notes?: string;
+            /** Format: date */
+            openedAt?: string | null;
+        };
+        AccountUpdateRequest: {
+            /** Format: uuid */
+            idempotencyKey?: string;
+            name: string;
+            description?: string;
+            /** Format: uuid */
+            categoryId: string;
+            /** Format: uuid */
+            institutionId?: string | null;
+            accountReference?: string;
+            currency: components["schemas"]["CurrencyCode"];
+            /** @enum {string} */
+            trackingMode?: "balance" | "positions";
+            openingValueMinor?: components["schemas"]["MinorUnits"];
+            costBasisMinor?: components["schemas"]["MinorUnits"] | null;
+            isIncludedInNetWorth?: boolean;
+            notes?: string;
+            /** Format: date */
+            openedAt?: string | null;
+        };
+        AccountDeleteRequest: {
+            confirmationName: string;
+        };
+        TransactionCreateRequest: {
+            /** Format: uuid */
+            idempotencyKey: string;
+            /** Format: uuid */
+            accountId: string;
+            type: components["schemas"]["MutableTransactionType"];
+            amountMinor: components["schemas"]["MinorUnits"];
+            /** Format: date */
+            transactionDate: string;
+            description?: string;
+            externalId?: string;
+            notes?: string;
+        };
+        TransactionUpdateRequest: {
+            /** Format: uuid */
+            idempotencyKey?: string;
+            /** Format: uuid */
+            accountId?: string;
+            type: components["schemas"]["MutableTransactionType"];
+            amountMinor: components["schemas"]["MinorUnits"];
+            /** Format: date */
+            transactionDate: string;
+            description?: string;
+            externalId?: string;
+            notes?: string;
+        };
+        /** @enum {string} */
+        MutableTransactionType: "deposit" | "withdrawal" | "interest" | "dividend" | "capital_gain" | "capital_loss" | "fee" | "purchase" | "sale" | "manual_adjustment" | "liability_payment" | "liability_increase";
+        ValuationCreateRequest: {
+            /** Format: uuid */
+            idempotencyKey: string;
+            /** Format: uuid */
+            accountId: string;
+            valueMinor: components["schemas"]["MinorUnits"] & unknown;
+            /** Format: date */
+            valuationDate: string;
+            notes?: string;
+        };
+        TransferCreateRequest: {
+            /** Format: uuid */
+            idempotencyKey: string;
+            /** Format: uuid */
+            fromAccountId: string;
+            /** Format: uuid */
+            toAccountId: string;
+            sourceAmountMinor: components["schemas"]["MinorUnits"] & unknown;
+            destinationAmountMinor?: components["schemas"]["MinorUnits"];
+            /** Format: date */
+            transactionDate: string;
+            description?: string;
+        };
+        GoalMutationRequest: {
+            /** Format: uuid */
+            idempotencyKey?: string | null;
+            name: string;
+            description?: string | null;
+            targetAmount: components["schemas"]["PositiveDecimalString"];
+            currentAmount?: components["schemas"]["NonNegativeDecimalString"];
+            currency: components["schemas"]["CurrencyCode"];
+            /** Format: date */
+            targetDate: string;
+            /** Format: uuid */
+            linkedAccountId?: string | null;
+            /** @default Target */
+            icon: string;
+            /**
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "paused" | "completed" | "cancelled";
+            priority?: number;
+            assumedAnnualReturn: number;
+            plannedContribution: components["schemas"]["NonNegativeDecimalString"];
+            /**
+             * @default monthly
+             * @enum {string}
+             */
+            frequency: "weekly" | "monthly" | "quarterly" | "annually" | "custom";
+            /** Format: date */
+            planStartDate: string;
+            /** Format: date */
+            planEndDate?: string;
+        };
+        GoalMutationResult: {
+            /** Format: uuid */
+            id: string;
+            replayed: boolean;
+        };
+        GoalStatusRequest: {
+            /** @enum {string} */
+            status: "active" | "paused" | "completed" | "cancelled";
+        };
+        GoalMilestoneCreateRequest: {
+            name: string;
+            targetAmount: components["schemas"]["PositiveDecimalString"];
+            /** Format: date */
+            targetDate?: string;
+        };
+        InstrumentMutationRequest: {
+            externalId?: string;
+            name: string;
+            symbol?: string;
+            /** @enum {string} */
+            identifierType: "isin" | "ticker_exchange" | "custom";
+            identifier?: string;
+            exchangeMic?: string;
+            /** @enum {string} */
+            assetType: "stock" | "etf" | "fund";
+            quoteCurrency: components["schemas"]["CurrencyCode"];
+        };
+        SecurityPriceMutationRequest: {
+            /** Format: uuid */
+            instrumentId: string;
+            externalId?: string;
+            price: components["schemas"]["PositiveDecimalString"];
+            /** Format: date */
+            effectiveDate: string;
+            /** @default manual */
+            source: string;
+            provenance?: string;
+        };
+        PositionEventCreateRequest: {
+            /** Format: uuid */
+            accountId: string;
+            /** Format: uuid */
+            instrumentId: string;
+            /** @enum {string} */
+            type: "opening_position" | "buy" | "sell" | "quantity_adjustment";
+            quantity: components["schemas"]["DecimalString"];
+            unitPrice?: components["schemas"]["PositiveDecimalString"];
+            tradeCurrency?: components["schemas"]["CurrencyCode"];
+            feeAmount?: components["schemas"]["NonNegativeDecimalString"];
+            feeCurrency?: components["schemas"]["CurrencyCode"];
+            cashEffect?: components["schemas"]["PositiveDecimalString"];
+            appliedExchangeRate?: components["schemas"]["PositiveDecimalString"];
+            openingCostBasis?: components["schemas"]["NonNegativeDecimalString"];
+            /** Format: date */
+            tradeDate: string;
+            /** Format: date */
+            settlementDate?: string;
+            externalId?: string;
+            /** Format: uuid */
+            idempotencyKey: string;
+            description?: string;
+            notes?: string;
+        };
+        PositionEventUpdateRequest: {
+            /** Format: uuid */
+            accountId: string;
+            /** Format: uuid */
+            instrumentId: string;
+            /** @enum {string} */
+            type: "opening_position" | "buy" | "sell" | "quantity_adjustment";
+            quantity: components["schemas"]["DecimalString"];
+            unitPrice?: components["schemas"]["PositiveDecimalString"];
+            tradeCurrency?: components["schemas"]["CurrencyCode"];
+            feeAmount?: components["schemas"]["NonNegativeDecimalString"];
+            feeCurrency?: components["schemas"]["CurrencyCode"];
+            cashEffect?: components["schemas"]["PositiveDecimalString"];
+            appliedExchangeRate?: components["schemas"]["PositiveDecimalString"];
+            openingCostBasis?: components["schemas"]["NonNegativeDecimalString"];
+            /** Format: date */
+            tradeDate: string;
+            /** Format: date */
+            settlementDate?: string;
+            externalId?: string;
+            /** Format: uuid */
+            idempotencyKey?: string;
+            description?: string;
+            notes?: string;
+        };
+        PositionReconciliationCreateRequest: {
+            /** Format: uuid */
+            accountId: string;
+            /** Format: date */
+            observationDate: string;
+            reportedCash?: components["schemas"]["DecimalString"];
+            reportedTotal: components["schemas"]["DecimalString"];
+            notes?: string;
+        };
+        AccountConversionHoldingRequest: {
+            /** Format: uuid */
+            instrumentId: string;
+            quantity: components["schemas"]["PositiveDecimalString"];
+            price: components["schemas"]["PositiveDecimalString"];
+            openingCostBasis?: components["schemas"]["NonNegativeDecimalString"];
+            /** @default conversion */
+            priceSource: string;
+            priceProvenance?: string;
+        };
+        AccountConversionRequest: {
+            /** Format: uuid */
+            sourceAccountId: string;
+            targetName: string;
+            /** Format: date */
+            conversionDate: string;
+            openingCash: components["schemas"]["NonNegativeDecimalString"];
+            holdings: components["schemas"]["AccountConversionHoldingRequest"][];
+            /** Format: uuid */
+            idempotencyKey?: string | null;
+            confirmDifference?: boolean;
+        };
+        AccountConversionHoldingPreview: {
+            /** Format: uuid */
+            instrumentId: string;
+            name: string;
+            symbol: string | null;
+            quantity: components["schemas"]["DecimalString"];
+            price: components["schemas"]["DecimalString"];
+            quoteCurrency: components["schemas"]["CurrencyCode"];
+        };
+        AccountConversionPreview: {
+            /** Format: uuid */
+            sourceAccountId: string;
+            sourceAccountName: string;
+            currency: components["schemas"]["CurrencyCode"];
+            /** Format: date */
+            conversionDate: string;
+            sourceBalanceMinor: components["schemas"]["MinorUnits"];
+            openingCashMinor: components["schemas"]["MinorUnits"];
+            positionsMinor: components["schemas"]["MinorUnits"];
+            projectedTotalMinor: components["schemas"]["MinorUnits"];
+            differenceMinor: components["schemas"]["MinorUnits"];
+            holdings: components["schemas"]["AccountConversionHoldingPreview"][];
+        };
+        AccountConversionResult: {
+            /** Format: uuid */
+            targetAccountId: string;
+            replayed: boolean;
+        };
         /** @enum {string} */
         TransactionType: "opening_balance" | "deposit" | "withdrawal" | "interest" | "dividend" | "capital_gain" | "capital_loss" | "fee" | "purchase" | "sale" | "manual_adjustment" | "liability_payment" | "liability_increase" | "transfer";
         Category: {
@@ -1360,6 +2244,10 @@ export interface components {
     };
     parameters: {
         CSRFToken: string;
+        /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+        MutationCSRFToken: string;
+        /** @description UUID request key. When also supplied in the JSON body, both values must match. */
+        IdempotencyKey: string;
         AccountID: string;
         ResourceID: string;
         /** @description Select active accounts, archived accounts, or both. */
@@ -1445,6 +2333,145 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    createCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Category created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    updateCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Category updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setCategoryArchived: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Category archive state updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    reorderCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Category order updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     listInstitutions: {
         parameters: {
             query?: never;
@@ -1467,6 +2494,170 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    createInstitution: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstitutionMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Institution created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Institution"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    updateInstitution: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstitutionMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Institution updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setInstitutionArchived: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Institution archive state updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    createExchangeRate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExchangeRateMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Exchange rate created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExchangeRate"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deleteExchangeRate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exchange rate deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listAccounts: {
@@ -1497,6 +2688,40 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    createAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created or an identical request replayed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     getAccount: {
         parameters: {
             query?: never;
@@ -1521,6 +2746,108 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    deleteAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Account deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    updateAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Account updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setAccountArchived: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequiredArchiveMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Account archive state updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listAccountTransactions: {
@@ -1656,6 +2983,198 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    createTransaction: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Transaction created or an identical request replayed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deleteTransaction: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transaction or transfer pair deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    updateTransaction: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Transaction updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    createValuation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValuationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Valuation created or an identical request replayed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deleteValuation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Valuation deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    createTransfer: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Transfer created or an identical request replayed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     listGoals: {
         parameters: {
             query?: never;
@@ -1676,6 +3195,51 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    createGoal: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+                /** @description UUID request key. When also supplied in the JSON body, both values must match. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description An idempotent goal creation was replayed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMutationResult"];
+                };
+            };
+            /** @description Goal created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalMutationResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getGoal: {
@@ -1703,6 +3267,104 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    updateGoal: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Goal updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deleteGoal: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Goal deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setGoalStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Goal status updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     listGoalMilestones: {
         parameters: {
             query?: never;
@@ -1726,6 +3388,99 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    createGoalMilestone: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoalMilestoneCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Goal milestone created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deleteGoalMilestone: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+                milestoneId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Goal milestone deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    dismissGoalAlert: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Goal alert dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listGoalAlerts: {
@@ -1838,6 +3593,40 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Settings updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationStatusResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     listInstruments: {
         parameters: {
             query?: never;
@@ -1860,6 +3649,40 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    createInstrument: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Instrument created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getInstrument: {
@@ -1885,6 +3708,409 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    updateInstrument: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Instrument updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deleteInstrument: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Instrument deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    setInstrumentArchived: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Instrument archive state updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    upsertSecurityPrice: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecurityPriceMutationRequest"];
+            };
+        };
+        responses: {
+            /** @description Security price upserted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deleteSecurityPrice: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Security price deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    createPositionEvent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionEventCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Position event created or an existing idempotent event returned */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    updatePositionEvent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionEventUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Position event updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deletePositionEvent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Position event deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    createPositionReconciliation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionReconciliationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Position reconciliation created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceIDResponse"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    deletePositionReconciliation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+            };
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Position reconciliation deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    previewAccountConversion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+                /** @description UUID request key. When also supplied in the JSON body, both values must match. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountConversionRequest"];
+            };
+        };
+        responses: {
+            /** @description Account conversion preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountConversionPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    executeAccountConversion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
+                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
+                /** @description UUID request key. When also supplied in the JSON body, both values must match. */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountConversionRequest"];
+            };
+        };
+        responses: {
+            /** @description An idempotent account conversion was replayed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountConversionResult"];
+                };
+            };
+            /** @description Account converted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountConversionResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getEstateWorkspace: {

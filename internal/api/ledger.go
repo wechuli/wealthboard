@@ -252,7 +252,11 @@ func (handler *LedgerHandler) CreateTransfer(response http.ResponseWriter, reque
 	fromID, fromErr := uuid.Parse(body.FromAccountID)
 	toID, toErr := uuid.Parse(body.ToAccountID)
 	sourceAmount, sourceErr := service.ParseMinorUnits(body.SourceAmountMinor)
-	destinationAmount, destinationErr := service.ParseMinorUnits(body.DestinationAmountMinor)
+	var destinationAmount int64
+	var destinationErr error
+	if body.DestinationAmountMinor != "" {
+		destinationAmount, destinationErr = service.ParseMinorUnits(body.DestinationAmountMinor)
+	}
 	date, dateErr := time.Parse(time.DateOnly, body.TransactionDate)
 	if err != nil || fromErr != nil || toErr != nil || sourceErr != nil || destinationErr != nil || dateErr != nil {
 		handler.writeError(response, service.ErrLedgerValidation)
@@ -397,7 +401,13 @@ func parseLedgerValues(keyValue, accountValue, amountValue, dateValue string, re
 	} else if requireKey {
 		err = errors.New("missing idempotency key")
 	}
-	accountID, accountErr := uuid.Parse(accountValue)
+	var accountID uuid.UUID
+	var accountErr error
+	if accountValue != "" {
+		accountID, accountErr = uuid.Parse(accountValue)
+	} else if requireKey {
+		accountErr = errors.New("missing account ID")
+	}
 	amount, amountErr := service.ParseMinorUnits(amountValue)
 	date, dateErr := time.Parse(time.DateOnly, dateValue)
 	if err != nil || accountErr != nil || amountErr != nil || dateErr != nil {

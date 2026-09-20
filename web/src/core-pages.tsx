@@ -1,4 +1,5 @@
 import { Landmark } from "lucide-react";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import {
@@ -12,10 +13,21 @@ import {
   getGoalAlerts,
   getGoalMilestones,
   getGoals,
+  getCategories,
+  getInstitutions,
+  getInstruments,
   getReportAllocation,
   getReportSummary,
   getTransactions,
 } from "./api";
+import {
+  AccountControls,
+  AccountConversionForm,
+  AccountCreateForm,
+  LedgerManager,
+  PositionTools,
+} from "./ledger-forms";
+import { GoalForm, GoalManager } from "./planning-forms";
 import { MoneyValue } from "./privacy";
 import type {
   Account,
@@ -23,6 +35,7 @@ import type {
   Goal,
   Transaction,
   Valuation,
+  Session,
 } from "./types";
 import {
   Badge,
@@ -106,8 +119,9 @@ export function DashboardPage() {
   );
 }
 
-export function AccountsPage() {
-  const state = useResource(getAccounts);
+export function AccountsPage({ session }: { session: Session }) {
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(() => Promise.all([getAccounts(), getCategories(), getInstitutions()]), [refresh]);
   return (
     <>
       <PageHeader
@@ -116,7 +130,7 @@ export function AccountsPage() {
         description="Current balances across active financial accounts."
       />
       <ResourceView state={state}>
-        {({ items }) => <AccountList accounts={items} />}
+        {([accounts, categories, institutions]) => <div className="settings-stack"><AccountCreateForm categories={categories.items} institutions={institutions.items} session={session} onChanged={() => setRefresh((value) => value + 1)} /><AccountList accounts={accounts.items} /></div>}
       </ResourceView>
     </>
   );
@@ -162,8 +176,9 @@ function AccountList({ accounts }: { accounts: Account[] }) {
   );
 }
 
-export function AccountDetailPage() {
+export function AccountDetailPage({ session }: { session: Session }) {
   const { id = "" } = useParams();
+  const [refresh, setRefresh] = useState(0);
   const state = useResource(
     () =>
       Promise.all([
@@ -171,12 +186,16 @@ export function AccountDetailPage() {
         getAccountActivity(id),
         getAccountTransactions(id),
         getAccountValuations(id),
+        getAccounts(),
+        getCategories(),
+        getInstitutions(),
+        getInstruments(),
       ]),
-    [id],
+    [id, refresh],
   );
   return (
     <ResourceView state={state} loadingLabel="Loading account...">
-      {([account, activity, transactions, valuations]) => (
+      {([account, activity, transactions, valuations, accounts, categories, institutions, instruments]) => (
         <>
           <PageHeader
             eyebrow="Account"
@@ -217,6 +236,13 @@ export function AccountDetailPage() {
             <TransactionCard title="Transactions" items={transactions.items} />
             <ValuationCard items={valuations.items} />
           </div>
+          <AccountControls account={account} categories={categories.items} institutions={institutions.items} session={session} onChanged={() => setRefresh((value) => value + 1)} />
+          <LedgerManager account={account} transactions={transactions.items} valuations={valuations.items} allAccounts={accounts.items} session={session} onChanged={() => setRefresh((value) => value + 1)} />
+          {account.trackingMode === "positions" ? (
+            <PositionTools account={account} instruments={instruments.instruments} session={session} onChanged={() => setRefresh((value) => value + 1)} />
+          ) : (
+            <AccountConversionForm account={account} instruments={instruments.instruments} session={session} onConverted={(targetID) => window.location.assign(`/accounts/${targetID}`)} />
+          )}
         </>
       )}
     </ResourceView>
@@ -336,8 +362,9 @@ function ValuationCard({ items }: { items: Valuation[] }) {
   );
 }
 
-export function GoalsPage() {
-  const state = useResource(() => Promise.all([getGoals(), getGoalAlerts()]));
+export function GoalsPage({ session }: { session: Session }) {
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(() => Promise.all([getGoals(), getGoalAlerts(), getAccounts()]), [refresh]);
   return (
     <>
       <PageHeader
@@ -346,8 +373,9 @@ export function GoalsPage() {
         description="Linked balances, target dates, and contribution plans."
       />
       <ResourceView state={state}>
-        {([goals, alerts]) => (
+        {([goals, alerts, accounts]) => (
           <>
+            <Card><CardHeader title="Create financial goal" /><GoalForm accounts={accounts.items} session={session} onChanged={() => setRefresh((value) => value + 1)} /></Card>
             {alerts.length ? (
               <div className="notice warning">
                 {alerts.length} goal alert{alerts.length === 1 ? "" : "s"} need
@@ -409,15 +437,16 @@ function GoalCard({ goal }: { goal: Goal }) {
   );
 }
 
-export function GoalDetailPage() {
+export function GoalDetailPage({ session }: { session: Session }) {
   const { id = "" } = useParams();
+  const [refresh, setRefresh] = useState(0);
   const state = useResource(
-    () => Promise.all([getGoal(id), getGoalMilestones(id)]),
-    [id],
+    () => Promise.all([getGoal(id), getGoalMilestones(id), getAccounts()]),
+    [id, refresh],
   );
   return (
     <ResourceView state={state} loadingLabel="Loading goal...">
-      {([goal, milestones]) => (
+      {([goal, milestones, accounts]) => (
         <>
           <PageHeader
             eyebrow="Goal"
@@ -480,6 +509,7 @@ export function GoalDetailPage() {
               />
             )}
           </Card>
+          <GoalManager goal={goal} milestones={milestones} accounts={accounts.items} session={session} onChanged={() => setRefresh((value) => value + 1)} />
         </>
       )}
     </ResourceView>
