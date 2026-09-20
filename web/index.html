@@ -13,7 +13,9 @@
     <script type="module" src="/src/main.tsx"></script>
     <script type="module">
       if (import.meta.env.PROD && "serviceWorker" in navigator) {
-        window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js"));
+        window.addEventListener("load", () =>
+          navigator.serviceWorker.register("/sw.js"),
+        );
       }
     </script>
   </body>

@@ -24,6 +24,7 @@ import { NavLink } from "react-router-dom";
 
 import { PrivacyBoundary } from "./privacy";
 import type { Session } from "./types";
+import { PwaManager } from "./pwa";
 
 export const navigation = [
   { to: "/", label: "Dashboard", icon: BarChart3 },
@@ -71,6 +72,7 @@ export function AppShell({
 
   return (
     <PrivacyBoundary hidden={hidden}>
+      <PwaManager />
       <div className="app-layout">
         <aside className={menuOpen ? "sidebar open" : "sidebar"}>
           <div className="sidebar-brand">
@@ -171,5 +173,11 @@ export function clearUserState() {
             .filter((key) => key.startsWith("wealthboard-"))
             .map((key) => caches.delete(key)),
         ),
+      );
+  if ("serviceWorker" in navigator)
+    void navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) =>
+        Promise.all(registrations.map((registration) => registration.unregister())),
       );
 }

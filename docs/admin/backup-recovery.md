@@ -1,6 +1,6 @@
 ---
 title: Backup and recovery
-description: Distinguish user exports from full SQLite backups and restore safely.
+description: Distinguish user exports from PostgreSQL backups and restore safely.
 ---
 
 # Backup and recovery
@@ -8,20 +8,25 @@ description: Distinguish user exports from full SQLite backups and restore safel
 Use both levels of protection:
 
 - **User export:** portable source records for one authenticated user.
-- **SQLite backup:** deployment-wide recovery, including identities and every
+- **PostgreSQL backup:** deployment-wide recovery, including identities and every
   user's records.
 
 ## Create an operator backup
 
-Set `BACKUP_PATH` to persistent, access-controlled storage, then run:
+Install PostgreSQL client tools compatible with the server. Create an
+access-controlled destination directory, then choose a new explicit filename:
 
 ```bash
-npm run backup
+mkdir -p backups
+make backup BACKUP_FILE="$PWD/backups/wealthboard-$(date -u +%Y%m%dT%H%M%SZ).dump"
 ```
 
-The backup script creates a consistent timestamped SQLite copy. A raw backup
-contains password hashes, OIDC mappings, provider configuration records, and all
-users' financial data. Treat it as a high-sensitivity secret.
+The target directory must already exist and the file must not. The command uses
+`DATABASE_URL` and `pg_dump --format=custom --no-owner --no-privileges`, checks
+that the result is a nonempty regular file, and sets mode `0600`. A database
+archive contains password hashes, OIDC mappings, encrypted remembered AI keys,
+provider settings, and every user's financial data. Treat it as a
+high-sensitivity secret.
 
 ## Retention
 
@@ -31,28 +36,39 @@ ransomware, or destructive operator error.
 
 Document the intended recovery point and recovery time for the deployment.
 
-## Offline restore
+## Maintenance-mode restore
 
-Stop Wealthboard before replacing the active SQLite file. Then run:
+Restore is destructive. Stop every Wealthboard replica and any other database
+writer, verify the target `DATABASE_URL`, and leave maintenance mode in place
+until validation completes. Then run:
 
 ```bash
-CONFIRM_OFFLINE_RESTORE=true \
-RESTORE_FILE=/backups/wealthboard-2026-08-02T10-00-00Z.db \
-npm run backup:restore
+make restore RESTORE_FILE="$PWD/backups/wealthboard-20260920T120000Z.dump"
 ```
 
-Start Wealthboard afterward so pending migrations and readiness checks run.
+The underlying command requires `--confirm-maintenance`; the Make target supplies
+it only after you explicitly invoke `restore`. The restore workflow:
+
+1. verifies that the source is a regular custom-format archive with
+  `pg_restore --list`;
+2. creates `wealthboard-pre-restore-<UTC timestamp>.dump` beside the source;
+3. runs `pg_restore --clean --if-exists --exit-on-error --single-transaction`
+  without restoring ownership or privileges; and
+4. checks the expected schema version and rejects unvalidated foreign keys.
+
+The safety dump is retained on success or failure and its path is printed. A
+failed restore must be investigated while maintenance mode remains active.
 
 Before restore:
 
 1. Confirm the target deployment and backup timestamp.
-2. Preserve a copy of the current database.
+2. Verify the archive directory can also hold the automatic safety dump.
 3. Verify enough free disk space exists for staging and recovery copies.
 4. Stop all processes that can write to the database.
 
 After restore:
 
-1. Check `/api/health/ready`.
+1. Start Wealthboard and check `/api/health/ready`.
 2. Review startup and migration logs without exposing record content.
 3. Sign in with a controlled account.
 4. Verify representative accounts, goals, rates, and estate snapshots.
@@ -63,7 +79,7 @@ After restore:
 A backup is unproven until restored into a disposable location and checked. A
 regular drill should verify:
 
-- SQLite integrity and foreign keys;
+- PostgreSQL schema version and foreign keys;
 - migration history;
 - authentication readiness;
 - representative user login;

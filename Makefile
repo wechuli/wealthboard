@@ -1,7 +1,7 @@
 GO_PACKAGES := ./cmd/... ./internal/...
 DATABASE_URL ?= postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable
 
-.PHONY: generate lint typecheck test build migrate-check security test-e2e go-fmt go-generate go-test go-test-integration go-vet go-run migrate migrate-status postgres-up postgres-down web-install web-generate web-dev web-typecheck web-test web-build
+.PHONY: generate lint typecheck test build migrate-check security test-e2e go-fmt go-generate go-test go-test-integration go-vet go-run migrate migrate-status backup restore seed-demo postgres-up postgres-down web-install web-generate web-dev web-typecheck web-test web-build
 
 generate: go-generate web-generate
 
@@ -53,6 +53,19 @@ migrate:
 
 migrate-status:
 	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/wealthboard migrate-status
+
+backup:
+	test -n "$(BACKUP_FILE)"
+	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/wealthboard backup --file "$(BACKUP_FILE)"
+
+restore:
+	test -n "$(RESTORE_FILE)"
+	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/wealthboard restore --file "$(RESTORE_FILE)" --confirm-maintenance
+
+seed-demo:
+	test "$(DEMO_DATA)" = "true"
+	test -n "$(TARGET_USERNAME)"
+	DATABASE_URL="$(DATABASE_URL)" DEMO_DATA=true go run ./cmd/wealthboard seed-demo --username "$(TARGET_USERNAME)"
 
 postgres-up:
 	docker compose -f docker-compose.go.yml up -d postgres

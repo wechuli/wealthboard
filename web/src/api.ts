@@ -85,6 +85,34 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function fileRequest<T>(
+  path: string,
+  csrfToken: string,
+  body: FormData,
+  headers?: Record<string, string>,
+): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken, ...headers },
+    body,
+  });
+}
+
+export async function downloadExport(path: string, filename: string) {
+  const response = await fetch(`/api/v1${path}`, {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!response.ok)
+    throw new ApiError("The export could not be downloaded.", response.status);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function mutate<T>(
   path: string,
   csrfToken: string,
@@ -182,6 +210,58 @@ export const getAI = () => request<AIRead>("/ai");
 export const getSettings = () => request<SettingsRead>("/settings");
 export const getAPIKeys = () => request<APIKeyList>("/api-keys");
 
+export type CorporateActionInput = Record<string, string> & {
+  idempotencyKey: string;
+};
+
+export type ImportRow = {
+  row: number;
+  status: string;
+  code?: string;
+  message?: string;
+  type?: string;
+  amount?: string;
+  date?: string;
+};
+
+export type ImportResult = {
+  hash?: string;
+  account: { id: string; name: string; currency: string };
+  summary: Record<string, number>;
+  rows: ImportRow[];
+  currentBalanceMinor?: number;
+  projectedBalanceMinor?: number;
+  finalBalanceMinor?: number;
+  netChangeMinor?: number;
+  current?: Record<string, unknown>;
+  projected?: Record<string, unknown>;
+  instrumentChanges?: unknown[];
+  eventChanges?: unknown[];
+  priceChanges?: unknown[];
+  canCommit?: boolean;
+};
+
+export type RestoreSummary = Record<string, number>;
+export type AISettingsInput = {
+  provider: "openai" | "deepseek" | "custom";
+  baseUrl: string;
+  model: string;
+  includeExactAmounts: boolean;
+  includeAccountNames: boolean;
+  monthlyTokenLimit: number;
+  maxOutputTokens: number;
+};
+export type AISource = {
+  units: { id: string; location: string; text: string }[];
+  warnings: string[];
+};
+export type AIConversionDraft = {
+  content: string;
+  references: { collection: string; row: number; sourceIds: string[] }[];
+  exclusions: { sourceId: string; reason: string }[];
+  issues: string[];
+};
+
 export function createAPIKey(input: CreateAPIKeyInput, csrfToken: string) {
   return request<CreatedAPIKey>("/api-keys", {
     method: "POST",
@@ -214,6 +294,146 @@ const jsonMutation = <T>(
 
 const deleteMutation = (path: string, csrfToken: string, body?: unknown) =>
   mutate<void>(path, csrfToken, { method: "DELETE", body });
+
+export const createCorporateAction = (
+  kind: string,
+  input: CorporateActionInput,
+  csrf: string,
+) =>
+  mutate<{ eventGroupId: string }>(`/corporate-actions/${kind}`, csrf, {
+    method: "POST",
+    body: input,
+    idempotencyKey: input.idempotencyKey,
+  });
+export const deleteCorporateActionGroup = (id: string, csrf: string) =>
+  deleteMutation(`/corporate-actions/${id}`, csrf);
+
+export function previewImport(
+  accountId: string,
+  kind: "history" | "investment",
+  file: File,
+  csrf: string,
+) {
+  const body = new FormData();
+  body.append("file", file);
+  const segment = kind === "history" ? "history-import" : "investment-import";
+  return fileRequest<ImportResult>(
+    `/accounts/${accountId}/${segment}/preview`,
+    csrf,
+    body,
+  );
+}
+
+export function commitImport(
+  accountId: string,
+  kind: "history" | "investment",
+  file: File,
+  hash: string,
+  csrf: string,
+) {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("hash", hash);
+  const segment = kind === "history" ? "history-import" : "investment-import";
+  return fileRequest<ImportResult>(
+    `/accounts/${accountId}/${segment}/commit`,
+    csrf,
+    body,
+  );
+}
+
+export function restoreUser(file: File, csrf: string) {
+  const body = new FormData();
+  body.append("file", file);
+  return fileRequest<RestoreSummary>("/restore/user", csrf, body);
+}
+
+export const updateEstatePlan = (input: unknown, csrf: string) =>
+  mutate<unknown>("/estate/plan", csrf, { method: "PUT", body: input });
+export const createBeneficiary = (input: unknown, csrf: string) =>
+  mutate<{ id: string }>("/estate/beneficiaries", csrf, {
+    method: "POST",
+    body: input,
+  });
+export const updateBeneficiary = (id: string, input: unknown, csrf: string) =>
+  mutate<void>(`/estate/beneficiaries/${id}`, csrf, {
+    method: "PUT",
+    body: input,
+  });
+export const archiveBeneficiary = (
+  id: string,
+  archived: boolean,
+  csrf: string,
+) =>
+  mutate<void>(`/estate/beneficiaries/${id}/archive`, csrf, {
+    method: "PATCH",
+    body: { archived },
+  });
+export const upsertEstateDirective = (
+  accountId: string,
+  input: unknown,
+  csrf: string,
+) =>
+  mutate<{ id: string }>(`/estate/directives/${accountId}`, csrf, {
+    method: "PUT",
+    body: input,
+  });
+export const upsertEstateAllocation = (
+  directiveId: string,
+  input: unknown,
+  csrf: string,
+) =>
+  mutate<{ id: string }>(`/estate/allocations/${directiveId}`, csrf, {
+    method: "PUT",
+    body: input,
+  });
+export const deleteEstateAllocation = (id: string, csrf: string) =>
+  deleteMutation(`/estate/allocations/${id}`, csrf);
+export const upsertResiduaryAllocation = (input: unknown, csrf: string) =>
+  mutate<{ id: string }>("/estate/residuary", csrf, {
+    method: "PUT",
+    body: input,
+  });
+export const deleteResiduaryAllocation = (id: string, csrf: string) =>
+  deleteMutation(`/estate/residuary/${id}`, csrf);
+export const createEstateSnapshot = (csrf: string) =>
+  mutate<EstateSnapshot>("/estate/snapshots", csrf, { method: "POST" });
+export const deleteEstateSnapshot = (id: string, csrf: string) =>
+  deleteMutation(`/estate/snapshots/${id}`, csrf);
+
+export const saveAISettings = (input: AISettingsInput, csrf: string) =>
+  mutate<unknown>("/ai/settings", csrf, { method: "PUT", body: input });
+export const saveAICredential = (apiKey: string, csrf: string) =>
+  mutate<unknown>("/ai/credential", csrf, {
+    method: "POST",
+    body: { apiKey },
+  });
+export const deleteAICredential = (csrf: string) =>
+  deleteMutation("/ai/credential", csrf);
+export const disconnectAI = (csrf: string) =>
+  deleteMutation("/ai/settings", csrf);
+export const clearAIUsage = (csrf: string) =>
+  mutate<{ deleted: number }>("/ai/usage/clear", csrf, { method: "POST" });
+export const generateAIReview = (input: unknown, csrf: string) =>
+  mutate<Record<string, unknown>>("/ai/review", csrf, {
+    method: "POST",
+    body: input,
+  });
+export function extractAIDocument(
+  file: File,
+  documentPassword: string,
+  csrf: string,
+) {
+  const body = new FormData();
+  body.append("file", file);
+  if (documentPassword) body.append("documentPassword", documentPassword);
+  return fileRequest<{ source: AISource }>("/ai/import/extract", csrf, body);
+}
+export const convertAIDocument = (input: unknown, csrf: string) =>
+  mutate<AIConversionDraft>("/ai/import/convert", csrf, {
+    method: "POST",
+    body: input,
+  });
 
 export const updateSettings = (input: SettingsInput, csrf: string) =>
   jsonMutation<MutationStatus>("/settings", "PUT", input, csrf);

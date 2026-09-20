@@ -33,6 +33,7 @@ import {
   ReviewPage,
 } from "./feature-pages";
 import { AppShell, clearUserState } from "./shell";
+import { OfflinePage } from "./pwa";
 import { SettingsPage } from "./settings-page";
 import type { AuthConfig, Overview, Session } from "./types";
 
@@ -352,10 +353,11 @@ function AuthenticatedApp({
           path="/instruments/:id"
           element={<InstrumentDetailPage session={session} />}
         />
-        <Route path="/estate" element={<EstatePage />} />
+        <Route path="/estate" element={<EstatePage session={session} />} />
         <Route path="/estate/snapshots/:id" element={<EstateSnapshotPage />} />
         <Route path="/review" element={<ReviewPage />} />
         <Route path="/settings" element={<SettingsPage session={session} />} />
+        <Route path="/offline" element={<OfflinePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

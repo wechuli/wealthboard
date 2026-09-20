@@ -20,6 +20,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      extraction-worker:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
@@ -35,6 +37,9 @@ services:
       TZ: ${TZ:-Africa/Nairobi}
       AI_CREDENTIAL_ENCRYPTION_KEY: ${AI_CREDENTIAL_ENCRYPTION_KEY:-}
       AI_ALLOWED_ENDPOINTS: ${AI_ALLOWED_ENDPOINTS:-}
+      AI_EXTRACTION_SOCKET: /run/wealthboard/extraction.sock
+    volumes:
+      - wealthboard-extraction-socket:/run/wealthboard
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -43,5 +48,33 @@ services:
     cap_drop:
       - ALL
 
+  extraction-worker:
+    build:
+      context: .
+      target: extraction-worker
+    restart: unless-stopped
+    environment:
+      AI_EXTRACTION_SOCKET: /run/wealthboard/extraction.sock
+    volumes:
+      - wealthboard-extraction-socket:/run/wealthboard
+    network_mode: none
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('node:fs').statSync(process.env.AI_EXTRACTION_SOCKET).isSocket()||process.exit(1)"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+
 volumes:
   wealthboard-postgres-data:
+  wealthboard-extraction-socket:

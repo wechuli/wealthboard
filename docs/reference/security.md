@@ -37,7 +37,7 @@ The database can contain:
 - password hashes and OIDC identity mappings;
 - encrypted AI provider credentials when enabled.
 
-Protect the database file, backups, and user exports accordingly.
+Protect PostgreSQL, database backups, and user exports accordingly.
 
 ## Browser privacy mode
 
@@ -66,10 +66,12 @@ highly sensitive financial and estate data.
 
 ## PWA cache boundary
 
-The service worker never caches authenticated financial responses. It caches
-only the offline shell and static assets, with network-first application code in
-production. Development removes Wealthboard service-worker state to prevent
-stale bundles from mixing with current server HTML.
+The production service worker never intercepts `/api` requests and therefore
+never caches authenticated financial responses. It precaches only the offline
+HTML page, web manifest, and icons. A failed navigation receives the offline
+page; previously viewed pages and records are not guaranteed to remain usable.
+There is no background-sync handler, mutation queue, in-app install prompt, or
+update notification. Users must reconnect and retry any write themselves.
 
 ## AI provider boundary
 
@@ -81,6 +83,14 @@ encryption key.
 Custom endpoints require an operator allowlist. Users should review provider
 retention, training, and billing terms before sending data.
 
+Remembered provider keys require a dedicated canonical base64 32-byte key and
+are bound to one user with AES-256-GCM associated data. Custom endpoint hosts
+are resolved and rejected when they map to private or local address space;
+redirects and environment proxies are disabled. PDF/XLSX/DOCX extraction may
+cross a pod-local Unix socket, so its sidecar and socket permissions are part of
+the trusted deployment boundary. Document passwords must never be logged or
+persisted by that sidecar.
+
 ## Estate-planning boundary
 
 Beneficiaries are planning records, not identities or authorized users. Estate
@@ -90,10 +100,10 @@ executor portal, or replace legal documents and provider beneficiary forms.
 ## Operator checklist
 
 - Terminate TLS at a trusted proxy.
-- Restrict database and backup filesystem permissions.
+- Restrict PostgreSQL access and backup filesystem permissions.
 - Use secret storage for session, OIDC, and AI keys.
-- Keep Node.js, dependencies, images, host OS, and proxy patched.
+- Keep Go, PostgreSQL, Node.js parser/build dependencies, images, host OS, and proxy patched.
 - Back up regularly and test restore into a disposable location.
-- Run one application replica.
+- Keep every replica on the same migration-compatible release.
 - Review production dependency and image scan results.
 - Disable users deliberately when access should end.

@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/wechuli/wealthboard/internal/aiworkflow"
 	"github.com/wechuli/wealthboard/internal/api"
 	webauth "github.com/wechuli/wealthboard/internal/auth"
 	"github.com/wechuli/wealthboard/internal/config"
@@ -31,6 +33,16 @@ func main() {
 func run(args []string) error {
 	if len(args) == 0 {
 		return usageError()
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	switch args[0] {
+	case "backup":
+		return runBackupCommand(ctx, args[1:], os.Stdout, os.Stderr)
+	case "restore":
+		return runRestoreCommand(ctx, args[1:], os.Stdout, os.Stderr)
+	case "seed-demo":
+		return runSeedDemoCommand(ctx, args[1:], os.Stdout, os.Stderr)
 	}
 	if args[0] == "healthcheck" {
 		if len(args) != 1 {
@@ -52,9 +64,6 @@ func run(args []string) error {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	db, err := database.Open(ctx, cfg.Database)
 	if err != nil {
@@ -119,12 +128,38 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	coreReads := api.NewCoreReadHandler(authHandler, service.NewCoreReadService(service.NewSQLCoreReadRepository(db)))
 	goalsReports := api.NewGoalsReportsHandler(authHandler, service.NewGoalsReportsService(service.NewSQLGoalsReportsRepository(db)))
 	featureReads := api.NewFeatureReadHandler(authHandler, service.NewFeatureReads(db))
+	endpointPolicy, err := aiworkflow.NewEndpointPolicyFromEnvironment(net.DefaultResolver)
+	if err != nil {
+		return err
+	}
+	var credentialCodec *aiworkflow.CredentialCodec
+	if os.Getenv("AI_CREDENTIAL_ENCRYPTION_KEY") != "" {
+		credentialCodec, err = aiworkflow.NewCredentialCodecFromEnvironment()
+		if err != nil {
+			return err
+		}
+	}
+	aiService := aiworkflow.NewService(
+		aiworkflow.NewPostgresRepository(db),
+		credentialCodec,
+		endpointPolicy,
+		aiworkflow.NewHTTPTransport(nil, 120*time.Second),
+	)
+	extractorScript := os.Getenv("AI_EXTRACTION_SCRIPT")
+	if extractorScript == "" {
+		extractorScript = "scripts/extract-import-source-cli.mjs"
+	}
 	mutations := api.MutationHandlers{
-		Metadata:   api.NewMetadataMutationHandler(authHandler, service.NewMetadataMutations(db)),
-		Ledger:     api.NewLedgerHandler(authHandler, service.NewLedgerService(db), trustedOrigin),
-		Goals:      api.NewGoalMutationHandler(authHandler, service.NewGoalMutationService(service.NewSQLGoalMutationRepository(db))),
-		Investment: api.NewInvestmentMutationHandler(authHandler, service.NewInvestmentMutations(db), trustedOrigin),
-		Conversion: api.NewAccountConversionHandler(authHandler, service.NewAccountConversionService(db)),
+		Metadata:    api.NewMetadataMutationHandler(authHandler, service.NewMetadataMutations(db)),
+		Ledger:      api.NewLedgerHandler(authHandler, service.NewLedgerService(db), trustedOrigin),
+		Goals:       api.NewGoalMutationHandler(authHandler, service.NewGoalMutationService(service.NewSQLGoalMutationRepository(db))),
+		Investment:  api.NewInvestmentMutationHandler(authHandler, service.NewInvestmentMutations(db), trustedOrigin),
+		Conversion:  api.NewAccountConversionHandler(authHandler, service.NewAccountConversionService(db)),
+		Corporate:   api.NewCorporateActionHandler(authHandler, service.NewCorporateActions(db), trustedOrigin),
+		Imports:     api.NewImportHandler(authHandler, service.NewAccountHistoryImportService(db), service.NewInvestmentHistoryImportService(db), trustedOrigin),
+		Portability: api.NewPortabilityHandler(authHandler, service.NewPortabilityService(db)),
+		Estate:      api.NewEstateMutationHandler(authHandler, service.NewEstateMutations(db)),
+		AI:          api.NewAIWorkflowHandler(authHandler, aiService, aiworkflow.Extractor{ScriptPath: extractorScript, Timeout: 15 * time.Second}),
 	}
 	distPath := os.Getenv("WEB_DIST_PATH")
 	if distPath == "" {
@@ -185,7 +220,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 }
 
 func usageError() error {
-	return fmt.Errorf("usage: wealthboard <serve|healthcheck|migrate|migrate-status|reset-password --username <name>>")
+	return fmt.Errorf("usage: wealthboard <serve|healthcheck|migrate|migrate-status|reset-password --username <name>|backup --file <path>|restore --file <path> --confirm-maintenance|seed-demo --username <name>>")
 }
 
 func healthcheck() error {

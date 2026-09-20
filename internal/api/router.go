@@ -24,11 +24,16 @@ type ReadHandlers struct {
 }
 
 type MutationHandlers struct {
-	Metadata   *MetadataMutationHandler
-	Ledger     *LedgerHandler
-	Goals      *GoalMutationHandler
-	Investment *InvestmentMutationHandler
-	Conversion *AccountConversionHandler
+	Metadata    *MetadataMutationHandler
+	Ledger      *LedgerHandler
+	Goals       *GoalMutationHandler
+	Investment  *InvestmentMutationHandler
+	Conversion  *AccountConversionHandler
+	Corporate   *CorporateActionHandler
+	Imports     *ImportHandler
+	Portability *PortabilityHandler
+	Estate      *EstateMutationHandler
+	AI          *AIWorkflowHandler
 }
 
 func NewRouter(logger *slog.Logger, ready readinessCheck) http.Handler {
@@ -93,6 +98,21 @@ func NewRouterWithReads(logger *slog.Logger, ready readinessCheck, auth *AuthHan
 				}
 				if reads.Mutations.Conversion != nil {
 					RegisterAccountConversionRoutes(router, reads.Mutations.Conversion)
+				}
+				if reads.Mutations.Corporate != nil {
+					RegisterCorporateActionRoutes(router, reads.Mutations.Corporate)
+				}
+				if reads.Mutations.Imports != nil {
+					RegisterImportRoutes(router, reads.Mutations.Imports)
+				}
+				if reads.Mutations.Portability != nil {
+					RegisterPortabilityRoutes(router, reads.Mutations.Portability)
+				}
+				if reads.Mutations.Estate != nil {
+					RegisterEstateMutationRoutes(router, reads.Mutations.Estate)
+				}
+				if reads.Mutations.AI != nil {
+					RegisterAIWorkflowRoutes(router, reads.Mutations.AI)
 				}
 				if auth.apiKeys != nil {
 					router.Get("/api-keys", auth.ListAPIKeys)

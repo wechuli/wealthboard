@@ -26,7 +26,7 @@ in the order most people use it, with real screens and concrete examples.
   </a>
   <a href="./admin/deployment">
     <strong>Run Wealthboard</strong>
-    <span>Deploy, configure authentication, back up SQLite, and recover safely.</span>
+    <span>Deploy, configure authentication, back up PostgreSQL, and recover safely.</span>
   </a>
 </div>
 

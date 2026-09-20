@@ -2,8 +2,8 @@
 
 Wealthboard is a self-hosted, multi-user wealth and goals tracker. Each user has
 an independent portfolio, settings, categories, exchange rates, reports, and
-portable exports. The Next.js application reads SQLite directly and requires no
-separate backend or financial integration. Authentication can remain fully
+portable exports. The current application is a Go HTTP service backed by
+PostgreSQL and serves a Vite/React web client. Authentication can remain fully
 local or use one operator-configured OpenID Connect provider.
 
 See the [product guide](https://wechuliprojects.github.io/wealthboard/) for
@@ -28,7 +28,7 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Private beneficiary and estate-distribution planning with printable,
   privacy-controlled as-of summaries
 - Per-user JSON portability and account/transaction CSV export
-- Operator-only full SQLite backup and offline restore
+- Operator-only PostgreSQL custom-format backup and maintenance-mode restore
 - Installable PWA shell with explicit offline safety
 - Browser-local System, Light, and Dark appearance themes
 - Optional on-demand, evidence-linked AI portfolio review with private BYOK
@@ -77,21 +77,26 @@ legally executed wills, and do not grant beneficiary access or transfer assets.
 
 ## Requirements
 
-- Node.js 22 or newer
-- npm
-- A persistent local filesystem for SQLite
+- Go 1.27 or newer
+- Node.js 24 and npm for building the Vite client and documentation
+- PostgreSQL 17 and matching `pg_dump`/`pg_restore` tools for operator recovery
 
 ## Local development
 
 ```bash
-npm install
-cp .env.example .env
-npm run dev
+make postgres-up
+make web-install
+make build
+DATABASE_URL='postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable' \
+SESSION_SECRET="$(openssl rand -hex 32)" \
+APP_URL=http://localhost:3000 \
+AUTH_METHODS=local \
+./bin/wealthboard serve
 ```
 
-Set `SESSION_SECRET` to at least 32 random characters before starting. The
-development command applies pending migrations, then starts Next.js at
-<http://localhost:3000>.
+`serve` applies pending PostgreSQL migrations before listening on
+<http://localhost:3000>. Keep `SESSION_SECRET` stable and at least 32
+characters.
 
 The default `AUTH_METHODS=local` mode preserves the original workflow. Open
 `/signup` to create local users. Signup atomically creates the internal identity,
@@ -105,16 +110,18 @@ users only after a validated provider login.
 Demo data is never loaded by signup. Target one existing user explicitly:
 
 ```bash
-DEMO_DATA=true TARGET_USERNAME=alice npm run db:seed:demo
+make seed-demo DEMO_DATA=true TARGET_USERNAME=alice
 ```
 
-The command never creates an identity or seeds every user.
+Both `DEMO_DATA=true` and an explicit existing username are required. The
+command never creates an identity or seeds every user; deterministic IDs and
+conflict handling make repeat runs safe for the same target.
 
 ## Environment variables
 
 | Variable                       | Purpose                                                         |
 | ------------------------------ | --------------------------------------------------------------- |
-| `DATABASE_PATH`                | Persistent SQLite file; default `./data/wealthboard.db`         |
+| `DATABASE_URL`                 | Required PostgreSQL connection URL                              |
 | `SESSION_SECRET`               | HMAC session secret; at least 32 characters                     |
 | `APP_URL`                      | Canonical deployment URL used for origin validation             |
 | `TRUST_PROXY_HEADERS`          | Trust one ingress-overwritten client IP header; default `false` |
@@ -125,9 +132,11 @@ The command never creates an identity or seeds every user.
 | `OIDC_PROVIDER_NAME`           | Login-button provider label; 1-60 characters                    |
 | `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key           |
 | `TZ`                           | Default timezone for new users; default `Africa/Nairobi`        |
-| `BACKUP_PATH`                  | Operator backup directory; default `./backups`                  |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys |
-| `AI_ALLOWED_ENDPOINTS`         | Optional comma-separated exact custom OpenAI-compatible URLs    |
+| `AI_ALLOWED_ENDPOINTS`         | Comma-separated exact custom OpenAI-compatible base URLs        |
+| `AI_EXTRACTION_SOCKET`         | Optional Unix socket for an operator-supplied document parser   |
+| `AI_EXTRACTION_SCRIPT`         | Local Node parser script; default `scripts/extract-import-source-cli.mjs` |
+| `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                            |
 
 There is no initial-user password or environment-created identity.
 
@@ -158,7 +167,7 @@ openssl rand -base64 32    # OIDC_TRANSACTION_SECRET
 Do not reuse either value as `OIDC_CLIENT_SECRET`. OIDC transaction state is
 encrypted in a short-lived, callback-scoped, HTTP-only `SameSite=Lax` cookie.
 Provider tokens, authorization codes, PKCE verifiers, and claim payloads are
-never stored in SQLite, exports, browser storage, analytics, or logs. A
+never stored in PostgreSQL, exports, browser storage, analytics, or logs. A
 successful callback issues the ordinary Wealthboard session containing only the
 internal user UUID, session version, and expiry.
 
@@ -223,14 +232,14 @@ provider keys:
 openssl rand -base64 32
 ```
 
-Do not reuse `SESSION_SECRET`. Without this variable, users can still enter a
-session-only API key on the Portfolio Review page. OpenAI and DeepSeek use fixed
-built-in endpoints; custom endpoints are rejected unless their exact normalized
-URL appears in `AI_ALLOWED_ENDPOINTS`. An operator can explicitly allow a local
-endpoint, for example `http://ollama:11434/v1`, but ordinary users cannot select
-arbitrary internal hosts. Keep the encryption key stable across restarts and
-restores; rotating it currently requires users to delete and save their provider
-credentials again.
+Do not reuse `SESSION_SECRET`. The value must be canonical base64 for exactly 32
+bytes. Without it, users can still submit a session-only provider key for one
+request. OpenAI and DeepSeek use fixed built-in endpoints; custom endpoints
+must exactly match a normalized URL in `AI_ALLOWED_ENDPOINTS`. Every provider
+hostname is resolved again before use, and private, loopback, link-local,
+multicast, and other local ranges are rejected even if allowlisted. Redirects
+and environment HTTP proxies are disabled. Keep the encryption key stable;
+changing it makes remembered keys undecryptable until users replace them.
 
 ## Password changes and operator reset
 
@@ -264,49 +273,18 @@ docker compose exec \
 
 ## Database migrations
 
-`db/schema.ts` is the schema source of truth. Generated migrations under
-`db/migrations` form an append-only history that supports both fresh databases
-and upgrades of existing databases.
+The Go service embeds the append-only PostgreSQL migrations under
+`db/postgres/migrations`. `serve` runs pending migrations at startup; operators
+can run or inspect them separately with `make migrate` and
+`make migrate-status`. Never edit an applied migration.
 
-```bash
-npm run db:generate
-npm run db:migrate
-```
+## Container deployment
 
-After changing the schema, generate and review a new migration. Never delete,
-rename, or edit a migration that may already have been applied. The migration
-runner verifies the latest applied migration before executing pending SQL and
-stops with a migration-history error if files were replaced or modified.
-
-If that check fails, restore the original migration files from the application
-version that created the database, then generate a new migration. A disposable
-development database can instead be backed up if needed, deleted, and recreated;
-do not manually change its migration ledger.
-
-## Docker deployment
-
-Create `.env` with `SESSION_SECRET`, `APP_URL`, `AUTH_METHODS`, and any required
-OIDC values, then run:
-
-```bash
-docker compose up -d --build
-docker compose ps
-```
-
-Compose mounts `/data` for SQLite and `/backups` for operator backups. Both
-volumes survive image replacement. The container runs as UID/GID 1001, applies
-migrations on startup, and exposes `/api/health/live` and
-`/api/health/ready`. The legacy `/api/health` path has readiness semantics.
-
-To update:
-
-```bash
-npm run backup
-docker compose up -d --build
-```
-
-Terminate TLS in a trusted reverse proxy and do not mount the SQLite volume
-read-write into multiple application replicas.
+The application image is a non-root, read-only, distroless Go runtime serving
+the built Vite assets. It contains neither PostgreSQL client tools nor Node.js.
+Supply an external `DATABASE_URL`, run operator backups from a trusted host or
+admin job with matching PostgreSQL tools, and provide a document-extraction
+sidecar when PDF/XLSX/DOCX conversion is required.
 
 ## Kubernetes deployment
 
@@ -321,12 +299,12 @@ kubectl create secret generic wealthboard-secrets \
 kubectl apply -f deploy/kubernetes.yaml
 ```
 
-The OIDC keys may be omitted while `AUTH_METHODS=local`. The example uses one
-replica with a `Recreate` strategy, ReadWriteOnce PVCs, separate startup,
-readiness, and liveness probes, an Ingress, resource bounds, and a non-root
-security context. TLS must terminate at the configured `APP_URL`, and the proxy
-must preserve the original host and scheme. The example enables trusted proxy
-headers for its single ingress; that ingress must overwrite rather than append
+Create the separate `wealthboard-database` secret with its `database-url` key.
+The manifest deploys two rolling application replicas and no PostgreSQL
+server, volume, backup controller, or extraction sidecar. Operate PostgreSQL,
+point the egress policy at its actual namespace/labels, schedule and retain
+backups outside the application pods, and test restores. TLS must terminate at
+the configured `APP_URL`; the ingress must overwrite rather than append
 client-supplied forwarding headers.
 
 ## AI portfolio review
@@ -354,11 +332,18 @@ AI reviews and import conversion use a two-minute provider request timeout with
 automatic retries disabled. The monthly token limit accepts 10,000 to
 100,000,000 tokens; existing saved limits are not increased automatically.
 
-Provider keys entered on the Review page remain in browser component memory for
-that request and are cleared after success. Remembered keys are encrypted with
-AES-256-GCM and bound to the owning user. They are excluded from per-user exports,
-but deployment-wide SQLite backups contain the encrypted credential rows and must
-remain access-restricted. AI output is explanatory and is not financial advice.
+Provider keys entered for one request are not persisted. Remembered keys are
+encrypted with AES-256-GCM and bound to the owning user. They are excluded from
+per-user exports, but deployment-wide PostgreSQL backups contain encrypted
+credential rows and must remain access-restricted. AI output is explanatory and
+is not financial advice.
+
+UTF-8 CSV/TSV/JSON/TXT extraction runs in Go. PDF/XLSX/DOCX extraction uses
+`AI_EXTRACTION_SOCKET` when set; the operator-supplied Unix-socket sidecar must
+implement the request/response contract used by
+`scripts/extract-import-source-cli.mjs`. Without a socket, a direct installation
+falls back to `node` plus `AI_EXTRACTION_SCRIPT`. The distroless application
+image has no Node fallback.
 
 ## Per-user import, export, and restore
 
@@ -431,43 +416,46 @@ transfers use their dedicated workflows. Files are previewed without writes;
 identical external IDs are skipped, conflicts are never overwritten, and all
 currently valid rows commit atomically before one balance replay.
 
-## Deployment-wide backup and offline restore
+## Deployment-wide PostgreSQL backup and restore
 
-A raw SQLite file contains every user's password hash and financial records. It
-is never available through an authenticated HTTP route.
+A database archive contains every user's password hash, identity mappings,
+encrypted remembered AI keys, and financial records. It is never available
+through an authenticated HTTP route.
 
 Create a consistent operator backup:
 
 ```bash
-npm run backup
+mkdir -p backups
+make backup BACKUP_FILE="$PWD/backups/wealthboard-$(date -u +%Y%m%dT%H%M%SZ).dump"
 ```
 
-`BACKUP_PATH` must be persistent and access-restricted. To restore, stop the
-application first, then run:
+The explicit destination directory must already exist and the file must not.
+The command uses `pg_dump --format=custom`, omits ownership/privileges, verifies
+a nonempty regular file, and sets mode `0600`.
+
+Restore is destructive and requires maintenance mode: stop every application
+replica and other writer, then run:
 
 ```bash
-CONFIRM_OFFLINE_RESTORE=true \
-RESTORE_FILE=/backups/wealthboard-2026-08-02T10-00-00Z.db \
-npm run backup:restore
+make restore RESTORE_FILE="$PWD/backups/wealthboard-20260920T120000Z.dump"
 ```
 
-Start Wealthboard afterward so pending migrations run. Test backups regularly
-and retain an external copy before destructive maintenance.
+The command validates the custom archive, creates a timestamped
+`wealthboard-pre-restore-*.dump` beside it, and only then runs a clean,
+single-transaction restore. It validates readiness and foreign keys afterward
+and retains the safety dump on success or failure. Start Wealthboard only after
+the command completes, and test recovery regularly in a disposable database.
 
 ## PWA and offline behavior
 
-Use the browser install action or Wealthboard's **Install app** prompt. On iOS,
-use **Share → Add to Home Screen**.
-
-Production registers the service worker; development automatically unregisters
-Wealthboard workers and clears Wealthboard caches so stale development chunks
-cannot hydrate against newer server HTML. The production worker precaches only
-the offline shell and static assets. Application chunks and icons are
-network-first with cached offline fallback, which prevents an older bundle from
-overriding a deployed update. It does not cache authenticated financial
-responses or queue mutations. Financial submits are blocked while offline, and
-logout clears Wealthboard client state before a different user signs in on the
-same device.
+Production registers the service worker. It precaches only the standalone
+offline page, manifest, and application icons. Failed navigation shows that
+offline page; API requests are never intercepted, authenticated financial
+responses are never cached, and no background-sync handler queues mutations.
+Previously viewed dashboards and records are therefore not guaranteed to work
+offline. The current client also provides no in-app install/update prompt or
+offline mutation queue; use the browser's install action where available and
+retry writes only after connectivity returns.
 
 ## Verification
 
@@ -480,8 +468,8 @@ npm run test:e2e
 npm run build
 ```
 
-Automated tests use disposable SQLite files, exercise two-user isolation and
-portability attacks, and verify
+Automated integration tests use disposable PostgreSQL schemas, exercise
+two-user isolation and portability attacks, and verify
 layouts at 360, 390, 768, 1024, and 1440 px.
 
 ## Security considerations
@@ -492,9 +480,9 @@ layouts at 360, 390, 768, 1024, and 1440 px.
 - Production session cookies are Secure, HTTP-only, SameSite=Strict, and
   explicitly expiring. OIDC transaction cookies are separate, callback-scoped,
   Secure, HTTP-only, SameSite=Lax, and expire within ten minutes.
-- Restrict filesystem access to SQLite databases, backups, and exports.
+- Restrict PostgreSQL access and filesystem access to backups and exports.
 - Never publish raw backups or user exports to public object storage.
-- Keep TLS, the host, Node.js, the base image, and dependencies updated.
+- Keep TLS, PostgreSQL, Go, Node.js build tooling, the base image, and dependencies updated.
 - Users are independent; Wealthboard has no roles, organizations, invitations,
   shared portfolios, or cross-user transfers.
 - Database errors are logged by class or name without submitted secrets.

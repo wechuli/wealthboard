@@ -3,7 +3,10 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const publicDirectory = path.resolve("web/public");
-const serviceWorker = await readFile(path.join(publicDirectory, "sw.js"), "utf8");
+const serviceWorker = await readFile(
+  path.join(publicDirectory, "sw.js"),
+  "utf8",
+);
 const index = await readFile(path.resolve("web/index.html"), "utf8");
 const manifest = JSON.parse(
   await readFile(path.join(publicDirectory, "manifest.webmanifest"), "utf8"),

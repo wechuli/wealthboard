@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -26,6 +28,7 @@ func (sourceError *SourceError) Error() string { return sourceError.Message }
 type Extractor struct {
 	NodePath   string
 	ScriptPath string
+	SocketPath string
 	Timeout    time.Duration
 }
 
@@ -130,6 +133,46 @@ func (extractor Extractor) extractDocument(ctx context.Context, extension string
 	}
 	workerContext, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	input, _ := json.Marshal(map[string]string{
+		"extension":        extension,
+		"bytes":            base64.StdEncoding.EncodeToString(content),
+		"documentPassword": password,
+	})
+	socketPath := extractor.SocketPath
+	if socketPath == "" {
+		socketPath = os.Getenv("AI_EXTRACTION_SOCKET")
+	}
+	if socketPath != "" {
+		return extractDocumentOverSocket(workerContext, socketPath, input)
+	}
+	return extractor.extractDocumentWithNode(workerContext, input)
+}
+
+func extractDocumentOverSocket(ctx context.Context, socketPath string, input []byte) (Source, error) {
+	connection, err := (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
+	if err != nil {
+		return Source{}, documentExtractionError(ctx)
+	}
+	defer connection.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = connection.SetDeadline(deadline)
+	}
+	if _, err = connection.Write(input); err != nil {
+		return Source{}, documentExtractionError(ctx)
+	}
+	unixConnection, ok := connection.(*net.UnixConn)
+	if !ok || unixConnection.CloseWrite() != nil {
+		return Source{}, documentExtractionError(ctx)
+	}
+	var output cappedBuffer
+	output.maximum = MaxTextBytes + 16*1024
+	if _, err = io.Copy(&output, connection); err != nil || output.exceeded {
+		return Source{}, documentExtractionError(ctx)
+	}
+	return decodeDocumentExtraction(ctx, output.Bytes())
+}
+
+func (extractor Extractor) extractDocumentWithNode(ctx context.Context, input []byte) (Source, error) {
 	nodePath := extractor.NodePath
 	if nodePath == "" {
 		resolved, err := exec.LookPath("node")
@@ -138,12 +181,7 @@ func (extractor Extractor) extractDocument(ctx context.Context, extension string
 		}
 		nodePath = resolved
 	}
-	input, _ := json.Marshal(map[string]string{
-		"extension":        extension,
-		"bytes":            base64.StdEncoding.EncodeToString(content),
-		"documentPassword": password,
-	})
-	command := exec.CommandContext(workerContext, nodePath, "--max-old-space-size=160", extractor.ScriptPath)
+	command := exec.CommandContext(ctx, nodePath, "--max-old-space-size=160", extractor.ScriptPath)
 	command.Env = []string{}
 	command.Stdin = bytes.NewReader(input)
 	var output cappedBuffer
@@ -151,18 +189,22 @@ func (extractor Extractor) extractDocument(ctx context.Context, extension string
 	command.Stdout = &output
 	command.Stderr = io.Discard
 	err := command.Run()
-	if errors.Is(workerContext.Err(), context.DeadlineExceeded) {
-		return Source{}, &SourceError{Message: "Document extraction exceeded 15 seconds. Select a smaller file."}
-	}
 	if err != nil || output.exceeded {
-		return Source{}, &SourceError{Message: "The document parser could not complete within its resource limits."}
+		return Source{}, documentExtractionError(ctx)
+	}
+	return decodeDocumentExtraction(ctx, output.Bytes())
+}
+
+func decodeDocumentExtraction(ctx context.Context, output []byte) (Source, error) {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return Source{}, &SourceError{Message: "Document extraction exceeded 15 seconds. Select a smaller file."}
 	}
 	var response struct {
 		Source *Source `json:"source"`
 		Error  string  `json:"error"`
 		Code   string  `json:"code"`
 	}
-	if strictDecode(output.Bytes(), &response) != nil {
+	if strictDecode(output, &response) != nil {
 		return Source{}, &SourceError{Message: "Document extraction ended before completion."}
 	}
 	if response.Error != "" {
@@ -172,6 +214,13 @@ func (extractor Extractor) extractDocument(ctx context.Context, extension string
 		return Source{}, &SourceError{Message: "The extracted document is empty or exceeds the source limits."}
 	}
 	return *response.Source, nil
+}
+
+func documentExtractionError(ctx context.Context) error {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return &SourceError{Message: "Document extraction exceeded 15 seconds. Select a smaller file."}
+	}
+	return &SourceError{Message: "The document parser could not complete within its resource limits."}
 }
 
 type cappedBuffer struct {

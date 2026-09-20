@@ -50,7 +50,8 @@ worker.once("message", (message) => {
 worker.once("error", () => {
   process.stdout.write(
     JSON.stringify({
-      error: "The document parser could not complete within its resource limits.",
+      error:
+        "The document parser could not complete within its resource limits.",
     }),
   );
 });

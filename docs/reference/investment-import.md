@@ -183,7 +183,7 @@ Preview writes nothing. It reports:
 Confirmation requires the same file bytes and SHA-256 hash. Wealthboard
 reparses the file, rechecks ownership and duplicates, inserts every accepted
 source record, validates grouped relationships and long-only replay, and
-rebuilds the account value inside one SQLite transaction. Any unexpected error
+rebuilds the account value inside one serializable PostgreSQL transaction. Any unexpected error
 rolls back the entire investment import.
 
 ## Common rejection reasons

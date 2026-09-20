@@ -14,14 +14,22 @@ Use an account-scoped CSV or JSON file to append transactions to one existing
 active account. See [Transactions and values](./activity#import-detailed-account-history).
 
 The file cannot choose a user, account, institution, or currency. The signed-in
-session and account URL establish those values.
+session and account URL establish those values. Files are limited to 5 MB and
+10,000 rows. CSV requires exactly
+`external_id,type,amount,date,description,notes`; JSON requires the strict
+`wealthboard-account-history` version 1 envelope. Preview returns a SHA-256 hash,
+and commit accepts only the same bytes and hash. Identical stored external IDs
+are skipped, conflicting IDs reject commit, and accepted rows plus balance
+replay commit in one serializable transaction.
 
 ## Investment history import
 
 Use an active position account's **Import** action for instruments, opening
 holdings, trades, broker cash, and effective-dated prices. This is a strict,
 all-or-nothing workflow because one trade can depend on earlier quantities and
-cash.
+cash. JSON uses `wealthboard-investment-history` version 1. CSV accepts one of
+four exact templates: opening holdings, trades, cash, or prices. The 5 MB limit
+and 10,000-record combined limit also apply here.
 
 See [Investment History v1](../reference/investment-import) for the JSON
 envelope, four CSV templates, stable-ID policy, preview fields, and grouped
@@ -71,7 +79,7 @@ access-controlled location.
 ## Restore a user export
 
 Restore replaces only the signed-in user's portfolio in one database
-transaction.
+transaction. Archives larger than 25 MB are rejected.
 
 1. Download a fresh pre-restore export when offered.
 2. Select the JSON file.
@@ -106,6 +114,6 @@ or cost basis in versions 2 through 6.
 
 ::: danger A user export is not a deployment backup
 A JSON restore cannot recover login identities, OIDC mappings, or another user's
-portfolio. Operators must separately back up the SQLite database. See
+portfolio. Operators must separately back up PostgreSQL. See
 [Backup and recovery](../admin/backup-recovery).
 :::

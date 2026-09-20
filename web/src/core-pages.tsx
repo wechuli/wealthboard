@@ -30,6 +30,10 @@ import {
   PositionTools,
 } from "./ledger-forms";
 import { GoalForm, GoalManager } from "./planning-forms";
+import {
+  CorporateActionsPanel,
+  ImportWorkspace,
+} from "./advanced-account-workflows";
 import { MoneyValue } from "./privacy";
 import type {
   Account,
@@ -281,14 +285,29 @@ export function AccountDetailPage({ session }: { session: Session }) {
             onChanged={() => setRefresh((value) => value + 1)}
           />
           {account.trackingMode === "positions" ? (
-            <PositionTools
-              account={account}
-              instruments={instruments.instruments}
-              events={positionEvents.items}
-              reconciliations={positionReconciliations.items}
-              session={session}
-              onChanged={() => setRefresh((value) => value + 1)}
-            />
+            <>
+              <PositionTools
+                account={account}
+                instruments={instruments.instruments}
+                events={positionEvents.items}
+                reconciliations={positionReconciliations.items}
+                session={session}
+                onChanged={() => setRefresh((value) => value + 1)}
+              />
+              <CorporateActionsPanel
+                account={account}
+                accounts={accounts.items}
+                instruments={instruments.instruments}
+                events={positionEvents.items}
+                session={session}
+                onChanged={() => setRefresh((value) => value + 1)}
+              />
+              <ImportWorkspace
+                account={account}
+                session={session}
+                onChanged={() => setRefresh((value) => value + 1)}
+              />
+            </>
           ) : (
             <AccountConversionForm
               account={account}

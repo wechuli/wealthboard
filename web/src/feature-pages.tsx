@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import {
   getAI,
+  getAccounts,
   getCategories,
   getEstate,
   getEstateSnapshot,
@@ -28,6 +29,7 @@ import { CategoryManager, InstitutionManager } from "./metadata-forms";
 import type { Session } from "./types";
 import { useState } from "react";
 import { InstrumentForm, InstrumentManager } from "./planning-forms";
+import { EstateMutationWorkspace } from "./estate-workflows";
 
 export function CategoriesPage({ session }: { session: Session }) {
   const [refresh, setRefresh] = useState(0);
@@ -237,8 +239,9 @@ function PriceHistory({ prices }: { prices: SecurityPrice[] }) {
   );
 }
 
-export function EstatePage() {
-  const state = useResource(getEstate);
+export function EstatePage({ session }: { session: Session }) {
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(() => Promise.all([getEstate(), getAccounts()]), [refresh]);
   return (
     <>
       <PageHeader
@@ -247,7 +250,17 @@ export function EstatePage() {
         description="Beneficiaries, account directives, allocations, and immutable snapshots."
       />
       <ResourceView state={state}>
-        {(estate) => <EstateWorkspaceView estate={estate} />}
+        {([estate, accounts]) => (
+          <>
+            <EstateMutationWorkspace
+              estate={estate}
+              accounts={accounts.items}
+              session={session}
+              onChanged={() => setRefresh((value) => value + 1)}
+            />
+            <EstateWorkspaceView estate={estate} />
+          </>
+        )}
       </ResourceView>
     </>
   );
