@@ -7,6 +7,7 @@ import {
   AccountDetailPage,
   AccountsPage,
   DashboardPage,
+  NewSecurityPricePage,
   TransactionsPage,
   coreRouteIntents,
 } from "@/pages/core";
@@ -16,22 +17,26 @@ const {
   getAccount,
   getAccountAnalytics,
   getAccountActivity,
+  getAccountPositionEvents,
   getAccountValuations,
   getAccounts,
   getDashboard,
   getGoalAlerts,
   getGoals,
+  getInstruments,
   getSettings,
   getTransactions,
 } = vi.hoisted(() => ({
   getAccount: vi.fn(),
   getAccountAnalytics: vi.fn(),
   getAccountActivity: vi.fn(),
+  getAccountPositionEvents: vi.fn(),
   getAccountValuations: vi.fn(),
   getAccounts: vi.fn(),
   getDashboard: vi.fn(),
   getGoalAlerts: vi.fn(),
   getGoals: vi.fn(),
+  getInstruments: vi.fn(),
   getSettings: vi.fn(),
   getTransactions: vi.fn(),
 }));
@@ -44,13 +49,13 @@ vi.mock("@/api/client", () => ({
   getAccount,
   getAccountAnalytics,
   getAccountActivity,
-  getAccountPositionEvents: vi.fn(),
+  getAccountPositionEvents,
   getAccountPositionReconciliations: vi.fn(),
   getAccountTransactions: vi.fn(),
   getAccountValuations,
   getCategories: vi.fn(),
   getInstitutions: vi.fn(),
-  getInstruments: vi.fn(),
+  getInstruments,
   getAccounts,
   getDashboard,
   getGoalAlerts,
@@ -350,6 +355,43 @@ describe("ported core pages", () => {
     expect(await screen.findByText("Movement attribution")).toBeInTheDocument();
     expect(screen.getByText("Price movement")).toBeInTheDocument();
     expect(screen.getByText(/cash-flow-aware TWR/)).toBeInTheDocument();
+  });
+
+  it("defaults price entry to the first instrument held by the account", async () => {
+    getAccount.mockResolvedValue({ ...account, trackingMode: "positions" });
+    getInstruments.mockResolvedValue({
+      instruments: [
+        {
+          id: "instrument-1",
+          name: "Example World ETF",
+          symbol: "EWLD",
+          quoteCurrency: "KES",
+        },
+      ],
+    });
+    getAccountPositionEvents.mockResolvedValue({
+      items: [{ instrumentId: "instrument-1" }],
+      limit: 100,
+      offset: 0,
+      hasMore: false,
+    });
+
+    renderPage(
+      <Routes>
+        <Route
+          path="/accounts/:id/prices/new"
+          element={
+            <NewSecurityPricePage session={{ csrfToken: "csrf" } as never} />
+          }
+        />
+      </Routes>,
+      ["/accounts/account-1/prices/new"],
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Update security price" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Unit price")).toBeInTheDocument();
   });
 
   it("keeps every original page as a separate route intent", () => {

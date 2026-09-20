@@ -2201,13 +2201,16 @@ export function NewSecurityPricePage({ session }: PageProps) {
     () =>
       Promise.all([
         getAccount(id),
-        instrumentID
-          ? getInstruments().then(
-              ({ instruments }) =>
-                instruments.find((item) => item.id === instrumentID) ?? null,
-            )
-          : Promise.resolve(null),
-      ]),
+        getInstruments(),
+        getAccountPositionEvents(id),
+      ]).then(([account, { instruments }, events]) => {
+        const selectedInstrumentID =
+          instrumentID || events.items[0]?.instrumentId;
+        return [
+          account,
+          instruments.find((item) => item.id === selectedInstrumentID) ?? null,
+        ] as const;
+      }),
     [id, instrumentID],
   );
   return (

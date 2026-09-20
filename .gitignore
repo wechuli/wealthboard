@@ -38,6 +38,7 @@ bower_components
 build/Release
 # Go build output
 /wealthboard
+/bin/
 
 # Dependency directories
 node_modules/

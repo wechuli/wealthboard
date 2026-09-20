@@ -38,7 +38,9 @@ async function captureLocator(locator: Locator, name: string) {
 function cardForHeading(page: Page, name: string) {
   return page
     .getByRole("heading", { name, exact: true })
-    .locator('xpath=ancestor::div[contains(@class, "rounded-2xl")][1]');
+    .locator(
+      'xpath=ancestor::*[contains(@class, "read-card") or contains(@class, "rounded-2xl")][1]',
+    );
 }
 
 async function addBeneficiary(
@@ -142,6 +144,10 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByLabel("Exchange MIC").fill("XLON");
   await page.getByLabel("Quote currency").fill("USD");
   await page.getByRole("button", { name: "Create instrument" }).click();
+  await expect(page).toHaveURL(/\/instruments$/);
+  await expect(
+    page.getByText("Vanguard FTSE All-World UCITS ETF", { exact: true }),
+  ).toBeVisible();
   await page.goto(`/accounts/${brokerage!.id}/convert`);
   await page
     .getByLabel("Replacement account name")
@@ -170,17 +176,22 @@ test("capture the Wealthboard product guide", async ({ page }) => {
 
   await page.getByRole("link", { name: "Buy", exact: true }).click();
   await page.getByLabel("Quantity").fill("1");
-  await page.getByLabel("Execution price per unit").fill("205");
+  await page.getByLabel("Unit price").fill("205");
   await page.getByLabel("Fee amount").fill("1");
   await page.getByLabel("Trade date").fill("2026-08-13");
   await page.getByLabel("Settlement date").fill("2026-08-14");
   await page.getByLabel("Description").fill("Fictional recurring investment");
   await captureLocator(
-    cardForHeading(page, "Position activity"),
+    cardForHeading(page, "Position event"),
     "position-trade-entry.png",
   );
-  await page.getByRole("button", { name: "Save position activity" }).click();
+  await page.getByRole("button", { name: "Record position event" }).click();
+  await expect(page.getByText(/Buy.*VWRA/)).toBeVisible();
 
+  await page.goto(`/accounts/${positionAccountId}`);
+  await expect(
+    page.getByRole("heading", { name: "Interactive Brokers Positions" }),
+  ).toBeVisible();
   await page
     .getByLabel("Update Vanguard FTSE All-World UCITS ETF price")
     .click();
