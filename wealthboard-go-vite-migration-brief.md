@@ -35,7 +35,7 @@ When the repository has changed since this brief was written, inspect the latest
 - [x] Port the existing Next.js interface faithfully to Vite, preserving its route structure, responsive shell, forms, charts, labels, controls, and visual styling while replacing only framework and data bindings.
 - [x] Organize the Vite client into `app`, `api`, `components`, `hooks`, `lib`, and `pages` domains with stable aliases, colocated tests, and route-level code splitting.
 - [x] Close Phase 6 documentation for the Go/Vite/PostgreSQL runtime, fresh-start policy, operator commands, extraction-worker exception, and cutover/removal gates.
-- [ ] Complete Phase 6 cutover and remove the superseded Next.js runtime after all acceptance gates pass.
+- [x] Complete Phase 6 cutover and remove the superseded Next.js runtime after all acceptance gates pass.
 
 ## Objective
 
@@ -231,7 +231,7 @@ For a fresh PostgreSQL database, Goose applies the reviewed baseline schema and 
 
 Rules:
 
-- Preserve the existing Drizzle SQL migrations and metadata under an archival path for provenance. Do not rewrite or delete applied history.
+- Preserve the existing Drizzle SQL migrations and metadata under an archival path for provenance. Do not rewrite or delete applied history. Completed under `docs/archive/drizzle-migrations` during Phase 6 removal.
 - Generate a reviewed PostgreSQL `schema.sql` that preserves the current domain constraints while using PostgreSQL-native types and syntax.
 - Refuse startup when the PostgreSQL schema is missing or not at the expected Goose version.
 - Test fresh migration, repeat application, constraint behavior, and downgrade policy against disposable PostgreSQL databases.

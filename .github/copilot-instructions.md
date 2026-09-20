@@ -2,17 +2,16 @@
 
 ## Project context
 
-- Wealthboard is a self-hosted wealth and goals tracker built with Next.js App Router, strict TypeScript, SQLite, and Drizzle ORM. The runtime supports multiple independent application users.
+- Wealthboard is a self-hosted wealth and goals tracker built with a Go/Chi API, PostgreSQL, and a strict TypeScript Vite/React client. The runtime supports multiple independent application users.
 - Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the product and architecture contracts.
 - Use `docs/ARCHITECTURE.md` for system decisions and `README.md` for setup, operations, and verification. Inspect the owning implementation and nearby tests before changing behavior.
 - Keep the product local-first and deployable without cloud services or a separate backend. Users are independent: do not add organizations, roles, invitations, shared portfolios, or cross-user transfers.
 
 ## Architecture boundaries
 
-- Keep persistence and business rules in `lib/services`, reusable validation in `lib/validation.ts`, money logic in `lib/money.ts` or `lib/finance.ts`, and date logic in `lib/dates.ts`.
-- Use Server Components for authenticated reads and server actions for mutations. Add route handlers only for file or HTTP concerns such as import, export, backup, restore, and health checks.
-- Mark interactive components with `"use client"` only when they need browser state or events. Keep secrets, database access, session logic, and financial calculations server-only.
-- Reuse primitives in `components/ui`, forms in `components/forms`, and the existing service and action patterns before adding abstractions or dependencies.
+- Keep persistence and business rules in `internal/service`, reusable HTTP validation in `internal/api`, exact money logic in `internal/domain`, and SQL in `db/postgres/queries` for sqlc generation.
+- The Vite client consumes `/api/v1`; it must not contain database access, session signing, secrets, or authoritative financial calculations.
+- Reuse primitives and feature components in `web/src/components` and the generated API types in `web/src/api/schema.ts` before adding abstractions or dependencies.
 
 ## Non-negotiable invariants
 
@@ -27,15 +26,15 @@
 
 ## Database changes
 
-- Change `db/schema.ts`, then run `npm run db:generate` and review the new incremental migration. Migration history is append-only: never delete, rename, or edit an applied migration or its snapshot.
+- Add a Goose migration under `db/postgres/migrations`, update matching SQL under `db/postgres/queries`, then run `make generate` and review sqlc output. Migration history is append-only: never delete, rename, or edit an applied migration.
 - Test schema changes against both a disposable empty database and a disposable database at the previous migration state. Persisted pre-release databases must retain an upgrade path.
 - Signup is public only when deployment policy enables local authentication. Validated OIDC first login is the only other provisioning path; do not add claim-based merging, environment-created identities, invitations, setup users, or default credentials.
 - Keep foreign keys enabled and retain historical records through the established archive behavior.
-- Do not hand-edit generated or runtime artifacts such as `.next`, `next-env.d.ts`, `node_modules`, `data/*.db`, or files under `test-results`.
+- Do not hand-edit generated or runtime artifacts such as `web/src/api/schema.ts`, `web/dist`, `node_modules`, `data/*`, or files under `test-results`.
 
 ## Working and validation
 
 - Use Node.js 22 or newer and npm. Keep changes focused and preserve existing public behavior unless the task changes it.
 - Add or update the closest unit, component, or Playwright test when behavior changes. Authorization-sensitive work requires at least two users and a negative cross-user assertion. Prefer deterministic fixtures and avoid real financial or secret data.
-- Run the narrowest relevant test first. Before finishing a code change, run `npm run lint`, `npm run typecheck`, and `npm test`; run `npm run test:e2e` for user-workflow changes and `npm run build` for integration or release-sensitive changes.
-- Do not start or replace a development server when one is already running. `npm run dev` applies pending migrations before starting Next.js.
+- Run the narrowest relevant test first. Before finishing a code change, run `make lint`, `make typecheck`, and `make test`; run `make test-e2e-go` for user-workflow changes and `make build` for integration or release-sensitive changes.
+- Do not start or replace a development server when one is already running. `wealthboard serve` applies pending PostgreSQL migrations before starting the Go server.

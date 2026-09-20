@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPhase6ParityPostgreSQLObserver(t *testing.T) {
+func TestPhase6ParityEvidence(t *testing.T) {
 	db := openPhase5TestDatabase(t)
 	ctx := context.Background()
 	userID := uuid.New()

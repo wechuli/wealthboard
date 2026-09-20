@@ -9,9 +9,9 @@ JSON API and serves a compiled Vite/React single-page client. One optional OIDC
 provider may authenticate internal users.
 
 PostgreSQL is a fresh-start boundary, not an in-place SQLite migration. The
-repository intentionally has no SQLite importer or dual-write path. Legacy
-Next.js, Drizzle, and SQLite sources remain temporarily for provenance and
-parity review, but they are not part of the production request path.
+repository intentionally has no SQLite importer or dual-write path. The Phase 6
+cutover removed the legacy Next.js, Drizzle, and SQLite runtime. Frozen parity
+fixtures and archived migration history remain as non-executable evidence.
 
 ## Decisions
 
@@ -140,9 +140,8 @@ DOCX. Direct installations may run the bounded Node child configured by
 `extraction-worker` image over a pod-local Unix socket; Node is absent from the
 distroless application image. UTF-8 CSV, TSV, JSON, and TXT remain parsed in Go.
 
-Legacy application source and its migrations are retained unchanged until the
-cutover checklist records acceptance, rollback evidence, and explicit approval
-to remove them. Retention does not make the legacy runtime supported.
+Phase 6 acceptance and removal evidence is recorded in
+`docs/admin/cutover-evidence.md`.
 
 ## Position-account architecture
 
@@ -400,8 +399,9 @@ operations retain source records. Timestamps are stored in PostgreSQL and
 serialized in UTC.
 
 Goose migrations under `db/postgres/migrations` are the append-only schema
-authority. `db/postgres/schema.sql` feeds sqlc generation. Legacy Drizzle schema
-and migrations are archival provenance only and are not applied to PostgreSQL.
+authority. SQL files under `db/postgres/queries` feed sqlc generation. Legacy
+Drizzle migrations are archived under `docs/archive/drizzle-migrations` as
+provenance only and are not applied to PostgreSQL.
 
 Archived accounts are excluded from current and historical totals, activity,
 comparisons, live estate views, goal progress, ordinary CSV reports, and

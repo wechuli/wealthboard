@@ -64,6 +64,7 @@ export default defineConfig({
           { text: "Authentication", link: "/admin/authentication" },
           { text: "Backup and recovery", link: "/admin/backup-recovery" },
           { text: "Cutover and removal", link: "/admin/cutover" },
+          { text: "Cutover evidence", link: "/admin/cutover-evidence" },
           { text: "Troubleshooting", link: "/admin/troubleshooting" },
         ],
       },

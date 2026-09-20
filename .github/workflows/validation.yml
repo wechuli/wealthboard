@@ -70,7 +70,7 @@ jobs:
             - name: Typecheck
               run: make typecheck
 
-            - name: Run Go, legacy, and Vite tests
+            - name: Run Go, Vite, PWA, and extraction tests
               run: make test
 
             - name: Verify PostgreSQL migrations
@@ -78,9 +78,6 @@ jobs:
 
             - name: Run PostgreSQL integration tests
               run: make go-test-integration
-
-            - name: Verify legacy and replacement parity
-              run: make test-parity
 
             - name: Scan dependencies
               run: make security

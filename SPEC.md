@@ -13,9 +13,8 @@ snapshots are immutable.
 The production runtime is the Go API serving the compiled Vite client over
 PostgreSQL. PostgreSQL installations start from the reviewed fresh schema;
 SQLite data is intentionally not migrated or dual-written. Legacy Next.js,
-Drizzle, and SQLite source remains in the repository temporarily as migration
-provenance and must not be treated as a supported runtime or deleted until the
-documented cutover gates pass.
+Drizzle, and SQLite runtime source was removed after the Phase 6 gates passed.
+Frozen parity fixtures and archived Drizzle migrations remain as evidence.
 
 To avoid ambiguity:
 
@@ -1880,8 +1879,8 @@ Keep the first version focused on manually tracking net worth, account values, c
 - Existing SQLite data is intentionally discarded. There is no
   SQLite-to-PostgreSQL importer, dual-write period, or in-place database
   conversion contract.
-- Legacy Drizzle migrations remain unchanged for provenance until the
-  post-cutover removal checklist is approved.
+- Legacy Drizzle migrations remain unchanged under
+  `docs/archive/drizzle-migrations` as non-executable provenance.
 - Run migration checks, Go tests, frontend tests, linting, type checking, and a
   production build after schema changes.
 

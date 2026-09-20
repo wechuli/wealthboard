@@ -87,12 +87,6 @@ credentials.*.json
 .cache
 .parcel-cache
 
-# Next.js build output
-.next
-.next-e2e
-.next-verification
-out
-
 # Nuxt.js build / generate output
 .nuxt
 dist

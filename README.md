@@ -490,12 +490,16 @@ connectivity returns.
 ## Verification
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
+make generate
+make lint
+make typecheck
+make test
+make migrate-check
+make go-test-integration
 npx playwright install chromium
-npm run test:e2e
-npm run build
+make test-e2e-go
+make build
+npm run docs:build
 ```
 
 Automated integration tests use disposable PostgreSQL schemas, exercise

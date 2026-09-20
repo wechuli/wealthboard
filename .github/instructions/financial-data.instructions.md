@@ -1,12 +1,12 @@
 ---
 description: "Use when changing the Drizzle schema, migrations, services, server actions, route handlers, money calculations, balances, valuations, transfers, exchange rates, goals, imports, exports, backups, or restores."
 name: "Wealthboard Financial Data"
-applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance.ts, lib/dates.ts, lib/validation.ts, app/**/actions.ts, app/api/**/*.ts, scripts/**/*.ts, scripts/**/*.mjs"
+applyTo: "db/postgres/**/*.sql, internal/domain/**/*.go, internal/service/**/*.go, internal/database/**/*.go, internal/operator/**/*.go, internal/api/**/*.go"
 ---
 
 # Financial data and mutations
 
-- Treat `db/schema.ts` as the schema source of truth and `lib/services` as the owner of financial behavior. UI components and route handlers should call those boundaries rather than reproduce calculations or SQL.
+- Treat `db/postgres/migrations` as the schema history and `internal/service` as the owner of financial behavior. UI components and HTTP handlers should call those boundaries rather than reproduce calculations or SQL.
 - Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the current multi-user contract. Do not deploy authorization changes until cross-user isolation tests pass.
 - Derive `userId` only from `requireSession()` and pass it explicitly into services. Never accept a form, URL, header, import, or payload owner ID as authorization evidence.
 - Every private query and mutation must include the owner predicate. Fetch resources by `userId` and ID together, return not found for foreign resources, and include `userId` in private cache keys.
@@ -18,10 +18,10 @@ applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance
 - Imported external IDs are owner/account scoped, case-sensitive source identifiers. Identical records may be skipped, conflicts must never overwrite data, and fuzzy date/amount matching is not an identity policy.
 - Position quantities are replayed from ordered source events. Every mutation, correction, deletion, restore, or import must reject any sequence that becomes negative, and grouped cash/position events must commit and replay atomically.
 - Use the current user's most recent exchange rate effective on the date being calculated. Do not silently substitute the current rate for historical reports or reuse another user's rates.
-- Validate request and form data with the schemas in `lib/validation.ts`. Return the established `ActionState` shape for expected action errors; do not expose raw database errors to the client.
+- Validate requests at the Go API boundary and return the established problem JSON for expected errors; do not expose raw database errors to the client.
 - Every protected mutation must verify the session. Scope UUID idempotency keys to that user and perform multi-record financial changes atomically.
 - Keep authentication, database handles, password hashes, backup contents, and raw financial exports in server-only modules. Do not add secrets or sensitive values to logs.
 - User-facing exports, imports, and restores contain only the current user's data. Raw SQLite backup and restore are deployment-operator operations, not ordinary authenticated endpoints.
-- For schema changes, use `npm run db:generate` to append a migration, then inspect it. Never delete, rename, or edit an applied migration or snapshot.
+- For schema changes, add and inspect a new Goose migration, update sqlc queries as needed, and run `make generate`. Never delete, rename, or edit an applied migration.
 - Test migrations against both a disposable empty database and a disposable database at the previous migration state, and verify `foreign_key_check` after upgrading.
 - Add focused tests for sign behavior, rounding, replay ordering, historical exchange rates, idempotency, rollback, and cross-user denial whenever the touched behavior could affect balances or ownership.

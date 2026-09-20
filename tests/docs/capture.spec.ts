@@ -79,14 +79,19 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
-  const seed = spawnSync("make", ["seed-demo", "DEMO_DATA=true", "TARGET_USERNAME=guide-user"], {
-    cwd: projectRoot,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DATABASE_URL: "postgres://wealthboard_e2e:wealthboard_e2e@127.0.0.1:55433/wealthboard_e2e?sslmode=disable",
+  const seed = spawnSync(
+    "make",
+    ["seed-demo", "DEMO_DATA=true", "TARGET_USERNAME=guide-user"],
+    {
+      cwd: projectRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DATABASE_URL:
+          "postgres://wealthboard_e2e:wealthboard_e2e@127.0.0.1:55434/wealthboard_e2e?sslmode=disable",
+      },
     },
-  });
+  );
   expect(seed.status, seed.stderr || seed.stdout).toBe(0);
 
   await page.goto("/accounts/new");
@@ -94,9 +99,9 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByLabel("Category").selectOption({ label: "Liability" });
   await page.getByLabel("Opening value").fill("650000");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Home renovation loan" }),
-  ).toBeVisible();
+  await expect(page.getByLabel("Account or asset name")).toHaveValue("");
+  await page.goto("/accounts");
+  await expect(page.getByText("Home renovation loan", { exact: true })).toBeVisible();
 
   await page.goto("/");
   await capturePage(page, "dashboard-overview.png");
@@ -129,16 +134,14 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   );
   expect(brokerage).toBeTruthy();
 
-  await page.goto(`/accounts/${brokerage!.id}/convert`);
-  await page.getByRole("link", { name: "Add instrument" }).click();
-  await page
-    .getByLabel("Instrument name")
-    .fill("Vanguard FTSE All-World UCITS ETF");
+  await page.goto("/instruments/new");
+  await page.getByLabel("Name").fill("Vanguard FTSE All-World UCITS ETF");
   await page.getByLabel("Symbol").fill("VWRA");
   await page.getByLabel("Identifier", { exact: true }).fill("VWRA");
   await page.getByLabel("Exchange MIC").fill("XLON");
-  await page.getByLabel("Quote currency").selectOption("USD");
+  await page.getByLabel("Quote currency").fill("USD");
   await page.getByRole("button", { name: "Create instrument" }).click();
+  await page.goto(`/accounts/${brokerage!.id}/convert`);
   await page
     .getByLabel("Replacement account name")
     .fill("Interactive Brokers Positions");
@@ -146,14 +149,17 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByLabel(/Opening cash/).fill("1111");
   await page.getByLabel("Quantity").fill("15");
   await page.getByLabel("Unit price").fill("200");
-  await page.getByLabel("Reference basis").fill("2800");
-  await page.getByLabel("Price source").fill("broker statement");
-  await page
-    .getByLabel("Price provenance")
-    .fill("Fictional 12 August 2026 statement");
+  await page.getByLabel("Opening cost basis").fill("2800");
   await page.getByRole("button", { name: "Preview conversion" }).click();
-  await expect(page.getByText("Projected total")).toBeVisible();
-  await page.getByText("Projected total").scrollIntoViewIfNeeded();
+  const conversionPreview = page.getByRole("status");
+  await expect(conversionPreview).toContainText("projected");
+  const differenceConfirmation = page.getByRole("checkbox", {
+    name: /accept this conversion difference/,
+  });
+  if (await differenceConfirmation.isVisible()) {
+    await differenceConfirmation.check();
+  }
+  await conversionPreview.scrollIntoViewIfNeeded();
   await capturePage(page, "account-conversion-preview.png");
   await page.getByRole("button", { name: "Convert account" }).click();
   await expect(

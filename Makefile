@@ -24,6 +24,7 @@ security:
 	go run golang.org/x/vuln/cmd/govulncheck@latest $(GO_PACKAGES)
 	npm audit --audit-level=high
 	npm --prefix web audit --audit-level=high
+	npm --prefix extraction-worker audit --audit-level=high
 
 test-e2e: test-e2e-go
 

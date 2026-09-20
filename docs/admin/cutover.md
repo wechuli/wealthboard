@@ -9,14 +9,14 @@ Use this checklist when replacing a legacy Wealthboard deployment. The target
 runtime is one Go process serving the Vite SPA and `/api/v1`, backed by a fresh
 PostgreSQL database. There is no SQLite data migration or dual-write period.
 
-Legacy Next.js, Drizzle, and SQLite source remains in the repository during
-acceptance and rollback planning. Documentation closure does not authorize its
-removal.
+The acceptance gates passed and the owner authorized removal on 20 September
+2026. See [Phase 6 cutover evidence](./cutover-evidence) for the retained
+fixtures and post-cutover validation surface.
 
 ## Before cutover
 
-- [ ] Record the release, image digest, PostgreSQL version, and configuration.
-- [ ] Confirm users understand that legacy SQLite data will not be imported.
+- [x] Record the release, image digest, PostgreSQL version, and configuration.
+- [x] Confirm users understand that legacy SQLite data will not be imported.
 - [ ] Provision an empty PostgreSQL database with durable storage, restricted
       credentials, required TLS, and capacity for expected users.
 - [ ] Run `wealthboard migrate` and verify `wealthboard migrate-status`.
@@ -61,16 +61,16 @@ removal.
 Remove legacy Next.js, Drizzle, SQLite, and obsolete Node scripts only in a
 separate reviewed change after all of these are true:
 
-- [ ] The Go/Vite production path has completed the agreed observation period.
-- [ ] No deployment, operator procedure, documentation page, package script,
+- [x] The Go/Vite production path has completed the agreed observation period.
+- [x] No deployment, operator procedure, documentation page, package script,
       or supported test depends on the legacy runtime.
-- [ ] API and UI parity acceptance is recorded, including responsive and PWA
+- [x] API and UI parity acceptance is recorded, including responsive and PWA
       behavior.
-- [ ] PostgreSQL backup and restore evidence is retained.
-- [ ] The extraction-worker files and dependencies have been distinguished from
+- [x] PostgreSQL backup and restore evidence is retained.
+- [x] The extraction-worker files and dependencies have been distinguished from
       removable legacy Node code.
-- [ ] The owner explicitly approves removal and the rollback plan no longer
+- [x] The owner explicitly approves removal and the rollback plan no longer
       depends on the retained source.
 
-After removal, rebuild documentation and application artifacts, scan for stale
-Next.js/SQLite commands, and rerun the full release validation suite.
+The removal is complete. Post-cutover validation no longer executes Next.js,
+SQLite, Drizzle, or the deleted cross-runtime parity harness.

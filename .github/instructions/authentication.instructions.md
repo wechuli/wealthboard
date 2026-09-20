@@ -1,7 +1,7 @@
 ---
 description: "Use when implementing or reviewing signup, login, logout, password changes, password reset, session cookies, route protection, or authentication rate limiting."
 name: "Wealthboard Authentication"
-applyTo: "lib/auth/**/*.ts, app/login/**/*.ts, app/login/**/*.tsx, app/signup/**/*.ts, app/signup/**/*.tsx, proxy.ts, lib/bootstrap.ts, scripts/reset-password.mjs"
+applyTo: "internal/auth/**/*.go, internal/api/**/*auth*.go, cmd/wealthboard/**/*.go, web/src/components/auth/**/*.tsx, web/src/lib/auth-operations.ts"
 ---
 
 # Identity and authentication

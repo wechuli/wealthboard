@@ -1,16 +1,16 @@
 ---
 description: "Use when changing Wealthboard pages, layouts, React components, forms, charts, responsive behavior, styling, accessibility, loading states, or privacy-sensitive financial displays."
 name: "Wealthboard Frontend"
-applyTo: "app/**/*.tsx, components/**/*.tsx, app/globals.css"
+applyTo: "web/src/**/*.tsx, web/src/**/*.css"
 ---
 
 # Frontend implementation
 
-- Preserve the established compact, dark financial-dashboard language in `app/globals.css` and existing components. Build the working product interface, not a marketing page or explanatory landing page.
+- Preserve the established compact, dark financial-dashboard language in `web/src/styles/globals.css` and existing components. Build the working product interface, not a marketing page or explanatory landing page.
 - Distinguish an application user from a financial account in labels, variable names, and help text. Signup and login use a username; portfolio pages use “account” only for tracked financial holdings.
-- Prefer Server Components. Add `"use client"` only for browser APIs, local interaction state, React Hook Form, or client-only chart behavior; keep database and session access out of client modules.
-- Reuse `components/ui` primitives, `components/forms` patterns, Lucide icons, semantic CSS tokens, and existing page shells before creating a new component abstraction or visual treatment.
-- Use React Hook Form with `zodResolver` and the shared schemas in `lib/validation.ts`. Follow the existing action-state, pending-state, field-error, and idempotency-key patterns for financial forms.
+- Keep database access, session signing, secrets, and authoritative financial calculations out of the Vite client.
+- Reuse `web/src/components/ui` primitives, existing feature forms, Lucide icons, semantic CSS tokens, and page shells before creating a new component abstraction or visual treatment.
+- Use React Hook Form with `zodResolver` and colocated client schemas. Follow the existing API error, pending-state, field-error, and idempotency-key patterns for financial forms.
 - Format money and dates with project helpers and user settings. Never perform authoritative financial arithmetic in a component. Convert safe display values for Recharts only at the chart boundary.
 - Route every sensitive amount through the existing privacy-value behavior. New summaries, labels, chart tooltips, tables, and mobile views must respect hidden-value mode.
 - Never send or persist an owner `userId` merely to authorize a client action. Show the current identity and logout affordance where appropriate, while ownership remains a server-session concern.
