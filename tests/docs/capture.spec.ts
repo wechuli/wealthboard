@@ -192,10 +192,8 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Interactive Brokers Positions" }),
   ).toBeVisible();
-  await page
-    .getByLabel("Update Vanguard FTSE All-World UCITS ETF price")
-    .click();
-  await page.getByLabel("Unit price").fill("212");
+  await page.getByRole("link", { name: "Price", exact: true }).click();
+  await page.getByLabel(/^Price \(/).fill("212");
   await page.getByLabel("Price date").fill("2026-08-14");
   await page.getByLabel("Source").fill("broker statement");
   await page

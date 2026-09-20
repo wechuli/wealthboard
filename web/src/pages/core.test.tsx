@@ -391,7 +391,7 @@ describe("ported core pages", () => {
     expect(
       await screen.findByRole("heading", { name: "Update security price" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Unit price")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Price \(/)).toBeInTheDocument();
   });
 
   it("keeps every original page as a separate route intent", () => {
