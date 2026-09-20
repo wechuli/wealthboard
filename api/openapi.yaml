@@ -2209,7 +2209,18 @@ components:
       type: object
       additionalProperties: false
       required:
-        [displayName, appName, baseCurrency, timezone, preferredDateFormat, defaultDashboardPeriod, sessionTimeoutMinutes, positionStaleDaysStock, positionStaleDaysEtf, positionStaleDaysFund]
+        [
+          displayName,
+          appName,
+          baseCurrency,
+          timezone,
+          preferredDateFormat,
+          defaultDashboardPeriod,
+          sessionTimeoutMinutes,
+          positionStaleDaysStock,
+          positionStaleDaysEtf,
+          positionStaleDaysFund,
+        ]
       properties:
         displayName: { type: string, minLength: 1, maxLength: 80 }
         appName: { type: string, minLength: 1, maxLength: 80 }
@@ -2251,7 +2262,20 @@ components:
         name: { type: string, minLength: 1, maxLength: 100 }
         type:
           type: string
-          enum: [bank, credit_union, brokerage, asset_manager, pension_provider, insurer, lender, digital_wallet, government, employer, other]
+          enum:
+            [
+              bank,
+              credit_union,
+              brokerage,
+              asset_manager,
+              pension_provider,
+              insurer,
+              lender,
+              digital_wallet,
+              government,
+              employer,
+              other,
+            ]
         websiteUrl: { type: string, format: uri, maxLength: 500 }
         countryCode: { type: string, pattern: "^[A-Z]{2}$" }
         address: { type: string, maxLength: 500 }
@@ -2298,7 +2322,8 @@ components:
         accountReference: { type: string, maxLength: 50 }
         currency:
           $ref: "#/components/schemas/CurrencyCode"
-        trackingMode: { type: string, enum: [balance, positions], default: balance }
+        trackingMode:
+          { type: string, enum: [balance, positions], default: balance }
         openingValueMinor:
           allOf:
             - $ref: "#/components/schemas/MinorUnits"
@@ -2371,7 +2396,21 @@ components:
         notes: { type: string, maxLength: 2000 }
     MutableTransactionType:
       type: string
-      enum: [deposit, withdrawal, interest, dividend, capital_gain, capital_loss, fee, purchase, sale, manual_adjustment, liability_payment, liability_increase]
+      enum:
+        [
+          deposit,
+          withdrawal,
+          interest,
+          dividend,
+          capital_gain,
+          capital_loss,
+          fee,
+          purchase,
+          sale,
+          manual_adjustment,
+          liability_payment,
+          liability_increase,
+        ]
     ValuationCreateRequest:
       type: object
       additionalProperties: false
@@ -2388,7 +2427,14 @@ components:
     TransferCreateRequest:
       type: object
       additionalProperties: false
-      required: [idempotencyKey, fromAccountId, toAccountId, sourceAmountMinor, transactionDate]
+      required:
+        [
+          idempotencyKey,
+          fromAccountId,
+          toAccountId,
+          sourceAmountMinor,
+          transactionDate,
+        ]
       properties:
         idempotencyKey: { type: string, format: uuid }
         fromAccountId: { type: string, format: uuid }
@@ -2404,7 +2450,16 @@ components:
     GoalMutationRequest:
       type: object
       additionalProperties: false
-      required: [name, targetAmount, currency, targetDate, assumedAnnualReturn, plannedContribution, planStartDate]
+      required:
+        [
+          name,
+          targetAmount,
+          currency,
+          targetDate,
+          assumedAnnualReturn,
+          plannedContribution,
+          planStartDate,
+        ]
       properties:
         idempotencyKey: { type: [string, "null"], format: uuid }
         name: { type: string, minLength: 1, maxLength: 100 }
@@ -2418,12 +2473,22 @@ components:
         targetDate: { type: string, format: date }
         linkedAccountId: { type: [string, "null"], format: uuid }
         icon: { type: string, maxLength: 50, default: Target }
-        status: { type: string, enum: [active, paused, completed, cancelled], default: active }
+        status:
+          {
+            type: string,
+            enum: [active, paused, completed, cancelled],
+            default: active,
+          }
         priority: { type: integer, minimum: 0, maximum: 100 }
         assumedAnnualReturn: { type: number, minimum: 0, maximum: 100 }
         plannedContribution:
           $ref: "#/components/schemas/NonNegativeDecimalString"
-        frequency: { type: string, enum: [weekly, monthly, quarterly, annually, custom], default: monthly }
+        frequency:
+          {
+            type: string,
+            enum: [weekly, monthly, quarterly, annually, custom],
+            default: monthly,
+          }
         planStartDate: { type: string, format: date }
         planEndDate: { type: string, format: date }
     GoalMutationResult:
@@ -2477,11 +2542,16 @@ components:
     PositionEventCreateRequest:
       type: object
       additionalProperties: false
-      required: [accountId, instrumentId, type, quantity, tradeDate, idempotencyKey]
+      required:
+        [accountId, instrumentId, type, quantity, tradeDate, idempotencyKey]
       properties:
         accountId: { type: string, format: uuid }
         instrumentId: { type: string, format: uuid }
-        type: { type: string, enum: [opening_position, buy, sell, quantity_adjustment] }
+        type:
+          {
+            type: string,
+            enum: [opening_position, buy, sell, quantity_adjustment],
+          }
         quantity:
           $ref: "#/components/schemas/DecimalString"
         unitPrice:
@@ -2511,7 +2581,11 @@ components:
       properties:
         accountId: { type: string, format: uuid }
         instrumentId: { type: string, format: uuid }
-        type: { type: string, enum: [opening_position, buy, sell, quantity_adjustment] }
+        type:
+          {
+            type: string,
+            enum: [opening_position, buy, sell, quantity_adjustment],
+          }
         quantity:
           $ref: "#/components/schemas/DecimalString"
         unitPrice:
@@ -2563,7 +2637,8 @@ components:
     AccountConversionRequest:
       type: object
       additionalProperties: false
-      required: [sourceAccountId, targetName, conversionDate, openingCash, holdings]
+      required:
+        [sourceAccountId, targetName, conversionDate, openingCash, holdings]
       properties:
         sourceAccountId: { type: string, format: uuid }
         targetName: { type: string, minLength: 1, maxLength: 100 }
@@ -2595,7 +2670,19 @@ components:
     AccountConversionPreview:
       type: object
       additionalProperties: false
-      required: [sourceAccountId, sourceAccountName, currency, conversionDate, sourceBalanceMinor, openingCashMinor, positionsMinor, projectedTotalMinor, differenceMinor, holdings]
+      required:
+        [
+          sourceAccountId,
+          sourceAccountName,
+          currency,
+          conversionDate,
+          sourceBalanceMinor,
+          openingCashMinor,
+          positionsMinor,
+          projectedTotalMinor,
+          differenceMinor,
+          holdings,
+        ]
       properties:
         sourceAccountId: { type: string, format: uuid }
         sourceAccountName: { type: string }

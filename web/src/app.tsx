@@ -325,15 +325,33 @@ function AuthenticatedApp({
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/accounts" element={<AccountsPage session={session} />} />
-        <Route path="/accounts/:id" element={<AccountDetailPage session={session} />} />
+        <Route
+          path="/accounts/:id"
+          element={<AccountDetailPage session={session} />}
+        />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/goals" element={<GoalsPage session={session} />} />
-        <Route path="/goals/:id" element={<GoalDetailPage session={session} />} />
+        <Route
+          path="/goals/:id"
+          element={<GoalDetailPage session={session} />}
+        />
         <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/categories" element={<CategoriesPage session={session} />} />
-        <Route path="/institutions" element={<InstitutionsPage session={session} />} />
-        <Route path="/instruments" element={<InstrumentsPage session={session} />} />
-        <Route path="/instruments/:id" element={<InstrumentDetailPage session={session} />} />
+        <Route
+          path="/categories"
+          element={<CategoriesPage session={session} />}
+        />
+        <Route
+          path="/institutions"
+          element={<InstitutionsPage session={session} />}
+        />
+        <Route
+          path="/instruments"
+          element={<InstrumentsPage session={session} />}
+        />
+        <Route
+          path="/instruments/:id"
+          element={<InstrumentDetailPage session={session} />}
+        />
         <Route path="/estate" element={<EstatePage />} />
         <Route path="/estate/snapshots/:id" element={<EstateSnapshotPage />} />
         <Route path="/review" element={<ReviewPage />} />

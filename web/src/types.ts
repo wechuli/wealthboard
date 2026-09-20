@@ -86,7 +86,18 @@ export type CategoryInput = {
 
 export type InstitutionInput = {
   name: string;
-  type: "bank" | "credit_union" | "brokerage" | "asset_manager" | "pension_provider" | "insurer" | "lender" | "digital_wallet" | "government" | "employer" | "other";
+  type:
+    | "bank"
+    | "credit_union"
+    | "brokerage"
+    | "asset_manager"
+    | "pension_provider"
+    | "insurer"
+    | "lender"
+    | "digital_wallet"
+    | "government"
+    | "employer"
+    | "other";
   websiteUrl: string;
   countryCode: string;
   address: string;

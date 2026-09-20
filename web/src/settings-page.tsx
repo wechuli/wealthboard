@@ -49,7 +49,11 @@ export function SettingsPage({ session }: { session: Session }) {
       <ResourceView state={state}>
         {(data) => (
           <div className="settings-stack">
-            <SettingsEditor data={data} csrfToken={session.csrfToken} onChanged={() => setRefresh((value) => value + 1)} />
+            <SettingsEditor
+              data={data}
+              csrfToken={session.csrfToken}
+              onChanged={() => setRefresh((value) => value + 1)}
+            />
             <Card>
               <CardHeader
                 title="General"
@@ -95,7 +99,11 @@ export function SettingsPage({ session }: { session: Session }) {
                 </KeyValue>
               </div>
             </Card>
-            <ExchangeRateManager data={data} csrfToken={session.csrfToken} onChanged={() => setRefresh((value) => value + 1)} />
+            <ExchangeRateManager
+              data={data}
+              csrfToken={session.csrfToken}
+              onChanged={() => setRefresh((value) => value + 1)}
+            />
             <Card>
               <CardHeader
                 title="Currencies"

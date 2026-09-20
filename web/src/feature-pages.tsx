@@ -40,7 +40,13 @@ export function CategoriesPage({ session }: { session: Session }) {
         description="Asset and liability classifications used across the portfolio."
       />
       <ResourceView state={state}>
-        {({ items }) => <CategoryManager categories={items} csrfToken={session.csrfToken} onChanged={() => setRefresh((value) => value + 1)} />}
+        {({ items }) => (
+          <CategoryManager
+            categories={items}
+            csrfToken={session.csrfToken}
+            onChanged={() => setRefresh((value) => value + 1)}
+          />
+        )}
       </ResourceView>
     </>
   );
@@ -57,7 +63,13 @@ export function InstitutionsPage({ session }: { session: Session }) {
         description="Financial institutions associated with tracked accounts."
       />
       <ResourceView state={state}>
-        {({ items }) => <InstitutionManager institutions={items} csrfToken={session.csrfToken} onChanged={() => setRefresh((value) => value + 1)} />}
+        {({ items }) => (
+          <InstitutionManager
+            institutions={items}
+            csrfToken={session.csrfToken}
+            onChanged={() => setRefresh((value) => value + 1)}
+          />
+        )}
       </ResourceView>
     </>
   );
@@ -74,46 +86,61 @@ export function InstrumentsPage({ session }: { session: Session }) {
         description="Securities, identifiers, and latest recorded prices."
       />
       <ResourceView state={state}>
-        {({ instruments }) => <div className="settings-stack">
-          <Card><CardHeader title="Create instrument" /><InstrumentForm session={session} onChanged={() => setRefresh((value) => value + 1)} /></Card>
-          {instruments.length ? <div className="account-list">
-              {instruments.map((item) => (
-                <Link
-                  className="account-row"
-                  to={`/instruments/${item.id}`}
-                  key={item.id}
-                >
-                  <div className="account-icon">
-                    <CandlestickChart />
-                  </div>
-                  <div className="account-main">
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.symbol ||
-                        item.identifier ||
-                        humanize(item.assetType)}
-                    </span>
-                  </div>
-                  <div className="account-value">
-                    <strong>
-                      {item.latestPrice ? (
-                        <PrivateValue>
-                          {item.latestPrice.currency} {item.latestPrice.price}
-                        </PrivateValue>
-                      ) : (
-                        "No price"
-                      )}
-                    </strong>
-                    <span>
-                      {item.latestPrice
-                        ? formatDate(item.latestPrice.effectiveDate)
-                        : item.quoteCurrency}
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div> : <EmptyState title="No instruments" description="No investment instruments are configured." />}
-        </div>}
+        {({ instruments }) => (
+          <div className="settings-stack">
+            <Card>
+              <CardHeader title="Create instrument" />
+              <InstrumentForm
+                session={session}
+                onChanged={() => setRefresh((value) => value + 1)}
+              />
+            </Card>
+            {instruments.length ? (
+              <div className="account-list">
+                {instruments.map((item) => (
+                  <Link
+                    className="account-row"
+                    to={`/instruments/${item.id}`}
+                    key={item.id}
+                  >
+                    <div className="account-icon">
+                      <CandlestickChart />
+                    </div>
+                    <div className="account-main">
+                      <strong>{item.name}</strong>
+                      <span>
+                        {item.symbol ||
+                          item.identifier ||
+                          humanize(item.assetType)}
+                      </span>
+                    </div>
+                    <div className="account-value">
+                      <strong>
+                        {item.latestPrice ? (
+                          <PrivateValue>
+                            {item.latestPrice.currency} {item.latestPrice.price}
+                          </PrivateValue>
+                        ) : (
+                          "No price"
+                        )}
+                      </strong>
+                      <span>
+                        {item.latestPrice
+                          ? formatDate(item.latestPrice.effectiveDate)
+                          : item.quoteCurrency}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No instruments"
+                description="No investment instruments are configured."
+              />
+            )}
+          </div>
+        )}
       </ResourceView>
     </>
   );
@@ -162,7 +189,12 @@ export function InstrumentDetailPage({ session }: { session: Session }) {
             />
           </div>
           <PriceHistory prices={prices} />
-          <InstrumentManager instrument={instrument} prices={prices} session={session} onChanged={() => setRefresh((value) => value + 1)} />
+          <InstrumentManager
+            instrument={instrument}
+            prices={prices}
+            session={session}
+            onChanged={() => setRefresh((value) => value + 1)}
+          />
         </>
       )}
     </ResourceView>
