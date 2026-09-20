@@ -104,8 +104,10 @@ uses `node` and `AI_EXTRACTION_SCRIPT` (default
 environment, has bounded memory/output, and is killed at the 15-second deadline.
 
 The distroless application image contains neither Node nor parser dependencies.
-Compose and the Kubernetes example run the repository's separate
-`extraction-worker` image with no network and a shared in-memory Unix socket.
+Compose runs the repository's separate `extraction-worker` image with no
+network. The Kubernetes example runs the same bounded worker as a sidecar; like
+all containers in a pod, it shares the pod network namespace. Both use a shared
+in-memory Unix socket.
 For each connection, the service writes one JSON
 object containing `extension`, base64 `bytes`, and `documentPassword`, closes
 its write side, and expects the same bounded JSON response produced by the CLI

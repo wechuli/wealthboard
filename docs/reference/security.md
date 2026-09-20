@@ -89,8 +89,9 @@ Remembered provider keys require a dedicated canonical base64 32-byte key and
 are bound to one user with AES-256-GCM associated data. Custom endpoint hosts
 are resolved and rejected when they map to private or local address space;
 redirects and environment proxies are disabled. PDF/XLSX/DOCX extraction may
-cross a pod-local Unix socket, so its bundled network-disabled sidecar and socket
-permissions are part of the trusted deployment boundary. Document passwords
+cross a pod-local Unix socket, so its bundled sidecar and socket permissions are
+part of the trusted deployment boundary. Compose disables worker networking;
+Kubernetes sidecars share their pod's network namespace. Document passwords
 must never be logged or persisted by custom worker deployments.
 
 ## Estate-planning boundary

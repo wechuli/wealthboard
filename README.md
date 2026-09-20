@@ -340,10 +340,11 @@ credential rows and must remain access-restricted. AI output is explanatory and
 is not financial advice.
 
 UTF-8 CSV/TSV/JSON/TXT extraction runs in Go. PDF/XLSX/DOCX extraction uses
-`AI_EXTRACTION_SOCKET` when set. Compose and Kubernetes run the bundled
-network-disabled worker over a pod-local/shared Unix socket. Without a socket, a
-direct installation falls back to `node` plus `AI_EXTRACTION_SCRIPT`. The
-distroless application image has no Node fallback.
+`AI_EXTRACTION_SOCKET` when set. Compose runs the bundled worker without a
+network; Kubernetes runs it as a bounded sidecar sharing only the pod-local
+Unix socket with the application. Without a socket, a direct installation falls
+back to `node` plus `AI_EXTRACTION_SCRIPT`. The distroless application image has
+no Node fallback.
 
 ## Per-user import, export, and restore
 

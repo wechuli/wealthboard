@@ -9,9 +9,15 @@ import {
   createCorporateAction,
   deleteCorporateActionGroup,
   previewImport,
-  type ImportResult,
 } from "./api";
-import type { Account, Instrument, PositionEvent, Session } from "./types";
+import type {
+  Account,
+  CorporateActionInput,
+  ImportResult,
+  Instrument,
+  PositionEvent,
+  Session,
+} from "./types";
 import { Badge, Card, CardHeader, humanize, KeyValue } from "./ui";
 
 const dateToday = () => new Date().toISOString().slice(0, 10);
@@ -185,7 +191,7 @@ export function CorporateActionsPanel({
     try {
       await createCorporateAction(
         values.kind,
-        payload as CorporateActionValues & { idempotencyKey: string },
+        payload as CorporateActionInput,
         session.csrfToken,
       );
       setMessage("Corporate action recorded.");
@@ -523,11 +529,15 @@ function ImportPanel({
                   <div>
                     <strong>
                       Row {row.row} ·{" "}
-                      {humanize(row.type || row.code || "record")}
+                      {humanize(
+                        ("type" in row ? row.type : "") || row.code || "record",
+                      )}
                     </strong>
                     <span>
                       {row.message ||
-                        [row.date, row.amount].filter(Boolean).join(" · ")}
+                        ("collection" in row
+                          ? row.collection
+                          : [row.date, row.amount].filter(Boolean).join(" · "))}
                     </span>
                   </div>
                   <Badge
@@ -551,7 +561,7 @@ function ImportPanel({
                 busy ||
                 !result.hash ||
                 result.summary.failed > 0 ||
-                result.canCommit === false
+                ("canCommit" in result && result.canCommit === false)
               }
               onClick={() => void run(true)}
             >

@@ -157,7 +157,7 @@ func extractDocumentOverSocket(ctx context.Context, socketPath string, input []b
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = connection.SetDeadline(deadline)
 	}
-	if _, err = connection.Write(input); err != nil {
+	if _, err = io.Copy(connection, bytes.NewReader(input)); err != nil {
 		return Source{}, documentExtractionError(ctx)
 	}
 	unixConnection, ok := connection.(*net.UnixConn)

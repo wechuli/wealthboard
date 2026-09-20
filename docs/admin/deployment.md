@@ -21,17 +21,17 @@ one managed or self-operated PostgreSQL database.
 
 ## Essential configuration
 
-| Variable              | Purpose                                                                   |
-| --------------------- | ------------------------------------------------------------------------- |
-| `DATABASE_URL`        | Required PostgreSQL connection URL                                        |
-| `SESSION_SECRET`      | Unique high-entropy session key, at least 32 characters                   |
-| `APP_URL`             | Canonical external URL used for origin and OIDC validation                |
-| `AUTH_METHODS`        | `local`, `oidc`, or `local,oidc`                                          |
-| `TRUST_PROXY_HEADERS` | Enable only behind an ingress that overwrites forwarded client-IP headers |
-| `TZ`                  | Default timezone for new users                                            |
-| `AI_CREDENTIAL_ENCRYPTION_KEY` | Canonical base64 32-byte key for remembered provider credentials |
-| `AI_ALLOWED_ENDPOINTS` | Exact comma-separated custom provider base URLs                          |
-| `AI_EXTRACTION_SOCKET` | Shared Unix socket for a container document-parser sidecar               |
+| Variable                       | Purpose                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | Required PostgreSQL connection URL                                        |
+| `SESSION_SECRET`               | Unique high-entropy session key, at least 32 characters                   |
+| `APP_URL`                      | Canonical external URL used for origin and OIDC validation                |
+| `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`                                          |
+| `TRUST_PROXY_HEADERS`          | Enable only behind an ingress that overwrites forwarded client-IP headers |
+| `TZ`                           | Default timezone for new users                                            |
+| `AI_CREDENTIAL_ENCRYPTION_KEY` | Canonical base64 32-byte key for remembered provider credentials          |
+| `AI_ALLOWED_ENDPOINTS`         | Exact comma-separated custom provider base URLs                           |
+| `AI_EXTRACTION_SOCKET`         | Shared Unix socket for a container document-parser sidecar                |
 
 OIDC and AI variables are described in [Authentication](./authentication) and
 the repository README.
@@ -143,8 +143,9 @@ kubectl get ingress
 ```
 
 The manifest intentionally does not provision PostgreSQL, persistent database
-storage or a backup controller. It does include a network-isolated document
-extraction sidecar over an in-memory Unix socket. The operator is
+storage or a backup controller. It does include a bounded document extraction
+sidecar over an in-memory Unix socket; Kubernetes containers share the pod
+network namespace. The operator is
 responsible for PostgreSQL availability, upgrades, point-in-time or scheduled
 backup policy, retention, encryption, and restore drills. The application image
 is distroless and contains no `pg_dump`, `pg_restore`, Node.js, or shell, so run

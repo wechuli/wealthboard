@@ -110,7 +110,10 @@ function handleConnection(socket) {
     for (const chunk of chunks) chunk.fill(0);
     socket.end(encodeResponse(response));
   };
-  const deadline = setTimeout(() => finish(errorResponse()), REQUEST_TIMEOUT_MS);
+  const deadline = setTimeout(
+    () => finish(errorResponse()),
+    REQUEST_TIMEOUT_MS,
+  );
   deadline.unref();
   socket.on("data", (chunk) => {
     length += chunk.length;

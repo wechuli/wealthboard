@@ -80,7 +80,7 @@ provider may authenticate internal users.
   Milestones are owner-scoped source records with status derived from current
   progress and due date. Behind-plan reminders are computed on authenticated
   reads; owner-scoped dismissals suppress one goal for one user-calendar month.
-- **Estate planning:** `lib/services/estate-planning.ts` owns one private plan
+- **Estate planning:** `internal/service/estate_mutations.go` owns one private plan
   per user, beneficiaries, account directives, primary/contingent basis-point
   allocations, residue, converted indicative values, deterministic review
   items, and immutable SHA-256 snapshots. It never changes account ownership,
@@ -94,11 +94,10 @@ provider may authenticate internal users.
   automation exists.
 - **Portability:** JSON and CSV routes operate only on the authenticated user's
   records. A per-user JSON restore replaces only that user's portfolio in one
-  transaction. Export version 6 includes transaction external IDs and estate
-  plans with retained snapshot integrity hashes. Versions 2 through 5 remain
-  restorable; legacy transactions receive null external IDs and pre-v6 archives
-  begin with an empty estate plan. Legacy account institution strings are
-  normalized into owner-scoped records.
+  transaction. Export version 8 includes investment history, grouped cash,
+  account conversions, freshness settings, and retained estate snapshot hashes.
+  Versions 2 through 8 remain restorable through deterministic compatibility
+  upgrades; pre-v6 archives restore no estate data or inferred positions.
   Account history import uses stateless account-scoped preview and atomic commit
   routes with a strict CSV/JSON v1 contract and SHA-256 confirmation. Raw
   PostgreSQL custom-format backup and maintenance-mode restore are
@@ -112,9 +111,9 @@ provider may authenticate internal users.
 - **AI review:** Optional on-demand reviews use a versioned, owner-scoped,
   read-only snapshot calculated by Wealthboard. The model never receives SQL or
   mutation tools and cannot become authoritative for balances, conversions,
-  performance, or goals. OpenAI, DeepSeek, and operator-approved
-  OpenAI-compatible endpoints share one Chat Completions adapter. Responses must
-  validate against a bounded schema and cite supplied evidence IDs.
+  performance, or goals. OpenAI uses Responses with strict structured output;
+  DeepSeek and operator-approved compatible endpoints use Chat Completions JSON.
+  Responses validate against bounded schemas and supplied evidence IDs.
 - **AI credentials and retention:** Session-only keys stay in client component
   memory for one request. Remembered keys use AES-256-GCM with a dedicated
   deployment key and immutable `userId` associated data. Usage rows contain

@@ -43,6 +43,15 @@ jobs:
                       type=sha,prefix=sha-
                       type=raw,value=latest,enable={{is_default_branch}}
 
+            - name: Generate extraction worker image metadata
+              id: extraction-metadata
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                  tags: |
+                      type=semver,pattern={{version}},value=${{ github.event.release.tag_name }},suffix=-extraction-worker
+                      type=raw,value=latest-extraction-worker
+
             - name: Build and push image
               uses: docker/build-push-action@v6
               with:
@@ -53,3 +62,15 @@ jobs:
                   labels: ${{ steps.metadata.outputs.labels }}
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
+
+            - name: Build and push extraction worker image
+              uses: docker/build-push-action@v6
+              with:
+                  context: .
+                  file: ./Dockerfile
+                  target: extraction-worker
+                  push: true
+                  tags: ${{ steps.extraction-metadata.outputs.tags }}
+                  labels: ${{ steps.extraction-metadata.outputs.labels }}
+                  cache-from: type=gha,scope=extraction-worker
+                  cache-to: type=gha,mode=max,scope=extraction-worker

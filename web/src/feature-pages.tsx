@@ -552,7 +552,7 @@ export function ReviewPage({ session }: { session: Session }) {
       <PageHeader
         eyebrow="AI"
         title="Portfolio review"
-        description="Provider metadata, availability, budget, and recent usage. Review generation remains disabled in this read-only frontend."
+        description="Configure a provider, generate reviews, and convert redacted documents into drafts."
       />
       <ResourceView state={state}>
         {(ai) => (

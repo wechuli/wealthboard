@@ -48,6 +48,16 @@ import type {
   ValuationInput,
   ValuationPage,
   ExchangeRateInput,
+  CorporateActionInput,
+  ImportResult,
+  RestoreSummary,
+  EstatePlanInput,
+  BeneficiaryInput,
+  EstateDirectiveInput,
+  EstateAllocationInput,
+  AISettingsInput,
+  AISource,
+  AIConversionDraft,
 } from "./types";
 
 export class ApiError extends Error {
@@ -210,58 +220,6 @@ export const getAI = () => request<AIRead>("/ai");
 export const getSettings = () => request<SettingsRead>("/settings");
 export const getAPIKeys = () => request<APIKeyList>("/api-keys");
 
-export type CorporateActionInput = Record<string, string> & {
-  idempotencyKey: string;
-};
-
-export type ImportRow = {
-  row: number;
-  status: string;
-  code?: string;
-  message?: string;
-  type?: string;
-  amount?: string;
-  date?: string;
-};
-
-export type ImportResult = {
-  hash?: string;
-  account: { id: string; name: string; currency: string };
-  summary: Record<string, number>;
-  rows: ImportRow[];
-  currentBalanceMinor?: number;
-  projectedBalanceMinor?: number;
-  finalBalanceMinor?: number;
-  netChangeMinor?: number;
-  current?: Record<string, unknown>;
-  projected?: Record<string, unknown>;
-  instrumentChanges?: unknown[];
-  eventChanges?: unknown[];
-  priceChanges?: unknown[];
-  canCommit?: boolean;
-};
-
-export type RestoreSummary = Record<string, number>;
-export type AISettingsInput = {
-  provider: "openai" | "deepseek" | "custom";
-  baseUrl: string;
-  model: string;
-  includeExactAmounts: boolean;
-  includeAccountNames: boolean;
-  monthlyTokenLimit: number;
-  maxOutputTokens: number;
-};
-export type AISource = {
-  units: { id: string; location: string; text: string }[];
-  warnings: string[];
-};
-export type AIConversionDraft = {
-  content: string;
-  references: { collection: string; row: number; sourceIds: string[] }[];
-  exclusions: { sourceId: string; reason: string }[];
-  issues: string[];
-};
-
 export function createAPIKey(input: CreateAPIKeyInput, csrfToken: string) {
   return request<CreatedAPIKey>("/api-keys", {
     method: "POST",
@@ -348,14 +306,18 @@ export function restoreUser(file: File, csrf: string) {
   return fileRequest<RestoreSummary>("/restore/user", csrf, body);
 }
 
-export const updateEstatePlan = (input: unknown, csrf: string) =>
+export const updateEstatePlan = (input: EstatePlanInput, csrf: string) =>
   mutate<unknown>("/estate/plan", csrf, { method: "PUT", body: input });
-export const createBeneficiary = (input: unknown, csrf: string) =>
+export const createBeneficiary = (input: BeneficiaryInput, csrf: string) =>
   mutate<{ id: string }>("/estate/beneficiaries", csrf, {
     method: "POST",
     body: input,
   });
-export const updateBeneficiary = (id: string, input: unknown, csrf: string) =>
+export const updateBeneficiary = (
+  id: string,
+  input: BeneficiaryInput,
+  csrf: string,
+) =>
   mutate<void>(`/estate/beneficiaries/${id}`, csrf, {
     method: "PUT",
     body: input,
@@ -371,7 +333,7 @@ export const archiveBeneficiary = (
   });
 export const upsertEstateDirective = (
   accountId: string,
-  input: unknown,
+  input: EstateDirectiveInput,
   csrf: string,
 ) =>
   mutate<{ id: string }>(`/estate/directives/${accountId}`, csrf, {
@@ -380,7 +342,7 @@ export const upsertEstateDirective = (
   });
 export const upsertEstateAllocation = (
   directiveId: string,
-  input: unknown,
+  input: EstateAllocationInput,
   csrf: string,
 ) =>
   mutate<{ id: string }>(`/estate/allocations/${directiveId}`, csrf, {
@@ -389,7 +351,10 @@ export const upsertEstateAllocation = (
   });
 export const deleteEstateAllocation = (id: string, csrf: string) =>
   deleteMutation(`/estate/allocations/${id}`, csrf);
-export const upsertResiduaryAllocation = (input: unknown, csrf: string) =>
+export const upsertResiduaryAllocation = (
+  input: EstateAllocationInput,
+  csrf: string,
+) =>
   mutate<{ id: string }>("/estate/residuary", csrf, {
     method: "PUT",
     body: input,

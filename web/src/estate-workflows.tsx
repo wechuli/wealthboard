@@ -28,7 +28,7 @@ const planSchema = z.object({
   reviewReminderDate: optionalDate,
 });
 const beneficiarySchema = z.object({
-  kind: z.enum(["person", "trust", "charity", "organization", "other"]),
+  kind: z.enum(["person", "trust", "organization"]),
   name: z.string().trim().min(1).max(120),
   relationship: z.string().max(120),
   contactSummary: z.string().max(500),
@@ -38,8 +38,19 @@ const directiveSchema = z.object({
   accountId: z.string().uuid(),
   isIncluded: z.boolean(),
   ownershipShareBps: z.coerce.number().int().min(1).max(10000),
-  transferContext: z.string().max(500),
-  distributionMethod: z.string().trim().min(1).max(80),
+  transferContext: z.enum([
+    "estate",
+    "joint_survivorship",
+    "provider_designation",
+    "trust_entity",
+    "unknown",
+  ]),
+  distributionMethod: z.enum([
+    "transfer_asset",
+    "sell_and_divide",
+    "cash_equivalent",
+    "undecided",
+  ]),
   documentReference: z.string().max(500),
   notes: z.string().max(2000),
   reviewedAt: optionalDate,
@@ -187,7 +198,7 @@ function BeneficiaryManager({
 }: WorkflowProps) {
   const [editing, setEditing] = useState<Beneficiary>();
   const defaults = (item?: Beneficiary) => ({
-    kind: (item?.kind || "person") as "person",
+    kind: (item?.kind || "person") as "person" | "organization" | "trust",
     name: item?.name ?? "",
     relationship: item?.relationship ?? "",
     contactSummary: item?.contactSummary ?? "",
@@ -224,9 +235,7 @@ function BeneficiaryManager({
             <select id="beneficiary-kind" {...form.register("kind")}>
               <option value="person">Person</option>
               <option value="trust">Trust</option>
-              <option value="charity">Charity</option>
               <option value="organization">Organization</option>
-              <option value="other">Other</option>
             </select>
           </Labeled>
           <Labeled label="Name" id="beneficiary-name">
@@ -312,8 +321,8 @@ function DirectiveForm({
       accountId: accounts[0]?.id ?? "",
       isIncluded: true,
       ownershipShareBps: 10000,
-      transferContext: "",
-      distributionMethod: "beneficiary_designation",
+      transferContext: "estate" as const,
+      distributionMethod: "undecided" as const,
       documentReference: "",
       notes: "",
       reviewedAt: "",
@@ -352,10 +361,15 @@ function DirectiveForm({
             </select>
           </Labeled>
           <Labeled label="Distribution method" id="directive-method">
-            <input
+            <select
               id="directive-method"
               {...form.register("distributionMethod")}
-            />
+            >
+              <option value="undecided">Undecided</option>
+              <option value="transfer_asset">Transfer asset</option>
+              <option value="sell_and_divide">Sell and divide</option>
+              <option value="cash_equivalent">Cash equivalent</option>
+            </select>
           </Labeled>
           <Labeled label="Ownership basis points" id="directive-share">
             <input
@@ -365,10 +379,16 @@ function DirectiveForm({
             />
           </Labeled>
           <Labeled label="Transfer context" id="directive-context">
-            <input
+            <select
               id="directive-context"
               {...form.register("transferContext")}
-            />
+            >
+              <option value="estate">Estate</option>
+              <option value="joint_survivorship">Joint survivorship</option>
+              <option value="provider_designation">Provider designation</option>
+              <option value="trust_entity">Trust entity</option>
+              <option value="unknown">Unknown</option>
+            </select>
           </Labeled>
           <Labeled label="Document reference" id="directive-document">
             <input

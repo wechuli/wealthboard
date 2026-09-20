@@ -155,3 +155,27 @@ export type AccountConversionPreview =
   components["schemas"]["AccountConversionPreview"];
 export type AccountConversionResult =
   components["schemas"]["AccountConversionResult"];
+
+export type CorporateActionInput =
+  | components["schemas"]["StockSplitRequest"]
+  | components["schemas"]["SpinoffRequest"]
+  | components["schemas"]["MergerRequest"]
+  | components["schemas"]["DividendReinvestmentRequest"]
+  | components["schemas"]["InKindTransferRequest"];
+export type AccountHistoryImportResult =
+  components["schemas"]["AccountHistoryImportResult"];
+export type InvestmentHistoryImportResult =
+  components["schemas"]["InvestmentHistoryImportResult"];
+export type ImportResult =
+  | AccountHistoryImportResult
+  | InvestmentHistoryImportResult;
+export type RestoreSummary = components["schemas"]["RestoreSummary"];
+export type EstatePlanInput = components["schemas"]["EstatePlanInput"];
+export type BeneficiaryInput = components["schemas"]["BeneficiaryInput"];
+export type EstateDirectiveInput =
+  components["schemas"]["EstateDirectiveInput"];
+export type EstateAllocationInput =
+  components["schemas"]["EstateAllocationInput"];
+export type AISettingsInput = components["schemas"]["AISettingsInput"];
+export type AISource = components["schemas"]["AISource"];
+export type AIConversionDraft = components["schemas"]["AIConversionDraft"];
