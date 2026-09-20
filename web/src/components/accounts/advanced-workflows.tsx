@@ -89,6 +89,7 @@ const corporateActionSchema = z
         });
   });
 type CorporateActionValues = z.infer<typeof corporateActionSchema>;
+export type CorporateActionKind = CorporateActionValues["kind"];
 
 export function CorporateActionsPanel({
   account,
@@ -97,6 +98,7 @@ export function CorporateActionsPanel({
   events,
   session,
   onChanged,
+  initialKind = "stock-splits",
 }: {
   account: Account;
   accounts: Account[];
@@ -104,6 +106,7 @@ export function CorporateActionsPanel({
   events: PositionEvent[];
   session: Session;
   onChanged: () => void;
+  initialKind?: CorporateActionKind;
 }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -111,7 +114,7 @@ export function CorporateActionsPanel({
   const form = useForm<CorporateActionValues>({
     resolver: zodResolver(corporateActionSchema),
     defaultValues: {
-      kind: "stock-splits",
+      kind: initialKind,
       instrumentId: instruments[0]?.id ?? "",
       relatedInstrumentId: "",
       destinationAccountId: "",

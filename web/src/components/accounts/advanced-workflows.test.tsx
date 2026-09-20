@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ImportWorkspace } from "@/components/accounts/advanced-workflows";
+import {
+  CorporateActionsPanel,
+  ImportWorkspace,
+} from "@/components/accounts/advanced-workflows";
 import * as api from "@/api/client";
 import type { Account } from "@/lib/types";
 
@@ -79,5 +82,32 @@ describe("ImportWorkspace", () => {
       ),
     );
     expect(changed).toHaveBeenCalledOnce();
+  });
+});
+
+describe("CorporateActionsPanel", () => {
+  it("opens in the action selected by the routed quick command", () => {
+    render(
+      <CorporateActionsPanel
+        account={account}
+        accounts={[account]}
+        instruments={[
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            name: "Example World ETF",
+            symbol: "EWLD",
+          } as never,
+        ]}
+        events={[]}
+        session={session}
+        onChanged={vi.fn()}
+        initialKind="dividend-reinvestments"
+      />,
+    );
+
+    expect(screen.getByLabelText("Action")).toHaveValue(
+      "dividend-reinvestments",
+    );
+    expect(screen.getByLabelText("Dividend (USD)")).toBeVisible();
   });
 });

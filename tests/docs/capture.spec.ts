@@ -194,7 +194,7 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   ).toBeVisible();
   await page.getByRole("link", { name: "Price", exact: true }).click();
   await page.getByLabel(/^Price \(/).fill("212");
-  await page.getByLabel("Price date").fill("2026-08-14");
+  await page.getByLabel("Effective date").fill("2026-08-14");
   await page.getByLabel("Source").fill("broker statement");
   await page
     .getByLabel("Provenance")
@@ -202,44 +202,51 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await capturePage(page, "security-price-entry.png");
   await page.getByRole("button", { name: "Save price" }).click();
 
+  await page.goto(`/accounts/${positionAccountId}`);
   await page.getByRole("link", { name: "Reinvest" }).click();
-  await page.getByLabel(/Dividend amount/).fill("106");
-  await page.getByLabel("Execution price per unit").fill("212");
-  await page.getByLabel("Purchased quantity").fill("0.5");
+  await page.getByLabel(/^Dividend \(/).fill("106");
+  await page.getByLabel("Unit price").fill("212");
+  await page.getByLabel("Quantity").fill("0.5");
   await page.getByLabel("Effective date").fill("2026-08-14");
-  await page.getByLabel("Private notes").fill("Fictional reinvestment");
+  await page.getByLabel("Notes").fill("Fictional reinvestment");
   await captureLocator(
-    cardForHeading(page, "Authoritative source activity"),
+    cardForHeading(page, "Corporate actions"),
     "investment-actions.png",
   );
-  await page
-    .getByRole("button", { name: "Save dividend reinvestment" })
-    .click();
+  await page.getByRole("button", { name: /Record Dividend/ }).click();
 
+  await page.goto(`/accounts/${positionAccountId}`);
   await page.getByRole("link", { name: "Reconcile" }).click();
-  await page.getByLabel("Statement date").fill("2026-08-14");
-  await page.getByLabel(/Reported cash/).fill("905");
-  await page.getByLabel(/Reported total/).fill("4405");
-  await page.getByLabel("Notes").fill("Fictional broker statement comparison");
-  await page.getByRole("button", { name: "Save reconciliation" }).click();
+  const reconciliation = page
+    .getByLabel("Observation date")
+    .locator("xpath=ancestor::form");
+  await reconciliation.getByLabel("Observation date").fill("2026-08-14");
+  await reconciliation.getByLabel(/Reported cash/).fill("905");
+  await reconciliation.getByLabel(/Reported total/).fill("4405");
+  await reconciliation
+    .getByLabel("Notes")
+    .fill("Fictional broker statement comparison");
+  await reconciliation
+    .getByRole("button", { name: "Save reconciliation" })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "Statement reconciliations" }),
+    page.getByText("Fictional broker statement comparison", { exact: true }),
   ).toBeVisible();
+  await page.goto(`/accounts/${positionAccountId}`);
   await capturePage(page, "position-account-detail.png");
 
   await page.goto(`/accounts/${positionAccountId}/import`);
+  await page.getByLabel("Convert document with AI").check();
   await expect(
-    page.getByRole("heading", {
-      name: "Prepare your investment file with AI",
-    }),
+    page.getByRole("heading", { name: "Source file conversion" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Show prompt" }).click();
   await captureLocator(
-    cardForHeading(page, "Prepare your investment file with AI"),
+    cardForHeading(page, "Source file conversion"),
     "investment-ai-prompt.png",
   );
-  await page.getByRole("button", { name: "Hide prompt" }).click();
-  await page.getByLabel("CSV or JSON file").setInputFiles({
+  await page.getByLabel("Formatted CSV / JSON").check();
+  const investmentImport = cardForHeading(page, "Investment history import");
+  await investmentImport.getByLabel("Import file").setInputFiles({
     name: "fictional-investment-history.json",
     mimeType: "application/json",
     buffer: Buffer.from(
@@ -292,7 +299,7 @@ test("capture the Wealthboard product guide", async ({ page }) => {
       }),
     ),
   });
-  await page.getByRole("button", { name: "Preview file" }).click();
+  await investmentImport.getByRole("button", { name: "Preview" }).click();
   await expect(
     page.getByText(/Interactive Brokers Positions · 3 source records/),
   ).toBeVisible();

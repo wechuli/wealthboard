@@ -1994,6 +1994,14 @@ function AccountWorkflowPage({
 }) {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const command = searchParams.get("command");
+  const corporateActionKind =
+    command === "reinvestment"
+      ? "dividend-reinvestments"
+      : command === "in_kind_transfer"
+        ? "in-kind-transfers"
+        : "stock-splits";
   const [refresh, setRefresh] = useState(0);
   const state = useResource(
     () =>
@@ -2058,6 +2066,7 @@ function AccountWorkflowPage({
               events={events.items}
               session={session}
               onChanged={() => setRefresh((value) => value + 1)}
+              initialKind={corporateActionKind}
             />
           ) : (
             <PositionTools
