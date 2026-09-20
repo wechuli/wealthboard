@@ -190,15 +190,15 @@ func (service *EstateMutations) UpsertDirective(ctx context.Context, userID, acc
 	if err != nil {
 		return EstateMutationResult{}, err
 	}
+	plan, err := service.EnsurePlan(ctx, userID)
+	if err != nil {
+		return EstateMutationResult{}, err
+	}
 	tx, err := service.db.BeginTx(ctx, nil)
 	if err != nil {
 		return EstateMutationResult{}, fmt.Errorf("begin estate directive: %w", err)
 	}
 	defer tx.Rollback()
-	plan, err := requireEstatePlan(ctx, tx, userID)
-	if err != nil {
-		return EstateMutationResult{}, err
-	}
 	var isLiability bool
 	var archivedAt sql.NullTime
 	if err := tx.QueryRowContext(ctx, `SELECT is_liability,archived_at FROM accounts WHERE user_id=$1 AND id=$2`, userID, accountID).Scan(&isLiability, &archivedAt); errors.Is(err, sql.ErrNoRows) || archivedAt.Valid {

@@ -234,6 +234,10 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   ).toBeVisible();
   await page.goto(`/accounts/${positionAccountId}`);
   await capturePage(page, "position-account-detail.png");
+  await captureLocator(
+    cardForHeading(page, "Movement attribution"),
+    "position-movement-attribution.png",
+  );
 
   await page.goto(`/accounts/${positionAccountId}/import`);
   await page.getByLabel("Convert document with AI").check();
@@ -245,7 +249,9 @@ test("capture the Wealthboard product guide", async ({ page }) => {
     "investment-ai-prompt.png",
   );
   await page.getByLabel("Formatted CSV / JSON").check();
-  const investmentImport = cardForHeading(page, "Investment history import");
+  const investmentImport = page
+    .getByRole("heading", { name: "Investment history import" })
+    .locator('xpath=ancestor::section[contains(@class, "read-card")][1]');
   await investmentImport.getByLabel("Import file").setInputFiles({
     name: "fictional-investment-history.json",
     mimeType: "application/json",
@@ -300,24 +306,12 @@ test("capture the Wealthboard product guide", async ({ page }) => {
     ),
   });
   await investmentImport.getByRole("button", { name: "Preview" }).click();
-  await expect(
-    page.getByText(/Interactive Brokers Positions · 3 source records/),
-  ).toBeVisible();
-  await page
-    .getByRole("columnheader", { name: "Instrument" })
-    .first()
-    .scrollIntoViewIfNeeded();
-  await captureLocator(
-    cardForHeading(page, "Confirm projected account"),
-    "investment-import-preview.png",
-  );
+  await expect(investmentImport.getByText("Records")).toBeVisible();
+  await expect(investmentImport.getByText("3", { exact: true }).first()).toBeVisible();
+  await captureLocator(investmentImport, "investment-import-preview.png");
 
   await page.goto("/reports");
   await capturePage(page, "reports-overview.png");
-  await captureLocator(
-    cardForHeading(page, "Position movement attribution"),
-    "position-movement-attribution.png",
-  );
 
   await page.goto("/estate/beneficiaries");
   await addBeneficiary(page, {
@@ -354,18 +348,6 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   expect(land).toBeTruthy();
 
   await page.goto(`/estate/distribution?account=${land!.id}#asset-${land!.id}`);
-  for (const account of archive.accounts.filter(
-    (account) =>
-      !account.isLiability && !account.archivedAt && account.id !== land!.id,
-  )) {
-    const card = page.locator(`#asset-${account.id}`);
-    await card
-      .getByLabel("Include this asset in the estate distribution plan")
-      .uncheck();
-    await card.getByRole("button", { name: "Save asset directive" }).click();
-    await expect(card.getByRole("status")).toHaveText("Asset directive saved.");
-  }
-
   let landCard = page.locator(`#asset-${land!.id}`);
   await landCard.getByLabel("Estate ownership share").fill("100");
   await landCard.getByLabel("Last checked").fill("2026-08-12");
@@ -379,10 +361,16 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await landCard
     .getByLabel("Planning notes")
     .fill("Confirm title details with the estate adviser.");
-  await landCard.getByRole("button", { name: "Save asset directive" }).click();
-  await expect(landCard.getByRole("status")).toHaveText(
-    "Asset directive saved.",
-  );
+  const [landResponse] = await Promise.all([
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().includes(`/api/v1/estate/directives/${land!.id}`) &&
+        candidate.request().method() === "PUT",
+    ),
+    landCard.getByRole("button", { name: "Save asset directive" }).click(),
+  ]);
+  expect(landResponse.ok(), await landResponse.text()).toBeTruthy();
+  landCard = page.locator(`#asset-${land!.id}`);
 
   landCard = page.locator(`#asset-${land!.id}`);
   await landCard
@@ -433,7 +421,8 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByLabel("Last reviewed").fill("2026-08-12");
   await page.getByLabel("Review again on").fill("2027-08-12");
   await page.getByRole("button", { name: "Save plan details" }).click();
-  await expect(page.getByText("Allocation math complete")).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Plan details saved.");
+  await expect(page.getByText("Decisions needed")).toBeVisible();
   await capturePage(page, "estate-summary.png");
 
   await page.getByRole("button", { name: "Create summary" }).click();

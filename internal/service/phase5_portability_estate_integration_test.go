@@ -269,6 +269,10 @@ func TestEstateMutationsPostgreSQLSnapshotImmutabilityHashAndIsolation(t *testin
 
 	estate := NewEstateMutations(db)
 	estate.now = func() time.Time { return time.Date(2026, 9, 20, 21, 30, 0, 0, time.UTC) }
+	firstDirective, err := estate.UpsertDirective(ctx, ownerID, accountID, EstateDirectiveInput{IsIncluded: true, OwnershipShareBPS: 10000, TransferContext: "estate", DistributionMethod: "sell_and_divide"})
+	if err != nil || firstDirective.ID == uuid.Nil {
+		t.Fatalf("upsert first directive with default plan: result=%+v err=%v", firstDirective, err)
+	}
 	plan, err := estate.UpdatePlan(ctx, ownerID, EstatePlanInput{Title: "Family plan", Jurisdiction: "Kenya"})
 	if err != nil {
 		t.Fatalf("update plan: %v", err)

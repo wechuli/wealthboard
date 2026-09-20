@@ -37,6 +37,7 @@ make go-test-integration
 make test-e2e-go
 make build
 npm run docs:build
+npm run docs:capture
 ```
 
 Native backup/restore coverage remains in `internal/operator/postgres_test.go`.
