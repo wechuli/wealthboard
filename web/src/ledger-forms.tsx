@@ -1583,10 +1583,7 @@ export function PositionTools({
                   className="secondary-button danger-button"
                   onClick={() =>
                     void remove("position event", async () => {
-                      await operations.deleteEvent(
-                        eventID,
-                        session.csrfToken,
-                      );
+                      await operations.deleteEvent(eventID, session.csrfToken);
                       resetEvent();
                     })
                   }
@@ -1614,12 +1611,20 @@ export function PositionTools({
               <div className="data-row" key={event.id}>
                 <div>
                   <strong>
-                    {humanize(event.type)} · {instrument?.symbol || instrument?.name || "Instrument"}
+                    {humanize(event.type)} ·{" "}
+                    {instrument?.symbol || instrument?.name || "Instrument"}
                   </strong>
                   <span>
-                    {event.tradeDate} · <PrivateValue>{event.quantity} units</PrivateValue>
+                    {event.tradeDate} ·{" "}
+                    <PrivateValue>{event.quantity} units</PrivateValue>
                     {event.unitPrice ? (
-                      <> · <PrivateValue>{event.tradeCurrency} {event.unitPrice}</PrivateValue></>
+                      <>
+                        {" "}
+                        ·{" "}
+                        <PrivateValue>
+                          {event.tradeCurrency} {event.unitPrice}
+                        </PrivateValue>
+                      </>
                     ) : null}
                   </span>
                 </div>

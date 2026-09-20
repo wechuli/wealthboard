@@ -63,26 +63,22 @@ afterEach(cleanup);
 describe("AccountConversionForm", () => {
   it("requires preview and explicit difference confirmation before execute", async () => {
     const user = userEvent.setup();
-    const preview = vi
-      .fn()
-      .mockResolvedValue({
-        sourceAccountId: account.id,
-        sourceAccountName: account.name,
-        currency: "KES",
-        conversionDate: "2026-09-20",
-        sourceBalanceMinor: "100000",
-        openingCashMinor: "0",
-        positionsMinor: "90000",
-        projectedTotalMinor: "90000",
-        differenceMinor: "-10000",
-        holdings: [],
-      });
-    const execute = vi
-      .fn()
-      .mockResolvedValue({
-        targetAccountId: "33333333-3333-4333-8333-333333333333",
-        replayed: false,
-      });
+    const preview = vi.fn().mockResolvedValue({
+      sourceAccountId: account.id,
+      sourceAccountName: account.name,
+      currency: "KES",
+      conversionDate: "2026-09-20",
+      sourceBalanceMinor: "100000",
+      openingCashMinor: "0",
+      positionsMinor: "90000",
+      projectedTotalMinor: "90000",
+      differenceMinor: "-10000",
+      holdings: [],
+    });
+    const execute = vi.fn().mockResolvedValue({
+      targetAccountId: "33333333-3333-4333-8333-333333333333",
+      replayed: false,
+    });
     const onConverted = vi.fn();
     render(
       <AccountConversionForm
