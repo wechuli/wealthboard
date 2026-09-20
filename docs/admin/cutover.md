@@ -9,8 +9,7 @@ Use this checklist when replacing a legacy Wealthboard deployment. The target
 runtime is one Go process serving the Vite SPA and `/api/v1`, backed by a fresh
 PostgreSQL database. There is no SQLite data migration or dual-write period.
 
-The acceptance gates passed and the owner authorized removal on 20 September
-2026. See [Phase 6 cutover evidence](./cutover-evidence) for the retained
+The acceptance gates passed and the owner authorized removal on 20 September 2026. See [Phase 6 cutover evidence](./cutover-evidence) for the retained
 fixtures and post-cutover validation surface.
 
 ## Before cutover

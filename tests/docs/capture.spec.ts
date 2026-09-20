@@ -101,7 +101,9 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByLabel("Account or asset name")).toHaveValue("");
   await page.goto("/accounts");
-  await expect(page.getByText("Home renovation loan", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Home renovation loan", { exact: true }),
+  ).toBeVisible();
 
   await page.goto("/");
   await capturePage(page, "dashboard-overview.png");
