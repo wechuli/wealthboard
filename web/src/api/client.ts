@@ -65,6 +65,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -81,15 +82,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!response.ok) {
-    let problem: Problem | undefined;
+    let problem:
+      | Problem
+      | { detail?: string; error?: string; code?: string }
+      | undefined;
     try {
       problem = (await response.json()) as Problem;
     } catch {
       // Preserve a stable client error when the server returned no JSON body.
     }
     throw new ApiError(
-      problem?.detail ?? "The request could not be completed.",
+      problem && "detail" in problem
+        ? (problem.detail ?? "The request could not be completed.")
+        : (problem?.error ?? "The request could not be completed."),
       response.status,
+      problem && "code" in problem ? problem.code : undefined,
     );
   }
   if (response.status === 204) return undefined as T;

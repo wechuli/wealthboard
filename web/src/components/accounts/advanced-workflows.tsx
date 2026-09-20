@@ -19,7 +19,13 @@ import type {
   PositionEvent,
   Session,
 } from "@/lib/types";
-import { Badge, Card, CardHeader, humanize, KeyValue } from "@/components/ui/resource";
+import {
+  Badge,
+  Card,
+  CardHeader,
+  humanize,
+  KeyValue,
+} from "@/components/ui/resource";
 
 const dateToday = () => new Date().toISOString().slice(0, 10);
 const decimal = z
@@ -463,23 +469,26 @@ export function ImportWorkspace({
             />
           ) : null}
         </div>
-      ) : preparedFile ? (
-        <ImportPanel
-          kind={preparedKind}
-          account={account}
-          session={session}
-          onChanged={onChanged}
-          initialFile={preparedFile}
-          onEditFile={() => setPreparedFile(undefined)}
-        />
       ) : (
-        <Card className="p-5">
-          <AIDocumentImport
-            account={account}
-            session={session}
-            onPrepared={setPreparedFile}
-          />
-        </Card>
+        <>
+          <Card className={preparedFile ? "hidden" : "p-5"}>
+            <AIDocumentImport
+              account={account}
+              session={session}
+              onPrepared={setPreparedFile}
+            />
+          </Card>
+          {preparedFile ? (
+            <ImportPanel
+              kind={preparedKind}
+              account={account}
+              session={session}
+              onChanged={onChanged}
+              initialFile={preparedFile}
+              onEditFile={() => setPreparedFile(undefined)}
+            />
+          ) : null}
+        </>
       )}
     </section>
   );

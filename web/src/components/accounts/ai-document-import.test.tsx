@@ -86,6 +86,24 @@ afterEach(() => {
 describe("AIDocumentImport", () => {
   it("clears PDF passwords and omits them from conversion", async () => {
     const user = userEvent.setup();
+    extractAIDocument
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Enter the PDF password again."), {
+          code: "incorrect_password",
+        }),
+      )
+      .mockResolvedValueOnce({
+        source: {
+          units: [
+            {
+              id: "source-1",
+              location: "Page 1",
+              text: "Private reference; Deposit 12.30",
+            },
+          ],
+          warnings: [],
+        },
+      });
     renderImport();
     const file = new File(["encrypted"], "statement.pdf", {
       type: "application/pdf",
@@ -96,12 +114,19 @@ describe("AIDocumentImport", () => {
       "fictional-password",
     );
     await user.click(screen.getByRole("button", { name: "Extract source" }));
-
     expect(extractAIDocument).toHaveBeenCalledWith(
       file,
       "fictional-password",
       "csrf",
     );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Enter the PDF password again.",
+    );
+    const password = screen.getByLabelText("PDF password (if required)");
+    expect(password).toHaveValue("");
+    expect(password).toHaveFocus();
+    await user.type(password, "second-fictional-password");
+    await user.click(screen.getByRole("button", { name: "Extract source" }));
     expect(
       await screen.findByLabelText("Approved text for source-1"),
     ).toBeVisible();
@@ -117,7 +142,9 @@ describe("AIDocumentImport", () => {
     );
   });
 
-  it("sends only redacted text after renewed explicit consent", async () => {
+    expect(JSON.stringify(payload)).not.toMatch(
+      /documentPassword|fictional-password/,
+    );
     const user = userEvent.setup();
     renderImport();
     await user.upload(
