@@ -497,6 +497,9 @@ Pin production images by immutable digest in deployment configuration. Add defau
 
 - Port corporate actions, investment imports, account-history imports, portability, estate snapshots, AI review, AI conversion, password-protected document extraction, user restore, operator backup/restore, PWA behavior, and offline safeguards.
 - Run compatibility tests using existing export versions 2 through 8 and current import templates.
+- Completed: API-key access uses the dedicated `imports:write`, `exports:read`, and `ai:invoke` scopes, while remembered AI credentials and user restore remain browser-session-only operations.
+- Completed: the Vite account-import workflow supports extraction, transient PDF passwords, source review and redaction, explicit consent, conversion evidence and issues, draft download, and handoff to preview without automatic commit.
+- Completed: Go compatibility fixtures cover restore versions 2 through 8, and the replacement-runtime Playwright suite covers corporate actions, both import formats, estate isolation and snapshots, v8 export/restore, AI extraction and endpoint safety, service-worker registration, and offline mutation blocking.
 
 ### Phase 6: cutover
 

@@ -6,6 +6,7 @@ const appUrl = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: "./tests/e2e-go",
   testMatch: "**/*.spec.ts",
+  globalTeardown: "./tests/e2e-go/teardown.mjs",
   fullyParallel: false,
   workers: 1,
   timeout: 120_000,

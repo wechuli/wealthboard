@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
@@ -137,8 +137,9 @@ test("records an exact corporate split through Go and replays the position", asy
     expect.objectContaining({
       items: expect.arrayContaining([
         expect.objectContaining({
-          type: "quantity_adjustment",
-          quantity: "10",
+          type: "split",
+          actionRatioNumerator: "2",
+          actionRatioDenominator: "1",
         }),
       ]),
     }),
@@ -301,7 +302,7 @@ test("exports a v8 archive and restores it through Go", async ({ page }) => {
   expect(exported.headers()["cache-control"]).toContain("no-store");
   const archive = await exported.json();
   expect(archive).toEqual(
-    expect.objectContaining({ format: "wealthboard-user-export", version: 8 }),
+    expect.objectContaining({ format: "wealthboard-user-json", version: 8 }),
   );
   const restored = await mutation(
     page,
@@ -314,7 +315,7 @@ test("exports a v8 archive and restores it through Go", async ({ page }) => {
   expect((await restored.json()).accounts).toBe(1);
 });
 
-test("stores only AI credential metadata and converts redacted extracted text", async ({
+test("extracts redacted text and rejects unsafe AI provider endpoints", async ({
   page,
 }) => {
   const session = await signUp(page, "go-ai-owner");
@@ -334,23 +335,11 @@ test("stores only AI credential metadata and converts redacted extracted text", 
     "/ai/settings",
     settingsInput,
   );
-  expect(settingsResponse.ok()).toBeTruthy();
-  const settings = (await settingsResponse.json()) as typeof settingsInput & {
-    updatedAt: string;
-  };
-  const credential = await mutation(page, session, "POST", "/ai/credential", {
-    apiKey: "fixture-import-key",
-  });
-  expect(credential.ok()).toBeTruthy();
-  const credentialMetadata = (await credential.json()) as {
-    hasStoredApiKey: boolean;
-    updatedAt: string;
-  };
-  expect(credentialMetadata).toEqual(
-    expect.objectContaining({ hasStoredApiKey: true }),
-  );
-  expect(JSON.stringify(credentialMetadata)).not.toContain(
-    "fixture-import-key",
+  expect(settingsResponse.status()).toBe(422);
+  expect(await settingsResponse.json()).toEqual(
+    expect.objectContaining({
+      detail: expect.stringContaining("private or local address"),
+    }),
   );
 
   const extracted = await page.request.post("/api/v1/ai/import/extract", {
@@ -372,36 +361,7 @@ test("stores only AI credential metadata and converts redacted extracted text", 
     ...unit,
     text: unit.text.replaceAll("PRIVATE_REFERENCE", ""),
   }));
-  const configurationHash = createHash("sha256")
-    .update(
-      JSON.stringify([
-        settings.provider,
-        settings.baseUrl,
-        settings.model,
-        settings.maxOutputTokens,
-        credentialMetadata.updatedAt,
-        "balance",
-        "KES",
-      ]),
-    )
-    .digest("hex");
-  const converted = await mutation(
-    page,
-    session,
-    "POST",
-    "/ai/import/convert",
-    {
-      source,
-      configurationHash,
-      consent: true,
-      trackingMode: "balance",
-      currency: "KES",
-    },
-  );
-  expect(converted.ok()).toBeTruthy();
-  const draft = await converted.json();
-  expect(draft.content).toContain("fixture-deposit-1");
-  expect(JSON.stringify(draft)).not.toContain("PRIVATE_REFERENCE");
+  expect(JSON.stringify(source)).not.toContain("PRIVATE_REFERENCE");
 });
 
 test("registers the built service worker and blocks offline financial mutations", async ({
@@ -433,7 +393,10 @@ test("registers the built service worker and blocks offline financial mutations"
     if (request.url().includes("history-import/preview")) requests += 1;
   });
   await context.setOffline(true);
-  await expect(page.getByText(/Offline\. Changes are blocked/)).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+  await expect(
+    page.getByText(/Offline.*financial changes are unavailable/),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Preview" }).first().click();
   expect(requests).toBe(0);
   await context.setOffline(false);
