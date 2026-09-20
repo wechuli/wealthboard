@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import {
   PortedAccountDetailPage,
@@ -91,6 +91,7 @@ export default function CoreRoutes({ session }: { session: Session }) {
         path="/transactions/:id/edit"
         element={<PortedEditTransactionPage session={session} />}
       />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

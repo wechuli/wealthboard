@@ -110,15 +110,7 @@ function AuthenticatedRoutes({
     >
       <Suspense fallback={<RouteLoadingScreen />}>
         <Routes>
-          <Route path="/" element={<CoreRoutes session={session} />} />
-          <Route
-            path="/accounts/*"
-            element={<CoreRoutes session={session} />}
-          />
-          <Route
-            path="/transactions/*"
-            element={<CoreRoutes session={session} />}
-          />
+          <Route path="/*" element={<CoreRoutes session={session} />} />
           <Route
             path="/goals/*"
             element={<PlanningRoutes session={session} />}
