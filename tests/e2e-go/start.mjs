@@ -60,13 +60,7 @@ if (process.env.E2E_SKIP_WEB_BUILD !== "1") {
   run("npm", ["--prefix", "web", "run", "build"]);
 }
 fs.mkdirSync(path.dirname(binaryPath), { recursive: true });
-run("go", [
-  "build",
-  "-trimpath",
-  "-o",
-  binaryPath,
-  "./cmd/wealthboard",
-]);
+run("go", ["build", "-trimpath", "-o", binaryPath, "./cmd/wealthboard"]);
 
 server = spawn(binaryPath, ["serve"], {
   cwd: root,

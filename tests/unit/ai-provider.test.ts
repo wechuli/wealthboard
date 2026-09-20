@@ -239,6 +239,7 @@ describe.sequential("AI provider persistence and limits", () => {
   });
 
   test("excludes credentials from exports and scopes retention commands", async () => {
+    const startedAt = new Date("2026-08-04T10:00:00.000Z");
     const exported = JSON.stringify(await exportData(aliceId));
     expect(exported).not.toContain("ai_provider_settings");
     expect(exported).not.toContain("encryptedApiKey");
@@ -249,7 +250,7 @@ describe.sequential("AI provider persistence and limits", () => {
       chargedTokens: 0,
       successfulReviews: 0,
     });
-    expect(await getAiUsageSummary(bobId)).toMatchObject({
+    expect(await getAiUsageSummary(bobId, startedAt)).toMatchObject({
       chargedTokens: 400,
       successfulReviews: 1,
     });
