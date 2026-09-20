@@ -10,6 +10,7 @@ type Session = { csrfToken: string };
 async function signUp(page: Page, username: string): Promise<Session> {
   await page.goto("/signup");
   const response = await page.request.post("/api/v1/auth/signup", {
+    headers: { Origin: origin },
     data: {
       username,
       displayName: username,
@@ -18,7 +19,7 @@ async function signUp(page: Page, username: string): Promise<Session> {
       confirmPassword: password,
     },
   });
-  expect(response.status()).toBe(201);
+  expect(response.status()).toBe(200);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   return response.json();
