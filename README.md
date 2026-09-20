@@ -119,24 +119,24 @@ conflict handling make repeat runs safe for the same target.
 
 ## Environment variables
 
-| Variable                       | Purpose                                                         |
-| ------------------------------ | --------------------------------------------------------------- |
-| `DATABASE_URL`                 | Required PostgreSQL connection URL                              |
-| `SESSION_SECRET`               | HMAC session secret; at least 32 characters                     |
-| `APP_URL`                      | Canonical deployment URL used for origin validation             |
-| `TRUST_PROXY_HEADERS`          | Trust one ingress-overwritten client IP header; default `false` |
-| `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`; default `local`               |
-| `OIDC_ISSUER`                  | Exact provider issuer when OIDC is enabled                      |
-| `OIDC_CLIENT_ID`               | Confidential OIDC client ID                                     |
-| `OIDC_CLIENT_SECRET`           | Confidential OIDC client secret                                 |
-| `OIDC_PROVIDER_NAME`           | Login-button provider label; 1-60 characters                    |
-| `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key           |
-| `TZ`                           | Default timezone for new users; default `Africa/Nairobi`        |
-| `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys |
-| `AI_ALLOWED_ENDPOINTS`         | Comma-separated exact custom OpenAI-compatible base URLs        |
-| `AI_EXTRACTION_SOCKET`         | Optional Unix socket for an operator-supplied document parser   |
+| Variable                       | Purpose                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | Required PostgreSQL connection URL                                        |
+| `SESSION_SECRET`               | HMAC session secret; at least 32 characters                               |
+| `APP_URL`                      | Canonical deployment URL used for origin validation                       |
+| `TRUST_PROXY_HEADERS`          | Trust one ingress-overwritten client IP header; default `false`           |
+| `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`; default `local`                         |
+| `OIDC_ISSUER`                  | Exact provider issuer when OIDC is enabled                                |
+| `OIDC_CLIENT_ID`               | Confidential OIDC client ID                                               |
+| `OIDC_CLIENT_SECRET`           | Confidential OIDC client secret                                           |
+| `OIDC_PROVIDER_NAME`           | Login-button provider label; 1-60 characters                              |
+| `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key                     |
+| `TZ`                           | Default timezone for new users; default `Africa/Nairobi`                  |
+| `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys           |
+| `AI_ALLOWED_ENDPOINTS`         | Comma-separated exact custom OpenAI-compatible base URLs                  |
+| `AI_EXTRACTION_SOCKET`         | Optional Unix socket for the isolated document parser                     |
 | `AI_EXTRACTION_SCRIPT`         | Local Node parser script; default `scripts/extract-import-source-cli.mjs` |
-| `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                            |
+| `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                                     |
 
 There is no initial-user password or environment-created identity.
 
@@ -282,9 +282,9 @@ can run or inspect them separately with `make migrate` and
 
 The application image is a non-root, read-only, distroless Go runtime serving
 the built Vite assets. It contains neither PostgreSQL client tools nor Node.js.
-Supply an external `DATABASE_URL`, run operator backups from a trusted host or
-admin job with matching PostgreSQL tools, and provide a document-extraction
-sidecar when PDF/XLSX/DOCX conversion is required.
+Supply an external `DATABASE_URL` and run operator backups from a trusted host
+or admin job with matching PostgreSQL tools. The Compose stack builds the
+separate, network-disabled `extraction-worker` target for PDF/XLSX/DOCX.
 
 ## Kubernetes deployment
 
@@ -300,10 +300,11 @@ kubectl apply -f deploy/kubernetes.yaml
 ```
 
 Create the separate `wealthboard-database` secret with its `database-url` key.
-The manifest deploys two rolling application replicas and no PostgreSQL
-server, volume, backup controller, or extraction sidecar. Operate PostgreSQL,
-point the egress policy at its actual namespace/labels, schedule and retain
-backups outside the application pods, and test restores. TLS must terminate at
+The manifest deploys two rolling application replicas with a pod-local
+extraction sidecar, but no PostgreSQL server, database volume, or backup
+controller. Operate PostgreSQL, point the egress policy at its actual
+namespace/labels, schedule and retain backups outside the application pods, and
+test restores. TLS must terminate at
 the configured `APP_URL`; the ingress must overwrite rather than append
 client-supplied forwarding headers.
 
@@ -339,11 +340,10 @@ credential rows and must remain access-restricted. AI output is explanatory and
 is not financial advice.
 
 UTF-8 CSV/TSV/JSON/TXT extraction runs in Go. PDF/XLSX/DOCX extraction uses
-`AI_EXTRACTION_SOCKET` when set; the operator-supplied Unix-socket sidecar must
-implement the request/response contract used by
-`scripts/extract-import-source-cli.mjs`. Without a socket, a direct installation
-falls back to `node` plus `AI_EXTRACTION_SCRIPT`. The distroless application
-image has no Node fallback.
+`AI_EXTRACTION_SOCKET` when set. Compose and Kubernetes run the bundled
+network-disabled worker over a pod-local/shared Unix socket. Without a socket, a
+direct installation falls back to `node` plus `AI_EXTRACTION_SCRIPT`. The
+distroless application image has no Node fallback.
 
 ## Per-user import, export, and restore
 
@@ -453,9 +453,11 @@ offline page, manifest, and application icons. Failed navigation shows that
 offline page; API requests are never intercepted, authenticated financial
 responses are never cached, and no background-sync handler queues mutations.
 Previously viewed dashboards and records are therefore not guaranteed to work
-offline. The current client also provides no in-app install/update prompt or
-offline mutation queue; use the browser's install action where available and
-retry writes only after connectivity returns.
+offline. The client displays connection state, blocks forms marked as financial
+mutations while `navigator.onLine` is false, and offers Reload when a replacement
+worker is waiting. It provides no mutation queue or in-app install prompt; use
+the browser's install action where available and retry writes only after
+connectivity returns.
 
 ## Verification
 

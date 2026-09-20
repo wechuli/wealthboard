@@ -35,6 +35,10 @@ RUN mkdir -p /run/wealthboard \
 USER 65532:65532
 ENTRYPOINT ["node", "--max-old-space-size=160", "/worker/scripts/extraction-worker-daemon.mjs"]
 
+FROM extraction-worker AS extraction-worker-test
+COPY --chown=65532:65532 tests/node/extraction-worker-protocol.test.mjs ./tests/node/extraction-worker-protocol.test.mjs
+RUN node --test /worker/tests/node/extraction-worker-protocol.test.mjs
+
 FROM gcr.io/distroless/static-debian12:nonroot AS runner
 WORKDIR /app
 ENV NODE_ENV=production \

@@ -67,7 +67,13 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD", "node", "-e", "require('node:fs').statSync(process.env.AI_EXTRACTION_SOCKET).isSocket()||process.exit(1)"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('node:fs').statSync(process.env.AI_EXTRACTION_SOCKET).isSocket()||process.exit(1)",
+        ]
       interval: 5s
       timeout: 2s
       retries: 10

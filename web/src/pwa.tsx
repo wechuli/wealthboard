@@ -23,12 +23,16 @@ export function PwaManager() {
     const blockOfflineMutation = (event: SubmitEvent) => {
       if (online) return;
       const form = event.target;
-      if (form instanceof HTMLFormElement && form.dataset.financialMutation === "true") {
+      if (
+        form instanceof HTMLFormElement &&
+        form.dataset.financialMutation === "true"
+      ) {
         event.preventDefault();
       }
     };
     document.addEventListener("submit", blockOfflineMutation, true);
-    return () => document.removeEventListener("submit", blockOfflineMutation, true);
+    return () =>
+      document.removeEventListener("submit", blockOfflineMutation, true);
   }, [online]);
 
   useEffect(() => {
@@ -40,7 +44,10 @@ export function PwaManager() {
       registration.addEventListener("updatefound", () => {
         const worker = registration.installing;
         worker?.addEventListener("statechange", () => {
-          if (worker.state === "installed" && navigator.serviceWorker.controller)
+          if (
+            worker.state === "installed" &&
+            navigator.serviceWorker.controller
+          )
             setWaiting(worker);
         });
       });
@@ -54,7 +61,8 @@ export function PwaManager() {
     <>
       {!online ? (
         <div className="notice warning" role="status">
-          <CloudOff size={16} /> Offline. Changes are blocked until connectivity returns.
+          <CloudOff size={16} /> Offline. Changes are blocked until connectivity
+          returns.
         </div>
       ) : null}
       {waiting ? (
@@ -85,8 +93,13 @@ export function OfflinePage() {
       />
       <Card>
         <CardHeader title="Reconnect to continue" />
-        <p className="read-note">Financial mutations, imports, restores, and AI requests require a live connection.</p>
-        <Link className="secondary-button" to="/">Return to dashboard</Link>
+        <p className="read-note">
+          Financial mutations, imports, restores, and AI requests require a live
+          connection.
+        </p>
+        <Link className="secondary-button" to="/">
+          Return to dashboard
+        </Link>
       </Card>
     </>
   );

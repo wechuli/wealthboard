@@ -70,8 +70,10 @@ The production service worker never intercepts `/api` requests and therefore
 never caches authenticated financial responses. It precaches only the offline
 HTML page, web manifest, and icons. A failed navigation receives the offline
 page; previously viewed pages and records are not guaranteed to remain usable.
-There is no background-sync handler, mutation queue, in-app install prompt, or
-update notification. Users must reconnect and retry any write themselves.
+There is no background-sync handler, mutation queue, or in-app install prompt.
+The client displays an offline warning, blocks forms marked as financial
+mutations while the browser reports offline, and offers Reload when a new
+service worker is waiting. Users must reconnect and retry writes themselves.
 
 ## AI provider boundary
 
@@ -87,9 +89,9 @@ Remembered provider keys require a dedicated canonical base64 32-byte key and
 are bound to one user with AES-256-GCM associated data. Custom endpoint hosts
 are resolved and rejected when they map to private or local address space;
 redirects and environment proxies are disabled. PDF/XLSX/DOCX extraction may
-cross a pod-local Unix socket, so its sidecar and socket permissions are part of
-the trusted deployment boundary. Document passwords must never be logged or
-persisted by that sidecar.
+cross a pod-local Unix socket, so its bundled network-disabled sidecar and socket
+permissions are part of the trusted deployment boundary. Document passwords
+must never be logged or persisted by custom worker deployments.
 
 ## Estate-planning boundary
 

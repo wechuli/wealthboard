@@ -20,7 +20,9 @@ async function request(socketPath, body) {
 }
 
 async function withServer(run) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "wealthboard-extract-"));
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "wealthboard-extract-"),
+  );
   const socketPath = path.join(directory, "worker.sock");
   const server = startServer(socketPath);
   await new Promise((resolve, reject) => {
@@ -58,8 +60,29 @@ test("oversize requests receive a bounded response without echoed content", asyn
   });
 });
 
+test("valid requests invoke the parser without echoing document passwords", async () => {
+  await withServer(async (socketPath) => {
+    const password = "private-document-password";
+    const response = await request(
+      socketPath,
+      JSON.stringify({
+        extension: "pdf",
+        bytes: Buffer.from("%PDF-invalid").toString("base64"),
+        documentPassword: password,
+      }),
+    );
+    assert.ok(response.length < 80 * 1024);
+    assert.doesNotMatch(response.toString("utf8"), new RegExp(password));
+    assert.match(JSON.parse(response).error, /document|PDF|parser/i);
+  });
+});
+
 test("environment clearing preserves no inherited secrets", () => {
-  const environment = { PATH: "/bin", DATABASE_URL: "secret", API_KEY: "secret" };
+  const environment = {
+    PATH: "/bin",
+    DATABASE_URL: "secret",
+    API_KEY: "secret",
+  };
   clearEnvironment(environment);
   assert.deepEqual(environment, {});
 });

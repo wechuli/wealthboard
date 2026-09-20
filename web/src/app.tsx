@@ -355,7 +355,7 @@ function AuthenticatedApp({
         />
         <Route path="/estate" element={<EstatePage session={session} />} />
         <Route path="/estate/snapshots/:id" element={<EstateSnapshotPage />} />
-        <Route path="/review" element={<ReviewPage />} />
+        <Route path="/review" element={<ReviewPage session={session} />} />
         <Route path="/settings" element={<SettingsPage session={session} />} />
         <Route path="/offline" element={<OfflinePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

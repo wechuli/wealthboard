@@ -1,58 +1,66 @@
 ---
 title: Deployment
-description: Run Wealthboard locally, with Docker Compose, or as a single-replica Kubernetes workload.
+description: Run the Go service with PostgreSQL directly or on Kubernetes.
 ---
 
 # Deployment
 
-Wealthboard is one Next.js process backed by one SQLite database. It requires a
-persistent writable filesystem but no separate API or database service.
+Wealthboard is a Go HTTP service backed by PostgreSQL. It serves a compiled
+Vite/React client and can run multiple stateless application replicas against
+one managed or self-operated PostgreSQL database.
 
 ## Requirements
 
-- Node.js 22 or newer for a direct installation
-- persistent storage for the SQLite database
+- Go 1.27 or newer for a direct source build
+- Node.js 24 and npm for the Vite client build
+- PostgreSQL 17 with durable storage and tested backups
+- compatible `pg_dump` and `pg_restore` clients for operator recovery
 - persistent, access-controlled storage for backups
 - HTTPS termination in a trusted reverse proxy for production
-- one application replica
-
-SQLite is deliberately retained for a simple self-hosted deployment. Do not run
-multiple Wealthboard replicas against one database file.
+- a deployment plan for maintenance mode during destructive restore
 
 ## Essential configuration
 
 | Variable              | Purpose                                                                   |
 | --------------------- | ------------------------------------------------------------------------- |
-| `DATABASE_PATH`       | SQLite path; defaults to `./data/wealthboard.db`                          |
+| `DATABASE_URL`        | Required PostgreSQL connection URL                                        |
 | `SESSION_SECRET`      | Unique high-entropy session key, at least 32 characters                   |
 | `APP_URL`             | Canonical external URL used for origin and OIDC validation                |
 | `AUTH_METHODS`        | `local`, `oidc`, or `local,oidc`                                          |
 | `TRUST_PROXY_HEADERS` | Enable only behind an ingress that overwrites forwarded client-IP headers |
-| `BACKUP_PATH`         | Persistent operator backup directory                                      |
 | `TZ`                  | Default timezone for new users                                            |
+| `AI_CREDENTIAL_ENCRYPTION_KEY` | Canonical base64 32-byte key for remembered provider credentials |
+| `AI_ALLOWED_ENDPOINTS` | Exact comma-separated custom provider base URLs                          |
+| `AI_EXTRACTION_SOCKET` | Shared Unix socket for a container document-parser sidecar               |
 
 OIDC and AI variables are described in [Authentication](./authentication) and
 the repository README.
 
-## Direct Node.js installation
+## Direct installation
 
 ```bash
-npm ci
-cp .env.example .env
-# Edit .env before starting.
-npm run build
-npm start
+make postgres-up
+make web-install
+make build
+DATABASE_URL='postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable' \
+SESSION_SECRET="$(openssl rand -hex 32)" \
+APP_URL=http://localhost:3000 \
+AUTH_METHODS=local \
+./bin/wealthboard serve
 ```
 
-`npm start` applies pending migrations before starting Next.js. The process must
-be able to create and write the database directory.
+`serve` applies embedded PostgreSQL migrations before accepting requests.
 
 For development:
 
 ```bash
-npm install
-npm run dev
+make postgres-up
+make web-build
+make go-run
 ```
+
+Run `make web-dev` in a separate terminal only when actively developing the
+client; the Go server continues to serve `web/dist` until it is rebuilt.
 
 ## Dependency security and npm registry
 
@@ -68,35 +76,43 @@ transitive advisories by upgrading their owning package. Do not use
 change. The reviewed dependency baseline has zero findings from both
 `npm audit` and `npm audit --omit=dev`; rerun both after dependency changes.
 
-## Docker Compose
+## Containers
 
-1. Copy `.env.example` to `.env`.
-2. Set `SESSION_SECRET`, `APP_URL`, authentication policy, and provider values.
-3. Start the application:
+The production-style Compose stack starts PostgreSQL, Wealthboard, and the
+network-disabled extraction worker:
 
 ```bash
+POSTGRES_PASSWORD="$(openssl rand -hex 24)" \
+SESSION_SECRET="$(openssl rand -hex 32)" \
 docker compose up -d --build
 docker compose ps
 ```
 
-The Compose file mounts persistent data and backup storage. Protect both from
-other host users and never publish them in an image.
+`docker-compose.go.yml` remains the minimal PostgreSQL-only development stack.
+Neither Compose file schedules database backups. Build only the application
+image with:
+
+```bash
+docker build -t wealthboard:local .
+```
+
+Run that image with an external `DATABASE_URL` and the required authentication
+environment. The image runs as non-root with a read-only application filesystem.
 
 Before an update:
 
 ```bash
-npm run backup
-docker compose up -d --build
+make backup BACKUP_FILE="$PWD/backups/pre-update.dump"
+docker build -t wealthboard:local .
 ```
 
 Verify readiness after migrations finish.
 
 ## Position-account migration
 
-The position-account schema is delivered through two append-only migrations. Migration
-`0005` introduces account tracking mode, instruments, position events, security
-prices, and reconciliation observations. Migration `0006` completes the epic
-with conversion provenance, advanced-action relationships, grouped cash,
+The PostgreSQL financial-domain migration introduces account tracking mode,
+instruments, position events, security prices, reconciliation observations,
+conversion provenance, advanced-action relationships, grouped cash,
 deterministic event order, and freshness settings.
 
 - Existing accounts remain in total-value mode and keep their balances.
@@ -112,9 +128,8 @@ deterministic event order, and freshness settings.
 
 The example at `deploy/kubernetes.yaml` uses:
 
-- one replica;
-- `Recreate` update strategy;
-- ReadWriteOnce persistent storage;
+- two application replicas with a rolling update;
+- an external PostgreSQL URL from `wealthboard-database`;
 - startup, readiness, and liveness probes;
 - a non-root security context;
 - TLS at ingress.
@@ -127,8 +142,25 @@ kubectl get pods
 kubectl get ingress
 ```
 
-Do not scale the Deployment above one replica. SQLite supports concurrent reads
-inside the process, not independent application replicas on shared storage.
+The manifest intentionally does not provision PostgreSQL, persistent database
+storage or a backup controller. It does include a network-isolated document
+extraction sidecar over an in-memory Unix socket. The operator is
+responsible for PostgreSQL availability, upgrades, point-in-time or scheduled
+backup policy, retention, encryption, and restore drills. The application image
+is distroless and contains no `pg_dump`, `pg_restore`, Node.js, or shell, so run
+database operations from a trusted admin host/job. Adjust the example egress
+NetworkPolicy to match the real PostgreSQL namespace and labels.
+
+## Optional fictional demo data
+
+Demo data is never created by signup. The command requires both an explicit
+existing username and the exact opt-in gate:
+
+```bash
+make seed-demo DEMO_DATA=true TARGET_USERNAME=alice
+```
+
+It never creates an identity or seeds every user.
 
 ## Health endpoints
 

@@ -4,21 +4,19 @@
 > one baseline schema for fresh Wealthboard databases. Sections explicitly
 > marked "Planned" describe future work and are not runtime guarantees.
 
-Wealthboard remains a single-process Next.js application. Server Components read
-SQLite through Drizzle ORM, Server Actions perform validated mutations, and
-Route Handlers provide user-scoped import/export and health checks. There is no
-separate API service. One optional OIDC provider may authenticate internal users.
+Wealthboard is a Go HTTP service backed by PostgreSQL. It exposes the versioned
+JSON API and serves a compiled Vite/React single-page client. One optional OIDC
+provider may authenticate internal users.
 
 ## Decisions
 
-- **Runtime:** Next.js App Router on Node.js with strict TypeScript. Pages that
-  contain financial data are always dynamically rendered.
+- **Runtime:** Go 1.27 HTTP API and a strict-TypeScript Vite/React client.
 - **Tenancy:** One deployment supports multiple independent users. Users do not
   belong to organizations and cannot share portfolios, financial accounts,
   goals, categories, rates, or transfers.
-- **Persistence:** One WAL-mode SQLite database at `DATABASE_PATH`. Monetary
+- **Persistence:** PostgreSQL at required `DATABASE_URL`. Monetary
   amounts are integer minor units. Exchange rates are decimal strings and all
-  financial arithmetic uses `bigint` or Decimal.js.
+  financial arithmetic uses integer minor units and exact decimal helpers.
 - **Currencies:** A client-safe ISO 4217 catalog defines discoverable currency
   metadata and fresh-user defaults. Each user's settings own the base and
   enabled set. Services reject disabled currencies, while existing referenced
@@ -35,7 +33,7 @@ separate API service. One optional OIDC provider may authenticate internal users
   SameSite=Strict cookie whose subject is the immutable user ID. Session
   verification loads that user and checks status, expiry, and session version.
   Failed login/signup and bounded OIDC start/callback traffic are rate-limited
-  in SQLite.
+  in PostgreSQL.
 - **OIDC protocol:** Native fetch plus `jose` performs exact-issuer discovery,
   Authorization Code + PKCE S256, state/nonce validation, bounded token exchange,
   cached remote JWKS, and RS256 verification. Encrypted A256GCM transaction and
@@ -60,7 +58,7 @@ separate API service. One optional OIDC provider may authenticate internal users
   contribution; later transactions apply signed effects. Editing or deleting an
   event replays the account in the same database transaction.
 - **Transfers:** A transfer writes paired signed `Transfer` transactions under a
-  unique transfer group and idempotency key in one SQLite transaction.
+  unique transfer group and idempotency key in one PostgreSQL transaction.
 - **History:** Daily/monthly account balances are reconstructed from opening
   balances, transactions, and valuations, then converted using the most recent
   exchange rate owned by that user and effective on each date. Every point
@@ -103,15 +101,14 @@ separate API service. One optional OIDC provider may authenticate internal users
   normalized into owner-scoped records.
   Account history import uses stateless account-scoped preview and atomic commit
   routes with a strict CSV/JSON v1 contract and SHA-256 confirmation. Raw
-  SQLite backup and offline restore are deployment-operator commands, never
-  ordinary authenticated routes.
-- **Offline and updates:** Service workers are production-only; development
-  unregisters Wealthboard's worker and removes only Wealthboard caches. The
-  production worker precaches the offline shell and uses network-first static
-  application assets with cached offline fallback so stale code cannot hydrate
-  against newer server HTML. It never caches authenticated financial responses
-  or queues mutations. Logout clears user-specific client state before another
-  user can sign in on the device.
+  PostgreSQL custom-format backup and maintenance-mode restore are
+  deployment-operator commands, never ordinary authenticated routes.
+- **Offline and updates:** Production registers a service worker that precaches
+  only the offline page, manifest, and icons. Failed navigation falls back to
+  the offline page. `/api` is never intercepted, authenticated data is never
+  cached, and mutations are never queued. The client exposes connection state,
+  blocks marked financial forms while offline, and reports a waiting update.
+  Offline portfolio reads are not a runtime guarantee.
 - **AI review:** Optional on-demand reviews use a versioned, owner-scoped,
   read-only snapshot calculated by Wealthboard. The model never receives SQL or
   mutation tools and cannot become authoritative for balances, conversions,
@@ -165,7 +162,7 @@ contract.
 - In-kind transfers write paired owner-scoped `transfer_out` and `transfer_in`
   events. Selected corporate actions use explicit split, spin-off, and merger
   source records with positive ratios and related-instrument relationships.
-  Every grouped edit or deletion replays all affected accounts in one SQLite
+  Every grouped edit or deletion replays all affected accounts in one PostgreSQL
   transaction. Same-date events use an explicit per-account sequence before
   timestamp and ID tie-breakers.
   Mutations and restores validate recorded spin-off and merger entitlements
@@ -301,9 +298,10 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    never invokes AI. Preserve balance accepted-subset commits, investment
    whole-file atomicity, and canonical 5 MB/10,000-record limits.
 
-The implementation is bounded and request-scoped within the existing
-Next.js process, with no new backend, durable document store, or required job
-queue. Apply abort signals and time/output limits across parsing and provider
+The implementation is bounded and request-scoped within the Go service, with no
+durable document store or required job queue. Plain text parsing runs in Go;
+PDF/XLSX/DOCX uses a bounded local Node child or the bundled network-disabled
+Unix-socket sidecar. Apply cancellation and time/output limits across parsing and provider
 work; no silent chunking, retries, truncation, or automatic partial acceptance.
 Larger-document/background processing requires a separate durable-job design.
 Content stays in memory; workers are terminated on completion, failure, timeout,
@@ -375,7 +373,8 @@ responses in tests; never use real statements or credentials.
 
 Every table except `login_attempts` is either the identity table or is owned by
 one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
-operations retain source records. All timestamps are UTC ISO-8601 strings.
+operations retain source records. Timestamps are stored in PostgreSQL and
+serialized in UTC.
 
 Archived accounts are excluded from current and historical totals, activity,
 comparisons, live estate views, goal progress, ordinary CSV reports, and
@@ -406,10 +405,10 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 - `/estate/{beneficiaries,distribution,summary}` and
   `/estate/snapshots/[id]` — private estate planning and retained print views
 - `/reports`, `/categories`, `/institutions`, `/settings`
-- `/api/export/*`, `/api/accounts/[id]/history-import/{preview,commit}`, `/api/restore/user`,
+- `/api/v1/exports/*`, `/api/v1/accounts/[id]/history-import/{preview,commit}`, `/api/v1/restore/user`,
   `/api/estate/snapshots/[id]`, `/api/ai/review`, `/api/health/{live,ready}`
 - `/review` — on-demand, evidence-linked AI portfolio critique
-- `/offline`, `/manifest.webmanifest`, `/sw.js`
+- `/offline.html`, `/manifest.webmanifest`, `/sw.js`
 
 The protected layout owns the responsive sidebar, header, mobile bottom
 navigation, privacy-value toggle, quick-add flow, PWA status, and toast region.
@@ -420,11 +419,10 @@ own authorization decisions.
 
 ## Database lifecycle
 
-- `db/schema.ts` defines the current schema.
-- `db/migrations` contains an append-only generated migration history for fresh
+- `db/postgres/migrations` contains the embedded append-only migration history for fresh
   databases and upgrades of existing databases.
-- Startup verifies that the latest applied migration still exists unchanged,
-  then applies pending migrations before serving requests.
+- Startup applies pending migrations before serving requests; readiness checks
+  the expected schema version.
 - Disposable pre-release databases may be deleted and recreated, but persisted
   databases must be upgraded without replacing or modifying applied migrations.
 - No ownership-claim or account-bootstrap path is supported.

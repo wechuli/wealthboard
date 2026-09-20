@@ -1742,7 +1742,8 @@ paths:
           headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AccountHistoryImportResult" }
+              schema:
+                { $ref: "#/components/schemas/AccountHistoryImportResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
@@ -1769,7 +1770,8 @@ paths:
           headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AccountHistoryImportResult" }
+              schema:
+                { $ref: "#/components/schemas/AccountHistoryImportResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
@@ -1795,7 +1797,8 @@ paths:
           headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/InvestmentHistoryImportResult" }
+              schema:
+                { $ref: "#/components/schemas/InvestmentHistoryImportResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
@@ -1822,7 +1825,8 @@ paths:
           headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/InvestmentHistoryImportResult" }
+              schema:
+                { $ref: "#/components/schemas/InvestmentHistoryImportResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
@@ -1841,7 +1845,8 @@ paths:
         "200":
           description: Versioned Wealthboard user archive
           headers:
-            Content-Disposition: { $ref: "#/components/headers/UserArchiveDisposition" }
+            Content-Disposition:
+              { $ref: "#/components/headers/UserArchiveDisposition" }
             Cache-Control: { $ref: "#/components/headers/NoStore" }
           content:
             application/json:
@@ -1849,6 +1854,7 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
   /exports/transactions.csv:
@@ -1861,7 +1867,8 @@ paths:
         "200":
           description: UTF-8 transaction CSV
           headers:
-            Content-Disposition: { $ref: "#/components/headers/TransactionsDisposition" }
+            Content-Disposition:
+              { $ref: "#/components/headers/TransactionsDisposition" }
             Cache-Control: { $ref: "#/components/headers/NoStore" }
           content:
             text/csv:
@@ -1881,7 +1888,8 @@ paths:
         "200":
           description: UTF-8 account CSV
           headers:
-            Content-Disposition: { $ref: "#/components/headers/AccountsDisposition" }
+            Content-Disposition:
+              { $ref: "#/components/headers/AccountsDisposition" }
             Cache-Control: { $ref: "#/components/headers/NoStore" }
           content:
             text/csv:
@@ -2029,7 +2037,8 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/RequiredArchiveMutationRequest" }
+            schema:
+              { $ref: "#/components/schemas/RequiredArchiveMutationRequest" }
       responses:
         "204": { description: Beneficiary archive state updated }
         "400": { $ref: "#/components/responses/Problem" }
@@ -2939,9 +2948,11 @@ components:
               - $ref: "#/components/schemas/AccountHistoryImportEnvelope"
               - $ref: "#/components/schemas/InvestmentHistoryImportEnvelope"
         text/csv:
-          schema: { type: string, contentMediaType: "text/csv", maxLength: 5242880 }
+          schema:
+            { type: string, contentMediaType: "text/csv", maxLength: 5242880 }
         application/csv:
-          schema: { type: string, contentMediaType: "text/csv", maxLength: 5242880 }
+          schema:
+            { type: string, contentMediaType: "text/csv", maxLength: 5242880 }
         multipart/form-data:
           schema:
             type: object
@@ -2963,9 +2974,11 @@ components:
               - $ref: "#/components/schemas/AccountHistoryImportEnvelope"
               - $ref: "#/components/schemas/InvestmentHistoryImportEnvelope"
         text/csv:
-          schema: { type: string, contentMediaType: "text/csv", maxLength: 5242880 }
+          schema:
+            { type: string, contentMediaType: "text/csv", maxLength: 5242880 }
         application/csv:
-          schema: { type: string, contentMediaType: "text/csv", maxLength: 5242880 }
+          schema:
+            { type: string, contentMediaType: "text/csv", maxLength: 5242880 }
         multipart/form-data:
           schema:
             type: object
@@ -3092,12 +3105,25 @@ components:
         numerator: { $ref: "#/components/schemas/PositiveDecimalString" }
         denominator: { $ref: "#/components/schemas/PositiveDecimalString" }
         actionDate: { type: string, format: date }
-        idempotencyKey: { type: string, format: uuid, description: Required unless supplied in `Idempotency-Key`. }
+        idempotencyKey:
+          {
+            type: string,
+            format: uuid,
+            description: Required unless supplied in `Idempotency-Key`.,
+          }
         notes: { type: string, maxLength: 2000 }
     SpinoffRequest:
       type: object
       additionalProperties: false
-      required: [accountId, sourceInstrumentId, newInstrumentId, numerator, denominator, actionDate]
+      required:
+        [
+          accountId,
+          sourceInstrumentId,
+          newInstrumentId,
+          numerator,
+          denominator,
+          actionDate,
+        ]
       properties:
         accountId: { type: string, format: uuid }
         sourceInstrumentId: { type: string, format: uuid }
@@ -3105,12 +3131,25 @@ components:
         numerator: { $ref: "#/components/schemas/PositiveDecimalString" }
         denominator: { $ref: "#/components/schemas/PositiveDecimalString" }
         actionDate: { type: string, format: date }
-        idempotencyKey: { type: string, format: uuid, description: Required unless supplied in `Idempotency-Key`. }
+        idempotencyKey:
+          {
+            type: string,
+            format: uuid,
+            description: Required unless supplied in `Idempotency-Key`.,
+          }
         notes: { type: string, maxLength: 2000 }
     MergerRequest:
       type: object
       additionalProperties: false
-      required: [accountId, sourceInstrumentId, destinationInstrumentId, numerator, denominator, actionDate]
+      required:
+        [
+          accountId,
+          sourceInstrumentId,
+          destinationInstrumentId,
+          numerator,
+          denominator,
+          actionDate,
+        ]
       properties:
         accountId: { type: string, format: uuid }
         sourceInstrumentId: { type: string, format: uuid }
@@ -3118,12 +3157,26 @@ components:
         numerator: { $ref: "#/components/schemas/PositiveDecimalString" }
         denominator: { $ref: "#/components/schemas/PositiveDecimalString" }
         actionDate: { type: string, format: date }
-        idempotencyKey: { type: string, format: uuid, description: Required unless supplied in `Idempotency-Key`. }
+        idempotencyKey:
+          {
+            type: string,
+            format: uuid,
+            description: Required unless supplied in `Idempotency-Key`.,
+          }
         notes: { type: string, maxLength: 2000 }
     DividendReinvestmentRequest:
       type: object
       additionalProperties: false
-      required: [accountId, instrumentId, dividendAmount, quantity, unitPrice, tradeCurrency, activityDate]
+      required:
+        [
+          accountId,
+          instrumentId,
+          dividendAmount,
+          quantity,
+          unitPrice,
+          tradeCurrency,
+          activityDate,
+        ]
       properties:
         accountId: { type: string, format: uuid }
         instrumentId: { type: string, format: uuid }
@@ -3134,14 +3187,27 @@ components:
         feeAmount: { $ref: "#/components/schemas/NonNegativeDecimalString" }
         feeCurrency: { $ref: "#/components/schemas/CurrencyCode" }
         cashEffect: { $ref: "#/components/schemas/DecimalString" }
-        appliedExchangeRate: { $ref: "#/components/schemas/PositiveDecimalString" }
+        appliedExchangeRate:
+          { $ref: "#/components/schemas/PositiveDecimalString" }
         activityDate: { type: string, format: date }
-        idempotencyKey: { type: string, format: uuid, description: Required unless supplied in `Idempotency-Key`. }
+        idempotencyKey:
+          {
+            type: string,
+            format: uuid,
+            description: Required unless supplied in `Idempotency-Key`.,
+          }
         notes: { type: string, maxLength: 2000 }
     InKindTransferRequest:
       type: object
       additionalProperties: false
-      required: [sourceAccountId, destinationAccountId, instrumentId, quantity, transferDate]
+      required:
+        [
+          sourceAccountId,
+          destinationAccountId,
+          instrumentId,
+          quantity,
+          transferDate,
+        ]
       properties:
         sourceAccountId: { type: string, format: uuid }
         destinationAccountId: { type: string, format: uuid }
@@ -3149,7 +3215,12 @@ components:
         quantity: { $ref: "#/components/schemas/PositiveDecimalString" }
         transferDate: { type: string, format: date }
         feeAmount: { $ref: "#/components/schemas/NonNegativeDecimalString" }
-        idempotencyKey: { type: string, format: uuid, description: Required unless supplied in `Idempotency-Key`. }
+        idempotencyKey:
+          {
+            type: string,
+            format: uuid,
+            description: Required unless supplied in `Idempotency-Key`.,
+          }
         notes: { type: string, maxLength: 2000 }
     AccountHistoryImportEnvelope:
       type: object
@@ -3169,7 +3240,21 @@ components:
         external_id: { type: [string, "null"] }
         type:
           type: string
-          enum: [deposit, withdrawal, interest, dividend, capital_gain, capital_loss, fee, purchase, sale, manual_adjustment, liability_payment, liability_increase]
+          enum:
+            [
+              deposit,
+              withdrawal,
+              interest,
+              dividend,
+              capital_gain,
+              capital_loss,
+              fee,
+              purchase,
+              sale,
+              manual_adjustment,
+              liability_payment,
+              liability_increase,
+            ]
         amount: { $ref: "#/components/schemas/DecimalString" }
         date: { type: string, format: date }
         description: { type: [string, "null"] }
@@ -3177,7 +3262,15 @@ components:
     InvestmentHistoryImportEnvelope:
       type: object
       additionalProperties: false
-      required: [format, version, instruments, position_events, cash_transactions, prices]
+      required:
+        [
+          format,
+          version,
+          instruments,
+          position_events,
+          cash_transactions,
+          prices,
+        ]
       properties:
         format: { type: string }
         version: { type: integer }
@@ -3209,19 +3302,32 @@ components:
     InvestmentImportEvent:
       type: object
       additionalProperties: false
-      required: [external_id, instrument_external_id, type, quantity, trade_currency, trade_date]
+      required:
+        [
+          external_id,
+          instrument_external_id,
+          type,
+          quantity,
+          trade_currency,
+          trade_date,
+        ]
       properties:
         external_id: { type: string }
         instrument_external_id: { type: string }
         type: { type: string }
         quantity: { $ref: "#/components/schemas/DecimalString" }
-        unit_price: { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
+        unit_price:
+          { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
         trade_currency: { $ref: "#/components/schemas/CurrencyCode" }
-        fee_amount: { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
+        fee_amount:
+          { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
         fee_currency: { type: [string, "null"], pattern: "^[A-Z]{3}$" }
-        cash_effect: { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
-        applied_exchange_rate: { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
-        opening_cost_basis: { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
+        cash_effect:
+          { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
+        applied_exchange_rate:
+          { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
+        opening_cost_basis:
+          { type: [string, "null"], pattern: "^-?[0-9]+(?:\\.[0-9]+)?$" }
         event_group_id: { type: [string, "null"], format: uuid }
         trade_date: { type: string, format: date }
         settlement_date: { type: [string, "null"], format: date }
@@ -3242,7 +3348,8 @@ components:
     InvestmentImportPrice:
       type: object
       additionalProperties: false
-      required: [external_id, instrument_external_id, price, effective_date, source]
+      required:
+        [external_id, instrument_external_id, price, effective_date, source]
       properties:
         external_id: { type: string }
         instrument_external_id: { type: string }
@@ -3278,7 +3385,8 @@ components:
         message: { type: string }
         transactionId: { type: [string, "null"], format: uuid }
         type: { type: string }
-        amount: { type: string, description: Canonical major-unit decimal string. }
+        amount:
+          { type: string, description: Canonical major-unit decimal string. }
         date: { type: string, format: date }
     AccountHistoryImportSummary:
       type: object
@@ -3297,11 +3405,32 @@ components:
         hash: { type: string, pattern: "^[a-f0-9]{64}$" }
         account: { $ref: "#/components/schemas/ImportAccount" }
         dateRange:
-          oneOf: [{ $ref: "#/components/schemas/ImportDateRange" }, { type: "null" }]
-        currentBalanceMinor: { type: integer, format: int64, description: Integer amount in account-currency minor units. }
-        projectedBalanceMinor: { type: integer, format: int64, description: Integer amount in account-currency minor units. }
-        finalBalanceMinor: { type: integer, format: int64, description: Integer amount in account-currency minor units. }
-        netChangeMinor: { type: integer, format: int64, description: Integer amount in account-currency minor units. }
+          oneOf:
+            [{ $ref: "#/components/schemas/ImportDateRange" }, { type: "null" }]
+        currentBalanceMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer amount in account-currency minor units.,
+          }
+        projectedBalanceMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer amount in account-currency minor units.,
+          }
+        finalBalanceMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer amount in account-currency minor units.,
+          }
+        netChangeMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer amount in account-currency minor units.,
+          }
         summary: { $ref: "#/components/schemas/AccountHistoryImportSummary" }
         rows:
           type: array
@@ -3320,7 +3449,17 @@ components:
     InvestmentInstrumentChange:
       type: object
       additionalProperties: false
-      required: [instrumentId, externalId, name, symbol, resolution, currentQuantity, projectedQuantity, quantityChange]
+      required:
+        [
+          instrumentId,
+          externalId,
+          name,
+          symbol,
+          resolution,
+          currentQuantity,
+          projectedQuantity,
+          quantityChange,
+        ]
       properties:
         instrumentId: { type: string, format: uuid }
         externalId: { type: string }
@@ -3333,7 +3472,16 @@ components:
     InvestmentEventChange:
       type: object
       additionalProperties: false
-      required: [externalId, instrumentId, type, tradeDate, eventSequence, beforeQuantity, afterQuantity]
+      required:
+        [
+          externalId,
+          instrumentId,
+          type,
+          tradeDate,
+          eventSequence,
+          beforeQuantity,
+          afterQuantity,
+        ]
       properties:
         externalId: { type: string }
         instrumentId: { type: string, format: uuid }
@@ -3345,7 +3493,8 @@ components:
     InvestmentPriceChange:
       type: object
       additionalProperties: false
-      required: [externalId, instrumentId, price, currency, source, affectedFrom]
+      required:
+        [externalId, instrumentId, price, currency, source, affectedFrom]
       properties:
         externalId: { type: string }
         instrumentId: { type: string, format: uuid }
@@ -3356,14 +3505,38 @@ components:
     InvestmentImportValue:
       type: object
       additionalProperties: false
-      required: [cashMinor, positionsMinor, totalMinor, complete, missingPrices, missingCurrencies]
+      required:
+        [
+          cashMinor,
+          positionsMinor,
+          totalMinor,
+          complete,
+          missingPrices,
+          missingCurrencies,
+        ]
       properties:
-        cashMinor: { type: integer, format: int64, description: Integer account-currency minor units. }
-        positionsMinor: { type: integer, format: int64, description: Integer account-currency minor units. }
-        totalMinor: { type: integer, format: int64, description: Integer account-currency minor units. }
+        cashMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer account-currency minor units.,
+          }
+        positionsMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer account-currency minor units.,
+          }
+        totalMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer account-currency minor units.,
+          }
         complete: { type: boolean }
         missingPrices: { type: array, items: { type: string } }
-        missingCurrencies: { type: array, items: { $ref: "#/components/schemas/CurrencyCode" } }
+        missingCurrencies:
+          { type: array, items: { $ref: "#/components/schemas/CurrencyCode" } }
     InvestmentImportSummary:
       type: object
       additionalProperties: false
@@ -3377,22 +3550,62 @@ components:
     InvestmentHistoryImportResult:
       type: object
       additionalProperties: false
-      required: [account, current, projected, netChangeMinor, dateRange, instrumentChanges, eventChanges, priceChanges, summary, canCommit, rows]
+      required:
+        [
+          account,
+          current,
+          projected,
+          netChangeMinor,
+          dateRange,
+          instrumentChanges,
+          eventChanges,
+          priceChanges,
+          summary,
+          canCommit,
+          rows,
+        ]
       properties:
         hash: { type: string, pattern: "^[a-f0-9]{64}$" }
         account: { $ref: "#/components/schemas/ImportAccount" }
         current: { $ref: "#/components/schemas/InvestmentImportValue" }
         projected: { $ref: "#/components/schemas/InvestmentImportValue" }
-        finalBalanceMinor: { type: integer, format: int64, description: Integer account-currency minor units. }
-        netChangeMinor: { type: integer, format: int64, description: Integer account-currency minor units. }
+        finalBalanceMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer account-currency minor units.,
+          }
+        netChangeMinor:
+          {
+            type: integer,
+            format: int64,
+            description: Integer account-currency minor units.,
+          }
         dateRange:
-          oneOf: [{ $ref: "#/components/schemas/ImportDateRange" }, { type: "null" }]
-        instrumentChanges: { type: array, items: { $ref: "#/components/schemas/InvestmentInstrumentChange" } }
-        eventChanges: { type: array, items: { $ref: "#/components/schemas/InvestmentEventChange" } }
-        priceChanges: { type: array, items: { $ref: "#/components/schemas/InvestmentPriceChange" } }
+          oneOf:
+            [{ $ref: "#/components/schemas/ImportDateRange" }, { type: "null" }]
+        instrumentChanges:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/InvestmentInstrumentChange" },
+          }
+        eventChanges:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/InvestmentEventChange" },
+          }
+        priceChanges:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/InvestmentPriceChange" },
+          }
         summary: { $ref: "#/components/schemas/InvestmentImportSummary" }
         canCommit: { type: boolean }
-        rows: { type: array, items: { $ref: "#/components/schemas/InvestmentImportRow" } }
+        rows:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/InvestmentImportRow" },
+          }
     PortableRecord:
       type: object
       description: One owner-scoped archive row. Database `*_minor` fields are integer minor units; rates, prices, quantities, and ratios are exact decimal strings. User ownership columns and authentication secrets are excluded.
@@ -3400,37 +3613,167 @@ components:
     UserArchive:
       type: object
       additionalProperties: false
-      required: [format, version, exportedAt, settings, categories, institutions, accounts, transactions, valuations, exchangeRates, goals, goalContributionPlans, goalMilestones, goalAlertDismissals, beneficiaries, estatePlans, estateAccountDirectives, estateAllocations, estateResiduaryAllocations, estatePlanSnapshots, investmentInstruments, positionEvents, securityPrices, positionReconciliations, accountConversions]
+      required:
+        [
+          format,
+          version,
+          exportedAt,
+          settings,
+          categories,
+          institutions,
+          accounts,
+          transactions,
+          valuations,
+          exchangeRates,
+          goals,
+          goalContributionPlans,
+          goalMilestones,
+          goalAlertDismissals,
+          beneficiaries,
+          estatePlans,
+          estateAccountDirectives,
+          estateAllocations,
+          estateResiduaryAllocations,
+          estatePlanSnapshots,
+          investmentInstruments,
+          positionEvents,
+          securityPrices,
+          positionReconciliations,
+          accountConversions,
+        ]
       properties:
         format: { type: string, const: wealthboard-user-export }
         version: { type: integer, const: 8 }
         exportedAt: { type: string, format: date-time }
-        settings: { type: object, additionalProperties: true, description: Owner settings without credentials or session data. }
-        categories: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        institutions: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        accounts: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        transactions: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        valuations: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        exchangeRates: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        goals: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        goalContributionPlans: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        goalMilestones: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        goalAlertDismissals: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        beneficiaries: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        estatePlans: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        estateAccountDirectives: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        estateAllocations: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        estateResiduaryAllocations: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        estatePlanSnapshots: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        investmentInstruments: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        positionEvents: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        securityPrices: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        positionReconciliations: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
-        accountConversions: { type: array, items: { $ref: "#/components/schemas/PortableRecord" } }
+        settings:
+          {
+            type: object,
+            additionalProperties: true,
+            description: Owner settings without credentials or session data.,
+          }
+        categories:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        institutions:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        accounts:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        transactions:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        valuations:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        exchangeRates:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        goals:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        goalContributionPlans:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        goalMilestones:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        goalAlertDismissals:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        beneficiaries:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        estatePlans:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        estateAccountDirectives:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        estateAllocations:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        estateResiduaryAllocations:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        estatePlanSnapshots:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        investmentInstruments:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        positionEvents:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        securityPrices:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        positionReconciliations:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
+        accountConversions:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/PortableRecord" },
+          }
     RestoreSummary:
       type: object
       additionalProperties: false
-      required: [institutions, accounts, transactions, goals, milestones, beneficiaries, estatePlans, estateSnapshots, investmentInstruments, positionEvents, securityPrices, positionReconciliations]
+      required:
+        [
+          institutions,
+          accounts,
+          transactions,
+          goals,
+          milestones,
+          beneficiaries,
+          estatePlans,
+          estateSnapshots,
+          investmentInstruments,
+          positionEvents,
+          securityPrices,
+          positionReconciliations,
+        ]
       properties:
         institutions: { type: integer, minimum: 0 }
         accounts: { type: integer, minimum: 0 }
@@ -4705,12 +5048,29 @@ components:
     EstateDirectiveInput:
       type: object
       additionalProperties: false
-      required: [isIncluded, ownershipShareBps, transferContext, distributionMethod]
+      required:
+        [isIncluded, ownershipShareBps, transferContext, distributionMethod]
       properties:
         isIncluded: { type: boolean }
-        ownershipShareBps: { type: integer, format: int32, minimum: 1, maximum: 10000 }
-        transferContext: { type: string, enum: [estate, joint_survivorship, provider_designation, trust_entity, unknown] }
-        distributionMethod: { type: string, enum: [transfer_asset, sell_and_divide, cash_equivalent, undecided] }
+        ownershipShareBps:
+          { type: integer, format: int32, minimum: 1, maximum: 10000 }
+        transferContext:
+          {
+            type: string,
+            enum:
+              [
+                estate,
+                joint_survivorship,
+                provider_designation,
+                trust_entity,
+                unknown,
+              ],
+          }
+        distributionMethod:
+          {
+            type: string,
+            enum: [transfer_asset, sell_and_divide, cash_equivalent, undecided],
+          }
         documentReference: { type: string, maxLength: 300 }
         notes: { type: string, maxLength: 2000 }
         reviewedAt: { type: [string, "null"], format: date }
@@ -4721,7 +5081,8 @@ components:
       properties:
         beneficiaryId: { type: string, format: uuid }
         tier: { type: string, enum: [primary, contingent] }
-        allocationBps: { type: integer, format: int32, minimum: 1, maximum: 10000 }
+        allocationBps:
+          { type: integer, format: int32, minimum: 1, maximum: 10000 }
         notes: { type: string, maxLength: 2000 }
     EstatePlan:
       type: object
@@ -4803,9 +5164,25 @@ components:
         isLiability: { type: boolean }
         accountArchivedAt: { type: [string, "null"], format: date-time }
         isIncluded: { type: boolean }
-        ownershipShareBps: { type: integer, format: int32, minimum: 1, maximum: 10000 }
-        transferContext: { type: string, enum: [estate, joint_survivorship, provider_designation, trust_entity, unknown] }
-        distributionMethod: { type: string, enum: [transfer_asset, sell_and_divide, cash_equivalent, undecided] }
+        ownershipShareBps:
+          { type: integer, format: int32, minimum: 1, maximum: 10000 }
+        transferContext:
+          {
+            type: string,
+            enum:
+              [
+                estate,
+                joint_survivorship,
+                provider_designation,
+                trust_entity,
+                unknown,
+              ],
+          }
+        distributionMethod:
+          {
+            type: string,
+            enum: [transfer_asset, sell_and_divide, cash_equivalent, undecided],
+          }
         documentReference: { type: [string, "null"] }
         notes: { type: [string, "null"] }
         reviewedAt: { type: [string, "null"], format: date-time }
@@ -4832,7 +5209,8 @@ components:
         directiveId: { type: string, format: uuid }
         beneficiaryId: { type: string, format: uuid }
         tier: { type: string, enum: [primary, contingent] }
-        allocationBps: { type: integer, format: int32, minimum: 1, maximum: 10000 }
+        allocationBps:
+          { type: integer, format: int32, minimum: 1, maximum: 10000 }
         notes: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -4855,7 +5233,8 @@ components:
         estatePlanId: { type: string, format: uuid }
         beneficiaryId: { type: string, format: uuid }
         tier: { type: string, enum: [primary, contingent] }
-        allocationBps: { type: integer, format: int32, minimum: 1, maximum: 10000 }
+        allocationBps:
+          { type: integer, format: int32, minimum: 1, maximum: 10000 }
         notes: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -5075,19 +5454,53 @@ components:
     AISettingsInput:
       type: object
       additionalProperties: false
-      required: [provider, baseUrl, model, includeExactAmounts, includeAccountNames, monthlyTokenLimit, maxOutputTokens]
+      required:
+        [
+          provider,
+          baseUrl,
+          model,
+          includeExactAmounts,
+          includeAccountNames,
+          monthlyTokenLimit,
+          maxOutputTokens,
+        ]
       properties:
         provider: { $ref: "#/components/schemas/AIProvider" }
         baseUrl: { type: string, format: uri }
         model: { type: string, minLength: 1, maxLength: 200 }
-        includeExactAmounts: { type: boolean, description: Whether exact financial amounts may be shared with the configured provider. }
-        includeAccountNames: { type: boolean, description: Whether private account names may be shared with the configured provider. }
+        includeExactAmounts:
+          {
+            type: boolean,
+            description: Whether exact financial amounts may be shared with the configured provider.,
+          }
+        includeAccountNames:
+          {
+            type: boolean,
+            description: Whether private account names may be shared with the configured provider.,
+          }
         monthlyTokenLimit: { type: integer, minimum: 10000, maximum: 100000000 }
-        maxOutputTokens: { type: integer, minimum: 256, description: Must not exceed `monthlyTokenLimit`. }
+        maxOutputTokens:
+          {
+            type: integer,
+            minimum: 256,
+            description: Must not exceed `monthlyTokenLimit`.,
+          }
     AIWorkflowSettings:
       type: object
       additionalProperties: false
-      required: [provider, baseUrl, model, includeExactAmounts, includeAccountNames, monthlyTokenLimit, maxOutputTokens, hasStoredApiKey, apiKeyHint, updatedAt]
+      required:
+        [
+          provider,
+          baseUrl,
+          model,
+          includeExactAmounts,
+          includeAccountNames,
+          monthlyTokenLimit,
+          maxOutputTokens,
+          hasStoredApiKey,
+          apiKeyHint,
+          updatedAt,
+        ]
       properties:
         provider: { $ref: "#/components/schemas/AIProvider" }
         baseUrl: { type: string, format: uri }
@@ -5097,7 +5510,11 @@ components:
         monthlyTokenLimit: { type: integer }
         maxOutputTokens: { type: integer }
         hasStoredApiKey: { type: boolean }
-        apiKeyHint: { type: [string, "null"], description: Non-secret credential hint; plaintext and ciphertext are never returned. }
+        apiKeyHint:
+          {
+            type: [string, "null"],
+            description: Non-secret credential hint; plaintext and ciphertext are never returned.,
+          }
         updatedAt: { type: string, format: date-time }
     AICredentialInput:
       type: object
@@ -5120,7 +5537,23 @@ components:
     AIReviewSnapshot:
       type: object
       additionalProperties: false
-      required: [schemaVersion, asOf, period, focus, baseCurrency, sharing, completeness, portfolio, allocations, topAccounts, cashFlow, goals, dataQuality, methodology]
+      required:
+        [
+          schemaVersion,
+          asOf,
+          period,
+          focus,
+          baseCurrency,
+          sharing,
+          completeness,
+          portfolio,
+          allocations,
+          topAccounts,
+          cashFlow,
+          goals,
+          dataQuality,
+          methodology,
+        ]
       properties:
         schemaVersion: { type: integer, const: 1 }
         asOf: { type: string, minLength: 1 }
@@ -5139,41 +5572,96 @@ components:
     AIReviewRequest:
       type: object
       additionalProperties: false
-      required: [period, focus, includeExactAmounts, includeAccountNames, snapshot]
+      required:
+        [period, focus, includeExactAmounts, includeAccountNames, snapshot]
       properties:
         period: { $ref: "#/components/schemas/AIReviewPeriod" }
         focus: { $ref: "#/components/schemas/AIReviewFocus" }
         includeExactAmounts: { type: boolean }
         includeAccountNames: { type: boolean }
-        apiKey: { type: string, minLength: 8, maxLength: 4096, writeOnly: true, description: Ephemeral provider key; used only when no stored credential is selected. }
+        apiKey:
+          {
+            type: string,
+            minLength: 8,
+            maxLength: 4096,
+            writeOnly: true,
+            description: Ephemeral provider key; used only when no stored credential is selected.,
+          }
         snapshot: { $ref: "#/components/schemas/AIReviewSnapshot" }
     AIReviewFinding:
       type: object
       additionalProperties: false
-      required: [id, category, severity, confidence, title, explanation, evidenceRefs]
+      required:
+        [id, category, severity, confidence, title, explanation, evidenceRefs]
       properties:
         id: { type: string, minLength: 1, maxLength: 80 }
-        category: { type: string, enum: [data-quality, allocation, liquidity, cash-flow, goals, general] }
+        category:
+          {
+            type: string,
+            enum:
+              [data-quality, allocation, liquidity, cash-flow, goals, general],
+          }
         severity: { type: string, enum: [info, attention, high] }
         confidence: { type: string, enum: [low, medium, high] }
         title: { type: string, minLength: 1, maxLength: 140 }
         explanation: { type: string, minLength: 1, maxLength: 700 }
-        evidenceRefs: { type: array, minItems: 1, maxItems: 6, items: { type: string } }
+        evidenceRefs:
+          { type: array, minItems: 1, maxItems: 6, items: { type: string } }
     AIReview:
       type: object
       additionalProperties: false
-      required: [schemaVersion, headline, executiveSummary, dataQuality, strengths, attentionItems, goalObservations, questions, possibleNextChecks, limitations]
+      required:
+        [
+          schemaVersion,
+          headline,
+          executiveSummary,
+          dataQuality,
+          strengths,
+          attentionItems,
+          goalObservations,
+          questions,
+          possibleNextChecks,
+          limitations,
+        ]
       properties:
         schemaVersion: { type: integer, const: 1 }
         headline: { type: string, minLength: 1, maxLength: 160 }
         executiveSummary: { type: string, minLength: 1, maxLength: 1400 }
-        dataQuality: { type: array, maxItems: 6, items: { $ref: "#/components/schemas/AIReviewFinding" } }
-        strengths: { type: array, maxItems: 6, items: { $ref: "#/components/schemas/AIReviewFinding" } }
-        attentionItems: { type: array, maxItems: 8, items: { $ref: "#/components/schemas/AIReviewFinding" } }
-        goalObservations: { type: array, maxItems: 6, items: { $ref: "#/components/schemas/AIReviewFinding" } }
-        questions: { type: array, maxItems: 6, items: { type: string, maxLength: 300 } }
-        possibleNextChecks: { type: array, maxItems: 6, items: { type: string, maxLength: 300 } }
-        limitations: { type: array, minItems: 1, maxItems: 8, items: { type: string, minLength: 1, maxLength: 300 } }
+        dataQuality:
+          {
+            type: array,
+            maxItems: 6,
+            items: { $ref: "#/components/schemas/AIReviewFinding" },
+          }
+        strengths:
+          {
+            type: array,
+            maxItems: 6,
+            items: { $ref: "#/components/schemas/AIReviewFinding" },
+          }
+        attentionItems:
+          {
+            type: array,
+            maxItems: 8,
+            items: { $ref: "#/components/schemas/AIReviewFinding" },
+          }
+        goalObservations:
+          {
+            type: array,
+            maxItems: 6,
+            items: { $ref: "#/components/schemas/AIReviewFinding" },
+          }
+        questions:
+          { type: array, maxItems: 6, items: { type: string, maxLength: 300 } }
+        possibleNextChecks:
+          { type: array, maxItems: 6, items: { type: string, maxLength: 300 } }
+        limitations:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 8,
+            items: { type: string, minLength: 1, maxLength: 300 },
+          }
     AIReviewResult:
       type: object
       additionalProperties: false
@@ -5206,7 +5694,13 @@ components:
           type: string
           format: binary
           description: One TXT, CSV, TSV, JSON, PDF, XLSX, or DOCX file, maximum 5 MiB.
-        documentPassword: { type: string, maxLength: 1024, writeOnly: true, description: Optional and accepted for PDF files only. }
+        documentPassword:
+          {
+            type: string,
+            maxLength: 1024,
+            writeOnly: true,
+            description: Optional and accepted for PDF files only.,
+          }
     AISourceUnit:
       type: object
       additionalProperties: false
@@ -5220,7 +5714,13 @@ components:
       additionalProperties: false
       required: [units, warnings]
       properties:
-        units: { type: array, minItems: 1, maxItems: 1000, items: { $ref: "#/components/schemas/AISourceUnit" } }
+        units:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 1000,
+            items: { $ref: "#/components/schemas/AISourceUnit" },
+          }
         warnings: { type: array, maxItems: 100, items: { type: string } }
     AISourceResult:
       type: object
@@ -5253,7 +5753,12 @@ components:
       properties:
         collection: { type: string }
         row: { type: integer, minimum: 1 }
-        sourceIds: { type: array, minItems: 1, items: { type: string, pattern: "^source-[0-9]+$" } }
+        sourceIds:
+          {
+            type: array,
+            minItems: 1,
+            items: { type: string, pattern: "^source-[0-9]+$" },
+          }
     AIExclusion:
       type: object
       additionalProperties: false
@@ -5266,9 +5771,18 @@ components:
       additionalProperties: false
       required: [content, references, exclusions, issues]
       properties:
-        content: { type: string, description: Generated Wealthboard import document content. }
-        references: { type: array, items: { $ref: "#/components/schemas/AIDraftReference" } }
-        exclusions: { type: array, items: { $ref: "#/components/schemas/AIExclusion" } }
+        content:
+          {
+            type: string,
+            description: Generated Wealthboard import document content.,
+          }
+        references:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/AIDraftReference" },
+          }
+        exclusions:
+          { type: array, items: { $ref: "#/components/schemas/AIExclusion" } }
         issues: { type: array, maxItems: 100, items: { type: string } }
     Problem:
       type: object

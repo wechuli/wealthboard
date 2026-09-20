@@ -21,6 +21,12 @@ mkdir -p backups
 make backup BACKUP_FILE="$PWD/backups/wealthboard-$(date -u +%Y%m%dT%H%M%SZ).dump"
 ```
 
+The equivalent binary command is:
+
+```bash
+DATABASE_URL='postgres://…' ./bin/wealthboard backup --file /secure/wealthboard.dump
+```
+
 The target directory must already exist and the file must not. The command uses
 `DATABASE_URL` and `pg_dump --format=custom --no-owner --no-privileges`, checks
 that the result is a nonempty regular file, and sets mode `0600`. A database
@@ -46,14 +52,22 @@ until validation completes. Then run:
 make restore RESTORE_FILE="$PWD/backups/wealthboard-20260920T120000Z.dump"
 ```
 
+The equivalent binary command is:
+
+```bash
+DATABASE_URL='postgres://…' ./bin/wealthboard restore \
+   --file /secure/wealthboard.dump \
+   --confirm-maintenance
+```
+
 The underlying command requires `--confirm-maintenance`; the Make target supplies
 it only after you explicitly invoke `restore`. The restore workflow:
 
 1. verifies that the source is a regular custom-format archive with
-  `pg_restore --list`;
+   `pg_restore --list`;
 2. creates `wealthboard-pre-restore-<UTC timestamp>.dump` beside the source;
 3. runs `pg_restore --clean --if-exists --exit-on-error --single-transaction`
-  without restoring ownership or privileges; and
+   without restoring ownership or privileges; and
 4. checks the expected schema version and rejects unvalidated foreign keys.
 
 The safety dump is retained on success or failure and its path is printed. A

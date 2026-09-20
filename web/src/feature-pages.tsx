@@ -30,6 +30,7 @@ import type { Session } from "./types";
 import { useState } from "react";
 import { InstrumentForm, InstrumentManager } from "./planning-forms";
 import { EstateMutationWorkspace } from "./estate-workflows";
+import { AIWorkflowWorkspace } from "./ai-workflows";
 
 export function CategoriesPage({ session }: { session: Session }) {
   const [refresh, setRefresh] = useState(0);
@@ -241,7 +242,10 @@ function PriceHistory({ prices }: { prices: SecurityPrice[] }) {
 
 export function EstatePage({ session }: { session: Session }) {
   const [refresh, setRefresh] = useState(0);
-  const state = useResource(() => Promise.all([getEstate(), getAccounts()]), [refresh]);
+  const state = useResource(
+    () => Promise.all([getEstate(), getAccounts()]),
+    [refresh],
+  );
   return (
     <>
       <PageHeader
@@ -540,8 +544,9 @@ function SnapshotContent({
   );
 }
 
-export function ReviewPage() {
-  const state = useResource(getAI);
+export function ReviewPage({ session }: { session: Session }) {
+  const [refresh, setRefresh] = useState(0);
+  const state = useResource(getAI, [refresh]);
   return (
     <>
       <PageHeader
@@ -552,6 +557,11 @@ export function ReviewPage() {
       <ResourceView state={state}>
         {(ai) => (
           <>
+            <AIWorkflowWorkspace
+              ai={ai}
+              session={session}
+              onChanged={() => setRefresh((value) => value + 1)}
+            />
             {ai.settings ? (
               <div className="metric-grid">
                 <TextMetric

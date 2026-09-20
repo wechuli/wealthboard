@@ -104,13 +104,15 @@ uses `node` and `AI_EXTRACTION_SCRIPT` (default
 environment, has bounded memory/output, and is killed at the 15-second deadline.
 
 The distroless application image contains neither Node nor parser dependencies.
-For containers, set `AI_EXTRACTION_SOCKET` to a shared Unix socket and supply an
-operator-managed sidecar. For each connection, the service writes one JSON
+Compose and the Kubernetes example run the repository's separate
+`extraction-worker` image with no network and a shared in-memory Unix socket.
+For each connection, the service writes one JSON
 object containing `extension`, base64 `bytes`, and `documentPassword`, closes
 its write side, and expects the same bounded JSON response produced by the CLI
-script. The sidecar must restrict socket permissions to the application pod,
-avoid logs and temporary files, enforce equivalent resource limits, and close
-each response. The repository does not currently ship that listening process.
+script. The daemon caps connections, request/response sizes, parser memory, and
+runtime; clears request buffers and its environment; suppresses worker output;
+and creates its socket with restricted permissions. Custom deployments must
+preserve those controls and keep the socket pod-local.
 Without Node or a reachable sidecar, plain text/table extraction still works,
 but PDF/XLSX/DOCX returns a bounded parser error.
 

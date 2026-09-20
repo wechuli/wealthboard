@@ -12,17 +12,16 @@ then the user workflow.
 
 Check:
 
-- Node.js is version 22 or newer;
+- `DATABASE_URL` reaches PostgreSQL;
 - `SESSION_SECRET` is present and long enough;
 - `APP_URL` is a valid absolute URL;
-- the database directory exists and is writable;
 - no other process is using the requested port;
-- pending migrations have not been edited or removed.
+- embedded migrations can be applied by the configured database role.
 
-Run migrations explicitly to separate database failure from Next.js startup:
+Run migrations explicitly to separate database failure from HTTP startup:
 
 ```bash
-npm run db:migrate
+make migrate
 ```
 
 ## Liveness is healthy but readiness is not
@@ -31,7 +30,7 @@ Request `/api/health/ready` and inspect server logs. Common causes are:
 
 - an authentication mode would strand active users;
 - OIDC-only mode cannot reach or validate provider discovery;
-- the SQLite database is unavailable;
+- PostgreSQL is unavailable;
 - schema migrations are incomplete.
 
 Do not point liveness at an external identity provider; a temporary provider
@@ -106,10 +105,9 @@ the summary.
 
 ## The browser shows stale navigation or a hydration warning
 
-Current Wealthboard registers its service worker only in production.
-Development automatically unregisters Wealthboard's worker and deletes only
-Wealthboard caches. In production, code assets are network-first with cached
-offline fallback.
+Current Wealthboard registers its service worker only in production. It caches
+the offline page, manifest, and icons, but not application pages or API
+responses. A failed navigation shows the offline page.
 
 For a browser that previously ran an older build:
 
@@ -117,7 +115,7 @@ For a browser that previously ran an older build:
 2. If needed, close all Wealthboard tabs and reopen the site.
 3. Clear only the site's storage in browser developer tools.
 
-Do not clear the SQLite database; this is browser cache state, not server data.
+Do not alter PostgreSQL; this is browser cache state, not server data.
 
 ## OIDC login returns an error
 
@@ -128,9 +126,10 @@ the commands in [OIDC provider configuration](../example/oidc_configuration).
 Provider claims are not account-link evidence. Existing local users must link
 from Settings in hybrid mode.
 
-## SQLite reports busy or locked
+## PostgreSQL is unavailable or restore failed
 
-Confirm only one Wealthboard process/replica writes the database, storage is
-local or supports SQLite locking correctly, and no backup/restore tool is
-replacing files while the app runs. Preserve the database before invasive
-repair and use a disposable copy for investigation.
+Verify `DATABASE_URL`, DNS, TLS mode, credentials, NetworkPolicy, and the
+database service. Keep the application in maintenance mode after a failed
+restore. The restore command prints the automatic pre-restore safety dump path;
+preserve it and investigate with a disposable database before another
+destructive attempt.

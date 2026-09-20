@@ -17,7 +17,9 @@ export function clearEnvironment(environment, preserved = []) {
   }
 }
 
-function errorResponse(message = "The document parser could not complete within its resource limits.") {
+function errorResponse(
+  message = "The document parser could not complete within its resource limits.",
+) {
   return { error: message };
 }
 
@@ -84,7 +86,10 @@ async function extract(request) {
       void worker.terminate();
       resolve(response);
     };
-    const timeout = setTimeout(() => finish(errorResponse()), REQUEST_TIMEOUT_MS);
+    const timeout = setTimeout(
+      () => finish(errorResponse()),
+      REQUEST_TIMEOUT_MS,
+    );
     timeout.unref();
     worker.once("message", finish);
     worker.once("error", () => finish(errorResponse()));
@@ -101,10 +106,12 @@ function handleConnection(socket) {
   const finish = (response) => {
     if (complete) return;
     complete = true;
+    clearTimeout(deadline);
     for (const chunk of chunks) chunk.fill(0);
     socket.end(encodeResponse(response));
   };
-  socket.setTimeout(REQUEST_TIMEOUT_MS, () => finish(errorResponse()));
+  const deadline = setTimeout(() => finish(errorResponse()), REQUEST_TIMEOUT_MS);
+  deadline.unref();
   socket.on("data", (chunk) => {
     length += chunk.length;
     if (length > MAX_REQUEST_BYTES) {
@@ -124,6 +131,7 @@ function handleConnection(socket) {
   });
   socket.once("error", () => {
     complete = true;
+    clearTimeout(deadline);
     for (const chunk of chunks) chunk.fill(0);
   });
 }
@@ -140,21 +148,23 @@ export function startServer(socketPath) {
     if (error.code !== "ENOENT") throw error;
   }
 
-  const server = net.createServer(handleConnection);
+  const server = net.createServer({ allowHalfOpen: true }, handleConnection);
   server.maxConnections = 4;
   server.listen(socketPath, () => fs.chmodSync(socketPath, 0o660));
   return server;
 }
 
 const isMain =
-  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const socketPath = process.env.AI_EXTRACTION_SOCKET;
   clearEnvironment(process.env);
   if (!socketPath) throw new Error("AI_EXTRACTION_SOCKET is required");
   process.umask(0o077);
   const server = startServer(socketPath);
-  const shutdown = () => server.close(() => fs.rmSync(socketPath, { force: true }));
+  const shutdown = () =>
+    server.close(() => fs.rmSync(socketPath, { force: true }));
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 }

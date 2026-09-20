@@ -178,6 +178,8 @@ export function clearUserState() {
     void navigator.serviceWorker
       .getRegistrations()
       .then((registrations) =>
-        Promise.all(registrations.map((registration) => registration.unregister())),
+        Promise.all(
+          registrations.map((registration) => registration.unregister()),
+        ),
       );
 }

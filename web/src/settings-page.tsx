@@ -27,6 +27,7 @@ import {
 } from "./ui";
 import { useResource } from "./use-resource";
 import { ExchangeRateManager, SettingsEditor } from "./metadata-forms";
+import { PortabilityPanel } from "./phase5-settings";
 
 const apiKeyScopes = [
   "portfolio:read",
@@ -174,6 +175,10 @@ export function SettingsPage({ session }: { session: Session }) {
               ))}
             </Card>
             <APIKeysPanel csrfToken={session.csrfToken} />
+            <PortabilityPanel
+              session={session}
+              onChanged={() => setRefresh((value) => value + 1)}
+            />
           </div>
         )}
       </ResourceView>
