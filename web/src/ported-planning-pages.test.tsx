@@ -23,43 +23,43 @@ vi.mock("./ported-planning-support", () => ({
 
 const fixtures = vi.hoisted(() => ({
   goal: {
-  id: "goal-1",
-  name: "Home deposit",
-  description: "Build a deposit",
-  targetAmountMinor: "10000000",
-  currentAmountMinor: "2500000",
-  currentAmountCurrency: "KES",
-  currency: "KES",
-  targetDate: "2028-09-20",
-  linkedAccount: null,
-  icon: "Target",
-  status: "active",
-  priority: 0,
-  assumedAnnualReturnBps: 800,
-  progressPercent: "25",
-  valueIncomplete: false,
-  missingCurrencies: [],
-  plan: {
-    plannedContributionMinor: "100000",
-    frequency: "monthly",
-    startDate: "2026-09-20",
-    endDate: null,
-  },
+    id: "goal-1",
+    name: "Home deposit",
+    description: "Build a deposit",
+    targetAmountMinor: "10000000",
+    currentAmountMinor: "2500000",
+    currentAmountCurrency: "KES",
+    currency: "KES",
+    targetDate: "2028-09-20",
+    linkedAccount: null,
+    icon: "Target",
+    status: "active",
+    priority: 0,
+    assumedAnnualReturnBps: 800,
+    progressPercent: "25",
+    valueIncomplete: false,
+    missingCurrencies: [],
+    plan: {
+      plannedContributionMinor: "100000",
+      frequency: "monthly",
+      startDate: "2026-09-20",
+      endDate: null,
+    },
   },
   instrument: {
-  id: "instrument-1",
-  externalId: null,
-  name: "Example Equity Fund",
-  symbol: "EEF",
-  identifierType: "custom",
-  identifier: null,
-  exchangeMic: null,
-  assetType: "fund",
-  quoteCurrency: "KES",
-  archivedAt: null,
-  createdAt: "2026-09-20T00:00:00Z",
-  updatedAt: "2026-09-20T00:00:00Z",
-  latestPrice: null,
+    id: "instrument-1",
+    externalId: null,
+    name: "Example Equity Fund",
+    symbol: "EEF",
+    identifierType: "custom",
+    identifier: null,
+    exchangeMic: null,
+    assetType: "fund",
+    quoteCurrency: "KES",
+    archivedAt: null,
+    createdAt: "2026-09-20T00:00:00Z",
+    updatedAt: "2026-09-20T00:00:00Z",
+    latestPrice: null,
   },
 }));
 
@@ -156,7 +156,9 @@ describe("PortedPlanningRoutes", () => {
     ).toBe("/goals/new");
     expect(await screen.findByText("Home deposit")).toBeTruthy();
     expect(screen.getByText("Required monthly (8% return)")).toBeTruthy();
-    expect(screen.getByRole("progressbar", { name: "Home deposit progress" })).toBeTruthy();
+    expect(
+      screen.getByRole("progressbar", { name: "Home deposit progress" }),
+    ).toBeTruthy();
     expectNoLegacyClasses(view.container);
 
     cleanup();
@@ -171,7 +173,9 @@ describe("PortedPlanningRoutes", () => {
 
   it("keeps goal detail and edit as separate routes", async () => {
     const view = renderRoute("/goals/goal-1");
-    expect(await screen.findByRole("heading", { name: "Home deposit" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Home deposit" }),
+    ).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "Edit goal" }).getAttribute("href"),
     ).toBe("/goals/goal-1/edit");
@@ -184,37 +188,63 @@ describe("PortedPlanningRoutes", () => {
 
     cleanup();
     renderRoute("/goals/goal-1/edit");
-    expect(await screen.findByRole("heading", { name: "Edit Home deposit" })).toBeTruthy();
-    expect(screen.getByRole("form", { name: "Edit Home deposit form" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Edit Home deposit" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("form", { name: "Edit Home deposit form" }),
+    ).toBeTruthy();
   });
 
   it("renders reports and metadata page copy from the original UI", async () => {
     renderRoute("/reports");
-    expect(await screen.findByRole("heading", { name: "Reports & analytics" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Reports & analytics" }),
+    ).toBeTruthy();
     expect(await screen.findByText("Highest net worth")).toBeTruthy();
     expect(screen.getByText("Change since tracking")).toBeTruthy();
     expect(screen.getByText("Year-over-year")).toBeTruthy();
     expect(screen.getByText("Investment income")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Net-worth history" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Portfolio allocation" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Income and returns" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Asset classification" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Account comparison" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Net-worth history" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Portfolio allocation" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Income and returns" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Asset classification" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Account comparison" }),
+    ).toBeTruthy();
 
     cleanup();
     renderRoute("/categories");
-    expect(await screen.findByRole("heading", { name: "Categories" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Category manager" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Categories" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Category manager" }),
+    ).toBeTruthy();
 
     cleanup();
     renderRoute("/institutions");
-    expect(await screen.findByRole("heading", { name: "Institutions" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Institution manager" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Institutions" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "Institution manager" }),
+    ).toBeTruthy();
   });
 
   it("preserves the instrument directory, new route, and edit route", async () => {
     renderRoute("/instruments");
-    expect(await screen.findByRole("heading", { name: "Investment instruments" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Investment instruments" }),
+    ).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "Add instrument" }).getAttribute("href"),
     ).toBe("/instruments/new");
@@ -228,12 +258,20 @@ describe("PortedPlanningRoutes", () => {
 
     cleanup();
     renderRoute("/instruments/new");
-    expect(await screen.findByRole("heading", { name: "Add instrument" })).toBeTruthy();
-    expect(screen.getByRole("form", { name: "Create instrument form" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Add instrument" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("form", { name: "Create instrument form" }),
+    ).toBeTruthy();
 
     cleanup();
     renderRoute("/instruments/instrument-1/edit");
-    expect(await screen.findByRole("heading", { name: "Edit Example Equity Fund" })).toBeTruthy();
-    expect(screen.getByRole("form", { name: "Edit Example Equity Fund form" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Edit Example Equity Fund" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("form", { name: "Edit Example Equity Fund form" }),
+    ).toBeTruthy();
   });
 });

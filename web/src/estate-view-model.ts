@@ -175,8 +175,7 @@ export function buildEstateViewWorkspace(
         account.currentValueMinor,
         ownershipShareBps,
       );
-      const isIncluded =
-        directive?.isIncluded ?? account.isIncludedInNetWorth;
+      const isIncluded = directive?.isIncluded ?? account.isIncludedInNetWorth;
 
       if (isIncluded && !directive) {
         reviewItems.push({
@@ -360,16 +359,10 @@ export function buildEstateViewWorkspace(
             allocation.beneficiaryId === beneficiary.id &&
             allocation.tier === "primary",
         )
-        .reduce(
-          (sum, allocation) => sum + BigInt(allocation.amountMinor),
-          0n,
-        );
+        .reduce((sum, allocation) => sum + BigInt(allocation.amountMinor), 0n);
       const residual = asset.residualAllocations
         .filter((allocation) => allocation.beneficiaryId === beneficiary.id)
-        .reduce(
-          (sum, allocation) => sum + BigInt(allocation.amountMinor),
-          0n,
-        );
+        .reduce((sum, allocation) => sum + BigInt(allocation.amountMinor), 0n);
       return total + direct + residual;
     }, 0n);
     return {

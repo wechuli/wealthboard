@@ -49,21 +49,14 @@ export function EstateBeneficiariesPage({ session }: { session: Session }) {
 }
 
 function useEstateWorkspace(refresh: number) {
-  return useResource(
-    async () => {
-      const [estate, accounts, overview] = await Promise.all([
-        getEstate(),
-        getAccounts(),
-        getOverview(),
-      ]);
-      return buildEstateViewWorkspace(
-        estate,
-        accounts.items,
-        overview.settings,
-      );
-    },
-    [refresh],
-  );
+  return useResource(async () => {
+    const [estate, accounts, overview] = await Promise.all([
+      getEstate(),
+      getAccounts(),
+      getOverview(),
+    ]);
+    return buildEstateViewWorkspace(estate, accounts.items, overview.settings);
+  }, [refresh]);
 }
 
 export function EstateDistributionPage({ session }: { session: Session }) {

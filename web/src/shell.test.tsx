@@ -59,7 +59,9 @@ describe("AppShell navigation", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getAllByRole("button", { name: "Quick add" })[0]);
-    expect(screen.getByRole("dialog", { name: "Quick add" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Quick add" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Add deposit" })).toHaveAttribute(
       "href",
       "/transactions/new?type=deposit",

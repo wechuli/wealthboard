@@ -42,8 +42,7 @@ export function Button({
       "border border-white/10 bg-white/[0.06] text-slate-100 hover:bg-white/10",
     variant === "ghost" &&
       "text-slate-300 hover:bg-white/[0.06] hover:text-white",
-    variant === "danger" &&
-      "bg-red-500/15 text-red-300 hover:bg-red-500/25",
+    variant === "danger" && "bg-red-500/15 text-red-300 hover:bg-red-500/25",
     variant === "outline" &&
       "border border-white/15 bg-transparent text-slate-100 hover:bg-white/[0.06]",
     size === "default" && "h-11",
@@ -140,7 +139,10 @@ export function Badge({
   );
 }
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({
+  className,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       className={cn(
@@ -237,9 +239,7 @@ export function PageHeader({
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
           {title}
         </h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-slate-400">
-          {description}
-        </p>
+        <p className="mt-1.5 max-w-2xl text-sm text-slate-400">{description}</p>
       </div>
     </header>
   );
@@ -288,7 +288,11 @@ export function MutationButton({
           });
         }}
       >
-        {pending ? <LoaderCircle className="animate-spin" size={16} /> : children}
+        {pending ? (
+          <LoaderCircle className="animate-spin" size={16} />
+        ) : (
+          children
+        )}
       </Button>
       {message ? (
         <span className="sr-only" role="alert">

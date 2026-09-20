@@ -128,10 +128,18 @@ describe("original settings page", () => {
       "Password",
       "Import, restore & export",
     ]);
-    expect(screen.getByText("Portable files contain only your portfolio, never credentials or another user's records.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Archived accounts" })).toHaveClass("border-white/10");
+    expect(
+      screen.getByText(
+        "Portable files contain only your portfolio, never credentials or another user's records.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Archived accounts" })).toHaveClass(
+      "border-white/10",
+    );
     expect(screen.getByLabelText("Default dashboard period")).toHaveValue("1y");
-    expect(screen.queryByText(/deployment|operator|AI_ALLOWED_ENDPOINTS/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/deployment|operator|AI_ALLOWED_ENDPOINTS/i),
+    ).not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Provider"), "custom");
     const endpoint = screen.getByLabelText("API endpoint");
@@ -139,7 +147,11 @@ describe("original settings page", () => {
     await user.clear(endpoint);
     await user.type(endpoint, "https://models.example.com/v1");
     expect(endpoint).toHaveValue("https://models.example.com/v1");
-    expect(screen.getByText("This endpoint must be enabled for your Wealthboard instance.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This endpoint must be enabled for your Wealthboard instance.",
+      ),
+    ).toBeInTheDocument();
   });
 });
 
@@ -184,8 +196,12 @@ describe("original portfolio review", () => {
 
     await screen.findByRole("button", { name: "Reveal financial values" });
     await user.click(screen.getByRole("button", { name: "Generate review" }));
-    expect(await screen.findByRole("heading", { name: "Review hidden" })).toBeInTheDocument();
-    expect(screen.queryByText("Private portfolio headline")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Review hidden" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Private portfolio headline"),
+    ).not.toBeInTheDocument();
     localStorage.removeItem("wealthboard-values-hidden");
   });
 });
@@ -202,7 +218,8 @@ describe("original AI prompts", () => {
 
     await user.click(screen.getByRole("button", { name: "Show prompt" }));
     expect(
-      (screen.getByLabelText("AI conversion prompt") as HTMLTextAreaElement).value,
+      (screen.getByLabelText("AI conversion prompt") as HTMLTextAreaElement)
+        .value,
     ).toContain("external_id,type,amount,date,description,notes");
     await user.click(screen.getByRole("button", { name: "Copy prompt" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));

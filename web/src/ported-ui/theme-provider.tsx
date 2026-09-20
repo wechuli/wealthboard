@@ -126,9 +126,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ThemeContext.Provider
-      value={{ preference, resolvedTheme, setPreference }}
-    >
+    <ThemeContext.Provider value={{ preference, resolvedTheme, setPreference }}>
       {children}
     </ThemeContext.Provider>
   );

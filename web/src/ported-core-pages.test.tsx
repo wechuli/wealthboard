@@ -131,7 +131,9 @@ describe("ported core pages", () => {
   it("preserves the prominent dashboard hierarchy", async () => {
     renderPage(<PortedDashboardPage />);
 
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Overview" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Total net worth")).toBeInTheDocument();
     expect(screen.getByText("Net-worth history")).toBeInTheDocument();
     expect(screen.getByText("Asset allocation")).toBeInTheDocument();
@@ -162,15 +164,21 @@ describe("ported core pages", () => {
       "/accounts/new",
     );
     expect(await screen.findByLabelText("Search accounts")).toBeInTheDocument();
-    expect(screen.getByLabelText("Filter by tracking method")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Filter by tracking method"),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Filter by price state")).toHaveValue("all");
     expect(screen.getByLabelText("Sort accounts")).toHaveValue("value");
-    expect(screen.getByRole("option", { name: "Complete prices" })).toBeEnabled();
+    expect(
+      screen.getByRole("option", { name: "Complete prices" }),
+    ).toBeEnabled();
     expect(screen.getByRole("option", { name: "Recent change" })).toBeEnabled();
     expect(screen.getByText("Daily account")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Table view" }));
-    expect(screen.getByRole("columnheader", { name: "30-day change" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "30-day change" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
   });
 
@@ -194,12 +202,15 @@ describe("ported core pages", () => {
     expect(
       await screen.findByLabelText("Search transactions"),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Filter by amount direction")).toBeInTheDocument();
-    expect(screen.getByText("Monthly interest", { exact: false })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Edit transaction" })).toHaveAttribute(
-      "href",
-      "/transactions/transaction-1/edit",
-    );
+    expect(
+      screen.getByLabelText("Filter by amount direction"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Monthly interest", { exact: false }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Edit transaction" }),
+    ).toHaveAttribute("href", "/transactions/transaction-1/edit");
   });
 
   it("keeps account detail actions and linked-goal framing without internal controls", async () => {
@@ -225,7 +236,9 @@ describe("ported core pages", () => {
       ["/accounts/account-1"],
     );
 
-    expect(await screen.findByRole("heading", { name: "Daily account" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Daily account" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Estate plan/ })).toHaveAttribute(
       "href",
       "/estate/distribution?account=account-1#asset-account-1",
@@ -234,11 +247,12 @@ describe("ported core pages", () => {
       "href",
       "/transactions/new?accountId=account-1&type=fee",
     );
-    expect(screen.getByRole("link", { name: /Emergency fund/ })).toHaveAttribute(
-      "href",
-      "/goals/goal-1",
-    );
-    expect(screen.queryByText(/workflow controls|current API/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Emergency fund/ }),
+    ).toHaveAttribute("href", "/goals/goal-1");
+    expect(
+      screen.queryByText(/workflow controls|current API/i),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps every original page as a separate route intent", () => {

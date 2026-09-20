@@ -43,7 +43,9 @@ export function EmptyState({
 }) {
   return (
     <div className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-6 text-center">
-      <div className="mb-4 rounded-2xl bg-white/[0.05] p-3 text-slate-400">{icon}</div>
+      <div className="mb-4 rounded-2xl bg-white/[0.05] p-3 text-slate-400">
+        {icon}
+      </div>
       <h3 className="font-semibold text-slate-100">{title}</h3>
       <p className="mt-1 max-w-sm text-sm text-slate-400">{description}</p>
       {action ? <div className="mt-5">{action}</div> : null}
@@ -51,7 +53,10 @@ export function EmptyState({
   );
 }
 
-export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export function Card({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
@@ -63,16 +68,25 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   );
 }
 
-export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export function CardHeader({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("flex items-start justify-between gap-4 p-5 pb-2", className)}
+      className={cn(
+        "flex items-start justify-between gap-4 p-5 pb-2",
+        className,
+      )}
       {...props}
     />
   );
 }
 
-export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
+export function CardTitle({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h2
       className={cn("text-sm font-semibold text-slate-100", className)}
@@ -81,11 +95,19 @@ export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHead
   );
 }
 
-export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("mt-1 text-sm text-slate-400", className)} {...props} />;
+export function CardDescription({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p className={cn("mt-1 text-sm text-slate-400", className)} {...props} />
+  );
 }
 
-export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export function CardContent({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("p-5 pt-3", className)} {...props} />;
 }
 
@@ -187,10 +209,16 @@ export const Select = React.forwardRef<
 ));
 Select.displayName = "Select";
 
-export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
+export function Label({
+  className,
+  ...props
+}: React.LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
-      className={cn("mb-1.5 block text-sm font-medium text-slate-300", className)}
+      className={cn(
+        "mb-1.5 block text-sm font-medium text-slate-300",
+        className,
+      )}
       {...props}
     />
   );
@@ -261,7 +289,10 @@ export function Progress({
   const safe = Math.min(100, Math.max(0, value));
   return (
     <div
-      className={cn("h-2 overflow-hidden rounded-full bg-white/[0.07]", className)}
+      className={cn(
+        "h-2 overflow-hidden rounded-full bg-white/[0.07]",
+        className,
+      )}
       role="progressbar"
       aria-label={label}
       aria-valuemin={0}

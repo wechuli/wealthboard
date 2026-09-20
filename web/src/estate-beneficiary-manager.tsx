@@ -179,9 +179,11 @@ export function BeneficiaryManager({
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-medium text-slate-100">{beneficiary.name}</h2>
               <Badge>
-                {kindOptions.find(
-                  (option) => option.value === beneficiary.kind,
-                )?.label}
+                {
+                  kindOptions.find(
+                    (option) => option.value === beneficiary.kind,
+                  )?.label
+                }
               </Badge>
               {beneficiary.archivedAt ? (
                 <Badge tone="warning">Archived</Badge>

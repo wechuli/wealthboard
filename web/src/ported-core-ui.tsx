@@ -221,7 +221,10 @@ export const Select = forwardRef<
 ));
 Select.displayName = "Select";
 
-export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
+export function Label({
+  className,
+  ...props
+}: LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
       className={classes(
@@ -245,7 +248,10 @@ export function Progress({
   const normalized = Math.max(0, Math.min(100, value));
   return (
     <div
-      className={classes("h-2 overflow-hidden rounded-full bg-white/[0.07]", className)}
+      className={classes(
+        "h-2 overflow-hidden rounded-full bg-white/[0.07]",
+        className,
+      )}
       role="progressbar"
       aria-label={label}
       aria-valuemin={0}

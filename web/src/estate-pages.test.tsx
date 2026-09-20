@@ -190,29 +190,57 @@ describe("estate route pages", () => {
       "/estate",
       <Routes>
         <Route path="/estate" element={<EstateIndexPage />} />
-        <Route path="/estate/distribution" element={<p>Distribution route</p>} />
+        <Route
+          path="/estate/distribution"
+          element={<p>Distribution route</p>}
+        />
       </Routes>,
     );
     expect(await screen.findByText("Distribution route")).toBeInTheDocument();
   });
 
   it("keeps beneficiary management isolated on its original route", async () => {
-    renderAt("/estate/beneficiaries", <EstateBeneficiariesPage session={session} />);
-    const heading = screen.getByRole("heading", { name: "Beneficiaries", level: 1 });
+    renderAt(
+      "/estate/beneficiaries",
+      <EstateBeneficiariesPage session={session} />,
+    );
+    const heading = screen.getByRole("heading", {
+      name: "Beneficiaries",
+      level: 1,
+    });
     expect(heading.closest("header")).toHaveClass("mb-6", "sm:items-end");
     expect(await screen.findByText("Jordan Example")).toBeInTheDocument();
-    expect(screen.getByText(/do not become Wealthboard users/)).toBeInTheDocument();
-    expect(screen.queryByText(/This plan records intent only/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/do not become Wealthboard users/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/This plan records intent only/),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the original distribution composition and selected asset", async () => {
-    renderAt("/estate/distribution?account=account-1", <EstateDistributionPage session={session} />);
-    expect(screen.getByRole("heading", { name: "Estate distribution" })).toBeInTheDocument();
+    renderAt(
+      "/estate/distribution?account=account-1",
+      <EstateDistributionPage session={session} />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Estate distribution" }),
+    ).toBeInTheDocument();
     await screen.findByRole("heading", { name: "Family home" });
-    expect(screen.getByText(/This plan records intent only/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Family home" }).closest("div[id='asset-account-1']")).toHaveClass("ring-2");
-    expect(screen.queryByText("Base-currency value unavailable")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Will Preparation Worksheet/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/This plan records intent only/),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("heading", { name: "Family home" })
+        .closest("div[id='asset-account-1']"),
+    ).toHaveClass("ring-2");
+    expect(
+      screen.queryByText("Base-currency value unavailable"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Will Preparation Worksheet/),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the original summary composition", async () => {
@@ -235,12 +263,18 @@ describe("estate route pages", () => {
       settings: { ...overview.settings, preferredDateFormat: "dd/MM/yyyy" },
     });
     renderAt("/estate/summary", <EstateSummaryPage session={session} />);
-    expect(screen.getByRole("heading", { name: "Estate planning summary" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Estate planning summary" }),
+    ).toBeInTheDocument();
     await screen.findByRole("heading", { name: "Completion review" });
     expect(screen.getByText(/Will Preparation Worksheet/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Completion review" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Completion review" }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Created 20\/09\/2026/)).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Add beneficiary" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Add beneficiary" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps snapshot values excluded until explicitly selected", async () => {
@@ -251,10 +285,14 @@ describe("estate route pages", () => {
         <Route path="/estate/snapshots/:id" element={<EstateSnapshotPage />} />
       </Routes>,
     );
-    expect(await screen.findByRole("heading", { name: "Print controls" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Print controls" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Value excluded").length).toBeGreaterThan(0);
     expect(screen.queryAllByText("KES 1,000.00")).toHaveLength(0);
-    await user.click(screen.getByRole("checkbox", { name: "Include exact values" }));
+    await user.click(
+      screen.getByRole("checkbox", { name: "Include exact values" }),
+    );
     expect(screen.getAllByText("KES 1,000.00").length).toBeGreaterThan(0);
   });
 });

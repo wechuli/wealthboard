@@ -107,12 +107,37 @@ function investmentOutputContract(format: InvestmentHistoryPromptFormat) {
     ].join("\n");
   }
   const contracts = {
-    holdings_csv: ["OUTPUT CONTRACT: OPENING HOLDINGS CSV", "  instrument_external_id,event_external_id,price_external_id,instrument_name,symbol,identifier_type,identifier,exchange_mic,asset_type,quote_currency,quantity,unit_price,price_date,opening_cost_basis,notes", "- Include only opening holdings that have an explicit quantity, effective unit price, and price date in the source."],
-    trades_csv: ["OUTPUT CONTRACT: TRADES CSV", "  external_id,instrument_external_id,type,quantity,unit_price,trade_currency,fee_amount,fee_currency,cash_effect,applied_exchange_rate,trade_date,settlement_date,description,notes", "- Include only buy, sell, or quantity_adjustment records. Do not include opening holdings, cash rows, prices, transfers, or corporate actions."],
-    cash_csv: ["OUTPUT CONTRACT: CASH CSV", "  external_id,type,amount,date,description,notes", "- Include only deposit, withdrawal, interest, dividend, fee, or manual_adjustment cash records."],
-    prices_csv: ["OUTPUT CONTRACT: PRICES CSV", "  external_id,instrument_external_id,price,effective_date,source,provenance", "- Include only explicit positive unit-price observations with a source and effective date."],
+    holdings_csv: [
+      "OUTPUT CONTRACT: OPENING HOLDINGS CSV",
+      "  instrument_external_id,event_external_id,price_external_id,instrument_name,symbol,identifier_type,identifier,exchange_mic,asset_type,quote_currency,quantity,unit_price,price_date,opening_cost_basis,notes",
+      "- Include only opening holdings that have an explicit quantity, effective unit price, and price date in the source.",
+    ],
+    trades_csv: [
+      "OUTPUT CONTRACT: TRADES CSV",
+      "  external_id,instrument_external_id,type,quantity,unit_price,trade_currency,fee_amount,fee_currency,cash_effect,applied_exchange_rate,trade_date,settlement_date,description,notes",
+      "- Include only buy, sell, or quantity_adjustment records. Do not include opening holdings, cash rows, prices, transfers, or corporate actions.",
+    ],
+    cash_csv: [
+      "OUTPUT CONTRACT: CASH CSV",
+      "  external_id,type,amount,date,description,notes",
+      "- Include only deposit, withdrawal, interest, dividend, fee, or manual_adjustment cash records.",
+    ],
+    prices_csv: [
+      "OUTPUT CONTRACT: PRICES CSV",
+      "  external_id,instrument_external_id,price,effective_date,source,provenance",
+      "- Include only explicit positive unit-price observations with a source and effective date.",
+    ],
   } as const;
-  return [contracts[format][0], "- Return only raw CSV. Do not use Markdown fences and do not add explanations before or after it.", "- Use this exact header and column order:", contracts[format][1], contracts[format][2], "- Leave unavailable optional text cells empty.", "- Apply normal CSV quoting to text containing commas, quotes, or line breaks.", "- CSV files cannot represent an atomic dividend-reinvestment group. Use Complete JSON when the source explicitly groups dividend income with reinvestment buys."].join("\n");
+  return [
+    contracts[format][0],
+    "- Return only raw CSV. Do not use Markdown fences and do not add explanations before or after it.",
+    "- Use this exact header and column order:",
+    contracts[format][1],
+    contracts[format][2],
+    "- Leave unavailable optional text cells empty.",
+    "- Apply normal CSV quoting to text containing commas, quotes, or line breaks.",
+    "- CSV files cannot represent an atomic dividend-reinvestment group. Use Complete JSON when the source explicitly groups dividend income with reinvestment buys.",
+  ].join("\n");
 }
 
 export function investmentHistoryAiPrompt(
@@ -170,17 +195,259 @@ export function investmentHistoryAiPrompt(
 }
 
 function CopyStatus({ state }: { state: "idle" | "copied" | "failed" }) {
-  return state === "copied" ? <p role="status" className="text-xs text-emerald-300">Prompt copied. Add your source data at the marker before sending it.</p> : state === "failed" ? <p role="alert" className="text-xs text-amber-300">The browser could not copy the prompt. Select the prompt and copy it manually.</p> : null;
+  return state === "copied" ? (
+    <p role="status" className="text-xs text-emerald-300">
+      Prompt copied. Add your source data at the marker before sending it.
+    </p>
+  ) : state === "failed" ? (
+    <p role="alert" className="text-xs text-amber-300">
+      The browser could not copy the prompt. Select the prompt and copy it
+      manually.
+    </p>
+  ) : null;
 }
 
-export function AccountHistoryAiPrompt({ currency, fractionDigits }: { currency: string; fractionDigits: number }) {
-  const [format, setFormat] = useState<AccountHistoryPromptFormat>("csv"); const [expanded, setExpanded] = useState(false); const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle"); const prompt = useMemo(() => accountHistoryAiPrompt(format, currency, fractionDigits), [currency, format, fractionDigits]);
-  return <Card className="mb-5 border-cyan-300/15"><CardHeader><div className="flex items-start gap-3"><span className="rounded-lg bg-cyan-300/10 p-2 text-cyan-200"><Sparkles size={18} aria-hidden /></span><div><CardTitle>Prepare your file with AI</CardTitle><p className="mt-1 text-sm text-slate-400">Copy a strict transformation prompt, then paste or attach your provider statement in an AI service you trust. Nothing is sent by Wealthboard.</p></div></div><Button type="button" variant="ghost" size="sm" className="shrink-0" aria-expanded={expanded} aria-controls="account-history-ai-prompt-content" onClick={() => setExpanded((current) => !current)}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}{expanded ? "Hide prompt" : "Show prompt"}</Button></CardHeader>{expanded ? <CardContent id="account-history-ai-prompt-content" className="space-y-4"><div className="flex gap-2 rounded-xl border border-white/10 bg-black/15 p-1" role="group" aria-label="AI prompt output format">{(["csv", "json"] as const).map((option) => <Button key={option} type="button" size="sm" variant={format === option ? "secondary" : "ghost"} className="flex-1 uppercase" aria-pressed={format === option} onClick={() => { setFormat(option); setCopyState("idle"); }}>{option}</Button>)}</div><div><Label htmlFor="account-history-ai-prompt">AI conversion prompt</Label><Textarea id="account-history-ai-prompt" value={prompt} readOnly spellCheck={false} className="h-80 resize-none font-mono text-xs leading-5" onFocus={(event) => event.currentTarget.select()} /></div><PromptFooter onCopy={async () => { try { await navigator.clipboard.writeText(prompt); setCopyState("copied"); } catch { setCopyState("failed"); } }} copied={copyState === "copied"} investment={false} /><CopyStatus state={copyState} /></CardContent> : null}</Card>;
+export function AccountHistoryAiPrompt({
+  currency,
+  fractionDigits,
+}: {
+  currency: string;
+  fractionDigits: number;
+}) {
+  const [format, setFormat] = useState<AccountHistoryPromptFormat>("csv");
+  const [expanded, setExpanded] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  const prompt = useMemo(
+    () => accountHistoryAiPrompt(format, currency, fractionDigits),
+    [currency, format, fractionDigits],
+  );
+  return (
+    <Card className="mb-5 border-cyan-300/15">
+      <CardHeader>
+        <div className="flex items-start gap-3">
+          <span className="rounded-lg bg-cyan-300/10 p-2 text-cyan-200">
+            <Sparkles size={18} aria-hidden />
+          </span>
+          <div>
+            <CardTitle>Prepare your file with AI</CardTitle>
+            <p className="mt-1 text-sm text-slate-400">
+              Copy a strict transformation prompt, then paste or attach your
+              provider statement in an AI service you trust. Nothing is sent by
+              Wealthboard.
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0"
+          aria-expanded={expanded}
+          aria-controls="account-history-ai-prompt-content"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {expanded ? "Hide prompt" : "Show prompt"}
+        </Button>
+      </CardHeader>
+      {expanded ? (
+        <CardContent
+          id="account-history-ai-prompt-content"
+          className="space-y-4"
+        >
+          <div
+            className="flex gap-2 rounded-xl border border-white/10 bg-black/15 p-1"
+            role="group"
+            aria-label="AI prompt output format"
+          >
+            {(["csv", "json"] as const).map((option) => (
+              <Button
+                key={option}
+                type="button"
+                size="sm"
+                variant={format === option ? "secondary" : "ghost"}
+                className="flex-1 uppercase"
+                aria-pressed={format === option}
+                onClick={() => {
+                  setFormat(option);
+                  setCopyState("idle");
+                }}
+              >
+                {option}
+              </Button>
+            ))}
+          </div>
+          <div>
+            <Label htmlFor="account-history-ai-prompt">
+              AI conversion prompt
+            </Label>
+            <Textarea
+              id="account-history-ai-prompt"
+              value={prompt}
+              readOnly
+              spellCheck={false}
+              className="h-80 resize-none font-mono text-xs leading-5"
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </div>
+          <PromptFooter
+            onCopy={async () => {
+              try {
+                await navigator.clipboard.writeText(prompt);
+                setCopyState("copied");
+              } catch {
+                setCopyState("failed");
+              }
+            }}
+            copied={copyState === "copied"}
+            investment={false}
+          />
+          <CopyStatus state={copyState} />
+        </CardContent>
+      ) : null}
+    </Card>
+  );
 }
 
-export function InvestmentHistoryAiPrompt({ accountCurrency, accountFractionDigits, enabledCurrencies }: { accountCurrency: string; accountFractionDigits: number; enabledCurrencies: string[] }) {
-  const [format, setFormat] = useState<InvestmentHistoryPromptFormat>("json"); const [expanded, setExpanded] = useState(false); const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle"); const prompt = useMemo(() => investmentHistoryAiPrompt(format, accountCurrency, accountFractionDigits, enabledCurrencies), [accountCurrency, accountFractionDigits, enabledCurrencies, format]);
-  return <Card className="mb-5 border-cyan-300/15"><CardHeader><div className="flex items-start gap-3"><span className="rounded-lg bg-cyan-300/10 p-2 text-cyan-200"><Sparkles size={18} aria-hidden /></span><div><CardTitle>Prepare your investment file with AI</CardTitle><p className="mt-1 text-sm text-slate-400">Copy a strict transformation prompt, then paste or attach your broker statement in an AI service you trust. Nothing is sent by Wealthboard.</p></div></div><Button type="button" variant="ghost" size="sm" className="shrink-0" aria-expanded={expanded} aria-controls="investment-history-ai-prompt-content" onClick={() => setExpanded((current) => !current)}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}{expanded ? "Hide prompt" : "Show prompt"}</Button></CardHeader>{expanded ? <CardContent id="investment-history-ai-prompt-content" className="space-y-4"><div><Label htmlFor="investment-history-ai-prompt-format">AI prompt output format</Label><Select id="investment-history-ai-prompt-format" value={format} onChange={(event) => { setFormat(event.target.value as InvestmentHistoryPromptFormat); setCopyState("idle"); }}>{Object.entries(FORMAT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></div><div><Label htmlFor="investment-history-ai-prompt">AI conversion prompt</Label><Textarea id="investment-history-ai-prompt" value={prompt} readOnly spellCheck={false} className="h-80 resize-none font-mono text-xs leading-5" onFocus={(event) => event.currentTarget.select()} /></div><PromptFooter onCopy={async () => { try { await navigator.clipboard.writeText(prompt); setCopyState("copied"); } catch { setCopyState("failed"); } }} copied={copyState === "copied"} investment /><CopyStatus state={copyState} /></CardContent> : null}</Card>;
+export function InvestmentHistoryAiPrompt({
+  accountCurrency,
+  accountFractionDigits,
+  enabledCurrencies,
+}: {
+  accountCurrency: string;
+  accountFractionDigits: number;
+  enabledCurrencies: string[];
+}) {
+  const [format, setFormat] = useState<InvestmentHistoryPromptFormat>("json");
+  const [expanded, setExpanded] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  const prompt = useMemo(
+    () =>
+      investmentHistoryAiPrompt(
+        format,
+        accountCurrency,
+        accountFractionDigits,
+        enabledCurrencies,
+      ),
+    [accountCurrency, accountFractionDigits, enabledCurrencies, format],
+  );
+  return (
+    <Card className="mb-5 border-cyan-300/15">
+      <CardHeader>
+        <div className="flex items-start gap-3">
+          <span className="rounded-lg bg-cyan-300/10 p-2 text-cyan-200">
+            <Sparkles size={18} aria-hidden />
+          </span>
+          <div>
+            <CardTitle>Prepare your investment file with AI</CardTitle>
+            <p className="mt-1 text-sm text-slate-400">
+              Copy a strict transformation prompt, then paste or attach your
+              broker statement in an AI service you trust. Nothing is sent by
+              Wealthboard.
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0"
+          aria-expanded={expanded}
+          aria-controls="investment-history-ai-prompt-content"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {expanded ? "Hide prompt" : "Show prompt"}
+        </Button>
+      </CardHeader>
+      {expanded ? (
+        <CardContent
+          id="investment-history-ai-prompt-content"
+          className="space-y-4"
+        >
+          <div>
+            <Label htmlFor="investment-history-ai-prompt-format">
+              AI prompt output format
+            </Label>
+            <Select
+              id="investment-history-ai-prompt-format"
+              value={format}
+              onChange={(event) => {
+                setFormat(event.target.value as InvestmentHistoryPromptFormat);
+                setCopyState("idle");
+              }}
+            >
+              {Object.entries(FORMAT_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="investment-history-ai-prompt">
+              AI conversion prompt
+            </Label>
+            <Textarea
+              id="investment-history-ai-prompt"
+              value={prompt}
+              readOnly
+              spellCheck={false}
+              className="h-80 resize-none font-mono text-xs leading-5"
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </div>
+          <PromptFooter
+            onCopy={async () => {
+              try {
+                await navigator.clipboard.writeText(prompt);
+                setCopyState("copied");
+              } catch {
+                setCopyState("failed");
+              }
+            }}
+            copied={copyState === "copied"}
+            investment
+          />
+          <CopyStatus state={copyState} />
+        </CardContent>
+      ) : null}
+    </Card>
+  );
 }
 
-function PromptFooter({ onCopy, copied, investment }: { onCopy: () => Promise<void>; copied: boolean; investment: boolean }) { return <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-2 text-xs text-slate-500"><ShieldCheck className="mt-0.5 shrink-0 text-emerald-300" size={15} /><p>{investment ? "Wealthboard does not send this prompt or your financial files to any AI. AI-generated investment files can contain relationship, quantity, settlement, or price errors; review the preview before importing." : "Wealthboard does not send this prompt or your financial files to any AI. AI-generated files can contain mistakes; review the file here before importing it."}</p></div><Button type="button" variant="secondary" className="shrink-0" onClick={() => void onCopy()}>{copied ? <Check size={16} /> : <Copy size={16} />}{copied ? "Copied" : "Copy prompt"}</Button></div>; }
+function PromptFooter({
+  onCopy,
+  copied,
+  investment,
+}: {
+  onCopy: () => Promise<void>;
+  copied: boolean;
+  investment: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-2 text-xs text-slate-500">
+        <ShieldCheck className="mt-0.5 shrink-0 text-emerald-300" size={15} />
+        <p>
+          {investment
+            ? "Wealthboard does not send this prompt or your financial files to any AI. AI-generated investment files can contain relationship, quantity, settlement, or price errors; review the preview before importing."
+            : "Wealthboard does not send this prompt or your financial files to any AI. AI-generated files can contain mistakes; review the file here before importing it."}
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        className="shrink-0"
+        onClick={() => void onCopy()}
+      >
+        {copied ? <Check size={16} /> : <Copy size={16} />}
+        {copied ? "Copied" : "Copy prompt"}
+      </Button>
+    </div>
+  );
+}

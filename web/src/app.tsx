@@ -379,14 +379,8 @@ function AuthenticatedApp({
             path="/accounts/:id"
             element={<AccountDetailPage session={session} />}
           />
-          <Route
-            path="/transactions"
-            element={<TransactionsPage />}
-          />
-          <Route
-            path="/goals"
-            element={<GoalsPage session={session} />}
-          />
+          <Route path="/transactions" element={<TransactionsPage />} />
+          <Route path="/goals" element={<GoalsPage session={session} />} />
           <Route
             path="/goals/:id"
             element={<GoalDetailPage session={session} />}
@@ -408,18 +402,12 @@ function AuthenticatedApp({
             path="/instruments/:id"
             element={<InstrumentDetailPage session={session} />}
           />
-          <Route
-            path="/estate"
-            element={<EstatePage session={session} />}
-          />
+          <Route path="/estate" element={<EstatePage session={session} />} />
           <Route
             path="/estate/snapshots/:id"
             element={<EstateSnapshotPage />}
           />
-          <Route
-            path="/review"
-            element={<ReviewPage session={session} />}
-          />
+          <Route path="/review" element={<ReviewPage session={session} />} />
           <Route
             path="/settings"
             element={<SettingsPage session={session} />}

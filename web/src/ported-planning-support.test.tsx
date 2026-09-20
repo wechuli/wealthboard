@@ -60,7 +60,9 @@ describe("ported planning support", () => {
     expect(screen.getByLabelText("Goal name")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create goal" })).toBeTruthy();
     expect(screen.getByLabelText("Identifier type")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Create instrument" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Create instrument" }),
+    ).toBeTruthy();
     expectNoLegacyClasses(view.container);
   });
 
@@ -83,13 +85,25 @@ describe("ported planning support", () => {
     } as Institution;
     const view = render(
       <>
-        <CategoryManager categories={[category]} csrfToken="csrf" onChanged={vi.fn()} />
-        <InstitutionManager institutions={[institution]} csrfToken="csrf" onChanged={vi.fn()} />
+        <CategoryManager
+          categories={[category]}
+          csrfToken="csrf"
+          onChanged={vi.fn()}
+        />
+        <InstitutionManager
+          institutions={[institution]}
+          csrfToken="csrf"
+          onChanged={vi.fn()}
+        />
       </>,
     );
 
-    expect(screen.getByRole("heading", { name: "Create custom category" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Add institution" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Create custom category" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Add institution" }),
+    ).toBeTruthy();
     expect(screen.getByLabelText("Move category up")).toBeTruthy();
     expect(screen.getByLabelText("Archive institution")).toBeTruthy();
     expectNoLegacyClasses(view.container);

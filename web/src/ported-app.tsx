@@ -67,14 +67,18 @@ export function PortedApp() {
     void getSession()
       .then(setSession)
       .catch((error: unknown) => {
-        setSession(error instanceof ApiError && error.status === 401 ? null : undefined);
+        setSession(
+          error instanceof ApiError && error.status === 401 ? null : undefined,
+        );
       });
   }, []);
 
   if (session === undefined || !authConfig) return <LoadingScreen />;
   if (session === null) {
     if (pathname === "/signup" && authConfig.localEnabled) {
-      return <SignupScreen authenticate={signup} onAuthenticated={setSession} />;
+      return (
+        <SignupScreen authenticate={signup} onAuthenticated={setSession} />
+      );
     }
     return (
       <LoginScreen
@@ -116,7 +120,10 @@ function AuthenticatedRoutes({
   if (error) {
     return (
       <main className="financial-grid flex min-h-screen items-center justify-center px-5">
-        <div className="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200" role="alert">
+        <div
+          className="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200"
+          role="alert"
+        >
           {error}
         </div>
       </main>
@@ -142,43 +149,130 @@ function AuthenticatedRoutes({
         <Route path="/signup" element={<Navigate to="/" replace />} />
 
         <Route path="/accounts" element={<PortedAccountsPage />} />
-        <Route path="/accounts/new" element={<PortedNewAccountPage session={session} />} />
-        <Route path="/accounts/archived" element={<PortedArchivedAccountsPage session={session} />} />
-        <Route path="/accounts/:id" element={<PortedAccountDetailPage session={session} />} />
-        <Route path="/accounts/:id/edit" element={<PortedEditAccountPage session={session} />} />
-        <Route path="/accounts/:id/valuation" element={<PortedValuationPage session={session} />} />
-        <Route path="/accounts/:id/convert" element={<PortedConvertAccountPage session={session} />} />
-        <Route path="/accounts/:id/import" element={<PortedAccountHistoryImportPage session={session} />} />
-        <Route path="/accounts/:id/investment-actions" element={<PortedInvestmentActionsPage session={session} />} />
-        <Route path="/accounts/:id/instruments/new" element={<PortedNewAccountInstrumentPage session={session} />} />
-        <Route path="/accounts/:id/positions/new" element={<PortedNewPositionEventPage session={session} />} />
-        <Route path="/accounts/:id/positions/:eventId/edit" element={<PortedEditPositionEventPage session={session} />} />
-        <Route path="/accounts/:id/prices/new" element={<PortedNewSecurityPricePage session={session} />} />
-        <Route path="/accounts/:id/reconcile" element={<PortedReconcilePositionAccountPage session={session} />} />
+        <Route
+          path="/accounts/new"
+          element={<PortedNewAccountPage session={session} />}
+        />
+        <Route
+          path="/accounts/archived"
+          element={<PortedArchivedAccountsPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id"
+          element={<PortedAccountDetailPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/edit"
+          element={<PortedEditAccountPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/valuation"
+          element={<PortedValuationPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/convert"
+          element={<PortedConvertAccountPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/import"
+          element={<PortedAccountHistoryImportPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/investment-actions"
+          element={<PortedInvestmentActionsPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/instruments/new"
+          element={<PortedNewAccountInstrumentPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/positions/new"
+          element={<PortedNewPositionEventPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/positions/:eventId/edit"
+          element={<PortedEditPositionEventPage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/prices/new"
+          element={<PortedNewSecurityPricePage session={session} />}
+        />
+        <Route
+          path="/accounts/:id/reconcile"
+          element={<PortedReconcilePositionAccountPage session={session} />}
+        />
 
-        <Route path="/transactions" element={<PortedTransactionsPage session={session} />} />
-        <Route path="/transactions/new" element={<PortedNewTransactionPage session={session} />} />
-        <Route path="/transactions/:id/edit" element={<PortedEditTransactionPage session={session} />} />
+        <Route
+          path="/transactions"
+          element={<PortedTransactionsPage session={session} />}
+        />
+        <Route
+          path="/transactions/new"
+          element={<PortedNewTransactionPage session={session} />}
+        />
+        <Route
+          path="/transactions/:id/edit"
+          element={<PortedEditTransactionPage session={session} />}
+        />
 
         <Route path="/goals" element={<PortedGoalsPage session={session} />} />
-        <Route path="/goals/new" element={<PortedNewGoalPage session={session} />} />
-        <Route path="/goals/:id" element={<PortedGoalDetailPage session={session} />} />
-        <Route path="/goals/:id/edit" element={<PortedEditGoalPage session={session} />} />
+        <Route
+          path="/goals/new"
+          element={<PortedNewGoalPage session={session} />}
+        />
+        <Route
+          path="/goals/:id"
+          element={<PortedGoalDetailPage session={session} />}
+        />
+        <Route
+          path="/goals/:id/edit"
+          element={<PortedEditGoalPage session={session} />}
+        />
         <Route path="/reports" element={<PortedReportsPage />} />
-        <Route path="/categories" element={<PortedCategoriesPage session={session} />} />
-        <Route path="/institutions" element={<PortedInstitutionsPage session={session} />} />
-        <Route path="/instruments" element={<PortedInstrumentsPage session={session} />} />
-        <Route path="/instruments/new" element={<PortedNewInstrumentPage session={session} />} />
-        <Route path="/instruments/:id/edit" element={<PortedEditInstrumentPage session={session} />} />
+        <Route
+          path="/categories"
+          element={<PortedCategoriesPage session={session} />}
+        />
+        <Route
+          path="/institutions"
+          element={<PortedInstitutionsPage session={session} />}
+        />
+        <Route
+          path="/instruments"
+          element={<PortedInstrumentsPage session={session} />}
+        />
+        <Route
+          path="/instruments/new"
+          element={<PortedNewInstrumentPage session={session} />}
+        />
+        <Route
+          path="/instruments/:id/edit"
+          element={<PortedEditInstrumentPage session={session} />}
+        />
 
         <Route path="/estate" element={<EstateIndexPage />} />
-        <Route path="/estate/beneficiaries" element={<EstateBeneficiariesPage session={session} />} />
-        <Route path="/estate/distribution" element={<EstateDistributionPage session={session} />} />
-        <Route path="/estate/summary" element={<EstateSummaryPage session={session} />} />
+        <Route
+          path="/estate/beneficiaries"
+          element={<EstateBeneficiariesPage session={session} />}
+        />
+        <Route
+          path="/estate/distribution"
+          element={<EstateDistributionPage session={session} />}
+        />
+        <Route
+          path="/estate/summary"
+          element={<EstateSummaryPage session={session} />}
+        />
         <Route path="/estate/snapshots/:id" element={<EstateSnapshotPage />} />
 
-        <Route path="/review" element={<OriginalPortfolioReviewPage session={session} />} />
-        <Route path="/settings" element={<OriginalSettingsPage session={session} />} />
+        <Route
+          path="/review"
+          element={<OriginalPortfolioReviewPage session={session} />}
+        />
+        <Route
+          path="/settings"
+          element={<OriginalSettingsPage session={session} />}
+        />
         <Route path="/offline" element={<OfflinePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

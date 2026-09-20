@@ -55,7 +55,9 @@ describe("ported authentication UI", () => {
       screen.getByRole("heading", { name: "Create your private portfolio." }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Base currency")).toHaveValue("KES");
-    expect(screen.getByRole("option", { name: "USD - US Dollar" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "USD - US Dollar" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(screen.getByText("Enter a valid username.")).toBeInTheDocument();

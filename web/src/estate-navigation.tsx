@@ -22,8 +22,7 @@ export function EstateNavigation() {
           to={href}
           className={cn(
             "flex min-h-11 items-center justify-center gap-2 rounded-lg px-2 text-xs font-semibold text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 sm:text-sm",
-            pathname.startsWith(href) &&
-              "bg-emerald-400/10 text-emerald-300",
+            pathname.startsWith(href) && "bg-emerald-400/10 text-emerald-300",
           )}
         >
           <Icon size={16} aria-hidden />
