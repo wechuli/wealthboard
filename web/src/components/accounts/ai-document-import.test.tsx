@@ -142,9 +142,7 @@ describe("AIDocumentImport", () => {
     );
   });
 
-    expect(JSON.stringify(payload)).not.toMatch(
-      /documentPassword|fictional-password/,
-    );
+  it("sends only redacted text after renewed explicit consent", async () => {
     const user = userEvent.setup();
     renderImport();
     await user.upload(

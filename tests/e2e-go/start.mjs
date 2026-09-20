@@ -53,7 +53,9 @@ process.on("uncaughtException", (error) => {
 
 run("docker", [...compose, "down", "--volumes", "--remove-orphans"]);
 run("docker", [...compose, "up", "--detach", "--wait"]);
-run("npm", ["--prefix", "web", "run", "build"]);
+if (process.env.E2E_SKIP_WEB_BUILD !== "1") {
+  run("npm", ["--prefix", "web", "run", "build"]);
+}
 run("go", [
   "build",
   "-trimpath",

@@ -190,7 +190,8 @@ export function getOverview() {
   return request<Overview>("/overview");
 }
 
-export const getDashboard = (range = "1y") => request<Dashboard>(`/dashboard?range=${encodeURIComponent(range)}`);
+export const getDashboard = (range = "1y") =>
+  request<Dashboard>(`/dashboard?range=${encodeURIComponent(range)}`);
 export const getAccounts = () => request<AccountList>("/accounts");
 export const getAccount = (id: string) => request<Account>(`/accounts/${id}`);
 export const getAccountActivity = (id: string) =>
