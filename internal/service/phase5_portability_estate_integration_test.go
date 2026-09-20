@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -107,18 +108,138 @@ func TestPortabilityPostgreSQLVersionsIsolationAndRollback(t *testing.T) {
 		t.Fatalf("rollback account count=%d err=%v", count, err)
 	}
 
-	cleanV8, err := portability.Export(ctx, ownerID)
+	for version := 2; version <= CurrentUserArchiveVersion; version++ {
+		t.Run(fmt.Sprintf("restore_v%d", version), func(t *testing.T) {
+			archiveJSON := representativeArchiveJSON(t, version)
+			summary, err := portability.RestoreJSON(ctx, ownerID, archiveJSON)
+			if err != nil {
+				t.Fatalf("restore v%d: %v", version, err)
+			}
+			wantEstate, wantInvestments := 0, 0
+			if version >= 6 {
+				wantEstate = 1
+			}
+			if version >= 7 {
+				wantInvestments = 1
+			}
+			if summary.Accounts != 3 || summary.Transactions != 2 || summary.EstatePlans != wantEstate || summary.InvestmentInstruments != wantInvestments || summary.PositionEvents != wantInvestments {
+				t.Fatalf("v%d restore summary=%+v", version, summary)
+			}
+
+			var balanceAccountID, goalAccountID, institutionID, accountInstitutionID uuid.UUID
+			var balance int64
+			if err := db.QueryRowContext(ctx, `SELECT id,current_value_minor,institution_id FROM accounts WHERE user_id=$1 AND name='Everyday Cash'`, ownerID).Scan(&balanceAccountID, &balance, &accountInstitutionID); err != nil {
+				t.Fatalf("read v%d balance account: %v", version, err)
+			}
+			if err := db.QueryRowContext(ctx, `SELECT linked_account_id FROM goals WHERE user_id=$1 AND name='Reserve'`, ownerID).Scan(&goalAccountID); err != nil {
+				t.Fatalf("read v%d goal relationship: %v", version, err)
+			}
+			if err := db.QueryRowContext(ctx, `SELECT id FROM institutions WHERE user_id=$1 AND name='Example Bank'`, ownerID).Scan(&institutionID); err != nil {
+				t.Fatalf("read v%d institution: %v", version, err)
+			}
+			if balance != 1250 || goalAccountID != balanceAccountID || accountInstitutionID != institutionID {
+				t.Fatalf("v%d balance=%d account=%s goalAccount=%s institution=%s accountInstitution=%s", version, balance, balanceAccountID, goalAccountID, institutionID, accountInstitutionID)
+			}
+
+			assertPortabilityVersionAdditions(t, ctx, db, ownerID, version, balanceAccountID)
+			if err := db.QueryRowContext(ctx, `SELECT current_value_minor FROM accounts WHERE user_id=$1 AND id=$2`, otherID, otherAccountID).Scan(&otherValue); err != nil || otherValue != 777 {
+				t.Fatalf("v%d changed other user value=%d err=%v", version, otherValue, err)
+			}
+
+			broken := duplicateRepresentativeCategoryJSON(t, version)
+			if _, err := portability.RestoreJSON(ctx, ownerID, broken); err == nil {
+				t.Fatalf("v%d duplicate-category restore succeeded", version)
+			}
+			var afterRollbackID uuid.UUID
+			var afterRollbackBalance int64
+			if err := db.QueryRowContext(ctx, `SELECT id,current_value_minor FROM accounts WHERE user_id=$1 AND name='Everyday Cash'`, ownerID).Scan(&afterRollbackID, &afterRollbackBalance); err != nil || afterRollbackID != balanceAccountID || afterRollbackBalance != 1250 {
+				t.Fatalf("v%d rollback account=%s balance=%d err=%v", version, afterRollbackID, afterRollbackBalance, err)
+			}
+		})
+	}
+}
+
+func assertPortabilityVersionAdditions(t *testing.T, ctx context.Context, db *sql.DB, ownerID uuid.UUID, version int, balanceAccountID uuid.UUID) {
+	t.Helper()
+	wantEstate, wantInvestments, wantConversions := 0, 0, 0
+	if version >= 6 {
+		wantEstate = 1
+	}
+	if version >= 7 {
+		wantInvestments = 1
+	}
+	if version == 8 {
+		wantConversions = 1
+	}
+	var estateCount, investmentCount, conversionCount int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM estate_plans WHERE user_id=$1`, ownerID).Scan(&estateCount); err != nil {
+		t.Fatalf("count v%d estate plans: %v", version, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM investment_instruments WHERE user_id=$1`, ownerID).Scan(&investmentCount); err != nil {
+		t.Fatalf("count v%d investments: %v", version, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM account_conversions WHERE user_id=$1`, ownerID).Scan(&conversionCount); err != nil {
+		t.Fatalf("count v%d conversions: %v", version, err)
+	}
+	if estateCount != wantEstate || investmentCount != wantInvestments || conversionCount != wantConversions {
+		t.Fatalf("v%d additions estate=%d investments=%d conversions=%d", version, estateCount, investmentCount, conversionCount)
+	}
+	if version >= 6 {
+		var directiveAccountID uuid.UUID
+		if err := db.QueryRowContext(ctx, `SELECT account_id FROM estate_account_directives WHERE user_id=$1`, ownerID).Scan(&directiveAccountID); err != nil || directiveAccountID != balanceAccountID {
+			t.Fatalf("v%d estate account=%s want=%s err=%v", version, directiveAccountID, balanceAccountID, err)
+		}
+	}
+	if version >= 7 {
+		var positionAccountID, eventAccountID, eventInstrumentID, instrumentID uuid.UUID
+		var positionValue int64
+		var quantity string
+		if err := db.QueryRowContext(ctx, `SELECT id,current_value_minor FROM accounts WHERE user_id=$1 AND name='Brokerage'`, ownerID).Scan(&positionAccountID, &positionValue); err != nil {
+			t.Fatalf("read v%d position account: %v", version, err)
+		}
+		if err := db.QueryRowContext(ctx, `SELECT account_id,instrument_id,quantity::text FROM position_events WHERE user_id=$1`, ownerID).Scan(&eventAccountID, &eventInstrumentID, &quantity); err != nil {
+			t.Fatalf("read v%d position event: %v", version, err)
+		}
+		if err := db.QueryRowContext(ctx, `SELECT id FROM investment_instruments WHERE user_id=$1`, ownerID).Scan(&instrumentID); err != nil {
+			t.Fatalf("read v%d instrument: %v", version, err)
+		}
+		if positionValue != 25000 || quantity != "2" || eventAccountID != positionAccountID || eventInstrumentID != instrumentID {
+			t.Fatalf("v%d position value=%d quantity=%s account=%s eventAccount=%s instrument=%s eventInstrument=%s", version, positionValue, quantity, positionAccountID, eventAccountID, instrumentID, eventInstrumentID)
+		}
+	}
+	var stockDays, fundDays int
+	if err := db.QueryRowContext(ctx, `SELECT position_stale_days_stock,position_stale_days_fund FROM user_settings WHERE user_id=$1`, ownerID).Scan(&stockDays, &fundDays); err != nil {
+		t.Fatalf("read v%d stale-price settings: %v", version, err)
+	}
+	wantStockDays, wantFundDays := 7, 31
+	if version == 8 {
+		wantStockDays, wantFundDays = 14, 45
+	}
+	if stockDays != wantStockDays || fundDays != wantFundDays {
+		t.Fatalf("v%d stale-price settings=%d/%d want=%d/%d", version, stockDays, fundDays, wantStockDays, wantFundDays)
+	}
+}
+
+func duplicateRepresentativeCategoryJSON(t *testing.T, version int) []byte {
+	t.Helper()
+	decoder := json.NewDecoder(strings.NewReader(string(representativeArchiveJSON(t, version))))
+	decoder.UseNumber()
+	var raw map[string]any
+	if err := decoder.Decode(&raw); err != nil {
+		t.Fatalf("decode representative v%d archive: %v", version, err)
+	}
+	categories := raw["categories"].([]any)
+	duplicate := map[string]any{}
+	for key, value := range categories[0].(map[string]any) {
+		duplicate[key] = value
+	}
+	duplicate["id"] = "duplicate-category"
+	raw["categories"] = append(categories, duplicate)
+	data, err := json.Marshal(raw)
 	if err != nil {
-		t.Fatalf("export clean v2 source: %v", err)
+		t.Fatalf("marshal invalid v%d archive: %v", version, err)
 	}
-	v2 := archiveV8ToV2(t, cleanV8)
-	if _, err := portability.RestoreJSON(ctx, ownerID, v2); err != nil {
-		t.Fatalf("restore v2: %v", err)
-	}
-	var mode string
-	if err := db.QueryRowContext(ctx, `SELECT tracking_mode FROM accounts WHERE user_id=$1`, ownerID).Scan(&mode); err != nil || mode != "balance" {
-		t.Fatalf("v2 restored mode=%s err=%v", mode, err)
-	}
+	return data
 }
 
 func TestEstateMutationsPostgreSQLSnapshotImmutabilityHashAndIsolation(t *testing.T) {
@@ -207,38 +328,3 @@ func openPhase5TestDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-func archiveV8ToV2(t *testing.T, archive UserArchive) []byte {
-	t.Helper()
-	data, err := json.Marshal(archive)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var raw map[string]any
-	decoder := json.NewDecoder(strings.NewReader(string(data)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&raw); err != nil {
-		t.Fatal(err)
-	}
-	raw["version"] = json.Number("2")
-	settings := raw["settings"].(map[string]any)
-	delete(settings, "positionStaleDaysStock")
-	delete(settings, "positionStaleDaysEtf")
-	delete(settings, "positionStaleDaysFund")
-	for _, account := range objectRows(raw["accounts"]) {
-		delete(account, "trackingMode")
-		delete(account, "institutionId")
-		account["institution"] = nil
-	}
-	for _, transaction := range objectRows(raw["transactions"]) {
-		delete(transaction, "externalId")
-		delete(transaction, "eventGroupId")
-	}
-	for _, key := range []string{"institutions", "goalMilestones", "goalAlertDismissals", "beneficiaries", "estatePlans", "estateAccountDirectives", "estateAllocations", "estateResiduaryAllocations", "estatePlanSnapshots", "investmentInstruments", "positionEvents", "securityPrices", "positionReconciliations", "accountConversions"} {
-		delete(raw, key)
-	}
-	result, err := json.Marshal(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return result
-}

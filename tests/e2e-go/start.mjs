@@ -3,7 +3,10 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const root = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../..",
+);
 const composeFile = path.join(root, "tests/e2e-go/docker-compose.yml");
 const project = process.env.E2E_COMPOSE_PROJECT || "wealthboard-go-e2e";
 const postgresPort = process.env.E2E_POSTGRES_PORT || "55432";
@@ -22,7 +25,9 @@ function run(command, args, options = {}) {
     ...options,
   });
   if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed with ${result.status}`);
+    throw new Error(
+      `${command} ${args.join(" ")} failed with ${result.status}`,
+    );
   }
 }
 
@@ -49,7 +54,13 @@ process.on("uncaughtException", (error) => {
 run("docker", [...compose, "down", "--volumes", "--remove-orphans"]);
 run("docker", [...compose, "up", "--detach", "--wait"]);
 run("npm", ["--prefix", "web", "run", "build"]);
-run("go", ["build", "-trimpath", "-o", "bin/wealthboard-e2e", "./cmd/wealthboard"]);
+run("go", [
+  "build",
+  "-trimpath",
+  "-o",
+  "bin/wealthboard-e2e",
+  "./cmd/wealthboard",
+]);
 
 server = spawn(path.join(root, "bin/wealthboard-e2e"), ["serve"], {
   cwd: root,

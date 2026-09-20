@@ -27,7 +27,7 @@ security:
 	npm audit --audit-level=high
 	npm --prefix web audit --audit-level=high
 
-test-e2e:
+test-e2e: web-build
 	npm run test:e2e
 
 test-e2e-go:

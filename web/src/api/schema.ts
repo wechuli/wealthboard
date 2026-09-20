@@ -1136,7 +1136,7 @@ export interface paths {
         put?: never;
         /**
          * Validate and preview a balance-account history import
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The raw body or multipart file is limited to 5 MiB; multipart request overhead is limited to an additional 1 MiB. Results and balances are owner-scoped and returned with `Cache-Control: no-store`.
+         * @description Bearer API keys require `imports:write`. Browser sessions require a trusted Origin and `X-CSRF-Token`. The raw body or multipart file is limited to 5 MiB; multipart request overhead is limited to an additional 1 MiB. Results and balances are owner-scoped and returned with `Cache-Control: no-store`.
          */
         post: operations["previewAccountHistoryImport"];
         delete?: never;
@@ -1156,7 +1156,7 @@ export interface paths {
         put?: never;
         /**
          * Commit a previously previewed balance-account history import
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Send the preview hash in `X-Preview-Hash` for raw JSON/CSV or in multipart field `hash`; it must match the exact content. The 5 MiB file and 1 MiB multipart-overhead limits apply. Results use `Cache-Control: no-store`.
+         * @description Bearer API keys require `imports:write`. Browser sessions require a trusted Origin and `X-CSRF-Token`. Send the preview hash in `X-Preview-Hash` for raw JSON/CSV or in multipart field `hash`; it must match the exact content. The 5 MiB file and 1 MiB multipart-overhead limits apply. Results use `Cache-Control: no-store`.
          */
         post: operations["commitAccountHistoryImport"];
         delete?: never;
@@ -1176,7 +1176,7 @@ export interface paths {
         put?: never;
         /**
          * Validate and preview a position-account history import
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The raw body or multipart file is limited to 5 MiB; multipart request overhead is limited to an additional 1 MiB. Results, positions, and values are owner-scoped and returned with `Cache-Control: no-store`.
+         * @description Bearer API keys require `imports:write`. Browser sessions require a trusted Origin and `X-CSRF-Token`. The raw body or multipart file is limited to 5 MiB; multipart request overhead is limited to an additional 1 MiB. Results, positions, and values are owner-scoped and returned with `Cache-Control: no-store`.
          */
         post: operations["previewInvestmentHistoryImport"];
         delete?: never;
@@ -1196,7 +1196,7 @@ export interface paths {
         put?: never;
         /**
          * Commit a previously previewed position-account history import
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Send the preview hash in `X-Preview-Hash` for raw JSON/CSV or in multipart field `hash`; it must match the exact content. The 5 MiB file and 1 MiB multipart-overhead limits apply. Results use `Cache-Control: no-store`.
+         * @description Bearer API keys require `imports:write`. Browser sessions require a trusted Origin and `X-CSRF-Token`. Send the preview hash in `X-Preview-Hash` for raw JSON/CSV or in multipart field `hash`; it must match the exact content. The 5 MiB file and 1 MiB multipart-overhead limits apply. Results use `Cache-Control: no-store`.
          */
         post: operations["commitInvestmentHistoryImport"];
         delete?: never;
@@ -1214,7 +1214,7 @@ export interface paths {
         };
         /**
          * Download the current user's portable JSON archive
-         * @description Requires `exports:read` or `portfolio:read`. The download contains private owner-scoped financial and estate data, excludes authentication secrets and user IDs, and must not be cached.
+         * @description Bearer API keys require `exports:read`; authenticated browser sessions may also export. The download contains private owner-scoped financial and estate data, excludes authentication secrets and user IDs, and must not be cached.
          */
         get: operations["exportUserArchive"];
         put?: never;
@@ -1234,7 +1234,7 @@ export interface paths {
         };
         /**
          * Download the current user's transactions as CSV
-         * @description Requires `exports:read` or `portfolio:read`. The private owner-scoped export must not be cached. Monetary columns use integer minor units.
+         * @description Bearer API keys require `exports:read`; authenticated browser sessions may also export. The private owner-scoped export must not be cached. Monetary columns use integer minor units.
          */
         get: operations["exportTransactionsCsv"];
         put?: never;
@@ -1254,7 +1254,7 @@ export interface paths {
         };
         /**
          * Download the current user's accounts as CSV
-         * @description Requires `exports:read` or `portfolio:read`. The private owner-scoped export must not be cached. Monetary columns use integer minor units.
+         * @description Bearer API keys require `exports:read`; authenticated browser sessions may also export. The private owner-scoped export must not be cached. Monetary columns use integer minor units.
          */
         get: operations["exportAccountsCsv"];
         put?: never;
@@ -1276,7 +1276,7 @@ export interface paths {
         put?: never;
         /**
          * Replace the current user's portable data from an archive
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Accepts a raw JSON archive or one multipart `file`. Archive content is limited to 25 MiB; the raw HTTP body permits at most 1 MiB additional multipart overhead. Restore validates owner-scoped relationships and never restores authentication secrets or another user's identity.
+         * @description Requires a browser session, trusted Origin, and `X-CSRF-Token`; Bearer API keys are not accepted. Accepts a raw JSON archive or one multipart `file`. Archive content is limited to 25 MiB; the raw HTTP body permits at most 1 MiB additional multipart overhead. Restore validates owner-scoped relationships and never restores authentication secrets or another user's identity.
          */
         post: operations["restoreUserArchive"];
         delete?: never;
@@ -1543,13 +1543,13 @@ export interface paths {
         get?: never;
         /**
          * Save the current user's AI provider settings
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The JSON body is limited to 16 KiB. Stored API key ciphertext is never returned.
+         * @description Requires a browser session, trusted Origin, and `X-CSRF-Token`; Bearer API keys are not accepted. The JSON body is limited to 16 KiB. Stored API key ciphertext is never returned.
          */
         put: operations["saveAISettings"];
         post?: never;
         /**
          * Delete AI settings and disconnect the provider
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Removes owner-scoped settings and stored credential material and returns `Cache-Control: no-store`.
+         * @description Requires a browser session, trusted Origin, and `X-CSRF-Token`; Bearer API keys are not accepted. Removes owner-scoped settings and stored credential material and returns `Cache-Control: no-store`.
          */
         delete: operations["disconnectAIProvider"];
         options?: never;
@@ -1568,12 +1568,12 @@ export interface paths {
         put?: never;
         /**
          * Encrypt and store an AI provider API key
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The JSON body is limited to 8 KiB. The plaintext key is used only for encryption and is never returned or logged.
+         * @description Requires a browser session, trusted Origin, and `X-CSRF-Token`; Bearer API keys are not accepted. The JSON body is limited to 8 KiB. The plaintext key is used only for encryption and is never returned or logged.
          */
         post: operations["saveAICredential"];
         /**
          * Delete the stored AI provider credential
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Deletes only the current user's encrypted credential and returns `Cache-Control: no-store`.
+         * @description Requires a browser session, trusted Origin, and `X-CSRF-Token`; Bearer API keys are not accepted. Deletes only the current user's encrypted credential and returns `Cache-Control: no-store`.
          */
         delete: operations["deleteAICredential"];
         options?: never;
@@ -1592,7 +1592,7 @@ export interface paths {
         put?: never;
         /**
          * Delete the current user's AI usage history
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Only owner-scoped usage events are deleted.
+         * @description Requires a browser session, trusted Origin, and `X-CSRF-Token`; Bearer API keys are not accepted. Only owner-scoped usage events are deleted.
          */
         post: operations["clearAIUsage"];
         delete?: never;
@@ -1612,7 +1612,7 @@ export interface paths {
         put?: never;
         /**
          * Generate a review from a supplied portfolio snapshot
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The JSON body is limited to 40 KiB and the embedded snapshot to 25,000 bytes. Exact amounts and account names are sent only when the explicit sharing flags permit them. A request API key is ephemeral and never returned, stored, or logged.
+         * @description Bearer API keys require `ai:invoke`. Browser sessions require a trusted Origin and `X-CSRF-Token`. The JSON body is limited to 40 KiB and the embedded snapshot to 25,000 bytes. Exact amounts and account names are sent only when the explicit sharing flags permit them. A request API key is ephemeral and never returned, stored, or logged.
          */
         post: operations["createAIReview"];
         delete?: never;
@@ -1632,7 +1632,7 @@ export interface paths {
         put?: never;
         /**
          * Extract bounded text units from one import source file
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Accepts exactly one file up to 5 MiB plus at most one PDF password; multipart overhead is limited to 64 KiB. Supported files are TXT, CSV, TSV, JSON, PDF, XLSX, and DOCX. Extracted text is limited to 64 KiB and 1,000 units. Passwords are cleared after use and never returned, stored, or logged.
+         * @description Bearer API keys require `ai:invoke`. Browser sessions require a trusted Origin and `X-CSRF-Token`. Accepts exactly one file up to 5 MiB plus at most one PDF password; multipart overhead is limited to 64 KiB. Supported files are TXT, CSV, TSV, JSON, PDF, XLSX, and DOCX. Extracted text is limited to 64 KiB and 1,000 units. Passwords are cleared after use and never returned, stored, or logged.
          */
         post: operations["extractAIImportSource"];
         delete?: never;
@@ -1652,7 +1652,7 @@ export interface paths {
         put?: never;
         /**
          * Convert extracted source units into an import draft
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The JSON body is limited to 5 MiB plus 128 KiB, while the encoded source itself remains limited to 64 KiB and 1,000 units. Consent and a matching settings/destination hash are mandatory. Source text is treated as untrusted data. An ephemeral API key is never returned, stored, or logged.
+         * @description Bearer API keys require `ai:invoke`. Browser sessions require a trusted Origin and `X-CSRF-Token`. The JSON body is limited to 5 MiB plus 128 KiB, while the encoded source itself remains limited to 64 KiB and 1,000 units. Consent and a matching settings/destination hash are mandatory. Source text is treated as untrusted data. An ephemeral API key is never returned, stored, or logged.
          */
         post: operations["convertAIImportSource"];
         delete?: never;
