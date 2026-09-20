@@ -34,6 +34,7 @@ When the repository has changed since this brief was written, inspect the latest
 - [x] Complete Phase 5 corporate actions, bounded account and investment imports, versioned user portability, estate mutations and immutable snapshots, encrypted AI workflows, PostgreSQL operator commands, extraction isolation, and PWA safeguards.
 - [x] Port the existing Next.js interface faithfully to Vite, preserving its route structure, responsive shell, forms, charts, labels, controls, and visual styling while replacing only framework and data bindings.
 - [x] Organize the Vite client into `app`, `api`, `components`, `hooks`, `lib`, and `pages` domains with stable aliases, colocated tests, and route-level code splitting.
+- [x] Close Phase 6 documentation for the Go/Vite/PostgreSQL runtime, fresh-start policy, operator commands, extraction-worker exception, and cutover/removal gates.
 - [ ] Complete Phase 6 cutover and remove the superseded Next.js runtime after all acceptance gates pass.
 
 ## Objective

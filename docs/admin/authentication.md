@@ -24,9 +24,9 @@ An operator can reset an existing local password when local authentication is
 enabled:
 
 ```bash
-TARGET_USERNAME=alice \
 NEW_USER_PASSWORD='choose-a-strong-temporary-password' \
-npm run password:reset
+DATABASE_URL='postgres://wealthboard:password@localhost:5433/wealthboard?sslmode=disable' \
+./bin/wealthboard reset-password --username alice
 ```
 
 Do not place the password in shell history on a shared machine. The reset

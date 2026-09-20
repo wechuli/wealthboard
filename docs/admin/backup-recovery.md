@@ -11,6 +11,9 @@ Use both levels of protection:
 - **PostgreSQL backup:** deployment-wide recovery, including identities and every
   user's records.
 
+Operator recovery accepts PostgreSQL custom-format archives only. It does not
+convert or restore a legacy SQLite database into PostgreSQL.
+
 ## Create an operator backup
 
 Install PostgreSQL client tools compatible with the server. Create an

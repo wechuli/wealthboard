@@ -35,11 +35,12 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
 Money is stored as integer minor units. Exchange rates are effective-dated
-decimal strings, and calculations use `bigint` or Decimal.js.
+decimal strings, and authoritative server calculations use checked integers and
+exact `math/big` arithmetic.
 
 ## Product guide
 
-The user and operator guide is published at https://wechuli.github.io/wealthboard/. It covers first setup,
+The user and operator guide is published at https://wechuliprojects.github.io/wealthboard/. It covers first setup,
 accounts, position-tracked investments, activity, goals, reports, estate
 planning, portability, deployment, authentication, backups, and troubleshooting
 with fictional product screenshots.
@@ -124,6 +125,8 @@ conflict handling make repeat runs safe for the same target.
 | `DATABASE_URL`                 | Required PostgreSQL connection URL                                        |
 | `SESSION_SECRET`               | HMAC session secret; at least 32 characters                               |
 | `APP_URL`                      | Canonical deployment URL used for origin validation                       |
+| `NODE_ENV`                     | Set `production` to require secure session cookies                        |
+| `PORT`                         | Go HTTP listener port; default `3000`                                     |
 | `TRUST_PROXY_HEADERS`          | Trust one ingress-overwritten client IP header; default `false`           |
 | `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`; default `local`                         |
 | `OIDC_ISSUER`                  | Exact provider issuer when OIDC is enabled                                |
@@ -253,9 +256,9 @@ username; the password is read from the environment rather than command
 arguments:
 
 ```bash
-TARGET_USERNAME=alice \
 NEW_USER_PASSWORD='a-new-password-with-12-characters' \
-npm run password:reset
+DATABASE_URL='postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable' \
+./bin/wealthboard reset-password --username alice
 ```
 
 The reset command works only when local authentication is enabled and only for a
@@ -266,9 +269,8 @@ For Docker Compose:
 
 ```bash
 docker compose exec \
-  -e TARGET_USERNAME=alice \
   -e NEW_USER_PASSWORD='a-new-password-with-12-characters' \
-  wealthboard npm run password:reset
+  wealthboard reset-password --username alice
 ```
 
 ## Database migrations
@@ -277,6 +279,31 @@ The Go service embeds the append-only PostgreSQL migrations under
 `db/postgres/migrations`. `serve` runs pending migrations at startup; operators
 can run or inspect them separately with `make migrate` and
 `make migrate-status`. Never edit an applied migration.
+
+PostgreSQL is a fresh-start boundary. There is no SQLite-to-PostgreSQL importer,
+dual-write mode, or supported in-place conversion. Legacy Next.js, Drizzle, and
+SQLite files remain in the repository only for migration provenance until the
+[cutover checklist](docs/admin/cutover.md) authorizes their removal.
+
+## Operator commands
+
+The Go binary owns runtime and database operations:
+
+```bash
+./bin/wealthboard serve
+./bin/wealthboard migrate
+./bin/wealthboard migrate-status
+NEW_USER_PASSWORD='replacement-password' ./bin/wealthboard reset-password --username alice
+./bin/wealthboard backup --file /secure/wealthboard.dump
+./bin/wealthboard restore --file /secure/wealthboard.dump --confirm-maintenance
+DEMO_DATA=true ./bin/wealthboard seed-demo --username alice
+./bin/wealthboard healthcheck
+```
+
+`make migrate`, `make migrate-status`, `make backup`, `make restore`, and
+`make seed-demo` are source-tree wrappers around these commands. Backup and
+restore require compatible PostgreSQL client tools on the operator host; they
+are intentionally absent from the distroless application image.
 
 ## Container deployment
 
@@ -313,7 +340,7 @@ client-supplied forwarding headers.
 Portfolio Review is optional, read-only, and generated only on request. Configure
 OpenAI, DeepSeek, or an operator-approved OpenAI-compatible endpoint under
 **Settings → AI portfolio review**, then open **Review**. The integration uses the
-provider's Chat Completions API through the official OpenAI Node client.
+provider's supported HTTP API through the Go AI workflow.
 
 Wealthboard calculates a bounded, versioned snapshot before contacting a model.
 By default it contains ratios, concentration, goal trajectory, and data-quality

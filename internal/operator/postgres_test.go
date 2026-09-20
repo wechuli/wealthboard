@@ -2,13 +2,20 @@ package operator
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wechuli/wealthboard/internal/config"
+	"github.com/wechuli/wealthboard/internal/database"
 )
 
 type recordedCommand struct {
@@ -128,6 +135,110 @@ func TestRestoreStopsWhenArchivePreflightFails(t *testing.T) {
 	}
 	if len(runner.commands) != 1 {
 		t.Fatalf("commands = %d, want preflight only", len(runner.commands))
+	}
+}
+
+func TestPostgreSQLNativeBackupRestore(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+
+	ctx := context.Background()
+	admin, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatalf("open admin database: %v", err)
+	}
+
+	databaseName := fmt.Sprintf("wealthboard_backup_test_%d", time.Now().UnixNano())
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE "+databaseName); err != nil {
+		t.Fatalf("create disposable database: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.ExecContext(context.Background(), "DROP DATABASE "+databaseName+" WITH (FORCE)"); err != nil {
+			t.Errorf("drop disposable database: %v", err)
+		}
+		if err := admin.Close(); err != nil {
+			t.Errorf("close admin database: %v", err)
+		}
+	})
+
+	targetURL, err := url.Parse(databaseURL)
+	if err != nil {
+		t.Fatalf("parse TEST_DATABASE_URL: %v", err)
+	}
+	targetURL.Path = "/" + databaseName
+	targetURL.RawPath = ""
+	query := targetURL.Query()
+	query.Del("search_path")
+	targetURL.RawQuery = query.Encode()
+
+	db, err := database.Open(ctx, config.Database{
+		URL:             targetURL.String(),
+		MaxOpenConns:    2,
+		MaxIdleConns:    1,
+		ConnMaxLifetime: time.Minute,
+		ConnMaxIdleTime: time.Minute,
+		PingTimeout:     5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("open disposable database: %v", err)
+	}
+	if err := database.MigrateUp(ctx, db); err != nil {
+		db.Close()
+		t.Fatalf("migrate disposable database: %v", err)
+	}
+	const userID = "00000000-0000-0000-0000-000000000001"
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO users (id, username, created_at, updated_at)
+		VALUES ($1, 'backup-owner', now(), now())
+	`, userID); err != nil {
+		db.Close()
+		t.Fatalf("seed disposable database: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close disposable database before backup: %v", err)
+	}
+
+	archivePath := filepath.Join(t.TempDir(), "wealthboard.dump")
+	tools := NewPostgresTools(io.Discard, io.Discard)
+	if err := tools.Backup(ctx, BackupOptions{DatabaseURL: targetURL.String(), FilePath: archivePath}); err != nil {
+		t.Fatalf("backup disposable database: %v", err)
+	}
+
+	db, err = sql.Open("pgx", targetURL.String())
+	if err != nil {
+		t.Fatalf("reopen disposable database: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, userID); err != nil {
+		db.Close()
+		t.Fatalf("mutate disposable database before restore: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close disposable database before restore: %v", err)
+	}
+
+	result, err := tools.Restore(ctx, RestoreOptions{
+		DatabaseURL: targetURL.String(), FilePath: archivePath, ConfirmMaintenance: true,
+	})
+	if err != nil {
+		t.Fatalf("restore disposable database: %v", err)
+	}
+	if info, err := os.Stat(result.SafetyDumpPath); err != nil || info.Size() == 0 {
+		t.Fatalf("pre-restore safety backup is missing or empty: info=%v err=%v", info, err)
+	}
+
+	db, err = sql.Open("pgx", targetURL.String())
+	if err != nil {
+		t.Fatalf("open restored database: %v", err)
+	}
+	defer db.Close()
+	var username string
+	if err := db.QueryRowContext(ctx, `SELECT username FROM users WHERE id = $1`, userID).Scan(&username); err != nil {
+		t.Fatalf("read restored user: %v", err)
+	}
+	if username != "backup-owner" {
+		t.Fatalf("restored username = %q, want backup-owner", username)
 	}
 }
 

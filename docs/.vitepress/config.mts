@@ -63,6 +63,7 @@ export default defineConfig({
           { text: "Deployment", link: "/admin/deployment" },
           { text: "Authentication", link: "/admin/authentication" },
           { text: "Backup and recovery", link: "/admin/backup-recovery" },
+          { text: "Cutover and removal", link: "/admin/cutover" },
           { text: "Troubleshooting", link: "/admin/troubleshooting" },
         ],
       },

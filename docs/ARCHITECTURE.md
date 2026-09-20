@@ -8,6 +8,11 @@ Wealthboard is a Go HTTP service backed by PostgreSQL. It exposes the versioned
 JSON API and serves a compiled Vite/React single-page client. One optional OIDC
 provider may authenticate internal users.
 
+PostgreSQL is a fresh-start boundary, not an in-place SQLite migration. The
+repository intentionally has no SQLite importer or dual-write path. Legacy
+Next.js, Drizzle, and SQLite sources remain temporarily for provenance and
+parity review, but they are not part of the production request path.
+
 ## Decisions
 
 - **Runtime:** Go 1.27 HTTP API and a strict-TypeScript Vite/React client.
@@ -16,7 +21,8 @@ provider may authenticate internal users.
   goals, categories, rates, or transfers.
 - **Persistence:** PostgreSQL at required `DATABASE_URL`. Monetary
   amounts are integer minor units. Exchange rates are decimal strings and all
-  financial arithmetic uses integer minor units and exact decimal helpers.
+  authoritative financial arithmetic uses checked integers plus `math/big`
+  integer and rational helpers.
 - **Currencies:** A client-safe ISO 4217 catalog defines discoverable currency
   metadata and fresh-user defaults. Each user's settings own the base and
   enabled set. Services reject disabled currencies, while existing referenced
@@ -74,8 +80,8 @@ provider may authenticate internal users.
   rate's effective date and a one-calendar-month threshold; stale rates remain
   usable and historical conversions never look ahead.
 - **Goals:** A linked account is the source of truth for goal progress. Unlinked
-  goals retain a direct current amount. Forecasts use Decimal.js future-value
-  calculations and a configurable annual return assumption. Scenario
+  goals retain a direct current amount. Persisted and API calculations use
+  exact Go arithmetic with a configurable annual return assumption; scenario
   comparisons are pure client-side projections over immutable inputs.
   Milestones are owner-scoped source records with status derived from current
   progress and due date. Behind-plan reminders are computed on authenticated
@@ -121,6 +127,23 @@ provider may authenticate internal users.
   and provider keys are not retained. Custom endpoints require an exact
   operator allowlist and redirects are disabled.
 
+## Runtime and cutover boundary
+
+The supported production request path is browser or API client to the Go/Chi
+process, then PostgreSQL. Go serves `/api/v1/*`, health probes, compiled Vite
+assets, and the SPA fallback. There is no production Next.js process, React
+server rendering, Server Action, Node.js API handler, or SQLite database.
+
+The one JavaScript runtime exception is document extraction for PDF, XLSX, and
+DOCX. Direct installations may run the bounded Node child configured by
+`AI_EXTRACTION_SCRIPT`. Containers use the separate network-disabled
+`extraction-worker` image over a pod-local Unix socket; Node is absent from the
+distroless application image. UTF-8 CSV, TSV, JSON, and TXT remain parsed in Go.
+
+Legacy application source and its migrations are retained unchanged until the
+cutover checklist records acceptance, rollback evidence, and explicit approval
+to remove them. Retention does not make the legacy runtime supported.
+
 ## Position-account architecture
 
 Position source records, derived values, conversion, imports, advanced actions,
@@ -145,7 +168,8 @@ contract.
   not independently editable authoritative balances. Same-owner relationships
   use composite foreign keys and every lookup, aggregate, import, and cache key
   includes `userId`.
-- Quantities and unit prices use canonical decimal strings and Decimal.js so
+- Quantities and unit prices use canonical decimal strings and exact
+  `math/big` rational arithmetic so
   fractional units and sub-minor-unit quotes remain exact. Gross amounts, fee
   amounts, cash effects, and derived account values remain integer minor units
   with their currencies retained; an applied settlement rate is a canonical
@@ -214,17 +238,17 @@ it is not a financial write path. Strict v1 contracts and the browser-only
 manual prompt workflow remain unchanged. OCR/image processing remains backlog AI3.
 
 1. The account import UI offers direct structured import or explicit AI
-   conversion. Account-scoped POST routes,
-   `/api/accounts/[id]/import/{extract,convert}`, handle bounded multipart/JSON concerns,
-   verifies the session and trusted origin, and delegates to a server-only
-   service in `lib/services/import-conversion.ts`. Resolve the active account by `userId` and account ID
-   before expensive parsing or external calls; return not found for foreign
-   accounts. The account's tracking mode selects the target schema.
+  conversion. Go exposes `/api/v1/ai/import/extract` and
+  `/api/v1/ai/import/convert` for bounded extraction and model conversion.
+  Browser calls require the verified session, trusted origin, and CSRF token;
+  API keys require `ai:invoke`. The later account-scoped preview and commit
+  routes resolve the active account by session-derived `userId` and account ID
+  before any financial write and return not found for foreign accounts.
 2. Bounded local parsers prepare source text/tables and stable page/sheet/row
-   references for user review, selection, and redaction before external
-   submission. `lib/services/import-source.ts` handles UTF-8 CSV, TSV, JSON, and
-   TXT; a terminable Node worker in `scripts/extract-import-source.mjs` handles
-   XLSX, text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
+  references for user review, selection, and redaction before external
+  submission. `internal/aiworkflow/extraction.go` handles UTF-8 CSV, TSV, JSON,
+  and TXT; a terminable Node worker or isolated socket daemon handles XLSX,
+  text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
    XLSX numeric cells remain original strings. Formula caches and excluded
    image/Word/PDF content have review warnings; no OCR is performed. Enforce
    extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
@@ -247,8 +271,8 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    Never execute macros, formulas, embedded scripts, or external references.
    Reject unsupported encryption, corrupt, or over-limit input rather than
    silently truncating.
-3. After explicit per-request consent, resolve the current user's provider and
-   credentials through `lib/services/ai-provider.ts`. Reuse encrypted-key
+3. After explicit per-request consent, `internal/aiworkflow.Service` resolves
+  the current user's provider and credentials. Reuse encrypted-key
    handling, endpoint allowlisting, disabled redirects, cancellation, and safe
    errors. Existing usage reservation/completion functions enforce shared
    review/conversion rate and monthly token budgets. The settings form, Zod
@@ -262,9 +286,9 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    from prompt bytes plus the output ceiling; retain the reservation on failed
    conversion when usage is unknown. Requests have bounded streaming body reads
    and active preparations are limited to one per user/four per module instance.
-4. `lib/ai/provider.ts` exposes a separate extraction operation and strict Zod
-   schema from `lib/ai/import-schemas.ts`; it never calls the portfolio-review
-   snapshot builder. OpenAI uses native structured output through Responses;
+4. The Go AI workflow exposes a separate conversion operation and validates its
+  bounded request and response models independently of the portfolio-review
+  snapshot builder. OpenAI uses native structured output through Responses;
    DeepSeek/custom models must support text Chat Completions and JSON output.
    The configured model ID is not discovered or probed during settings save;
    incompatible requests fail without model/provider substitution. Both paths
@@ -325,8 +349,8 @@ responses in tests; never use real statements or credentials.
 - All user-owned tables carry a non-null `userId` foreign key even when
   ownership can also be reached through a parent record. This makes filtering
   explicit and supports efficient owner-first indexes.
-- Service functions accept session-derived `userId` as their first ownership
-  argument. Pages, actions, and handlers never perform an unscoped lookup and
+- Service functions accept session-derived `userId` as their ownership
+  argument. API handlers and client pages never perform an unscoped lookup and
   then decide in the UI whether the result belongs to the user.
 - Reads, writes, archives, and deletes use `userId` and resource ID together.
   A foreign resource returns not found so its existence is not disclosed.
@@ -374,6 +398,10 @@ Every table except `login_attempts` is either the identity table or is owned by
 one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
 operations retain source records. Timestamps are stored in PostgreSQL and
 serialized in UTC.
+
+Goose migrations under `db/postgres/migrations` are the append-only schema
+authority. `db/postgres/schema.sql` feeds sqlc generation. Legacy Drizzle schema
+and migrations are archival provenance only and are not applied to PostgreSQL.
 
 Archived accounts are excluded from current and historical totals, activity,
 comparisons, live estate views, goal progress, ordinary CSV reports, and

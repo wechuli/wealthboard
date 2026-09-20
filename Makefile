@@ -1,7 +1,7 @@
 GO_PACKAGES := ./cmd/... ./internal/...
 DATABASE_URL ?= postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable
 
-.PHONY: generate lint typecheck test build migrate-check security test-e2e test-e2e-go go-fmt go-generate go-test go-test-integration go-vet go-run migrate migrate-status backup restore seed-demo postgres-up postgres-down web-install web-generate web-dev web-typecheck web-test web-build
+.PHONY: generate lint typecheck test build migrate-check security test-e2e test-e2e-go test-parity go-fmt go-generate go-test go-test-integration go-vet go-run migrate migrate-status backup restore seed-demo postgres-up postgres-down web-install web-generate web-dev web-typecheck web-test web-build
 
 generate: go-generate web-generate
 
@@ -33,6 +33,12 @@ test-e2e: web-build
 test-e2e-go:
 	npm run test:e2e:go
 
+test-parity:
+	@workspace="$$(mktemp -d)"; trap 'rm -rf "$$workspace"' EXIT; \
+	PARITY_OUTPUT="$$workspace/legacy.json" npm test -- tests/unit/phase6-parity.test.ts && \
+	TEST_DATABASE_URL="$${TEST_DATABASE_URL:-$(DATABASE_URL)}" PARITY_OUTPUT="$$workspace/go.json" go test ./internal/service -run '^TestPhase6ParityPostgreSQLObserver$$' -count=1 && \
+	node scripts/compare-phase6-parity.mjs "$$workspace/legacy.json" "$$workspace/go.json"
+
 go-fmt:
 	test -z "$$(gofmt -l cmd db/postgres internal)"
 
@@ -43,7 +49,7 @@ go-test:
 	go test $(GO_PACKAGES) ./db/postgres/...
 
 go-test-integration:
-	TEST_DATABASE_URL="$(DATABASE_URL)" go test ./internal/database ./internal/auth ./internal/service -count=1
+	TEST_DATABASE_URL="$(DATABASE_URL)" go test ./internal/database ./internal/auth ./internal/service ./internal/operator -count=1
 
 go-vet:
 	go vet $(GO_PACKAGES)

@@ -55,3 +55,4 @@ one.
 | Assign inheritance percentages                             | [Estate planning](./guides/estate-planning)              |
 | Move or restore my data                                    | [Import, export, and restore](./guides/data-portability) |
 | Configure the server                                       | [Deployment](./admin/deployment)                         |
+| Replace a legacy deployment                                | [Cutover and removal](./admin/cutover)                   |

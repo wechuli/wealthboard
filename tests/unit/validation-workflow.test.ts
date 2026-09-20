@@ -13,6 +13,7 @@ const publishWorkflow = fs.readFileSync(
   path.join(workflowDirectory, "publish-container.yml"),
   "utf8",
 );
+const makefile = fs.readFileSync(path.resolve("Makefile"), "utf8");
 
 describe("validation workflows", () => {
   it.each([
@@ -22,6 +23,8 @@ describe("validation workflows", () => {
     "make typecheck",
     "make test",
     "make migrate-check",
+    "make go-test-integration",
+    "make test-parity",
     "make security",
     "make test-e2e-go",
   ])("runs %s", (command) => {
@@ -33,6 +36,12 @@ describe("validation workflows", () => {
       2,
     );
     expect(validationWorkflow).toContain("TEST_DATABASE_URL:");
+  });
+
+  it("covers PostgreSQL constraints, aggregates, auth, exports, and native backup restore", () => {
+    expect(makefile).toMatch(
+      /go-test-integration:\n\s+TEST_DATABASE_URL="\$\(DATABASE_URL\)" go test \.\/internal\/database \.\/internal\/auth \.\/internal\/service \.\/internal\/operator -count=1/,
+    );
   });
 
   it("gates container publishing on the reusable validation workflow", () => {
@@ -54,11 +63,7 @@ describe("validation workflows", () => {
       );
       for (const match of contents.matchAll(/^\s*uses:\s+([^\s#]+).*$/gm)) {
         const reference = match[1];
-        if (
-          reference.startsWith("./") ||
-          reference.startsWith("actions/") ||
-          reference.startsWith("github/")
-        ) {
+        if (reference.startsWith("./")) {
           continue;
         }
         expect(reference, workflowFile).toMatch(/@[0-9a-f]{40}$/);

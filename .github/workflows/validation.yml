@@ -76,6 +76,12 @@ jobs:
             - name: Verify PostgreSQL migrations
               run: make migrate-check
 
+            - name: Run PostgreSQL integration tests
+              run: make go-test-integration
+
+            - name: Verify legacy and replacement parity
+              run: make test-parity
+
             - name: Scan dependencies
               run: make security
 

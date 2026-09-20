@@ -9,6 +9,11 @@ Wealthboard is a Go HTTP service backed by PostgreSQL. It serves a compiled
 Vite/React client and can run multiple stateless application replicas against
 one managed or self-operated PostgreSQL database.
 
+PostgreSQL deployments start from the fresh Goose schema. Wealthboard does not
+import or dual-write legacy SQLite databases. Review the
+[cutover and removal checklist](./cutover) before replacing an existing runtime
+or deleting retained legacy source.
+
 ## Requirements
 
 - Go 1.27 or newer for a direct source build
@@ -26,15 +31,20 @@ one managed or self-operated PostgreSQL database.
 | `DATABASE_URL`                 | Required PostgreSQL connection URL                                        |
 | `SESSION_SECRET`               | Unique high-entropy session key, at least 32 characters                   |
 | `APP_URL`                      | Canonical external URL used for origin and OIDC validation                |
+| `NODE_ENV`                     | Set `production` so application session cookies require HTTPS             |
+| `PORT`                         | Go HTTP listener port; default `3000`                                     |
 | `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`                                          |
 | `TRUST_PROXY_HEADERS`          | Enable only behind an ingress that overwrites forwarded client-IP headers |
 | `TZ`                           | Default timezone for new users                                            |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Canonical base64 32-byte key for remembered provider credentials          |
 | `AI_ALLOWED_ENDPOINTS`         | Exact comma-separated custom provider base URLs                           |
 | `AI_EXTRACTION_SOCKET`         | Shared Unix socket for a container document-parser sidecar                |
+| `AI_EXTRACTION_SCRIPT`         | Direct-install Node parser path when no socket is configured              |
+| `WEB_DIST_PATH`                | Compiled Vite assets served by Go; default `web/dist`                     |
 
 OIDC and AI variables are described in [Authentication](./authentication) and
-the repository README.
+the repository README. Set `NODE_ENV=production` for every direct production
+installation; the supplied container image already sets it.
 
 ## Direct installation
 
@@ -50,6 +60,19 @@ AUTH_METHODS=local \
 ```
 
 `serve` applies embedded PostgreSQL migrations before accepting requests.
+
+Useful operator commands are:
+
+```bash
+./bin/wealthboard migrate
+./bin/wealthboard migrate-status
+NEW_USER_PASSWORD='replacement-password' ./bin/wealthboard reset-password --username alice
+DEMO_DATA=true ./bin/wealthboard seed-demo --username alice
+./bin/wealthboard healthcheck
+```
+
+Backup and restore are covered separately because restore requires exclusive
+maintenance mode and the explicit `--confirm-maintenance` flag.
 
 For development:
 
@@ -98,6 +121,10 @@ docker build -t wealthboard:local .
 
 Run that image with an external `DATABASE_URL` and the required authentication
 environment. The image runs as non-root with a read-only application filesystem.
+
+Node.js is not part of the application container. It remains an intentional
+runtime exception only in the separate extraction worker for PDF, XLSX, and
+DOCX parsing. UTF-8 CSV, TSV, JSON, and TXT are parsed by Go.
 
 Before an update:
 

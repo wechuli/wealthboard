@@ -10,6 +10,13 @@ authentication, appearance themes, and versioned portability. Persisted
 databases advance only through append-only migrations; applied migrations and
 snapshots are immutable.
 
+The production runtime is the Go API serving the compiled Vite client over
+PostgreSQL. PostgreSQL installations start from the reviewed fresh schema;
+SQLite data is intentionally not migrated or dual-written. Legacy Next.js,
+Drizzle, and SQLite source remains in the repository temporarily as migration
+provenance and must not be treated as a supported runtime or deleted until the
+documented cutover gates pass.
+
 To avoid ambiguity:
 
 - **Application user** means a person who signs up and authenticates.
@@ -61,35 +68,38 @@ Make it easy to rename later through a configuration file.
 
 Use:
 
-- Next.js latest stable version
-- App Router
-- TypeScript with strict mode
-- React
-- SQLite
-- Drizzle ORM
+- Go 1.27 with Chi and `net/http`
+- PostgreSQL 17
+- Goose append-only PostgreSQL migrations
+- sqlc-generated database access
+- React with Vite and strict TypeScript
 - Recharts
 - Tailwind CSS
-- shadcn/ui
 - Zod
 - React Hook Form
 - Lucide icons
 - date-fns
-- Argon2 or bcrypt for password hashing
-- Next.js server actions or route handlers
+- bcrypt for password hashing
+- A versioned JSON API under `/api/v1`
 - Docker and Docker Compose
 - PWA support
 
-Do not create a separate backend application. The Next.js application should handle server-side operations and access SQLite directly.
+The browser must not access PostgreSQL directly. The Go service owns
+authentication, authorization, business rules, transactions, migrations, and
+operator commands. It serves the compiled Vite assets and SPA fallback from the
+same process. Production requires no Node.js server; Node is used only for
+builds and the isolated PDF/XLSX/DOCX extraction-worker exception.
 
-Use a persistent SQLite database file mounted through Docker.
+Use durable PostgreSQL storage and tested deployment-wide backups. New
+installations do not import SQLite databases.
 
 The application should be suitable for deployment to a home server or Kubernetes cluster.
 
 ## Important architectural principles
 
 - Support multiple independent application users in one deployment.
-- Enforce strict per-user data isolation in schema, services, actions, pages,
-  route handlers, exports, imports, analytics, caches, and tests.
+- Enforce strict per-user data isolation in schema, services, API handlers,
+  client pages, exports, imports, analytics, caches, and tests.
 - Do not implement organizations, teams, households, roles, invitations,
   shared portfolios, or cross-user financial accounts in the initial
   multi-user release.
@@ -101,8 +111,9 @@ The application should be suitable for deployment to a home server or Kubernetes
 - Use decimal-safe money handling
 - Store monetary values as integer minor units where practical
 - Store fractional quantities and unit prices as canonical decimal strings and
-  calculate them with Decimal.js; round only when producing a monetary amount
-- Do not use JavaScript floating-point arithmetic for financial calculations
+  calculate them with reviewed exact-decimal helpers; round only when producing
+  a monetary amount
+- Do not use floating-point arithmetic for authoritative financial calculations
 - Use transactions when updating balances and financial records
 - All dates should be stored in UTC and shown in the user’s configured timezone
 - Default timezone: Africa/Nairobi
@@ -170,7 +181,8 @@ Requirements:
 
 ## Core data model
 
-Design a clean SQLite schema using Drizzle.
+Design a clean PostgreSQL schema using append-only Goose migrations and access
+it through sqlc-generated queries and explicit transactions.
 
 ### Users
 
@@ -193,7 +205,7 @@ Store provider mappings separately with `id`, `userId`, canonical `issuer`,
 opaque `subject`, `createdAt`, `updatedAt`, and `lastLoginAt`. Enforce unique
 `(issuer, subject)` and `(userId, issuer)` and cascade-delete mappings with the
 internal user. Exclude mappings from per-user portability while retaining them
-in operator SQLite backups.
+in operator PostgreSQL backups.
 
 ### User settings
 
@@ -445,8 +457,9 @@ incomplete until a post-split quote is supplied; pre-split history is unchanged.
 For a position-tracked account, derive the value at a date from replayed cash
 plus every replayed quantity multiplied by its effective price and converted
 to the account currency when necessary. Calculate quantity times price with
-Decimal.js, round each quote value to that currency's minor unit, convert using
-the user's effective-dated exchange rate, and then sum integer minor units.
+exact `math/big` rational arithmetic, round each quote value to that currency's
+minor unit, convert using the user's effective-dated exchange rate, and then sum
+checked integer minor units.
 `currentValueMinor` remains a rebuildable cache so goals, estate planning,
 dashboard totals, and existing account-level consumers share one value.
 Importing a shared instrument price must rebuild every affected owner-scoped
@@ -498,11 +511,11 @@ visible separately rather than being assigned as gifts.
 Calculate indicative estate values from the authoritative replayed balance or
 position-derived account value multiplied by the user's asserted ownership
 share. Derive beneficiary values from allocation basis points with `bigint` and
-Decimal.js. Percentages are authoritative planning inputs; calculated currency
-values are estimates and must report missing effective-dated prices and exchange
-rates rather than silently omit holdings. Liabilities reduce the estimated net
-estate but do not automatically reduce or transfer an individual beneficiary's
-gift.
+exact `math/big` arithmetic. Percentages are authoritative planning inputs;
+calculated currency values are estimates and must report missing effective-dated
+prices and exchange rates rather than silently omit holdings. Liabilities reduce
+the estimated net estate but do not automatically reduce or transfer an
+individual beneficiary's gift.
 
 Allow users to create immutable, owner-scoped Estate Planning Summary snapshots
 with an as-of date, version, SHA-256 content hash, and minimized document
@@ -1251,12 +1264,14 @@ Before a per-user restore:
 - Create a current-user export that can be downloaded before replacement.
 - Roll back the entire operation on any failure.
 
-A raw SQLite backup contains credentials and every user's financial data. Do
+A PostgreSQL deployment backup contains credentials and every user's financial data. Do
 not expose full-database backup or restore through an ordinary authenticated
 route or user settings. Deployment operators, who are outside the application
-role model, perform consistent full-database backup and offline restore through
-documented CLI or container operations. Document the persistent backup
-directory and require the app to be stopped for a raw-file restore.
+role model, use the `wealthboard backup` and maintenance-confirmed
+`wealthboard restore` commands with compatible `pg_dump` and `pg_restore`
+tools. Require every application replica and other writer to be stopped for a
+restore, retain the automatic pre-restore safety dump, and validate readiness
+before reopening traffic.
 
 ### LLM-assisted text-file import
 
@@ -1505,7 +1520,8 @@ Include:
 - Install prompt where supported
 - Update-available notification
 
-Because SQLite is server-side, do not pretend full offline transaction creation is supported.
+Because PostgreSQL and the API are server-side, do not pretend full offline
+transaction creation is supported.
 
 When offline:
 
@@ -1714,6 +1730,7 @@ Implement:
 
 Use:
 
+- Go unit and PostgreSQL integration tests
 - Vitest for unit tests
 - React Testing Library for component tests
 - Playwright for end-to-end tests
@@ -1771,10 +1788,11 @@ Financial calculation logic should have comprehensive unit tests.
 
 Provide:
 
-- Dockerfile using a multi-stage build
+- Multi-stage Dockerfile that produces a non-root distroless Go application
+  image with compiled Vite assets
 - docker-compose.yml
-- Persistent volume for SQLite
-- Persistent volume for backups
+- Durable PostgreSQL storage in the Compose example
+- A separate network-disabled extraction-worker image for PDF/XLSX/DOCX
 - Health-check endpoint
 - Environment variable example file
 - Production startup instructions
@@ -1786,11 +1804,14 @@ Provide:
 
 Required environment variables should include:
 
-- DATABASE_PATH
+- DATABASE_URL
 - SESSION_SECRET
 - APP_URL
+- AUTH_METHODS
 - TZ
-- BACKUP_PATH
+
+Backups use an explicit operator-supplied file path and are not written by an
+HTTP route or scheduled by the application container.
 
 Do not bake secrets into the image.
 
@@ -1850,16 +1871,19 @@ Keep the first version focused on manually tracking net worth, account values, c
 
 ## Database lifecycle
 
-- `db/schema.ts` is the source of truth.
-- Generated migrations are append-only and support both fresh Wealthboard
-  databases and upgrades of existing databases.
+- `db/postgres/migrations` is the PostgreSQL schema authority and
+  `db/postgres/schema.sql` is the sqlc schema input.
+- Goose migrations are append-only and support fresh PostgreSQL databases plus
+  upgrades between PostgreSQL releases of Wealthboard.
 - Applied migration files must not be deleted, renamed, or modified. Schema
-  changes require a new generated migration.
-- Disposable pre-release databases may be deleted when their data is not needed;
-  persisted databases and backups must retain a valid upgrade path.
-- No data-claim path is required.
-- Run linting, type checking, relevant tests, and a production build after
-  schema changes.
+  changes require a new migration and regenerated sqlc output.
+- Existing SQLite data is intentionally discarded. There is no
+  SQLite-to-PostgreSQL importer, dual-write period, or in-place database
+  conversion contract.
+- Legacy Drizzle migrations remain unchanged for provenance until the
+  post-cutover removal checklist is approved.
+- Run migration checks, Go tests, frontend tests, linting, type checking, and a
+  production build after schema changes.
 
 ## Acceptance criteria
 
@@ -1903,13 +1927,13 @@ The application is complete when:
 - I can install it as a PWA.
 - Logging out and signing in as another user on the same device never reveals
   cached data from the previous user.
-- My SQLite data persists across application upgrades.
+- My PostgreSQL data persists across application upgrades.
 - I can export and restore my own portfolio without receiving another user's
   records or credentials.
 - Position-account exports and restores preserve instruments, events, prices,
   cash links, conversion provenance, event ordering, quantities, and owner
   isolation exactly.
-- A deployment operator can back up and restore the complete SQLite database
-  outside ordinary user routes.
+- A deployment operator can back up and restore the complete PostgreSQL
+  database outside ordinary user routes while application writers are stopped.
 - The dashboard looks like a premium financial application.
 - The interface remains focused and easy to understand.

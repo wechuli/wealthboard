@@ -94,6 +94,10 @@ part of the trusted deployment boundary. Compose disables worker networking;
 Kubernetes sidecars share their pod's network namespace. Document passwords
 must never be logged or persisted by custom worker deployments.
 
+The distroless application image contains no Node.js runtime. The extraction
+worker is the sole production JavaScript runtime exception and must remain
+isolated, bounded, non-root, and unable to access PostgreSQL or provider keys.
+
 ## Estate-planning boundary
 
 Beneficiaries are planning records, not identities or authorized users. Estate
@@ -108,5 +112,7 @@ executor portal, or replace legal documents and provider beneficiary forms.
 - Keep Go, PostgreSQL, Node.js parser/build dependencies, images, host OS, and proxy patched.
 - Back up regularly and test restore into a disposable location.
 - Keep every replica on the same migration-compatible release.
+- Follow the [cutover checklist](../admin/cutover) before removing retained
+	legacy code or rollback artifacts.
 - Review production dependency and image scan results.
 - Disable users deliberately when access should end.
