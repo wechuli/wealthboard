@@ -10,6 +10,7 @@ import {
   deleteCorporateActionGroup,
   previewImport,
 } from "@/api/client";
+import { AIDocumentImport } from "@/components/accounts/ai-document-import";
 import type {
   Account,
   CorporateActionInput,
@@ -413,23 +414,74 @@ export function ImportWorkspace({
   session: Session;
   onChanged: () => void;
 }) {
+  const [method, setMethod] = useState<"structured" | "ai">("structured");
+  const [preparedFile, setPreparedFile] = useState<File>();
+  const preparedKind =
+    account.trackingMode === "positions" ? "investment" : "history";
   return (
-    <div className="detail-grid">
-      <ImportPanel
-        kind="history"
-        account={account}
-        session={session}
-        onChanged={onChanged}
-      />
-      {account.trackingMode === "positions" ? (
+    <section className="min-w-0 space-y-5">
+      <fieldset
+        aria-label="Import method"
+        className="flex flex-wrap gap-4 border-b border-white/10 pb-4"
+      >
+        {[
+          { value: "structured", label: "Formatted CSV / JSON" },
+          { value: "ai", label: "Convert document with AI" },
+        ].map((option) => (
+          <label
+            key={option.value}
+            className="flex min-h-11 items-center gap-2 text-sm text-slate-200"
+          >
+            <input
+              type="radio"
+              name="importMethod"
+              value={option.value}
+              checked={method === option.value}
+              disabled={Boolean(preparedFile)}
+              onChange={() => setMethod(option.value as "structured" | "ai")}
+              className="accent-emerald-400"
+            />
+            {option.label}
+          </label>
+        ))}
+      </fieldset>
+
+      {method === "structured" ? (
+        <div className="detail-grid">
+          <ImportPanel
+            kind="history"
+            account={account}
+            session={session}
+            onChanged={onChanged}
+          />
+          {account.trackingMode === "positions" ? (
+            <ImportPanel
+              kind="investment"
+              account={account}
+              session={session}
+              onChanged={onChanged}
+            />
+          ) : null}
+        </div>
+      ) : preparedFile ? (
         <ImportPanel
-          kind="investment"
+          kind={preparedKind}
           account={account}
           session={session}
           onChanged={onChanged}
+          initialFile={preparedFile}
+          onEditFile={() => setPreparedFile(undefined)}
         />
-      ) : null}
-    </div>
+      ) : (
+        <Card className="p-5">
+          <AIDocumentImport
+            account={account}
+            session={session}
+            onPrepared={setPreparedFile}
+          />
+        </Card>
+      )}
+    </section>
   );
 }
 
@@ -438,13 +490,17 @@ function ImportPanel({
   account,
   session,
   onChanged,
+  initialFile,
+  onEditFile,
 }: {
   kind: "history" | "investment";
   account: Account;
   session: Session;
   onChanged: () => void;
+  initialFile?: File;
+  onEditFile?: () => void;
 }) {
-  const [file, setFile] = useState<File>();
+  const [file, setFile] = useState<File | undefined>(initialFile);
   const [result, setResult] = useState<ImportResult>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -499,17 +555,34 @@ function ImportPanel({
           void run(false);
         }}
       >
-        <Field label="Import file" id={`import-${kind}`}>
-          <input
-            id={`import-${kind}`}
-            type="file"
-            accept=".csv,.json,text/csv,application/json"
-            onChange={(event) => {
-              setFile(event.target.files?.[0]);
-              setResult(undefined);
-            }}
-          />
-        </Field>
+        {initialFile ? (
+          <div className="settings-stack">
+            <p className="text-sm text-slate-400">
+              AI draft ready for the standard server preview. Nothing has been
+              imported.
+            </p>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onEditFile}
+              disabled={busy}
+            >
+              Edit draft
+            </button>
+          </div>
+        ) : (
+          <Field label="Import file" id={`import-${kind}`}>
+            <input
+              id={`import-${kind}`}
+              type="file"
+              accept=".csv,.json,text/csv,application/json"
+              onChange={(event) => {
+                setFile(event.target.files?.[0]);
+                setResult(undefined);
+              }}
+            />
+          </Field>
+        )}
         <button className="primary-button compact" disabled={busy}>
           <FileUp size={16} />
           {busy ? "Checking..." : "Preview"}

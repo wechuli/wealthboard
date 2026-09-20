@@ -9,11 +9,7 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  convertAIDocument,
-  extractAIDocument,
-  getAI,
-} from "@/api/client";
+import { convertAIDocument, extractAIDocument, getAI } from "@/api/client";
 import { usePrivacy } from "@/components/providers/privacy-provider";
 import {
   Button,
@@ -165,9 +161,7 @@ export function AIDocumentImport({
       setPasswordRequired(
         code === "password_required" || code === "incorrect_password",
       );
-      setError(
-        caught instanceof Error ? caught.message : "Extraction failed.",
-      );
+      setError(caught instanceof Error ? caught.message : "Extraction failed.");
     } finally {
       setBusy(null);
     }
@@ -204,9 +198,7 @@ export function AIDocumentImport({
       setDraft(result);
       setReviewed(false);
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "Conversion failed.",
-      );
+      setError(caught instanceof Error ? caught.message : "Conversion failed.");
     } finally {
       setApiKey("");
       setConsent(false);
@@ -507,7 +499,7 @@ export function AIDocumentImport({
             <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto break-words">
               {draft.references.map((reference, index) => (
                 <li key={`reference-${index}`}>
-                  {reference.collection} row {reference.row}: {" "}
+                  {reference.collection} row {reference.row}:{" "}
                   {reference.sourceIds.join(", ")}
                 </li>
               ))}

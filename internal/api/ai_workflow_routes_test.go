@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -83,6 +85,8 @@ func TestAIWorkflowAuthorizationContracts(t *testing.T) {
 		{name: "API key credential denied", path: "/ai/credential", body: `{"apiKey":"api-key-secret"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusForbidden},
 		{name: "AI invoke scope", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusOK},
 		{name: "wrong invoke scope", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}, want: http.StatusForbidden},
+		{name: "convert AI invoke scope", path: "/ai/import/convert", body: `{"source":{"units":[],"warnings":[]},"configurationHash":"hash","consent":true,"trackingMode":"balance","currency":"USD"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusOK},
+		{name: "convert wrong scope", path: "/ai/import/convert", body: `{"source":{"units":[],"warnings":[]},"configurationHash":"hash","consent":true,"trackingMode":"balance","currency":"USD"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeImportsWrite}}, want: http.StatusForbidden},
 		{name: "session invoke", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "session"}, want: http.StatusOK},
 	}
 	for _, test := range tests {
@@ -91,6 +95,38 @@ func TestAIWorkflowAuthorizationContracts(t *testing.T) {
 			RegisterAIWorkflowRoutes(router, NewAIWorkflowHandler(fakeAIWorkflowAuthorizer{principal: test.principal}, &fakeAIWorkflowService{settings: &aiworkflow.Settings{}}, aiworkflow.Extractor{}))
 			request := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(test.body))
 			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != test.want {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, test.want, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestAIWorkflowExtractRequiresAIInvokeScope(t *testing.T) {
+	tests := []struct {
+		name      string
+		principal webauth.Principal
+		want      int
+	}{
+		{name: "AI invoke scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusOK},
+		{name: "wrong scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeImportsWrite}}, want: http.StatusForbidden},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			router := chi.NewRouter()
+			RegisterAIWorkflowRoutes(router, NewAIWorkflowHandler(fakeAIWorkflowAuthorizer{principal: test.principal}, &fakeAIWorkflowService{}, aiworkflow.Extractor{}))
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+			file, err := writer.CreateFormFile("file", "activity.csv")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = file.Write([]byte("id,amount\na,10\n"))
+			_ = writer.Close()
+			request := httptest.NewRequest(http.MethodPost, "/ai/import/extract", body)
+			request.Header.Set("Content-Type", writer.FormDataContentType())
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)
 			if response.Code != test.want {

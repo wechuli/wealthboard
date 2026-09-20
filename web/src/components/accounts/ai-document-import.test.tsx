@@ -105,12 +105,16 @@ describe("AIDocumentImport", () => {
     expect(
       await screen.findByLabelText("Approved text for source-1"),
     ).toBeVisible();
-    await user.click(screen.getByRole("checkbox", { name: /I approve sending/ }));
+    await user.click(
+      screen.getByRole("checkbox", { name: /I approve sending/ }),
+    );
     await user.click(
       screen.getByRole("button", { name: "Convert selected text" }),
     );
     const payload = convertAIDocument.mock.calls[0][0];
-    expect(JSON.stringify(payload)).not.toMatch(/documentPassword|fictional-password/);
+    expect(JSON.stringify(payload)).not.toMatch(
+      /documentPassword|fictional-password/,
+    );
   });
 
   it("sends only redacted text after renewed explicit consent", async () => {
@@ -125,13 +129,17 @@ describe("AIDocumentImport", () => {
       name: "Convert selected text",
     });
     expect(send).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /I approve sending/ }));
+    await user.click(
+      screen.getByRole("checkbox", { name: /I approve sending/ }),
+    );
     expect(send).toBeEnabled();
     const text = screen.getByLabelText("Approved text for source-1");
     await user.clear(text);
     await user.type(text, "Deposit 12.30");
     expect(send).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /I approve sending/ }));
+    await user.click(
+      screen.getByRole("checkbox", { name: /I approve sending/ }),
+    );
     await user.click(send);
 
     const payload = convertAIDocument.mock.calls[0][0];
@@ -142,7 +150,9 @@ describe("AIDocumentImport", () => {
       trackingMode: "balance",
       currency: "USD",
     });
-    expect(await screen.findByText("Verify the transaction date.")).toBeVisible();
+    expect(
+      await screen.findByText("Verify the transaction date."),
+    ).toBeVisible();
     await user.click(screen.getByText("Evidence references and exclusions"));
     expect(screen.getByText(/transactions row 1/)).toBeVisible();
     expect(screen.getByText(/Excluded source-2/)).toBeVisible();
@@ -174,7 +184,9 @@ describe("AIDocumentImport", () => {
       exclusions: [],
       issues: [],
     });
-    await user.click(screen.getByRole("checkbox", { name: /I approve sending/ }));
+    await user.click(
+      screen.getByRole("checkbox", { name: /I approve sending/ }),
+    );
     await user.click(
       screen.getByRole("button", { name: "Convert selected text" }),
     );

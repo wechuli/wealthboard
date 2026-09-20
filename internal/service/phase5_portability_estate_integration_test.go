@@ -327,4 +327,3 @@ func openPhase5TestDatabase(t *testing.T) *sql.DB {
 	t.Cleanup(func() { db.Close() })
 	return db
 }
-

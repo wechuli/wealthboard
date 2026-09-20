@@ -1,126 +1,126 @@
 name: Validation
 
 on:
-  pull_request:
-  push:
-    branches: [main]
-  workflow_call:
+    pull_request:
+    push:
+        branches: [main]
+    workflow_call:
 
 permissions:
-  contents: read
+    contents: read
 
 concurrency:
-  group: validation-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    group: validation-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 env:
-  DATABASE_URL: postgres://wealthboard:wealthboard@localhost:5432/wealthboard?sslmode=disable
-  TEST_DATABASE_URL: postgres://wealthboard:wealthboard@localhost:5432/wealthboard?sslmode=disable
+    DATABASE_URL: postgres://wealthboard:wealthboard@localhost:5432/wealthboard?sslmode=disable
+    TEST_DATABASE_URL: postgres://wealthboard:wealthboard@localhost:5432/wealthboard?sslmode=disable
 
 jobs:
-  validate:
-    name: Generate, analyze, and test
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: wealthboard
-          POSTGRES_USER: wealthboard
-          POSTGRES_PASSWORD: wealthboard
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U wealthboard -d wealthboard"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+    validate:
+        name: Generate, analyze, and test
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        services:
+            postgres:
+                image: postgres:17-alpine
+                env:
+                    POSTGRES_DB: wealthboard
+                    POSTGRES_USER: wealthboard
+                    POSTGRES_PASSWORD: wealthboard
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U wealthboard -d wealthboard"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
+            - name: Set up Go
+              uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+              with:
+                  go-version-file: go.mod
 
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            web/package-lock.json
+            - name: Set up Node.js
+              uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+              with:
+                  node-version: 24
+                  cache: npm
+                  cache-dependency-path: |
+                      package-lock.json
+                      web/package-lock.json
 
-      - name: Install dependencies
-        run: |
-          npm ci
-          npm --prefix web ci
+            - name: Install dependencies
+              run: |
+                  npm ci
+                  npm --prefix web ci
 
-      - name: Verify generated code has no drift
-        run: |
-          make generate
-          git diff --exit-code
+            - name: Verify generated code has no drift
+              run: |
+                  make generate
+                  git diff --exit-code
 
-      - name: Lint
-        run: make lint
+            - name: Lint
+              run: make lint
 
-      - name: Typecheck
-        run: make typecheck
+            - name: Typecheck
+              run: make typecheck
 
-      - name: Run Go, legacy, and Vite tests
-        run: make test
+            - name: Run Go, legacy, and Vite tests
+              run: make test
 
-      - name: Verify PostgreSQL migrations
-        run: make migrate-check
+            - name: Verify PostgreSQL migrations
+              run: make migrate-check
 
-      - name: Scan dependencies
-        run: make security
+            - name: Scan dependencies
+              run: make security
 
-  e2e:
-    name: Go and Vite browser tests
-    needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: wealthboard
-          POSTGRES_USER: wealthboard
-          POSTGRES_PASSWORD: wealthboard
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U wealthboard -d wealthboard"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+    e2e:
+        name: Go and Vite browser tests
+        needs: validate
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        services:
+            postgres:
+                image: postgres:17-alpine
+                env:
+                    POSTGRES_DB: wealthboard
+                    POSTGRES_USER: wealthboard
+                    POSTGRES_PASSWORD: wealthboard
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U wealthboard -d wealthboard"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version-file: go.mod
+            - name: Set up Go
+              uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+              with:
+                  go-version-file: go.mod
 
-      - name: Set up Node.js
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            web/package-lock.json
+            - name: Set up Node.js
+              uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+              with:
+                  node-version: 24
+                  cache: npm
+                  cache-dependency-path: |
+                      package-lock.json
+                      web/package-lock.json
 
-      - name: Install dependencies and Chromium
-        run: |
-          npm ci
-          npm --prefix web ci
-          npx playwright install --with-deps chromium
+            - name: Install dependencies and Chromium
+              run: |
+                  npm ci
+                  npm --prefix web ci
+                  npx playwright install --with-deps chromium
 
-      - name: Run Go and Vite end-to-end tests
-        run: make test-e2e
+            - name: Run Go and Vite end-to-end tests
+              run: make test-e2e
