@@ -307,7 +307,9 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   });
   await investmentImport.getByRole("button", { name: "Preview" }).click();
   await expect(investmentImport.getByText("Records")).toBeVisible();
-  await expect(investmentImport.getByText("3", { exact: true }).first()).toBeVisible();
+  await expect(
+    investmentImport.getByText("3", { exact: true }).first(),
+  ).toBeVisible();
   await captureLocator(investmentImport, "investment-import-preview.png");
 
   await page.goto("/reports");
