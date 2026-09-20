@@ -89,11 +89,13 @@ func (handler *ImportHandler) authorizeAndRead(response http.ResponseWriter, req
 		writeProblem(response, http.StatusUnauthorized, "Unauthorized", "Valid authentication is required.")
 		return webauth.Principal{}, uuid.Nil, nil, "", "", false
 	}
-	if !principal.HasScope(webauth.ScopePortfolioWrite) {
-		writeProblem(response, http.StatusForbidden, "Forbidden", "The credential does not grant portfolio:write.")
-		return webauth.Principal{}, uuid.Nil, nil, "", "", false
-	}
-	if principal.Method == "session" {
+	switch principal.Method {
+	case "api_key":
+		if !principal.HasScope(webauth.ScopeImportsWrite) {
+			writeProblem(response, http.StatusForbidden, "Forbidden", "The credential does not grant imports:write.")
+			return webauth.Principal{}, uuid.Nil, nil, "", "", false
+		}
+	case "session":
 		if request.Header.Get("Origin") != handler.trustedOrigin {
 			writeProblem(response, http.StatusForbidden, "Forbidden", "The request origin is not allowed.")
 			return webauth.Principal{}, uuid.Nil, nil, "", "", false
@@ -102,6 +104,9 @@ func (handler *ImportHandler) authorizeAndRead(response http.ResponseWriter, req
 			writeProblem(response, http.StatusUnauthorized, "Unauthorized", "A valid browser session and CSRF token are required.")
 			return webauth.Principal{}, uuid.Nil, nil, "", "", false
 		}
+	default:
+		writeProblem(response, http.StatusUnauthorized, "Unauthorized", "Valid authentication is required.")
+		return webauth.Principal{}, uuid.Nil, nil, "", "", false
 	}
 	accountID, err := uuid.Parse(chi.URLParam(request, "accountID"))
 	if err != nil {

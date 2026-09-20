@@ -182,6 +182,43 @@ func TestAuthorizePortfolioMutationPreservesSessionAndAPIKeyRules(t *testing.T) 
 	}
 }
 
+func TestAuthorizeScopedAndSessionOnlyMutations(t *testing.T) {
+	ownerID := uuid.New()
+	csrfToken := "test-csrf-token-that-is-long-enough"
+	handler, _ := testAuthHandler(t, &fakeAuthenticationService{principal: webauth.Principal{
+		UserID: ownerID, Method: "session", CSRFToken: csrfToken,
+	}}, &fakeLoginRateLimiter{})
+
+	sessionRequest := httptest.NewRequest(http.MethodPost, "/ai/credential", nil)
+	sessionRequest.AddCookie(&http.Cookie{Name: webauth.SessionCookieName, Value: "valid-session"})
+	sessionRequest.Header.Set("Origin", "https://wealthboard.example")
+	sessionRequest.Header.Set("X-CSRF-Token", csrfToken)
+	principal, err := handler.AuthorizeSessionMutation(sessionRequest)
+	if err != nil || principal.UserID != ownerID {
+		t.Fatalf("session-only authorization principal=%+v err=%v", principal, err)
+	}
+
+	apiKeyRequest := httptest.NewRequest(http.MethodPost, "/ai/review", nil)
+	apiKeyRequest.Header.Set("Authorization", "Bearer test")
+	handler.EnableAPIKeys(&fakeAPIKeyService{principal: webauth.Principal{
+		UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke},
+	}})
+	principal, err = handler.AuthorizeScopedMutation(apiKeyRequest, webauth.ScopeAIInvoke)
+	if err != nil || principal.UserID != ownerID {
+		t.Fatalf("AI API key authorization principal=%+v err=%v", principal, err)
+	}
+	if _, err := handler.AuthorizeSessionMutation(apiKeyRequest); !errors.Is(err, errMutationMethod) {
+		t.Fatalf("session-only API key error=%v, want errMutationMethod", err)
+	}
+
+	handler.EnableAPIKeys(&fakeAPIKeyService{principal: webauth.Principal{
+		UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite},
+	}})
+	if _, err := handler.AuthorizeScopedMutation(apiKeyRequest, webauth.ScopeAIInvoke); !errors.Is(err, errMutationScope) {
+		t.Fatalf("wrong AI API key scope error=%v, want errMutationScope", err)
+	}
+}
+
 func metadataMutationRouter(auth metadataMutationAuthorizer, mutations metadataMutationService) http.Handler {
 	router := chi.NewRouter()
 	RegisterMetadataMutationRoutes(router, NewMetadataMutationHandler(auth, mutations))

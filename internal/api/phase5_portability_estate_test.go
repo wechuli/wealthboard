@@ -16,9 +16,10 @@ import (
 )
 
 type fakePhase5Authorizer struct {
-	principal webauth.Principal
-	readErr   error
-	writeErr  error
+	principal  webauth.Principal
+	readErr    error
+	writeErr   error
+	sessionErr error
 }
 
 func (fake fakePhase5Authorizer) AuthenticateRequest(*http.Request) (webauth.Principal, error) {
@@ -27,6 +28,10 @@ func (fake fakePhase5Authorizer) AuthenticateRequest(*http.Request) (webauth.Pri
 
 func (fake fakePhase5Authorizer) AuthorizePortfolioMutation(*http.Request) (webauth.Principal, error) {
 	return fake.principal, fake.writeErr
+}
+
+func (fake fakePhase5Authorizer) AuthorizeSessionMutation(*http.Request) (webauth.Principal, error) {
+	return fake.principal, fake.sessionErr
 }
 
 type fakePortabilityService struct {
@@ -82,10 +87,37 @@ func TestPortabilityRoutesUseAuthenticatedOwnerAndBoundRestore(t *testing.T) {
 	}
 }
 
-func TestPortabilityExportRequiresExportOrPortfolioReadScope(t *testing.T) {
-	auth := fakePhase5Authorizer{principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}}
+func TestPortabilityExportAuthorization(t *testing.T) {
+	tests := []struct {
+		name      string
+		principal webauth.Principal
+		want      int
+	}{
+		{name: "session", principal: webauth.Principal{UserID: uuid.New(), Method: "session"}, want: http.StatusOK},
+		{name: "exports scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeExportsRead}}, want: http.StatusOK},
+		{name: "portfolio read scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioRead}}, want: http.StatusForbidden},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			auth := fakePhase5Authorizer{principal: test.principal}
+			NewPortabilityRoutes(auth, &fakePortabilityService{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/exports/user", nil))
+			if response.Code != test.want {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, test.want, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestPortabilityRestoreRejectsAPIKeys(t *testing.T) {
+	auth := fakePhase5Authorizer{
+		principal:  webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}},
+		sessionErr: errMutationMethod,
+	}
 	response := httptest.NewRecorder()
-	NewPortabilityRoutes(auth, &fakePortabilityService{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/exports/user", nil))
+	request := httptest.NewRequest(http.MethodPost, "/restore/user", strings.NewReader(`{"version":8}`))
+	request.Header.Set("Content-Type", "application/json")
+	NewPortabilityRoutes(auth, &fakePortabilityService{}).ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}

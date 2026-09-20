@@ -56,7 +56,7 @@ func (fake *fakeInvestmentHistoryImporter) Commit(context.Context, uuid.UUID, uu
 func TestImportRoutesAcceptRawJSONAndMultipartCommit(t *testing.T) {
 	ownerID, accountID := uuid.New(), uuid.New()
 	accounts := &fakeAccountHistoryImporter{}
-	router := importTestRouter(fakeImportAuthenticator{principal: webauth.Principal{UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}}, accounts, &fakeInvestmentHistoryImporter{})
+	router := importTestRouter(fakeImportAuthenticator{principal: webauth.Principal{UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeImportsWrite}}}, accounts, &fakeInvestmentHistoryImporter{})
 
 	preview := httptest.NewRequest(http.MethodPost, "/accounts/"+accountID.String()+"/history-import/preview", strings.NewReader(`{"format":"wealthboard-account-history"}`))
 	preview.Header.Set("Content-Type", "application/json")
@@ -92,10 +92,11 @@ func TestImportRoutesRequireWriteScopeAndBrowserCSRF(t *testing.T) {
 		headers   map[string]string
 		want      int
 	}{
-		{name: "write scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key"}, want: http.StatusForbidden},
-		{name: "origin", principal: webauth.Principal{UserID: uuid.New(), Method: "session", CSRFToken: "token", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}, want: http.StatusForbidden},
-		{name: "csrf", principal: webauth.Principal{UserID: uuid.New(), Method: "session", CSRFToken: "token", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}, headers: map[string]string{"Origin": "https://wealth.test"}, want: http.StatusUnauthorized},
-		{name: "allowed", principal: webauth.Principal{UserID: uuid.New(), Method: "session", CSRFToken: "token", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}, headers: map[string]string{"Origin": "https://wealth.test", "X-CSRF-Token": "token"}, want: http.StatusOK},
+		{name: "wrong API key scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}, want: http.StatusForbidden},
+		{name: "imports API key scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeImportsWrite}}, want: http.StatusOK},
+		{name: "origin", principal: webauth.Principal{UserID: uuid.New(), Method: "session", CSRFToken: "token"}, want: http.StatusForbidden},
+		{name: "csrf", principal: webauth.Principal{UserID: uuid.New(), Method: "session", CSRFToken: "token"}, headers: map[string]string{"Origin": "https://wealth.test"}, want: http.StatusUnauthorized},
+		{name: "allowed session", principal: webauth.Principal{UserID: uuid.New(), Method: "session", CSRFToken: "token"}, headers: map[string]string{"Origin": "https://wealth.test", "X-CSRF-Token": "token"}, want: http.StatusOK},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -116,7 +117,7 @@ func TestImportRoutesRequireWriteScopeAndBrowserCSRF(t *testing.T) {
 
 func TestImportRoutesEnforceBodyLimitHashAndErrorMapping(t *testing.T) {
 	accountID := uuid.New()
-	auth := fakeImportAuthenticator{principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}}
+	auth := fakeImportAuthenticator{principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeImportsWrite}}}
 	accounts := &fakeAccountHistoryImporter{}
 	router := importTestRouter(auth, accounts, &fakeInvestmentHistoryImporter{})
 

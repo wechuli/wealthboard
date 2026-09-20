@@ -18,6 +18,7 @@ import (
 type portabilityAuthorizer interface {
 	AuthenticateRequest(*http.Request) (webauth.Principal, error)
 	AuthorizePortfolioMutation(*http.Request) (webauth.Principal, error)
+	AuthorizeSessionMutation(*http.Request) (webauth.Principal, error)
 }
 
 type portabilityService interface {
@@ -67,7 +68,7 @@ func (handler *PortabilityHandler) export(response http.ResponseWriter, request 
 		writeProblem(response, http.StatusUnauthorized, "Unauthorized", "Valid authentication is required.")
 		return
 	}
-	if !principal.HasScope(webauth.ScopeExportsRead) && !principal.HasScope(webauth.ScopePortfolioRead) {
+	if !principal.HasScope(webauth.ScopeExportsRead) {
 		writeProblem(response, http.StatusForbidden, "Forbidden", "The credential does not grant exports:read.")
 		return
 	}
@@ -84,7 +85,7 @@ func (handler *PortabilityHandler) export(response http.ResponseWriter, request 
 }
 
 func (handler *PortabilityHandler) Restore(response http.ResponseWriter, request *http.Request) {
-	principal, err := handler.auth.AuthorizePortfolioMutation(request)
+	principal, err := handler.auth.AuthorizeSessionMutation(request)
 	if err != nil {
 		writeMutationAuthorizationError(response, err)
 		return
@@ -144,8 +145,8 @@ func writeMutationAuthorizationError(response http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errMutationOrigin):
 		writeProblem(response, http.StatusForbidden, "Forbidden", "The request origin is not allowed.")
-	case errors.Is(err, errMutationScope):
-		writeProblem(response, http.StatusForbidden, "Forbidden", "The credential does not grant portfolio:write.")
+	case errors.Is(err, errMutationScope), errors.Is(err, errMutationMethod):
+		writeProblem(response, http.StatusForbidden, "Forbidden", "A browser session is required.")
 	default:
 		writeProblem(response, http.StatusUnauthorized, "Unauthorized", "Valid mutation authentication is required.")
 	}

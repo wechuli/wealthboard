@@ -19,7 +19,8 @@ import (
 const maxAIJSONBytes = aiworkflow.MaxSourceBytes + 128<<10
 
 type aiWorkflowAuthorizer interface {
-	AuthorizePortfolioMutation(*http.Request) (webauth.Principal, error)
+	AuthorizeScopedMutation(*http.Request, webauth.Scope) (webauth.Principal, error)
+	AuthorizeSessionMutation(*http.Request) (webauth.Principal, error)
 }
 
 type aiWorkflowService interface {
@@ -54,7 +55,7 @@ func RegisterAIWorkflowRoutes(router chi.Router, handler *AIWorkflowHandler) {
 }
 
 func (handler *AIWorkflowHandler) SaveSettings(response http.ResponseWriter, request *http.Request) {
-	principal, ok := handler.authorize(response, request)
+	principal, ok := handler.authorizeSession(response, request)
 	if !ok {
 		return
 	}
@@ -71,7 +72,7 @@ func (handler *AIWorkflowHandler) SaveSettings(response http.ResponseWriter, req
 }
 
 func (handler *AIWorkflowHandler) SaveCredential(response http.ResponseWriter, request *http.Request) {
-	principal, ok := handler.authorize(response, request)
+	principal, ok := handler.authorizeSession(response, request)
 	if !ok {
 		return
 	}
@@ -99,7 +100,7 @@ func (handler *AIWorkflowHandler) Disconnect(response http.ResponseWriter, reque
 }
 
 func (handler *AIWorkflowHandler) ClearUsage(response http.ResponseWriter, request *http.Request) {
-	principal, ok := handler.authorize(response, request)
+	principal, ok := handler.authorizeSession(response, request)
 	if !ok {
 		return
 	}
@@ -112,7 +113,7 @@ func (handler *AIWorkflowHandler) ClearUsage(response http.ResponseWriter, reque
 }
 
 func (handler *AIWorkflowHandler) Review(response http.ResponseWriter, request *http.Request) {
-	principal, ok := handler.authorize(response, request)
+	principal, ok := handler.authorizeInvoke(response, request)
 	if !ok {
 		return
 	}
@@ -130,7 +131,7 @@ func (handler *AIWorkflowHandler) Review(response http.ResponseWriter, request *
 }
 
 func (handler *AIWorkflowHandler) Extract(response http.ResponseWriter, request *http.Request) {
-	_, ok := handler.authorize(response, request)
+	_, ok := handler.authorizeInvoke(response, request)
 	if !ok {
 		return
 	}
@@ -176,7 +177,7 @@ func (handler *AIWorkflowHandler) Extract(response http.ResponseWriter, request 
 }
 
 func (handler *AIWorkflowHandler) Convert(response http.ResponseWriter, request *http.Request) {
-	principal, ok := handler.authorize(response, request)
+	principal, ok := handler.authorizeInvoke(response, request)
 	if !ok {
 		return
 	}
@@ -194,7 +195,7 @@ func (handler *AIWorkflowHandler) Convert(response http.ResponseWriter, request 
 }
 
 func (handler *AIWorkflowHandler) emptyMutation(response http.ResponseWriter, request *http.Request, operation func(context.Context, uuid.UUID) error) {
-	principal, ok := handler.authorize(response, request)
+	principal, ok := handler.authorizeSession(response, request)
 	if !ok {
 		return
 	}
@@ -206,10 +207,19 @@ func (handler *AIWorkflowHandler) emptyMutation(response http.ResponseWriter, re
 	response.WriteHeader(http.StatusNoContent)
 }
 
-func (handler *AIWorkflowHandler) authorize(response http.ResponseWriter, request *http.Request) (webauth.Principal, bool) {
-	principal, err := handler.auth.AuthorizePortfolioMutation(request)
+func (handler *AIWorkflowHandler) authorizeSession(response http.ResponseWriter, request *http.Request) (webauth.Principal, bool) {
+	principal, err := handler.auth.AuthorizeSessionMutation(request)
+	return handler.writeAuthorization(response, principal, err)
+}
+
+func (handler *AIWorkflowHandler) authorizeInvoke(response http.ResponseWriter, request *http.Request) (webauth.Principal, bool) {
+	principal, err := handler.auth.AuthorizeScopedMutation(request, webauth.ScopeAIInvoke)
+	return handler.writeAuthorization(response, principal, err)
+}
+
+func (handler *AIWorkflowHandler) writeAuthorization(response http.ResponseWriter, principal webauth.Principal, err error) (webauth.Principal, bool) {
 	switch {
-	case errors.Is(err, errMutationOrigin), errors.Is(err, errMutationScope):
+	case errors.Is(err, errMutationOrigin), errors.Is(err, errMutationScope), errors.Is(err, errMutationMethod):
 		writeProblem(response, http.StatusForbidden, "Forbidden", "The request is not allowed.")
 	case err != nil:
 		writeProblem(response, http.StatusUnauthorized, "Unauthorized", "Valid mutation authentication is required.")

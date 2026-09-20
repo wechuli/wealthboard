@@ -12,6 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:go": "playwright test --config=playwright.go.config.ts",
+    "test:e2e:go:list": "playwright test --config=playwright.go.config.ts --list",
     "docs:sync": "node scripts/sync-docs-assets.mjs",
     "docs:dev": "npm run docs:sync && vitepress dev docs",
     "docs:build": "npm run docs:sync && vitepress build docs",

@@ -57,8 +57,47 @@ type fakeAIWorkflowAuthorizer struct {
 	err       error
 }
 
-func (authorizer fakeAIWorkflowAuthorizer) AuthorizePortfolioMutation(*http.Request) (webauth.Principal, error) {
+func (authorizer fakeAIWorkflowAuthorizer) AuthorizeScopedMutation(_ *http.Request, scope webauth.Scope) (webauth.Principal, error) {
+	if authorizer.err == nil && !authorizer.principal.HasScope(scope) {
+		return webauth.Principal{}, errMutationScope
+	}
 	return authorizer.principal, authorizer.err
+}
+
+func (authorizer fakeAIWorkflowAuthorizer) AuthorizeSessionMutation(*http.Request) (webauth.Principal, error) {
+	if authorizer.err == nil && authorizer.principal.Method == "api_key" {
+		return webauth.Principal{}, errMutationMethod
+	}
+	return authorizer.principal, authorizer.err
+}
+
+func TestAIWorkflowAuthorizationContracts(t *testing.T) {
+	tests := []struct {
+		name      string
+		path      string
+		body      string
+		principal webauth.Principal
+		want      int
+	}{
+		{name: "session credential", path: "/ai/credential", body: `{"apiKey":"session-secret-key"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "session"}, want: http.StatusOK},
+		{name: "API key credential denied", path: "/ai/credential", body: `{"apiKey":"api-key-secret"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusForbidden},
+		{name: "AI invoke scope", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusOK},
+		{name: "wrong invoke scope", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}, want: http.StatusForbidden},
+		{name: "session invoke", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "session"}, want: http.StatusOK},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			router := chi.NewRouter()
+			RegisterAIWorkflowRoutes(router, NewAIWorkflowHandler(fakeAIWorkflowAuthorizer{principal: test.principal}, &fakeAIWorkflowService{settings: &aiworkflow.Settings{}}, aiworkflow.Extractor{}))
+			request := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(test.body))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != test.want {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, test.want, response.Body.String())
+			}
+		})
+	}
 }
 
 type fakeAIWorkflowService struct {
