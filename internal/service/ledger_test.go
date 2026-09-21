@@ -1,9 +1,11 @@
 package service
 
 import (
+	"database/sql"
 	"errors"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -38,6 +40,22 @@ func TestLedgerTransactionEffectRejectsPositiveOverflow(t *testing.T) {
 	_, err := transactionEffect("deposit", math.MinInt64)
 	if !errors.Is(err, ErrLedgerValidation) {
 		t.Fatalf("transactionEffect() error = %v, want validation", err)
+	}
+}
+
+func TestTransactionExternalIDMatchesBlankAndLegacyRows(t *testing.T) {
+	input := TransactionMutationInput{
+		Type: "deposit", AmountMinor: 100_000_000,
+		TransactionDate: time.Date(2026, time.September, 21, 0, 0, 0, 0, time.UTC),
+	}
+	if !transactionExternalIDMatches(sql.NullString{}, input, "") {
+		t.Fatal("blank external ID did not match NULL")
+	}
+	if !transactionExternalIDMatches(sql.NullString{String: "derived-2026-09-21-deposit-100000000", Valid: true}, input, "") {
+		t.Fatal("blank external ID did not match legacy derived ID")
+	}
+	if transactionExternalIDMatches(sql.NullString{String: "another-id", Valid: true}, input, "") {
+		t.Fatal("blank external ID matched unrelated explicit ID")
 	}
 }
 

@@ -26,6 +26,7 @@ func (authenticator ledgerFakeAuthenticator) AuthenticateRequest(*http.Request) 
 
 type fakeLedgerMutator struct {
 	createdID            uuid.UUID
+	createTransactionErr error
 	lastUserID           uuid.UUID
 	lastTransaction      service.TransactionMutationInput
 	updatedTransaction   service.TransactionMutationInput
@@ -47,7 +48,7 @@ func (fake *fakeLedgerMutator) DeleteAccount(context.Context, uuid.UUID, uuid.UU
 }
 func (fake *fakeLedgerMutator) CreateTransaction(_ context.Context, userID uuid.UUID, input service.TransactionMutationInput) (uuid.UUID, error) {
 	fake.lastUserID, fake.lastTransaction = userID, input
-	return fake.createdID, nil
+	return fake.createdID, fake.createTransactionErr
 }
 
 func (fake *fakeLedgerMutator) UpdateTransaction(_ context.Context, _ uuid.UUID, _ uuid.UUID, input service.TransactionMutationInput) error {
@@ -113,6 +114,23 @@ func TestLedgerTransactionRoutePropagatesOwnerAndBigintString(t *testing.T) {
 	}
 	if fake.lastUserID != userID || fake.lastTransaction.AccountID != accountID || fake.lastTransaction.AmountMinor != int64(9223372036854775807) {
 		t.Fatalf("service input = user %s, transaction %+v", fake.lastUserID, fake.lastTransaction)
+	}
+}
+
+func TestLedgerTransactionRouteReturnsConflict(t *testing.T) {
+	userID, accountID, key := uuid.New(), uuid.New(), uuid.New()
+	fake := &fakeLedgerMutator{createTransactionErr: service.ErrLedgerConflict}
+	router := chi.NewRouter()
+	RegisterLedgerRoutes(router, NewLedgerHandler(ledgerFakeAuthenticator{principal: webauth.Principal{
+		UserID: userID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite},
+	}}, fake, "https://wealth.test"))
+	body := `{"idempotencyKey":"` + key.String() + `","accountId":"` + accountID.String() + `","type":"deposit","amountMinor":"100000000","transactionDate":"2026-09-21","externalId":"duplicate"}`
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/transactions", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "conflicts with existing ledger data") {
+		t.Fatalf("status/body = %d/%s", response.Code, response.Body.String())
 	}
 }
 

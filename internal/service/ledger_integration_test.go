@@ -66,6 +66,15 @@ func TestLedgerPostgreSQLReplayTransfersIdempotencyAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create deposit: %v", err)
 	}
+	duplicateDeposit := depositInput
+	duplicateDeposit.IdempotencyKey = uuid.New()
+	duplicateDepositID, err := service.CreateTransaction(ctx, userOne, duplicateDeposit)
+	if err != nil {
+		t.Fatalf("create legitimate duplicate deposit: %v", err)
+	}
+	if err := service.DeleteTransaction(ctx, userOne, duplicateDepositID); err != nil {
+		t.Fatalf("delete legitimate duplicate deposit probe: %v", err)
+	}
 	retryID, err := service.CreateTransaction(ctx, userOne, depositInput)
 	if err != nil || retryID != depositID {
 		t.Fatalf("idempotent deposit = %s, %v; want %s", retryID, err, depositID)

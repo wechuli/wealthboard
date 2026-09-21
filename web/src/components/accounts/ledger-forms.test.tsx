@@ -132,6 +132,27 @@ describe("AccountConversionForm", () => {
 });
 
 describe("TransactionForm", () => {
+  it("converts a grouped million-unit amount to exact minor units", async () => {
+    const user = userEvent.setup();
+    const create = vi.fn().mockResolvedValue({ id: "tx" });
+    render(
+      <TransactionForm
+        account={account}
+        session={session}
+        onChanged={vi.fn()}
+        operations={{ create, update: vi.fn() }}
+      />,
+    );
+    await user.type(screen.getByLabelText("Amount (KES)"), "1,000,000");
+    await user.click(
+      screen.getByRole("button", { name: "Record transaction" }),
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ amountMinor: "100000000" }),
+      session.csrfToken,
+    );
+  });
+
   it("keeps its idempotency key stable when a create is retried", async () => {
     const user = userEvent.setup();
     const create = vi

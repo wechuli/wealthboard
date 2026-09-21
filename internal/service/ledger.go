@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
@@ -364,9 +365,6 @@ func (service *LedgerService) CreateTransaction(ctx context.Context, userID uuid
 		return uuid.Nil, err
 	}
 	externalID := strings.TrimSpace(input.ExternalID)
-	if externalID == "" {
-		externalID = fmt.Sprintf("derived-%s-%s-%d", input.TransactionDate.Format(time.DateOnly), input.Type, input.AmountMinor)
-	}
 	if resultID, operation, found, lookupErr := lookupIdempotency(ctx, tx, userID, input.IdempotencyKey); lookupErr != nil {
 		return uuid.Nil, lookupErr
 	} else if found && operation != "transaction" {
@@ -379,7 +377,7 @@ func (service *LedgerService) CreateTransaction(ctx context.Context, userID uuid
 	var existingAmount int64
 	var existingDate time.Time
 	var existingDescription, existingNotes sql.NullString
-	var existingExternalID string
+	var existingExternalID sql.NullString
 	err = tx.QueryRowContext(ctx, `
 		SELECT id,account_id,type,amount_minor,transaction_date,description,notes,external_id
 		FROM transactions WHERE user_id=$1 AND idempotency_key=$2
@@ -387,7 +385,7 @@ func (service *LedgerService) CreateTransaction(ctx context.Context, userID uuid
 	if err == nil {
 		if existingAccount != input.AccountID || existingType != input.Type || existingAmount != input.AmountMinor ||
 			!sameDate(existingDate, input.TransactionDate) || existingDescription.String != strings.TrimSpace(input.Description) ||
-			existingNotes.String != strings.TrimSpace(input.Notes) || existingExternalID != externalID {
+			existingNotes.String != strings.TrimSpace(input.Notes) || !transactionExternalIDMatches(existingExternalID, input, externalID) {
 			return uuid.Nil, conflict("idempotency key was reused with incompatible transaction data")
 		}
 		return existingID, nil
@@ -410,8 +408,12 @@ func (service *LedgerService) CreateTransaction(ctx context.Context, userID uuid
 			description,notes,external_id,idempotency_key,created_at,updated_at
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)
 	`, transactionID, userID, input.AccountID, input.Type, input.AmountMinor, account.Currency,
-		ledgerDateOnly(input.TransactionDate), nullable(input.Description), nullable(input.Notes), externalID, input.IdempotencyKey, now)
+		ledgerDateOnly(input.TransactionDate), nullable(input.Description), nullable(input.Notes), nullable(externalID), input.IdempotencyKey, now)
 	if err != nil {
+		var postgresError *pgconn.PgError
+		if errors.As(err, &postgresError) && postgresError.Code == "23505" && postgresError.ConstraintName == "transactions_user_account_external_unique" {
+			return uuid.Nil, conflict("external ID already exists for this account")
+		}
 		return uuid.Nil, fmt.Errorf("insert transaction: %w", err)
 	}
 	if _, err := service.replayBalance(ctx, tx, userID, input.AccountID); err != nil {
@@ -421,6 +423,17 @@ func (service *LedgerService) CreateTransaction(ctx context.Context, userID uuid
 		return uuid.Nil, fmt.Errorf("commit transaction creation: %w", err)
 	}
 	return transactionID, nil
+}
+
+func transactionExternalIDMatches(existing sql.NullString, input TransactionMutationInput, expected string) bool {
+	if expected != "" {
+		return existing.Valid && existing.String == expected
+	}
+	if !existing.Valid || existing.String == "" {
+		return true
+	}
+	legacy := fmt.Sprintf("derived-%s-%s-%d", input.TransactionDate.Format(time.DateOnly), input.Type, input.AmountMinor)
+	return existing.String == legacy
 }
 
 func (service *LedgerService) UpdateTransaction(ctx context.Context, userID, transactionID uuid.UUID, input TransactionMutationInput) error {
