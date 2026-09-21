@@ -178,24 +178,32 @@ type HistoricalPointRead struct {
 }
 
 type DashboardRead struct {
-	AsOf                  string                `json:"asOf"`
-	BaseCurrency          string                `json:"baseCurrency"`
-	Totals                CurrentTotals         `json:"totals"`
-	AccountCount          int                   `json:"accountCount"`
-	GoalCount             int64                 `json:"goalCount"`
-	CurrentComplete       bool                  `json:"currentComplete"`
-	MissingCurrencies     []string              `json:"missingCurrencies"`
-	HistoricalAvailable   bool                  `json:"historicalAvailable"`
-	HistoricalComplete    bool                  `json:"historicalComplete"`
-	ValueBasis            string                `json:"valueBasis"`
-	History               []HistoricalPointRead `json:"history"`
-	Allocation            []AllocationItemRead  `json:"allocation"`
-	InvestibleAllocation  []AllocationItemRead  `json:"investibleAllocation"`
-	InstitutionAllocation []AllocationItemRead  `json:"institutionAllocation"`
-	CurrencyAllocation    []AllocationItemRead  `json:"currencyAllocation"`
-	InstrumentAllocation  []AllocationItemRead  `json:"instrumentAllocation"`
-	CompositionComplete   bool                  `json:"compositionComplete"`
-	CompletenessReasons   []string              `json:"completenessReasons"`
+	AsOf                  string                     `json:"asOf"`
+	BaseCurrency          string                     `json:"baseCurrency"`
+	Totals                CurrentTotals              `json:"totals"`
+	AccountCount          int                        `json:"accountCount"`
+	GoalCount             int64                      `json:"goalCount"`
+	CurrentComplete       bool                       `json:"currentComplete"`
+	MissingCurrencies     []string                   `json:"missingCurrencies"`
+	HistoricalAvailable   bool                       `json:"historicalAvailable"`
+	HistoricalComplete    bool                       `json:"historicalComplete"`
+	PeriodChanges         DashboardPeriodChangesRead `json:"periodChanges"`
+	ValueBasis            string                     `json:"valueBasis"`
+	History               []HistoricalPointRead      `json:"history"`
+	Allocation            []AllocationItemRead       `json:"allocation"`
+	InvestibleAllocation  []AllocationItemRead       `json:"investibleAllocation"`
+	InstitutionAllocation []AllocationItemRead       `json:"institutionAllocation"`
+	CurrencyAllocation    []AllocationItemRead       `json:"currencyAllocation"`
+	InstrumentAllocation  []AllocationItemRead       `json:"instrumentAllocation"`
+	CompositionComplete   bool                       `json:"compositionComplete"`
+	CompletenessReasons   []string                   `json:"completenessReasons"`
+}
+
+type DashboardPeriodChangesRead struct {
+	OneMonth    *string `json:"oneMonth"`
+	ThreeMonths *string `json:"threeMonths"`
+	OneYear     *string `json:"oneYear"`
+	AllTime     *string `json:"allTime"`
 }
 
 type ReportSummaryRead struct {
@@ -241,11 +249,28 @@ type AccountHistoryPointRead struct {
 type AccountAnalyticsRead struct {
 	AccountID                    uuid.UUID                        `json:"accountId"`
 	Currency                     string                           `json:"currency"`
+	Metrics                      AccountFlowMetricsRead           `json:"metrics"`
+	PositionSummary              *AccountPositionSummaryRead      `json:"positionSummary"`
 	History                      []AccountHistoryPointRead        `json:"history"`
 	HistoryComplete              bool                             `json:"historyComplete"`
 	MovementAttributionAvailable bool                             `json:"movementAttributionAvailable"`
 	MovementAttribution          *PositionMovementAttributionRead `json:"movementAttribution"`
 	CompletenessReasons          []string                         `json:"completenessReasons"`
+}
+
+type AccountFlowMetricsRead struct {
+	ContributionsMinor string `json:"contributionsMinor"`
+	WithdrawalsMinor   string `json:"withdrawalsMinor"`
+	IncomeMinor        string `json:"incomeMinor"`
+	FeesMinor          string `json:"feesMinor"`
+	CapitalGrowthMinor string `json:"capitalGrowthMinor"`
+	EstimatedGainMinor string `json:"estimatedGainMinor"`
+}
+
+type AccountPositionSummaryRead struct {
+	CashMinor      string `json:"cashMinor"`
+	PositionsMinor string `json:"positionsMinor"`
+	Complete       bool   `json:"complete"`
 }
 
 type PositionMovementAttributionRead struct {

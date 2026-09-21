@@ -58,6 +58,28 @@ func TestChartAnalyticsQueriesAreOwnerScoped(t *testing.T) {
 	if dashboard.Totals.NetWorth != "100" || len(dashboard.History) < 2 {
 		t.Fatalf("owner dashboard leaked or omitted history: %+v", dashboard)
 	}
+	if dashboard.PeriodChanges.OneMonth == nil || *dashboard.PeriodChanges.OneMonth != "0" ||
+		dashboard.PeriodChanges.ThreeMonths == nil || *dashboard.PeriodChanges.ThreeMonths != "100" ||
+		dashboard.PeriodChanges.OneYear == nil || *dashboard.PeriodChanges.OneYear != "100" ||
+		dashboard.PeriodChanges.AllTime == nil || *dashboard.PeriodChanges.AllTime != "100" {
+		t.Fatalf("dashboard period changes = %+v", dashboard.PeriodChanges)
+	}
+	analytics, err := service.AccountAnalytics(ctx, ownerID, ownerAccount)
+	if err != nil {
+		t.Fatalf("owner account analytics: %v", err)
+	}
+	if analytics.Metrics.ContributionsMinor != "100" || analytics.Metrics.IncomeMinor != "0" || analytics.Metrics.EstimatedGainMinor != "0" {
+		t.Fatalf("owner account metrics = %+v", analytics.Metrics)
+	}
+	coreReads := NewCoreReadService(NewSQLCoreReadRepository(db))
+	coreReads.now = service.now
+	accounts, err := coreReads.Accounts(ctx, ownerID, "active")
+	if err != nil {
+		t.Fatalf("owner account list: %v", err)
+	}
+	if len(accounts) != 1 || accounts[0].ID != ownerAccount || accounts[0].ConvertedValueMinor == nil || *accounts[0].ConvertedValueMinor != "100" || accounts[0].MonthlyChangeMinor == nil || *accounts[0].MonthlyChangeMinor != "0" {
+		t.Fatalf("owner account-list analytics = %+v", accounts)
+	}
 	if _, err := service.AccountAnalytics(ctx, ownerID, foreignAccount); !errors.Is(err, ErrGoalsReportsNotFound) {
 		t.Fatalf("foreign account analytics error = %v, want not found", err)
 	}

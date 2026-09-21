@@ -2698,6 +2698,8 @@ export interface components {
             currency: string;
             trackingMode: string;
             currentValueMinor: components["schemas"]["MinorUnits"];
+            convertedValueMinor: components["schemas"]["MinorUnits"] | null;
+            monthlyChangeMinor: components["schemas"]["MinorUnits"] | null;
             costBasisMinor?: components["schemas"]["MinorUnits"];
             isLiability: boolean;
             isIncludedInNetWorth: boolean;
@@ -2944,6 +2946,7 @@ export interface components {
             missingCurrencies: string[];
             historicalAvailable: boolean;
             historicalComplete: boolean;
+            periodChanges: components["schemas"]["DashboardPeriodChanges"];
             valueBasis: string;
             history: components["schemas"]["HistoricalPoint"][];
             allocation: components["schemas"]["AllocationItem"][];
@@ -2953,6 +2956,12 @@ export interface components {
             instrumentAllocation: components["schemas"]["AllocationItem"][];
             compositionComplete: boolean;
             completenessReasons: string[];
+        };
+        DashboardPeriodChanges: {
+            oneMonth: components["schemas"]["MinorUnits"] | null;
+            threeMonths: components["schemas"]["MinorUnits"] | null;
+            oneYear: components["schemas"]["MinorUnits"] | null;
+            allTime: components["schemas"]["MinorUnits"] | null;
         };
         ReportSummary: {
             /** Format: date */
@@ -2997,11 +3006,26 @@ export interface components {
             /** Format: uuid */
             accountId: string;
             currency: string;
+            metrics: components["schemas"]["AccountFlowMetrics"];
+            positionSummary: components["schemas"]["AccountPositionSummary"] | null;
             history: components["schemas"]["AccountHistoryPoint"][];
             historyComplete: boolean;
             movementAttributionAvailable: boolean;
             movementAttribution: components["schemas"]["PositionMovementAttribution"] | null;
             completenessReasons: string[];
+        };
+        AccountFlowMetrics: {
+            contributionsMinor: components["schemas"]["MinorUnits"];
+            withdrawalsMinor: components["schemas"]["MinorUnits"];
+            incomeMinor: components["schemas"]["MinorUnits"];
+            feesMinor: components["schemas"]["MinorUnits"];
+            capitalGrowthMinor: components["schemas"]["MinorUnits"];
+            estimatedGainMinor: components["schemas"]["MinorUnits"];
+        };
+        AccountPositionSummary: {
+            cashMinor: components["schemas"]["MinorUnits"];
+            positionsMinor: components["schemas"]["MinorUnits"];
+            complete: boolean;
         };
         PositionMovementAttribution: {
             /** Format: date-time */

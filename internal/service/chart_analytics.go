@@ -18,6 +18,7 @@ type chartAccount struct {
 	Currency             string
 	TrackingMode         string
 	CurrentValueMinor    int64
+	CostBasisMinor       *int64
 	IsLiability          bool
 	IsIncludedInNetWorth bool
 	CategoryName         string
@@ -93,7 +94,7 @@ func (repository *SQLGoalsReportsRepository) LoadChartData(ctx context.Context, 
 	data := chartData{}
 	rows, err := repository.db.QueryContext(ctx, `
 SELECT accounts.id, accounts.name, accounts.currency, accounts.tracking_mode,
-       accounts.current_value_minor, accounts.is_liability, accounts.is_included_in_net_worth,
+	accounts.current_value_minor, accounts.cost_basis_minor, accounts.is_liability, accounts.is_included_in_net_worth,
        categories.name, categories.is_liquid, categories.is_investible,
        COALESCE(institutions.name, 'Unspecified')
 FROM accounts
@@ -106,7 +107,7 @@ ORDER BY accounts.name,accounts.id`, userID)
 	}
 	for rows.Next() {
 		var item chartAccount
-		if err := rows.Scan(&item.ID, &item.Name, &item.Currency, &item.TrackingMode, &item.CurrentValueMinor,
+		if err := rows.Scan(&item.ID, &item.Name, &item.Currency, &item.TrackingMode, &item.CurrentValueMinor, &item.CostBasisMinor,
 			&item.IsLiability, &item.IsIncludedInNetWorth, &item.CategoryName, &item.IsLiquid,
 			&item.IsInvestible, &item.InstitutionName); err != nil {
 			rows.Close()
@@ -271,6 +272,10 @@ func buildChartDashboard(data chartData, settings GoalsReportsSettings, now time
 	if err != nil {
 		return DashboardRead{}, err
 	}
+	periodChanges, err := chartPeriodChanges(data, settings.BaseCurrency, now, currentPoint)
+	if err != nil {
+		return DashboardRead{}, err
+	}
 	history, err := chartHistory(data, settings.BaseCurrency, now, rangeName)
 	if err != nil {
 		return DashboardRead{}, err
@@ -305,12 +310,85 @@ func buildChartDashboard(data chartData, settings GoalsReportsSettings, now time
 			Fees: flows.Fees, CapitalGrowth: flows.CapitalGrowth},
 		AccountCount: len(data.Accounts), GoalCount: goalCount, CurrentComplete: currentPoint.Complete,
 		MissingCurrencies: missing, HistoricalAvailable: len(history) > 1,
-		HistoricalComplete: allHistoryComplete(history), ValueBasis: "effective_dated_replay",
+		HistoricalComplete: allHistoryComplete(history), PeriodChanges: periodChanges, ValueBasis: "effective_dated_replay",
 		History: history, Allocation: allocation, InvestibleAllocation: investible,
 		InstitutionAllocation: institutions, CurrencyAllocation: currencies,
 		InstrumentAllocation: instruments,
 		CompositionComplete:  len(reasons) == 0, CompletenessReasons: reasons,
 	}, nil
+}
+
+func chartPeriodChanges(data chartData, baseCurrency string, now time.Time, current HistoricalPointRead) (DashboardPeriodChangesRead, error) {
+	today := dateOnlyUTC(now)
+	oneMonth, err := chartNetWorthChange(data, baseCurrency, endOfChartDay(today.AddDate(0, 0, -30)), current)
+	if err != nil {
+		return DashboardPeriodChangesRead{}, err
+	}
+	threeMonths, err := chartNetWorthChange(data, baseCurrency, endOfChartDay(today.AddDate(0, 0, -90)), current)
+	if err != nil {
+		return DashboardPeriodChangesRead{}, err
+	}
+	oneYear, err := chartNetWorthChange(data, baseCurrency, endOfChartDay(today.AddDate(0, 0, -365)), current)
+	if err != nil {
+		return DashboardPeriodChangesRead{}, err
+	}
+	allTimeDate := endOfChartDay(today)
+	if dates := chartSourceDates(data); len(dates) > 0 {
+		allTimeDate = endOfChartDay(dates[0].AddDate(0, 0, -1))
+	}
+	allTime, err := chartNetWorthChange(data, baseCurrency, allTimeDate, current)
+	if err != nil {
+		return DashboardPeriodChangesRead{}, err
+	}
+	return DashboardPeriodChangesRead{OneMonth: oneMonth, ThreeMonths: threeMonths, OneYear: oneYear, AllTime: allTime}, nil
+}
+
+func chartNetWorthChange(data chartData, baseCurrency string, at time.Time, current HistoricalPointRead) (*string, error) {
+	baseline, err := chartPointAt(data, baseCurrency, at)
+	if err != nil {
+		return nil, err
+	}
+	if !current.Complete || !baseline.Complete {
+		return nil, nil
+	}
+	currentValue, err := strconv.ParseInt(current.NetWorthMinor, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse current net worth: %w", err)
+	}
+	baselineValue, err := strconv.ParseInt(baseline.NetWorthMinor, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse baseline net worth: %w", err)
+	}
+	value := strconv.FormatInt(currentValue-baselineValue, 10)
+	return &value, nil
+}
+
+func chartAccountListValues(data chartData, account chartAccount, baseCurrency string, now time.Time) (*string, *string, error) {
+	current, currentComplete, _, err := chartAccountValue(data, account, endOfChartDay(now))
+	if err != nil {
+		return nil, nil, err
+	}
+	baseline, baselineComplete, _, err := chartAccountValue(data, account, endOfChartDay(dateOnlyUTC(now).AddDate(0, 0, -30)))
+	if err != nil {
+		return nil, nil, err
+	}
+	if !currentComplete {
+		return nil, nil, nil
+	}
+	convertedCurrent, found, err := convertChartMinor(current, account.Currency, baseCurrency, data.Rates, now)
+	if err != nil || !found {
+		return nil, nil, err
+	}
+	converted := strconv.FormatInt(convertedCurrent, 10)
+	if !baselineComplete {
+		return &converted, nil, nil
+	}
+	convertedBaseline, found, err := convertChartMinor(baseline, account.Currency, baseCurrency, data.Rates, dateOnlyUTC(now).AddDate(0, 0, -30))
+	if err != nil || !found {
+		return &converted, nil, err
+	}
+	change := strconv.FormatInt(convertedCurrent-convertedBaseline, 10)
+	return &converted, &change, nil
 }
 
 func chartHistory(data chartData, baseCurrency string, now time.Time, rangeName string) ([]HistoricalPointRead, error) {
@@ -753,6 +831,10 @@ func (service *GoalsReportsService) AccountAnalytics(ctx context.Context, userID
 	if account == nil {
 		return AccountAnalyticsRead{}, ErrGoalsReportsNotFound
 	}
+	metrics, err := chartAccountMetrics(data, *account)
+	if err != nil {
+		return AccountAnalyticsRead{}, err
+	}
 	dates := chartSourceDatesForAccount(data, accountID)
 	history := []AccountHistoryPointRead{}
 	complete := true
@@ -773,6 +855,25 @@ func (service *GoalsReportsService) AccountAnalytics(ctx context.Context, userID
 		}
 	}
 	var movement *PositionMovementAttributionRead
+	var positionSummary *AccountPositionSummaryRead
+	if account.TrackingMode == "positions" {
+		snapshot, snapshotErr := buildChartPositionSnapshot(data, *account, endOfChartDay(service.now()))
+		if snapshotErr != nil {
+			return AccountAnalyticsRead{}, snapshotErr
+		}
+		positionsMinor := int64(0)
+		for _, position := range snapshot.Positions {
+			positionsMinor, err = checkedAdd(positionsMinor, position.Value)
+			if err != nil {
+				return AccountAnalyticsRead{}, err
+			}
+		}
+		positionSummary = &AccountPositionSummaryRead{
+			CashMinor:      strconv.FormatInt(snapshot.Total-positionsMinor, 10),
+			PositionsMinor: strconv.FormatInt(positionsMinor, 10),
+			Complete:       snapshot.Complete,
+		}
+	}
 	if account.TrackingMode == "positions" && len(dates) > 0 {
 		attribution, attributionErr := chartMovementAttribution(data, *account, endOfChartDay(dates[0]), endOfChartDay(service.now()))
 		if attributionErr != nil {
@@ -784,8 +885,88 @@ func (service *GoalsReportsService) AccountAnalytics(ctx context.Context, userID
 			reasons = append(reasons, "Position movement attribution is incomplete because a historical price or exchange rate is unavailable.")
 		}
 	}
-	return AccountAnalyticsRead{AccountID: accountID, Currency: account.Currency, History: history,
+	return AccountAnalyticsRead{AccountID: accountID, Currency: account.Currency, Metrics: metrics, PositionSummary: positionSummary, History: history,
 		HistoryComplete: complete, MovementAttributionAvailable: movement != nil, MovementAttribution: movement, CompletenessReasons: reasons}, nil
+}
+
+func chartAccountMetrics(data chartData, account chartAccount) (AccountFlowMetricsRead, error) {
+	contributions, withdrawals, transfersIn, transfersOut := int64(0), int64(0), int64(0), int64(0)
+	interest, dividends, fees, realizedGrowth, opening := int64(0), int64(0), int64(0), int64(0), int64(0)
+	for _, row := range data.Transactions {
+		if row.AccountID != account.ID {
+			continue
+		}
+		rawAmount := row.Amount
+		amount := rawAmount
+		if amount < 0 {
+			amount = -amount
+		}
+		var target *int64
+		sign := int64(1)
+		switch row.Type {
+		case "opening_balance":
+			target = &contributions
+			if opening == 0 {
+				opening = amount
+			}
+		case "deposit", "purchase":
+			target = &contributions
+		case "withdrawal", "sale":
+			target = &withdrawals
+		case "interest":
+			target = &interest
+		case "dividend":
+			target = &dividends
+		case "fee":
+			target = &fees
+		case "capital_gain":
+			target = &realizedGrowth
+		case "capital_loss":
+			target, sign = &realizedGrowth, -1
+		case "transfer":
+			if rawAmount >= 0 {
+				target = &transfersIn
+			} else {
+				target = &transfersOut
+			}
+		}
+		if target != nil {
+			value, addErr := checkedAdd(*target, sign*amount)
+			if addErr != nil {
+				return AccountFlowMetricsRead{}, addErr
+			}
+			*target = value
+		}
+	}
+	income, err := checkedAdd(interest, dividends)
+	if err != nil {
+		return AccountFlowMetricsRead{}, err
+	}
+	contributionBasis := contributions
+	if account.CostBasisMinor != nil {
+		contributionBasis, err = checkedAdd(*account.CostBasisMinor, contributions-opening)
+		if err != nil {
+			return AccountFlowMetricsRead{}, err
+		}
+	}
+	estimatedGain, err := checkedAdd(account.CurrentValueMinor, -contributionBasis)
+	if err == nil {
+		estimatedGain, err = checkedAdd(estimatedGain, -transfersIn)
+	}
+	if err == nil {
+		estimatedGain, err = checkedAdd(estimatedGain, withdrawals)
+	}
+	if err == nil {
+		estimatedGain, err = checkedAdd(estimatedGain, transfersOut)
+	}
+	if err != nil {
+		return AccountFlowMetricsRead{}, err
+	}
+	return AccountFlowMetricsRead{
+		ContributionsMinor: strconv.FormatInt(contributions, 10), WithdrawalsMinor: strconv.FormatInt(withdrawals, 10),
+		IncomeMinor: strconv.FormatInt(income, 10), FeesMinor: strconv.FormatInt(fees, 10),
+		CapitalGrowthMinor: strconv.FormatInt(realizedGrowth, 10), EstimatedGainMinor: strconv.FormatInt(estimatedGain, 10),
+	}, nil
 }
 
 func chartMovementAttribution(data chartData, account chartAccount, from, to time.Time) (PositionMovementAttributionRead, error) {

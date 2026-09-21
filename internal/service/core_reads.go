@@ -115,10 +115,13 @@ type CoreReadRepository interface {
 	ListActivity(context.Context, uuid.UUID, ActivityFilter) ([]ActivityRow, error)
 }
 
-type CoreReadService struct{ repository CoreReadRepository }
+type CoreReadService struct {
+	repository CoreReadRepository
+	now        func() time.Time
+}
 
 func NewCoreReadService(repository CoreReadRepository) *CoreReadService {
-	return &CoreReadService{repository: repository}
+	return &CoreReadService{repository: repository, now: time.Now}
 }
 
 type Settings struct {
@@ -170,6 +173,8 @@ type Account struct {
 	Currency             string     `json:"currency"`
 	TrackingMode         string     `json:"trackingMode"`
 	CurrentValueMinor    string     `json:"currentValueMinor"`
+	ConvertedValueMinor  *string    `json:"convertedValueMinor"`
+	MonthlyChangeMinor   *string    `json:"monthlyChangeMinor"`
 	CostBasisMinor       *string    `json:"costBasisMinor,omitempty"`
 	IsLiability          bool       `json:"isLiability"`
 	IsIncludedInNetWorth bool       `json:"isIncludedInNetWorth"`
@@ -285,6 +290,34 @@ func (service *CoreReadService) Accounts(ctx context.Context, userID uuid.UUID, 
 	items := make([]Account, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, accountFromRow(row))
+	}
+	chartRepository, ok := service.repository.(chartAnalyticsRepository)
+	if !ok {
+		return items, nil
+	}
+	settings, err := service.repository.GetSettings(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("load account-list settings: %w", err)
+	}
+	data, err := chartRepository.LoadChartData(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("load account-list analytics: %w", err)
+	}
+	chartAccounts := make(map[uuid.UUID]chartAccount, len(data.Accounts))
+	for _, account := range data.Accounts {
+		chartAccounts[account.ID] = account
+	}
+	for index := range items {
+		account, found := chartAccounts[items[index].ID]
+		if !found {
+			continue
+		}
+		converted, change, valueErr := chartAccountListValues(data, account, settings.BaseCurrency, service.now())
+		if valueErr != nil {
+			return nil, valueErr
+		}
+		items[index].ConvertedValueMinor = converted
+		items[index].MonthlyChangeMinor = change
 	}
 	return items, nil
 }
@@ -450,6 +483,10 @@ type SQLCoreReadRepository struct{ db coreReadDB }
 
 func NewSQLCoreReadRepository(db *sql.DB) *SQLCoreReadRepository {
 	return &SQLCoreReadRepository{db: db}
+}
+
+func (repository *SQLCoreReadRepository) LoadChartData(ctx context.Context, userID uuid.UUID) (chartData, error) {
+	return (&SQLGoalsReportsRepository{db: repository.db}).LoadChartData(ctx, userID)
 }
 
 func (repository *SQLCoreReadRepository) GetSettings(ctx context.Context, userID uuid.UUID) (SettingsRow, error) {

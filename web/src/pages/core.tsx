@@ -163,7 +163,7 @@ function DashboardMetric({
   negative?: boolean;
 }) {
   return (
-    <Card className="p-5">
+    <Card className="p-5" role="group" aria-label={`${label} metric`}>
       <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
         {icon}
         {label}
@@ -208,6 +208,12 @@ export function DashboardPage() {
         const activeGoals = goals
           .filter((goal) => goal.status === "active")
           .slice(0, 3);
+        const periodChanges = [
+          ["1 month", data.periodChanges.oneMonth],
+          ["3 months", data.periodChanges.threeMonths],
+          ["1 year", data.periodChanges.oneYear],
+          ["All time", data.periodChanges.allTime],
+        ] as const;
         return (
           <>
             <PageHeader
@@ -264,8 +270,8 @@ export function DashboardPage() {
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {["1 month", "3 months", "1 year", "All time"].map(
-                      (label) => (
+                    {periodChanges.map(
+                      ([label, value]) => (
                         <div
                           key={label}
                           role="group"
@@ -275,7 +281,27 @@ export function DashboardPage() {
                           <p className="text-[10px] uppercase tracking-wide text-slate-500">
                             {label}
                           </p>
-                          <IncompleteValue className="mt-1 block text-sm font-medium text-amber-300" />
+                          {value == null ? (
+                            <IncompleteValue className="mt-1 block text-sm font-medium text-amber-300" />
+                          ) : (
+                            <p
+                              className={
+                                BigInt(value) >= 0n
+                                  ? "mt-1 flex items-center gap-1 text-sm font-medium text-emerald-300"
+                                  : "mt-1 flex items-center gap-1 text-sm font-medium text-red-300"
+                              }
+                            >
+                              {BigInt(value) >= 0n ? (
+                                <ArrowUpRight size={14} />
+                              ) : (
+                                <ArrowDownRight size={14} />
+                              )}
+                              <MoneyValue
+                                amount={value}
+                                currency={data.baseCurrency}
+                              />
+                            </p>
+                          )}
                         </div>
                       ),
                     )}
@@ -300,11 +326,16 @@ export function DashboardPage() {
               />
               <DashboardMetric
                 label="Contributions"
+                amount={data.totals.contributions}
                 currency={data.baseCurrency}
                 icon={<WalletCards size={17} />}
               />
               <DashboardMetric
                 label="Income & gains"
+                amount={(
+                  BigInt(data.totals.income) +
+                  BigInt(data.totals.capitalGrowth)
+                ).toString()}
                 currency={data.baseCurrency}
                 icon={<TrendingUp size={17} />}
               />
@@ -322,11 +353,13 @@ export function DashboardPage() {
               />
               <DashboardMetric
                 label="Withdrawals"
+                amount={data.totals.withdrawals}
                 currency={data.baseCurrency}
                 icon={<ArrowUpRight size={17} />}
               />
               <DashboardMetric
                 label="Fees"
+                amount={data.totals.fees}
                 currency={data.baseCurrency}
                 icon={<ArrowDownRight size={17} />}
                 negative
@@ -621,6 +654,14 @@ function AccountsList({
             return Number(
               BigInt(right.currentValueMinor) - BigInt(left.currentValueMinor),
             );
+          if (sort === "change") {
+            if (left.monthlyChangeMinor == null) return 1;
+            if (right.monthlyChangeMinor == null) return -1;
+            return Number(
+              BigInt(right.monthlyChangeMinor) -
+                BigInt(left.monthlyChangeMinor),
+            );
+          }
           return 0;
         }),
     [
@@ -786,14 +827,44 @@ function AccountsList({
                   />
                   {account.currency !== baseCurrency ? (
                     <p className="mt-1 text-xs text-slate-500">
-                      Exchange rate needed
+                      {account.convertedValueMinor == null ? (
+                        "Exchange rate needed"
+                      ) : (
+                        <>
+                          <MoneyValue
+                            amount={account.convertedValueMinor}
+                            currency={baseCurrency}
+                          />{" "}
+                          in base currency
+                        </>
+                      )}
                     </p>
                   ) : null}
                 </div>
                 <div className="mt-5 flex items-end justify-between border-t border-white/[0.06] pt-4 text-xs">
                   <div>
                     <p className="text-slate-500">30-day change</p>
-                    <IncompleteValue className="mt-1 block text-amber-300" />
+                    {account.monthlyChangeMinor == null ? (
+                      <IncompleteValue className="mt-1 block text-amber-300" />
+                    ) : (
+                      <span
+                        className={
+                          BigInt(account.monthlyChangeMinor) >= 0n
+                            ? "mt-1 flex items-center gap-1 text-emerald-300"
+                            : "mt-1 flex items-center gap-1 text-red-300"
+                        }
+                      >
+                        {BigInt(account.monthlyChangeMinor) >= 0n ? (
+                          <ArrowUpRight size={13} />
+                        ) : (
+                          <ArrowDownRight size={13} />
+                        )}
+                        <MoneyValue
+                          amount={account.monthlyChangeMinor}
+                          currency={baseCurrency}
+                        />
+                      </span>
+                    )}
                   </div>
                   <div className="text-right text-slate-500">
                     <p>{account.categoryName}</p>
@@ -838,16 +909,33 @@ function AccountsList({
                     />
                   </td>
                   <td className="p-4">
-                    {account.currency === baseCurrency ? (
+                    {account.convertedValueMinor != null ? (
                       <MoneyValue
-                        amount={account.currentValueMinor}
+                        amount={account.convertedValueMinor}
                         currency={baseCurrency}
                       />
                     ) : (
                       <span className="text-amber-300">Rate needed</span>
                     )}
                   </td>
-                  <td className="p-4 text-amber-300">Incomplete data</td>
+                  <td
+                    className={
+                      account.monthlyChangeMinor == null
+                        ? "p-4 text-amber-300"
+                        : BigInt(account.monthlyChangeMinor) >= 0n
+                          ? "p-4 text-emerald-300"
+                          : "p-4 text-red-300"
+                    }
+                  >
+                    {account.monthlyChangeMinor == null ? (
+                      "Incomplete data"
+                    ) : (
+                      <MoneyValue
+                        amount={account.monthlyChangeMinor}
+                        currency={baseCurrency}
+                      />
+                    )}
+                  </td>
                   <td className="p-4 text-slate-500">Not recorded</td>
                 </tr>
               ))}
@@ -1284,7 +1372,7 @@ function Metric({
   primary?: boolean;
 }) {
   return (
-    <Card className="p-5">
+    <Card className="p-5" role="group" aria-label={`${label} metric`}>
       <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
@@ -1430,24 +1518,26 @@ export function AccountDetailPage({ session }: PageProps) {
                 </>
               }
             />
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Metric
-                label={account.isLiability ? "Amount owed" : "Current value"}
-                value={account.currentValueMinor}
-                currency={account.currency}
-                primary
-              />
-              <Metric label="Contributions" currency={account.currency} />
-              <Metric label="Income" currency={account.currency} />
-              <Metric
-                label={
-                  account.trackingMode === "positions"
-                    ? "Estimated gain/loss"
-                    : "Valuation change"
-                }
-                currency={account.currency}
-              />
-            </div>
+            {account.trackingMode === "positions" && analytics.positionSummary ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <Metric label="Current value" value={account.currentValueMinor} currency={account.currency} primary />
+                <Metric label="Cash" value={analytics.positionSummary.cashMinor} currency={account.currency} />
+                <Metric label="Positions" value={analytics.positionSummary.positionsMinor} currency={account.currency} />
+                <Card className="p-5">
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Data quality</p>
+                  <Badge tone={analytics.positionSummary.complete ? "positive" : "warning"}>
+                    {analytics.positionSummary.complete ? "Complete" : "Incomplete"}
+                  </Badge>
+                </Card>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <Metric label={account.isLiability ? "Amount owed" : "Current value"} value={account.currentValueMinor} currency={account.currency} primary />
+                <Metric label="Contributions" value={analytics.metrics.contributionsMinor} currency={account.currency} />
+                <Metric label="Income" value={analytics.metrics.incomeMinor} currency={account.currency} />
+                <Metric label="Valuation change" value={analytics.metrics.estimatedGainMinor} currency={account.currency} />
+              </div>
+            )}
             {account.trackingMode === "positions" &&
             analytics.movementAttribution ? (
               <Card className="mt-5">

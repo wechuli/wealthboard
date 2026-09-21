@@ -71,6 +71,8 @@ const account = {
   currency: "KES",
   trackingMode: "balance",
   currentValueMinor: "125000",
+  convertedValueMinor: "125000",
+  monthlyChangeMinor: "5000",
   isLiability: false,
   isIncludedInNetWorth: true,
   categoryName: "Cash",
@@ -131,6 +133,12 @@ beforeEach(() => {
     missingCurrencies: [],
     historicalAvailable: true,
     historicalComplete: true,
+    periodChanges: {
+      oneMonth: "5000",
+      threeMonths: "5000",
+      oneYear: "5000",
+      allTime: "5000",
+    },
     valueBasis: "effective_dated_replay",
     history: [
       {
@@ -166,6 +174,15 @@ beforeEach(() => {
   getAccountAnalytics.mockResolvedValue({
     accountId: account.id,
     currency: "KES",
+    metrics: {
+      contributionsMinor: "125000",
+      withdrawalsMinor: "0",
+      incomeMinor: "4250",
+      feesMinor: "0",
+      capitalGrowthMinor: "0",
+      estimatedGainMinor: "4250",
+    },
+    positionSummary: null,
     history: [
       { date: "2026-08-20", valueMinor: "120000", complete: true },
       { date: "2026-09-20", valueMinor: "125000", complete: true },
@@ -203,6 +220,26 @@ describe("ported core pages", () => {
       "href",
       "/transactions/new",
     );
+    expect(
+      screen.getByRole("group", { name: "1 month net worth change" }),
+    ).toHaveTextContent("KES 50.00");
+    for (const label of ["1 month", "3 months", "1 year", "All time"]) {
+      expect(
+        screen.getByRole("group", { name: `${label} net worth change` }),
+      ).not.toHaveTextContent("Incomplete data");
+    }
+    expect(
+      screen.getByRole("group", { name: "Contributions metric" }),
+    ).toHaveTextContent("KES 1,250.00");
+    expect(
+      screen.getByRole("group", { name: "Income & gains metric" }),
+    ).toHaveTextContent("KES 42.50");
+    expect(
+      screen.getByRole("group", { name: "Withdrawals metric" }),
+    ).toHaveTextContent("KES 0.00");
+    expect(screen.getByRole("group", { name: "Fees metric" })).toHaveTextContent(
+      "KES 0.00",
+    );
     expect(screen.queryByText(/current API/i)).not.toBeInTheDocument();
   });
 
@@ -228,11 +265,20 @@ describe("ported core pages", () => {
     ).toBeEnabled();
     expect(screen.getByRole("option", { name: "Recent change" })).toBeEnabled();
     expect(screen.getByText("Daily account")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Daily account/ }),
+    ).toHaveTextContent("KES 50.00");
+    expect(
+      screen.getByRole("link", { name: /Daily account/ }),
+    ).not.toHaveTextContent("Incomplete data");
 
     await user.click(screen.getByRole("button", { name: "Table view" }));
     expect(
       screen.getByRole("columnheader", { name: "30-day change" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Daily account/ })).toHaveTextContent(
+      "KES 50.00",
+    );
     expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
   });
 
@@ -305,6 +351,15 @@ describe("ported core pages", () => {
       screen.getByRole("link", { name: /Emergency fund/ }),
     ).toHaveAttribute("href", "/goals/goal-1");
     expect(
+      screen.getByRole("group", { name: "Contributions metric" }),
+    ).toHaveTextContent("KES 1,250.00");
+    expect(screen.getByRole("group", { name: "Income metric" })).toHaveTextContent(
+      "KES 42.50",
+    );
+    expect(
+      screen.getByRole("group", { name: "Valuation change metric" }),
+    ).toHaveTextContent("KES 42.50");
+    expect(
       screen.queryByText(/workflow controls|current API/i),
     ).not.toBeInTheDocument();
   });
@@ -314,6 +369,19 @@ describe("ported core pages", () => {
     getAccountAnalytics.mockResolvedValue({
       accountId: account.id,
       currency: "KES",
+      metrics: {
+        contributionsMinor: "100000",
+        withdrawalsMinor: "0",
+        incomeMinor: "0",
+        feesMinor: "0",
+        capitalGrowthMinor: "0",
+        estimatedGainMinor: "25000",
+      },
+      positionSummary: {
+        cashMinor: "25000",
+        positionsMinor: "100000",
+        complete: true,
+      },
       history: [],
       historyComplete: true,
       movementAttributionAvailable: true,
@@ -355,6 +423,12 @@ describe("ported core pages", () => {
     expect(await screen.findByText("Movement attribution")).toBeInTheDocument();
     expect(screen.getByText("Price movement")).toBeInTheDocument();
     expect(screen.getByText(/cash-flow-aware TWR/)).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Cash metric" })).toHaveTextContent(
+      "KES 250.00",
+    );
+    expect(
+      screen.getByRole("group", { name: "Positions metric" }),
+    ).toHaveTextContent("KES 1,000.00");
   });
 
   it("defaults price entry to the first instrument held by the account", async () => {

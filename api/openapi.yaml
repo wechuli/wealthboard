@@ -4401,6 +4401,8 @@ components:
           currency,
           trackingMode,
           currentValueMinor,
+          convertedValueMinor,
+          monthlyChangeMinor,
           isLiability,
           isIncludedInNetWorth,
           categoryName,
@@ -4415,6 +4417,14 @@ components:
         trackingMode: { type: string }
         currentValueMinor:
           $ref: "#/components/schemas/MinorUnits"
+        convertedValueMinor:
+          anyOf:
+            - { $ref: "#/components/schemas/MinorUnits" }
+            - { type: "null" }
+        monthlyChangeMinor:
+          anyOf:
+            - { $ref: "#/components/schemas/MinorUnits" }
+            - { type: "null" }
         costBasisMinor:
           $ref: "#/components/schemas/MinorUnits"
         isLiability: { type: boolean }
@@ -4852,6 +4862,7 @@ components:
           missingCurrencies,
           historicalAvailable,
           historicalComplete,
+          periodChanges,
           valueBasis,
           history,
           allocation,
@@ -4875,6 +4886,8 @@ components:
           items: { type: string }
         historicalAvailable: { type: boolean }
         historicalComplete: { type: boolean }
+        periodChanges:
+          $ref: "#/components/schemas/DashboardPeriodChanges"
         valueBasis: { type: string }
         history:
           type: array
@@ -4898,6 +4911,27 @@ components:
         completenessReasons:
           type: array
           items: { type: string }
+    DashboardPeriodChanges:
+      type: object
+      additionalProperties: false
+      required: [oneMonth, threeMonths, oneYear, allTime]
+      properties:
+        oneMonth:
+          anyOf:
+            - { $ref: "#/components/schemas/MinorUnits" }
+            - { type: "null" }
+        threeMonths:
+          anyOf:
+            - { $ref: "#/components/schemas/MinorUnits" }
+            - { type: "null" }
+        oneYear:
+          anyOf:
+            - { $ref: "#/components/schemas/MinorUnits" }
+            - { type: "null" }
+        allTime:
+          anyOf:
+            - { $ref: "#/components/schemas/MinorUnits" }
+            - { type: "null" }
     ReportSummary:
       type: object
       additionalProperties: false
@@ -5005,6 +5039,8 @@ components:
         [
           accountId,
           currency,
+          metrics,
+          positionSummary,
           history,
           historyComplete,
           movementAttributionAvailable,
@@ -5014,6 +5050,12 @@ components:
       properties:
         accountId: { type: string, format: uuid }
         currency: { type: string }
+        metrics:
+          $ref: "#/components/schemas/AccountFlowMetrics"
+        positionSummary:
+          oneOf:
+            - $ref: "#/components/schemas/AccountPositionSummary"
+            - type: "null"
         history:
           type: array
           items: { $ref: "#/components/schemas/AccountHistoryPoint" }
@@ -5026,6 +5068,33 @@ components:
         completenessReasons:
           type: array
           items: { type: string }
+    AccountFlowMetrics:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          contributionsMinor,
+          withdrawalsMinor,
+          incomeMinor,
+          feesMinor,
+          capitalGrowthMinor,
+          estimatedGainMinor,
+        ]
+      properties:
+        contributionsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        withdrawalsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        incomeMinor: { $ref: "#/components/schemas/MinorUnits" }
+        feesMinor: { $ref: "#/components/schemas/MinorUnits" }
+        capitalGrowthMinor: { $ref: "#/components/schemas/MinorUnits" }
+        estimatedGainMinor: { $ref: "#/components/schemas/MinorUnits" }
+    AccountPositionSummary:
+      type: object
+      additionalProperties: false
+      required: [cashMinor, positionsMinor, complete]
+      properties:
+        cashMinor: { $ref: "#/components/schemas/MinorUnits" }
+        positionsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        complete: { type: boolean }
     PositionMovementAttribution:
       type: object
       additionalProperties: false
