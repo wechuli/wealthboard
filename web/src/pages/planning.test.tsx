@@ -1,8 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { PlanningRoutes } from "@/pages/planning";
+import { calculateGoalScenarios } from "@/api/client";
 import { PrivacyBoundary } from "@/components/privacy";
 import type { Session } from "@/lib/types";
 
@@ -59,6 +61,35 @@ const fixtures = vi.hoisted(() => ({
         targetMinor: "10000000",
       },
     ],
+    scenarios: {
+      savedPlan: {
+        monthlyContributionMinor: "100000",
+        annualReturnBps: 800,
+        projectedAtTargetMinor: "10000000",
+        projectedProgressPercent: "100",
+        newContributionsMinor: "2400000",
+        estimatedGrowthMinor: "5100000",
+        estimatedCompletion: "2028-09-20",
+      },
+      requiredPace: {
+        monthlyContributionMinor: "250000",
+        annualReturnBps: 800,
+        projectedAtTargetMinor: "10000000",
+        projectedProgressPercent: "100",
+        newContributionsMinor: "6000000",
+        estimatedGrowthMinor: "1500000",
+        estimatedCompletion: "2028-09-20",
+      },
+      lowerReturn: {
+        monthlyContributionMinor: "100000",
+        annualReturnBps: 600,
+        projectedAtTargetMinor: "8000000",
+        projectedProgressPercent: "80",
+        newContributionsMinor: "2400000",
+        estimatedGrowthMinor: "3100000",
+        estimatedCompletion: "2029-06-20",
+      },
+    },
   },
   instrument: {
     id: "instrument-1",
@@ -79,6 +110,7 @@ const fixtures = vi.hoisted(() => ({
 
 vi.mock("@/api/client", () => ({
   archiveInstrument: vi.fn(),
+  calculateGoalScenarios: vi.fn(),
   deleteGoal: vi.fn(),
   deleteInstrument: vi.fn(),
   dismissGoalAlert: vi.fn(),
@@ -231,6 +263,16 @@ describe("PlanningRoutes", () => {
     expect(screen.getByText("Current monthly plan")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Projection" })).toBeTruthy();
     expect(screen.getByText("Scenario comparison")).toBeTruthy();
+    const requiredPace = screen
+      .getByRole("heading", { name: "Required pace" })
+      .closest("section");
+    expect(requiredPace).not.toBeNull();
+    expect(within(requiredPace!).getByText("KES 2,500.00")).toBeTruthy();
+    const savedPlan = screen
+      .getByRole("heading", { name: "Saved plan" })
+      .closest("section");
+    expect(savedPlan).not.toBeNull();
+    expect(within(savedPlan!).getByText("KES 51,000.00")).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Milestones/ })).toBeTruthy();
     expectNoLegacyClasses(view.container);
 
@@ -242,6 +284,41 @@ describe("PlanningRoutes", () => {
     expect(
       screen.getByRole("form", { name: "Edit Home deposit form" }),
     ).toBeTruthy();
+  });
+
+  it("recalculates temporary goal scenarios using exact minor units", async () => {
+    const user = userEvent.setup();
+    vi.mocked(calculateGoalScenarios).mockResolvedValueOnce({
+      ...fixtures.goal.scenarios,
+      savedPlan: {
+        ...fixtures.goal.scenarios.savedPlan,
+        monthlyContributionMinor: "13000000",
+        estimatedGrowthMinor: "5200000",
+      },
+    });
+    renderRoute("/goals/goal-1");
+
+    const contribution = await screen.findByLabelText(
+      "Monthly contribution (KES)",
+    );
+    expect(contribution).toHaveValue("1000.00");
+    await user.clear(contribution);
+    await user.type(contribution, "130000.00");
+    await user.click(screen.getByRole("button", { name: "Recalculate" }));
+
+    expect(calculateGoalScenarios).toHaveBeenCalledWith(
+      "goal-1",
+      "13000000",
+      800,
+    );
+    const savedPlan = screen
+      .getByRole("heading", { name: "Saved plan" })
+      .closest("section");
+    expect(savedPlan).not.toBeNull();
+    expect(
+      await within(savedPlan!).findByText("KES 130,000.00"),
+    ).toBeTruthy();
+    expect(within(savedPlan!).getByText("KES 52,000.00")).toBeTruthy();
   });
 
   it("renders reports and metadata page copy from the original UI", async () => {

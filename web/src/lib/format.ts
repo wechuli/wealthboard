@@ -13,3 +13,11 @@ export function minorUnitsToDecimal(value: string): string {
   const padded = digits.padStart(3, "0");
   return `${negative ? "-" : ""}${padded.slice(0, -2)}.${padded.slice(-2)}`;
 }
+
+export function decimalToMinorUnits(value: string): string | null {
+  const match = value.trim().match(/^(\d+)(?:\.(\d{0,2}))?$/);
+  if (!match) return null;
+  const whole = match[1] ?? "0";
+  const fraction = (match[2] ?? "").padEnd(2, "0");
+  return (BigInt(whole) * 100n + BigInt(fraction || "0")).toString();
+}

@@ -561,6 +561,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/goals/{id}/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Calculate temporary goal scenarios
+         * @description Calculates owner-scoped comparison scenarios without saving them. Requires `portfolio:read`; contribution values use integer minor units.
+         */
+        get: operations["calculateGoalScenarios"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/goals/{id}/status": {
         parameters: {
             query?: never;
@@ -2877,6 +2897,23 @@ export interface components {
             missingCurrencies: string[];
             plan: components["schemas"]["GoalPlan"] | null;
             projection: components["schemas"]["GoalProjectionPoint"][];
+            scenarios?: components["schemas"]["GoalScenarios"] | null;
+        };
+        GoalScenarios: {
+            savedPlan: components["schemas"]["GoalScenario"];
+            requiredPace: components["schemas"]["GoalScenario"];
+            lowerReturn: components["schemas"]["GoalScenario"];
+        };
+        GoalScenario: {
+            monthlyContributionMinor: components["schemas"]["MinorUnits"];
+            /** Format: int32 */
+            annualReturnBps: number;
+            projectedAtTargetMinor: components["schemas"]["MinorUnits"];
+            projectedProgressPercent: components["schemas"]["DecimalString"];
+            newContributionsMinor: components["schemas"]["MinorUnits"];
+            estimatedGrowthMinor: components["schemas"]["MinorUnits"];
+            /** Format: date */
+            estimatedCompletion: string | null;
         };
         GoalProjectionPoint: {
             /** Format: date-time */
@@ -4847,6 +4884,36 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    calculateGoalScenarios: {
+        parameters: {
+            query: {
+                monthlyContributionMinor: components["schemas"]["MinorUnits"];
+                annualReturnBps: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Temporary saved-plan, required-pace, and lower-return scenarios */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalScenarios"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
         };
     };

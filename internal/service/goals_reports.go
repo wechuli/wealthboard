@@ -13,7 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrGoalsReportsNotFound = errors.New("goals and reports resource not found")
+var (
+	ErrGoalsReportsNotFound     = errors.New("goals and reports resource not found")
+	ErrGoalsReportsInvalidInput = errors.New("invalid goals and reports input")
+)
 
 type GoalsReportsDB interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
@@ -106,8 +109,30 @@ type GoalRead struct {
 	MissingCurrencies      []string                  `json:"missingCurrencies"`
 	Plan                   *GoalPlanRead             `json:"plan"`
 	Projection             []GoalProjectionPointRead `json:"projection"`
+	Scenarios              *GoalScenariosRead        `json:"scenarios,omitempty"`
 	createdAt              time.Time
 	timezone               string
+}
+
+type GoalScenariosRead struct {
+	SavedPlan    GoalScenarioRead `json:"savedPlan"`
+	RequiredPace GoalScenarioRead `json:"requiredPace"`
+	LowerReturn  GoalScenarioRead `json:"lowerReturn"`
+}
+
+type GoalScenarioRead struct {
+	MonthlyContributionMinor string  `json:"monthlyContributionMinor"`
+	AnnualReturnBPS          int32   `json:"annualReturnBps"`
+	ProjectedAtTargetMinor   string  `json:"projectedAtTargetMinor"`
+	ProjectedProgressPercent string  `json:"projectedProgressPercent"`
+	NewContributionsMinor    string  `json:"newContributionsMinor"`
+	EstimatedGrowthMinor     string  `json:"estimatedGrowthMinor"`
+	EstimatedCompletion      *string `json:"estimatedCompletion"`
+}
+
+type GoalScenarioInput struct {
+	MonthlyContributionMinor string
+	AnnualReturnBPS          int32
 }
 
 type GoalProjectionPointRead struct {
@@ -339,6 +364,22 @@ func (service *GoalsReportsService) GetGoal(ctx context.Context, userID, goalID 
 	return service.mapGoal(record, settings), nil
 }
 
+func (service *GoalsReportsService) CalculateGoalScenarios(ctx context.Context, userID, goalID uuid.UUID, input GoalScenarioInput) (GoalScenariosRead, error) {
+	goal, err := service.GetGoal(ctx, userID, goalID)
+	if err != nil {
+		return GoalScenariosRead{}, err
+	}
+	contribution, ok := new(big.Int).SetString(input.MonthlyContributionMinor, 10)
+	if !ok || contribution.Sign() < 0 || input.AnnualReturnBPS < 0 || input.AnnualReturnBPS > 10000 {
+		return GoalScenariosRead{}, ErrGoalsReportsInvalidInput
+	}
+	scenarios := goalScenariosWithAssumptions(goal, service.now(), contribution, input.AnnualReturnBPS)
+	if scenarios == nil {
+		return GoalScenariosRead{}, ErrGoalsReportsInvalidInput
+	}
+	return *scenarios, nil
+}
+
 func (service *GoalsReportsService) ListMilestones(ctx context.Context, userID, goalID uuid.UUID) ([]GoalMilestoneRead, error) {
 	goal, err := service.GetGoal(ctx, userID, goalID)
 	if err != nil {
@@ -546,6 +587,7 @@ func (service *GoalsReportsService) mapGoal(record GoalRecord, settings GoalsRep
 		createdAt: record.CreatedAt, timezone: settings.Timezone,
 	}
 	goal.Projection = goalProjection(goal, service.now())
+	goal.Scenarios = goalScenarios(goal, service.now())
 	return goal
 }
 

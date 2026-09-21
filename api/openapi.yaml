@@ -947,6 +947,35 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
+  /goals/{id}/scenarios:
+    get:
+      operationId: calculateGoalScenarios
+      summary: Calculate temporary goal scenarios
+      description: Calculates owner-scoped comparison scenarios without saving them. Requires `portfolio:read`; contribution values use integer minor units.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - name: monthlyContributionMinor
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/MinorUnits" }
+        - name: annualReturnBps
+          in: query
+          required: true
+          schema: { type: integer, format: int32, minimum: 0, maximum: 10000 }
+      responses:
+        "200":
+          description: Temporary saved-plan, required-pace, and lower-return scenarios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoalScenarios" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /goals/{id}/status:
     patch:
       operationId: setGoalStatus
@@ -4718,6 +4747,39 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/GoalProjectionPoint"
+        scenarios:
+          oneOf:
+            - $ref: "#/components/schemas/GoalScenarios"
+            - type: "null"
+    GoalScenarios:
+      type: object
+      additionalProperties: false
+      required: [savedPlan, requiredPace, lowerReturn]
+      properties:
+        savedPlan: { $ref: "#/components/schemas/GoalScenario" }
+        requiredPace: { $ref: "#/components/schemas/GoalScenario" }
+        lowerReturn: { $ref: "#/components/schemas/GoalScenario" }
+    GoalScenario:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          monthlyContributionMinor,
+          annualReturnBps,
+          projectedAtTargetMinor,
+          projectedProgressPercent,
+          newContributionsMinor,
+          estimatedGrowthMinor,
+          estimatedCompletion,
+        ]
+      properties:
+        monthlyContributionMinor: { $ref: "#/components/schemas/MinorUnits" }
+        annualReturnBps: { type: integer, format: int32 }
+        projectedAtTargetMinor: { $ref: "#/components/schemas/MinorUnits" }
+        projectedProgressPercent: { $ref: "#/components/schemas/DecimalString" }
+        newContributionsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        estimatedGrowthMinor: { $ref: "#/components/schemas/MinorUnits" }
+        estimatedCompletion: { type: [string, "null"], format: date }
     GoalProjectionPoint:
       type: object
       additionalProperties: false

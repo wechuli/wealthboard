@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math/big"
 	"testing"
 	"time"
 
@@ -177,6 +178,38 @@ func TestGoalProjectionUsesExactMinorUnitsAndContributionWindow(t *testing.T) {
 	points := goalProjection(goal, time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC))
 	if len(points) != 3 || points[len(points)-1].ProjectedMinor != "120" || points[len(points)-1].ContributionsMinor != "120" {
 		t.Fatalf("projection = %+v", points)
+	}
+}
+
+func TestGoalScenariosUseMinorUnitsAndAttributeGrowth(t *testing.T) {
+	now := time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)
+	goal := GoalRead{CurrentAmountMinor: "10000000", TargetAmountMinor: "23000000", TargetDate: "2026-11-20", AssumedAnnualReturnBPS: 1200, Plan: &GoalPlanRead{
+		PlannedContributionMinor: "1000000", StartDate: "2026-01-20", Frequency: "monthly",
+	}}
+	scenarios := goalScenarios(goal, now)
+	if scenarios == nil {
+		t.Fatal("scenarios = nil")
+	}
+	if scenarios.RequiredPace.MonthlyContributionMinor == "13000000" {
+		t.Fatalf("required pace used the total shortfall: %+v", scenarios.RequiredPace)
+	}
+	if scenarios.SavedPlan.NewContributionsMinor != "10000000" || scenarios.SavedPlan.EstimatedGrowthMinor == "0" {
+		t.Fatalf("saved plan scenario = %+v", scenarios.SavedPlan)
+	}
+	projected, _ := new(big.Int).SetString(scenarios.SavedPlan.ProjectedAtTargetMinor, 10)
+	growth, _ := new(big.Int).SetString(scenarios.SavedPlan.EstimatedGrowthMinor, 10)
+	if projected.Cmp(new(big.Int).Add(big.NewInt(20000000), growth)) != 0 {
+		t.Fatalf("projected total does not equal principal plus contributions plus growth: %+v", scenarios.SavedPlan)
+	}
+}
+
+func TestGoalScenariosConvertSavedPlanToMonthlyPace(t *testing.T) {
+	goal := GoalRead{CurrentAmountMinor: "0", TargetAmountMinor: "100000", TargetDate: "2027-01-20", Plan: &GoalPlanRead{
+		PlannedContributionMinor: "120000", StartDate: "2026-01-20", Frequency: "annually",
+	}}
+	scenarios := goalScenarios(goal, time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC))
+	if scenarios == nil || scenarios.SavedPlan.MonthlyContributionMinor != "10000" {
+		t.Fatalf("annual plan monthly pace = %+v", scenarios)
 	}
 }
 

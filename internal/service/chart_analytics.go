@@ -1173,7 +1173,7 @@ func goalProjection(goal GoalRead, now time.Time) []GoalProjectionPointRead {
 	}
 	current, currentOK := new(big.Int).SetString(goal.CurrentAmountMinor, 10)
 	target, targetOK := new(big.Int).SetString(goal.TargetAmountMinor, 10)
-	contribution, contributionOK := new(big.Int).SetString(goal.Plan.PlannedContributionMinor, 10)
+	contribution, contributionOK := monthlyContributionForPlan(goal.Plan)
 	targetDate, dateErr := time.Parse(time.DateOnly, goal.TargetDate)
 	startDate := dateOnlyUTC(now)
 	if !currentOK || !targetOK || !contributionOK || dateErr != nil || !targetDate.After(startDate) {
@@ -1215,6 +1215,156 @@ func goalProjectionPoint(goal GoalRead, current, target, contribution *big.Int, 
 	projected, _ := roundedRatInt64(value)
 	return GoalProjectionPointRead{Date: start.AddDate(0, months, 0).Format(time.RFC3339), ProjectedMinor: strconv.FormatInt(projected, 10),
 		ContributionsMinor: contributions.String(), TargetMinor: target.String()}
+}
+
+func goalScenarios(goal GoalRead, now time.Time) *GoalScenariosRead {
+	contribution := big.NewInt(0)
+	if goal.Plan != nil {
+		if parsed, ok := monthlyContributionForPlan(goal.Plan); ok {
+			contribution = parsed
+		}
+	}
+	return goalScenariosWithAssumptions(goal, now, contribution, goal.AssumedAnnualReturnBPS)
+}
+
+func monthlyContributionForPlan(plan *GoalPlanRead) (*big.Int, bool) {
+	amount, ok := new(big.Int).SetString(plan.PlannedContributionMinor, 10)
+	if !ok {
+		return nil, false
+	}
+	multiplier := big.NewRat(1, 1)
+	switch plan.Frequency {
+	case "weekly":
+		multiplier = big.NewRat(52, 12)
+	case "quarterly":
+		multiplier = big.NewRat(1, 3)
+	case "annually":
+		multiplier = big.NewRat(1, 12)
+	}
+	return roundedRatBigInt(new(big.Rat).Mul(new(big.Rat).SetInt(amount), multiplier)), true
+}
+
+func goalScenariosWithAssumptions(goal GoalRead, now time.Time, contribution *big.Int, annualReturnBPS int32) *GoalScenariosRead {
+	current, currentOK := new(big.Int).SetString(goal.CurrentAmountMinor, 10)
+	target, targetOK := new(big.Int).SetString(goal.TargetAmountMinor, 10)
+	targetDate, dateErr := time.Parse(time.DateOnly, goal.TargetDate)
+	if goal.ValueIncomplete || !currentOK || !targetOK || dateErr != nil {
+		return nil
+	}
+	start := dateOnlyUTC(now)
+	planStart := start
+	var planEnd time.Time
+	if goal.Plan != nil {
+		if parsed, err := time.Parse(time.DateOnly, goal.Plan.StartDate); err == nil {
+			planStart = parsed
+		}
+		if goal.Plan.EndDate != nil {
+			planEnd, _ = time.Parse(time.DateOnly, *goal.Plan.EndDate)
+		}
+	}
+	lowerReturnBPS := annualReturnBPS - 200
+	if lowerReturnBPS < 0 {
+		lowerReturnBPS = 0
+	}
+	required := requiredMonthlyContribution(current, target, annualReturnBPS, start, targetDate)
+	return &GoalScenariosRead{
+		SavedPlan:    calculateGoalScenario(current, target, contribution, annualReturnBPS, start, targetDate, planStart, planEnd),
+		RequiredPace: calculateGoalScenario(current, target, required, annualReturnBPS, start, targetDate, start, time.Time{}),
+		LowerReturn:  calculateGoalScenario(current, target, contribution, lowerReturnBPS, start, targetDate, planStart, planEnd),
+	}
+}
+
+func requiredMonthlyContribution(current, target *big.Int, annualReturnBPS int32, start, targetDate time.Time) *big.Int {
+	months := monthsBetweenChart(start, targetDate)
+	if months <= 0 || current.Cmp(target) >= 0 {
+		return big.NewInt(0)
+	}
+	low := big.NewInt(0)
+	high := new(big.Int).Sub(target, current)
+	for low.Cmp(high) < 0 {
+		mid := new(big.Int).Add(low, high)
+		mid.Quo(mid, big.NewInt(2))
+		projected, _ := projectGoalValue(current, mid, annualReturnBPS, start, months, start, time.Time{})
+		if projected.Cmp(target) >= 0 {
+			high = mid
+		} else {
+			low = mid.Add(mid, big.NewInt(1))
+		}
+	}
+	return low
+}
+
+func calculateGoalScenario(current, target, contribution *big.Int, annualReturnBPS int32, start, targetDate, planStart, planEnd time.Time) GoalScenarioRead {
+	months := monthsBetweenChart(start, targetDate)
+	projected, contributions := projectGoalValue(current, contribution, annualReturnBPS, start, months, planStart, planEnd)
+	growth := new(big.Int).Sub(projected, current)
+	growth.Sub(growth, contributions)
+	completion := goalScenarioCompletion(current, target, contribution, annualReturnBPS, start, planStart, planEnd)
+	return GoalScenarioRead{
+		MonthlyContributionMinor: contribution.String(), AnnualReturnBPS: annualReturnBPS,
+		ProjectedAtTargetMinor: projected.String(), ProjectedProgressPercent: progressPercentBig(projected, target),
+		NewContributionsMinor: contributions.String(),
+		EstimatedGrowthMinor:  growth.String(), EstimatedCompletion: completion,
+	}
+}
+
+func projectGoalValue(current, contribution *big.Int, annualReturnBPS int32, start time.Time, months int, planStart, planEnd time.Time) (*big.Int, *big.Int) {
+	value := new(big.Rat).SetInt(current)
+	contributions := big.NewInt(0)
+	monthlyRate := new(big.Rat).SetFrac(big.NewInt(int64(annualReturnBPS)), big.NewInt(120000))
+	factor := new(big.Rat).Add(big.NewRat(1, 1), monthlyRate)
+	for month := 1; month <= months; month++ {
+		value.Mul(value, factor)
+		date := start.AddDate(0, month, 0)
+		if !date.Before(planStart) && (planEnd.IsZero() || !date.After(planEnd)) {
+			value.Add(value, new(big.Rat).SetInt(contribution))
+			contributions.Add(contributions, contribution)
+		}
+	}
+	return roundedRatBigInt(value), contributions
+}
+
+func roundedRatBigInt(value *big.Rat) *big.Int {
+	quotient, remainder := new(big.Int), new(big.Int)
+	quotient.QuoRem(value.Num(), value.Denom(), remainder)
+	if new(big.Int).Lsh(new(big.Int).Abs(remainder), 1).Cmp(value.Denom()) >= 0 {
+		quotient.Add(quotient, big.NewInt(int64(value.Sign())))
+	}
+	return quotient
+}
+
+func progressPercentBig(current, target *big.Int) string {
+	if target.Sign() <= 0 || current.Sign() <= 0 {
+		return "0"
+	}
+	if current.Cmp(target) >= 0 {
+		return "100"
+	}
+	hundredths := new(big.Int).Mul(new(big.Int).Set(current), big.NewInt(10000))
+	hundredths.Quo(hundredths, target)
+	return formatHundredths(hundredths.Int64())
+}
+
+func goalScenarioCompletion(current, target, contribution *big.Int, annualReturnBPS int32, start, planStart, planEnd time.Time) *string {
+	if current.Cmp(target) >= 0 {
+		value := start.Format(time.DateOnly)
+		return &value
+	}
+	value := new(big.Rat).SetInt(current)
+	monthlyRate := new(big.Rat).SetFrac(big.NewInt(int64(annualReturnBPS)), big.NewInt(120000))
+	factor := new(big.Rat).Add(big.NewRat(1, 1), monthlyRate)
+	for month := 1; month <= 1200; month++ {
+		value.Mul(value, factor)
+		date := start.AddDate(0, month, 0)
+		if !date.Before(planStart) && (planEnd.IsZero() || !date.After(planEnd)) {
+			value.Add(value, new(big.Rat).SetInt(contribution))
+		}
+		if roundedRatBigInt(value).Cmp(target) >= 0 {
+			completion := date.Format(time.DateOnly)
+			return &completion
+		}
+	}
+	return nil
 }
 
 func monthsBetweenChart(start, end time.Time) int {

@@ -19,6 +19,7 @@ import type {
   EstateSnapshot,
   EstateWorkspace,
   Goal,
+  GoalScenarios,
   GoalAlert,
   GoalMilestone,
   Institution,
@@ -214,6 +215,14 @@ export const getCategories = () => request<CategoryList>("/categories");
 export const getInstitutions = () => request<InstitutionList>("/institutions");
 export const getGoals = () => request<Goal[]>("/goals");
 export const getGoal = (id: string) => request<Goal>(`/goals/${id}`);
+export const calculateGoalScenarios = (
+  id: string,
+  monthlyContributionMinor: string,
+  annualReturnBps: number,
+) =>
+  request<GoalScenarios>(
+    `/goals/${id}/scenarios?${new URLSearchParams({ monthlyContributionMinor, annualReturnBps: String(annualReturnBps) })}`,
+  );
 export const getGoalMilestones = (id: string) =>
   request<GoalMilestone[]>(`/goals/${id}/milestones`);
 export const getGoalAlerts = () => request<GoalAlert[]>("/goals/alerts");

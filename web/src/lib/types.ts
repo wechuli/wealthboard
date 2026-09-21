@@ -34,6 +34,7 @@ export type Institution = components["schemas"]["Institution"];
 export type InstitutionList = OperationJsonResponse<"listInstitutions", 200>;
 
 export type Goal = components["schemas"]["Goal"];
+export type GoalScenarios = components["schemas"]["GoalScenarios"];
 export type GoalMilestone = components["schemas"]["GoalMilestone"];
 export type GoalAlert = components["schemas"]["GoalAlert"];
 

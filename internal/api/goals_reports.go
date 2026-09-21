@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ type RequestAuthenticator interface {
 type GoalsReportsReader interface {
 	ListGoals(context.Context, uuid.UUID) ([]service.GoalRead, error)
 	GetGoal(context.Context, uuid.UUID, uuid.UUID) (service.GoalRead, error)
+	CalculateGoalScenarios(context.Context, uuid.UUID, uuid.UUID, service.GoalScenarioInput) (service.GoalScenariosRead, error)
 	ListMilestones(context.Context, uuid.UUID, uuid.UUID) ([]service.GoalMilestoneRead, error)
 	ListAlerts(context.Context, uuid.UUID) ([]service.GoalAlertRead, error)
 	Dashboard(context.Context, uuid.UUID, ...string) (service.DashboardRead, error)
@@ -39,12 +41,32 @@ func NewGoalsReportsHandler(authenticator RequestAuthenticator, service GoalsRep
 func RegisterGoalsReportsRoutes(router chi.Router, handler *GoalsReportsHandler) {
 	router.Get("/goals/alerts", handler.GoalAlerts)
 	router.Get("/goals/{id}/milestones", handler.GoalMilestones)
+	router.Get("/goals/{id}/scenarios", handler.GoalScenarios)
 	router.Get("/goals/{id}", handler.GoalDetail)
 	router.Get("/goals", handler.Goals)
 	router.Get("/dashboard", handler.Dashboard)
 	router.Get("/accounts/{accountID}/analytics", handler.AccountAnalytics)
 	router.Get("/reports/summary", handler.ReportSummary)
 	router.Get("/reports/allocation", handler.ReportAllocation)
+}
+
+func (handler *GoalsReportsHandler) GoalScenarios(response http.ResponseWriter, request *http.Request) {
+	goalID, ok := readResourceID(response, request)
+	if !ok {
+		return
+	}
+	contribution := request.URL.Query().Get("monthlyContributionMinor")
+	annualReturn, err := strconv.ParseInt(request.URL.Query().Get("annualReturnBps"), 10, 32)
+	if contribution == "" || err != nil || annualReturn < 0 || annualReturn > 10000 {
+		writeProblem(response, http.StatusUnprocessableEntity, "Invalid request", "Enter a non-negative contribution and an annual return from 0% to 100%.")
+		return
+	}
+	handler.authorizedRead(response, request, func(ctx context.Context, userID uuid.UUID) (any, error) {
+		return handler.service.CalculateGoalScenarios(ctx, userID, goalID, service.GoalScenarioInput{
+			MonthlyContributionMinor: contribution,
+			AnnualReturnBPS:          int32(annualReturn),
+		})
+	})
 }
 
 func (handler *GoalsReportsHandler) Goals(response http.ResponseWriter, request *http.Request) {
@@ -121,6 +143,10 @@ func (handler *GoalsReportsHandler) authorizedRead(response http.ResponseWriter,
 	value, err := read(request.Context(), principal.UserID)
 	if errors.Is(err, service.ErrGoalsReportsNotFound) {
 		writeProblem(response, http.StatusNotFound, "Not Found", "The requested resource does not exist.")
+		return
+	}
+	if errors.Is(err, service.ErrGoalsReportsInvalidInput) {
+		writeProblem(response, http.StatusUnprocessableEntity, "Invalid request", "Enter a non-negative contribution and an annual return from 0% to 100%.")
 		return
 	}
 	if err != nil {

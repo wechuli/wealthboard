@@ -22,6 +22,7 @@ import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 
 import {
   archiveInstrument,
+  calculateGoalScenarios,
   createMilestone,
   deleteGoal,
   deleteInstrument,
@@ -67,7 +68,14 @@ import {
   InstrumentForm,
 } from "@/components/planning/support";
 import { MoneyValue } from "@/components/privacy";
-import type { Goal, GoalAlert, GoalMilestone, Session } from "@/lib/types";
+import type {
+  Goal,
+  GoalAlert,
+  GoalMilestone,
+  GoalScenarios,
+  Session,
+} from "@/lib/types";
+import { decimalToMinorUnits, minorUnitsToDecimal } from "@/lib/format";
 import { formatDate, ResourceView } from "@/components/ui/resource";
 import { useResource } from "@/hooks/use-resource";
 
@@ -896,15 +904,60 @@ function GoalAlerts({
 }
 
 function GoalScenarioComparison({ goal }: { goal: Goal }) {
+  const [contribution, setContribution] = useState(
+    minorUnitsToDecimal(
+      goal.scenarios?.savedPlan.monthlyContributionMinor ??
+        goal.plan?.plannedContributionMinor ??
+        "0",
+    ),
+  );
   const [returnPercent, setReturnPercent] = useState(
     String(goal.assumedAnnualReturnBps / 100),
   );
-  const [contribution, setContribution] = useState(
-    goal.plan?.plannedContributionMinor ?? "0",
+  const [scenarios, setScenarios] = useState<GoalScenarios | null>(
+    goal.scenarios ?? null,
   );
+  const [scenarioError, setScenarioError] = useState<string | null>(null);
+  const [scenarioPending, setScenarioPending] = useState(false);
   const current = BigInt(goal.currentAmountMinor);
   const target = BigInt(goal.targetAmountMinor);
-  const remaining = target > current ? target - current : 0n;
+  if (!scenarios) return null;
+
+  async function recalculate() {
+    const contributionMinor = decimalToMinorUnits(contribution);
+    const annualReturnBps = Math.round(Number(returnPercent) * 100);
+    if (
+      contributionMinor === null ||
+      !Number.isFinite(annualReturnBps) ||
+      annualReturnBps < 0 ||
+      annualReturnBps > 10000
+    ) {
+      setScenarioError(
+        "Enter a non-negative contribution with at most two decimals and a return from 0% to 100%.",
+      );
+      return;
+    }
+    setScenarioPending(true);
+    setScenarioError(null);
+    try {
+      setScenarios(
+        await calculateGoalScenarios(
+          goal.id,
+          contributionMinor,
+          annualReturnBps,
+        ),
+      );
+    } catch (error) {
+      setScenarioError(
+        error instanceof Error
+          ? error.message
+          : "The scenarios could not be calculated.",
+      );
+    } finally {
+      setScenarioPending(false);
+    }
+  }
+
   return (
     <Card className="mt-5">
       <OriginalCardHeader>
@@ -919,16 +972,45 @@ function GoalScenarioComparison({ goal }: { goal: Goal }) {
         </div>
       </OriginalCardHeader>
       <CardContent>
+        <div className="mb-4 grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div>
+            <Label htmlFor="scenario-contribution">
+              Monthly contribution ({goal.currency})
+            </Label>
+            <Input
+              id="scenario-contribution"
+              inputMode="decimal"
+              value={contribution}
+              onChange={(event) => setContribution(event.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="scenario-return">Annual return (%)</Label>
+            <Input
+              id="scenario-return"
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={returnPercent}
+              onChange={(event) => setReturnPercent(event.target.value)}
+            />
+          </div>
+          <Button disabled={scenarioPending} onClick={() => void recalculate()}>
+            {scenarioPending ? "Calculating..." : "Recalculate"}
+          </Button>
+        </div>
+        {scenarioError ? (
+          <p role="alert" className="mb-4 text-sm text-rose-300">
+            {scenarioError}
+          </p>
+        ) : null}
         <div className="grid gap-3 lg:grid-cols-3">
           {[
-            ["Saved plan", contribution, returnPercent],
-            ["Required pace", remaining.toString(), returnPercent],
-            [
-              "Lower return",
-              contribution,
-              String(Math.max(0, Number(returnPercent) - 2)),
-            ],
-          ].map(([name, amount, annualReturn], index) => (
+            { name: "Saved plan", scenario: scenarios.savedPlan },
+            { name: "Required pace", scenario: scenarios.requiredPace },
+            { name: "Lower return", scenario: scenarios.lowerReturn },
+          ].map(({ name, scenario }) => (
             <section
               key={name}
               className="min-w-0 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"
@@ -941,46 +1023,29 @@ function GoalScenarioComparison({ goal }: { goal: Goal }) {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor={`scenario-contribution-${index}`}>
-                    Monthly contribution
-                  </Label>
-                  <Input
-                    id={`scenario-contribution-${index}`}
-                    aria-label={`${name} monthly contribution`}
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(event) =>
-                      index !== 1 && setContribution(event.target.value)
-                    }
+                  <p className="text-xs text-slate-500">Monthly contribution</p>
+                  <MoneyValue
+                    amount={scenario.monthlyContributionMinor}
+                    currency={goal.currency}
+                    className="mt-1 block font-medium text-slate-200"
                   />
                 </div>
                 <div>
-                  <Label htmlFor={`scenario-return-${index}`}>
-                    Annual return (%)
-                  </Label>
-                  <Input
-                    id={`scenario-return-${index}`}
-                    aria-label={`${name} annual return`}
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={annualReturn}
-                    onChange={(event) =>
-                      index !== 2 && setReturnPercent(event.target.value)
-                    }
-                  />
+                  <p className="text-xs text-slate-500">Annual return</p>
+                  <p className="mt-1 font-medium text-slate-200">
+                    {scenario.annualReturnBps / 100}%
+                  </p>
                 </div>
               </div>
               <div className="mt-4 min-h-44">
                 <p className="text-xs text-slate-500">Projected at target</p>
                 <MoneyValue
-                  amount={(current + BigInt(amount || "0")).toString()}
+                  amount={scenario.projectedAtTargetMinor}
                   currency={goal.currency}
                   className="mt-1 block text-lg font-semibold text-white"
                 />
                 <Progress
-                  value={Number(goal.progressPercent)}
+                  value={Number(scenario.projectedProgressPercent)}
                   label={`${name} projected goal progress`}
                   className="mt-3"
                 />
@@ -989,18 +1054,27 @@ function GoalScenarioComparison({ goal }: { goal: Goal }) {
                     label="New contributions"
                     value={
                       <MoneyValue
-                        amount={amount || "0"}
+                        amount={scenario.newContributionsMinor}
                         currency={goal.currency}
                       />
                     }
                   />
                   <ScenarioValue
                     label="Estimated growth"
-                    value={<MoneyValue amount="0" currency={goal.currency} />}
+                    value={
+                      <MoneyValue
+                        amount={scenario.estimatedGrowthMinor}
+                        currency={goal.currency}
+                      />
+                    }
                   />
                   <ScenarioValue
                     label="Estimated completion"
-                    value={forecastDateForGoal(goal)}
+                    value={
+                      scenario.estimatedCompletion
+                        ? formatMonthYear(scenario.estimatedCompletion)
+                        : "Not projected"
+                    }
                     icon={<CalendarClock size={13} />}
                   />
                 </dl>

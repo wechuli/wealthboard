@@ -31,6 +31,11 @@ type fakeGoalsReportsReader struct {
 	lastGoalID uuid.UUID
 }
 
+func (reader *fakeGoalsReportsReader) CalculateGoalScenarios(_ context.Context, userID, goalID uuid.UUID, input service.GoalScenarioInput) (service.GoalScenariosRead, error) {
+	reader.lastUserID, reader.lastGoalID = userID, goalID
+	return service.GoalScenariosRead{SavedPlan: service.GoalScenarioRead{MonthlyContributionMinor: input.MonthlyContributionMinor, AnnualReturnBPS: input.AnnualReturnBPS}}, reader.getGoalErr
+}
+
 func (reader *fakeGoalsReportsReader) ListGoals(_ context.Context, userID uuid.UUID) ([]service.GoalRead, error) {
 	reader.lastUserID = userID
 	return []service.GoalRead{reader.goal}, nil
@@ -89,6 +94,23 @@ func TestGoalsReportsRoutesAuthenticateAndPropagateOwner(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `"targetAmountMinor":"10000"`) || !strings.Contains(response.Body.String(), `"currentAmountMinor":"2500"`) {
 		t.Fatalf("money values were not JSON strings: %s", response.Body.String())
+	}
+}
+
+func TestGoalScenariosRouteValidatesAndPropagatesAssumptions(t *testing.T) {
+	userID, goalID := uuid.New(), uuid.New()
+	reader := &fakeGoalsReportsReader{}
+	router := chi.NewRouter()
+	RegisterGoalsReportsRoutes(router, NewGoalsReportsHandler(fakeRequestAuthenticator{principal: webauth.Principal{
+		UserID: userID, Scopes: []webauth.Scope{webauth.ScopePortfolioRead},
+	}}, reader))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/goals/"+goalID.String()+"/scenarios?monthlyContributionMinor=13000000&annualReturnBps=800", nil))
+	if response.Code != http.StatusOK || reader.lastUserID != userID || reader.lastGoalID != goalID {
+		t.Fatalf("scenario status/identifiers = %d %s/%s", response.Code, reader.lastUserID, reader.lastGoalID)
+	}
+	if !strings.Contains(response.Body.String(), `"monthlyContributionMinor":"13000000"`) {
+		t.Fatalf("scenario body = %s", response.Body.String())
 	}
 }
 
