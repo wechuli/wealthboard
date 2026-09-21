@@ -259,10 +259,7 @@ export function SettingsPage({
             operation={operations.authentication.changePassword}
           />
         ) : null}
-        <PersonalAPIKeys
-          session={session}
-          operations={operations}
-        />
+        <PersonalAPIKeys session={session} operations={operations} />
         <DataPortability
           session={session}
           onChanged={changed}
@@ -336,9 +333,7 @@ function PersonalAPIKeys({
           <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-medium text-amber-100">
-                  Copy this key now
-                </p>
+                <p className="font-medium text-amber-100">Copy this key now</p>
                 <p className="mt-1 text-xs text-amber-200/80">
                   Wealthboard will not show the complete key again.
                 </p>
@@ -363,7 +358,9 @@ function PersonalAPIKeys({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => void navigator.clipboard.writeText(created.token)}
+                onClick={() =>
+                  void navigator.clipboard.writeText(created.token)
+                }
               >
                 <Copy size={16} /> Copy
               </Button>
@@ -423,7 +420,9 @@ function PersonalAPIKeys({
             </div>
           </div>
           <fieldset>
-            <legend className="text-sm font-medium text-slate-200">Scopes</legend>
+            <legend className="text-sm font-medium text-slate-200">
+              Scopes
+            </legend>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {apiKeyScopes.map(([scope, label]) => (
                 <Checkbox
@@ -445,7 +444,9 @@ function PersonalAPIKeys({
         {resource.status === "loading" ? (
           <p className="text-sm text-slate-400">Loading API keys...</p>
         ) : resource.status === "error" ? (
-          <p role="alert" className="text-sm text-red-300">{resource.message}</p>
+          <p role="alert" className="text-sm text-red-300">
+            {resource.message}
+          </p>
         ) : resource.data.keys.length ? (
           <div className="space-y-2">
             {resource.data.keys.map((key: APIKeyMetadata) => (
@@ -462,7 +463,9 @@ function PersonalAPIKeys({
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
                     Created {localeDate(key.createdAt)}
-                    {key.expiresAt ? ` · Expires ${localeDate(key.expiresAt)}` : ""}
+                    {key.expiresAt
+                      ? ` · Expires ${localeDate(key.expiresAt)}`
+                      : ""}
                     {key.revokedAt ? " · Revoked" : ""}
                   </p>
                 </div>
@@ -474,7 +477,8 @@ function PersonalAPIKeys({
                     onClick={() => {
                       if (!window.confirm(`Revoke ${key.name}?`)) return;
                       void run(
-                        () => operations.revokeAPIKey(key.id, session.csrfToken),
+                        () =>
+                          operations.revokeAPIKey(key.id, session.csrfToken),
                         "API key revoked.",
                       );
                     }}
@@ -484,19 +488,18 @@ function PersonalAPIKeys({
                 ) : null}
               </div>
             ))}
-            {resource.data.keys.some((key: APIKeyMetadata) => !key.revokedAt) ? (
+            {resource.data.keys.some(
+              (key: APIKeyMetadata) => !key.revokedAt,
+            ) ? (
               <Button
                 type="button"
                 variant="danger"
                 disabled={pending}
                 onClick={() => {
                   if (!window.confirm("Revoke every active API key?")) return;
-                  void run(
-                    async () => {
-                      await operations.revokeAllAPIKeys(session.csrfToken);
-                    },
-                    "All active API keys revoked.",
-                  );
+                  void run(async () => {
+                    await operations.revokeAllAPIKeys(session.csrfToken);
+                  }, "All active API keys revoked.");
                 }}
               >
                 <Trash2 size={16} /> Revoke all active keys

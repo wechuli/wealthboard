@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountHistoryAiPrompt } from "@/components/review/ai-prompts";
 import { PortfolioReviewWorkspace } from "@/pages/review";
 import { SettingsPage } from "@/pages/settings";
-import { PrivacyProvider, PrivacyToggle } from "@/components/providers/privacy-provider";
+import {
+  PrivacyProvider,
+  PrivacyToggle,
+} from "@/components/providers/privacy-provider";
 import type { AIRead, Session, SettingsRead } from "@/lib/types";
 
 afterEach(cleanup);
@@ -246,7 +249,10 @@ describe("original settings page", () => {
     );
 
     await screen.findByText("CLI key");
-    await user.type(screen.getByLabelText("Name", { selector: "#apiKeyName" }), "Automation");
+    await user.type(
+      screen.getByLabelText("Name", { selector: "#apiKeyName" }),
+      "Automation",
+    );
     await user.click(screen.getByRole("button", { name: "Create API key" }));
     expect(await screen.findByLabelText("New API key secret")).toHaveValue(
       "wbk_v1_00000000_fixture-secret",
@@ -258,14 +264,20 @@ describe("original settings page", () => {
 
     await user.click(screen.getByRole("button", { name: "Copy" }));
     expect(writeText).toHaveBeenCalledWith("wbk_v1_00000000_fixture-secret");
-    await user.click(screen.getByRole("button", { name: "Dismiss API key secret" }));
-    expect(screen.queryByLabelText("New API key secret")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Dismiss API key secret" }),
+    );
+    expect(
+      screen.queryByLabelText("New API key secret"),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Revoke" }));
     await waitFor(() =>
       expect(revokeAPIKey).toHaveBeenCalledWith(existingKey.id, "csrf"),
     );
-    await user.click(screen.getByRole("button", { name: "Revoke all active keys" }));
+    await user.click(
+      screen.getByRole("button", { name: "Revoke all active keys" }),
+    );
     await waitFor(() => expect(revokeAllAPIKeys).toHaveBeenCalledWith("csrf"));
   });
 });
