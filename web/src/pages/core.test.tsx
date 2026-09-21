@@ -237,9 +237,9 @@ describe("ported core pages", () => {
     expect(
       screen.getByRole("group", { name: "Withdrawals metric" }),
     ).toHaveTextContent("KES 0.00");
-    expect(screen.getByRole("group", { name: "Fees metric" })).toHaveTextContent(
-      "KES 0.00",
-    );
+    expect(
+      screen.getByRole("group", { name: "Fees metric" }),
+    ).toHaveTextContent("KES 0.00");
     expect(screen.queryByText(/current API/i)).not.toBeInTheDocument();
   });
 
@@ -276,9 +276,9 @@ describe("ported core pages", () => {
     expect(
       screen.getByRole("columnheader", { name: "30-day change" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /Daily account/ })).toHaveTextContent(
-      "KES 50.00",
-    );
+    expect(
+      screen.getByRole("row", { name: /Daily account/ }),
+    ).toHaveTextContent("KES 50.00");
     expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
   });
 
@@ -353,9 +353,9 @@ describe("ported core pages", () => {
     expect(
       screen.getByRole("group", { name: "Contributions metric" }),
     ).toHaveTextContent("KES 1,250.00");
-    expect(screen.getByRole("group", { name: "Income metric" })).toHaveTextContent(
-      "KES 42.50",
-    );
+    expect(
+      screen.getByRole("group", { name: "Income metric" }),
+    ).toHaveTextContent("KES 42.50");
     expect(
       screen.getByRole("group", { name: "Valuation change metric" }),
     ).toHaveTextContent("KES 42.50");
@@ -423,9 +423,9 @@ describe("ported core pages", () => {
     expect(await screen.findByText("Movement attribution")).toBeInTheDocument();
     expect(screen.getByText("Price movement")).toBeInTheDocument();
     expect(screen.getByText(/cash-flow-aware TWR/)).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Cash metric" })).toHaveTextContent(
-      "KES 250.00",
-    );
+    expect(
+      screen.getByRole("group", { name: "Cash metric" }),
+    ).toHaveTextContent("KES 250.00");
     expect(
       screen.getByRole("group", { name: "Positions metric" }),
     ).toHaveTextContent("KES 1,000.00");

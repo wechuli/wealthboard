@@ -270,41 +270,39 @@ export function DashboardPage() {
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {periodChanges.map(
-                      ([label, value]) => (
-                        <div
-                          key={label}
-                          role="group"
-                          aria-label={`${label} net worth change`}
-                          className="min-w-28 rounded-xl border border-white/[0.06] bg-black/15 p-3"
-                        >
-                          <p className="text-[10px] uppercase tracking-wide text-slate-500">
-                            {label}
+                    {periodChanges.map(([label, value]) => (
+                      <div
+                        key={label}
+                        role="group"
+                        aria-label={`${label} net worth change`}
+                        className="min-w-28 rounded-xl border border-white/[0.06] bg-black/15 p-3"
+                      >
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                          {label}
+                        </p>
+                        {value == null ? (
+                          <IncompleteValue className="mt-1 block text-sm font-medium text-amber-300" />
+                        ) : (
+                          <p
+                            className={
+                              BigInt(value) >= 0n
+                                ? "mt-1 flex items-center gap-1 text-sm font-medium text-emerald-300"
+                                : "mt-1 flex items-center gap-1 text-sm font-medium text-red-300"
+                            }
+                          >
+                            {BigInt(value) >= 0n ? (
+                              <ArrowUpRight size={14} />
+                            ) : (
+                              <ArrowDownRight size={14} />
+                            )}
+                            <MoneyValue
+                              amount={value}
+                              currency={data.baseCurrency}
+                            />
                           </p>
-                          {value == null ? (
-                            <IncompleteValue className="mt-1 block text-sm font-medium text-amber-300" />
-                          ) : (
-                            <p
-                              className={
-                                BigInt(value) >= 0n
-                                  ? "mt-1 flex items-center gap-1 text-sm font-medium text-emerald-300"
-                                  : "mt-1 flex items-center gap-1 text-sm font-medium text-red-300"
-                              }
-                            >
-                              {BigInt(value) >= 0n ? (
-                                <ArrowUpRight size={14} />
-                              ) : (
-                                <ArrowDownRight size={14} />
-                              )}
-                              <MoneyValue
-                                amount={value}
-                                currency={data.baseCurrency}
-                              />
-                            </p>
-                          )}
-                        </div>
-                      ),
-                    )}
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </CardContent>
@@ -333,8 +331,7 @@ export function DashboardPage() {
               <DashboardMetric
                 label="Income & gains"
                 amount={(
-                  BigInt(data.totals.income) +
-                  BigInt(data.totals.capitalGrowth)
+                  BigInt(data.totals.income) + BigInt(data.totals.capitalGrowth)
                 ).toString()}
                 currency={data.baseCurrency}
                 icon={<TrendingUp size={17} />}
@@ -1518,24 +1515,65 @@ export function AccountDetailPage({ session }: PageProps) {
                 </>
               }
             />
-            {account.trackingMode === "positions" && analytics.positionSummary ? (
+            {account.trackingMode === "positions" &&
+            analytics.positionSummary ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <Metric label="Current value" value={account.currentValueMinor} currency={account.currency} primary />
-                <Metric label="Cash" value={analytics.positionSummary.cashMinor} currency={account.currency} />
-                <Metric label="Positions" value={analytics.positionSummary.positionsMinor} currency={account.currency} />
+                <Metric
+                  label="Current value"
+                  value={account.currentValueMinor}
+                  currency={account.currency}
+                  primary
+                />
+                <Metric
+                  label="Cash"
+                  value={analytics.positionSummary.cashMinor}
+                  currency={account.currency}
+                />
+                <Metric
+                  label="Positions"
+                  value={analytics.positionSummary.positionsMinor}
+                  currency={account.currency}
+                />
                 <Card className="p-5">
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Data quality</p>
-                  <Badge tone={analytics.positionSummary.complete ? "positive" : "warning"}>
-                    {analytics.positionSummary.complete ? "Complete" : "Incomplete"}
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+                    Data quality
+                  </p>
+                  <Badge
+                    tone={
+                      analytics.positionSummary.complete
+                        ? "positive"
+                        : "warning"
+                    }
+                  >
+                    {analytics.positionSummary.complete
+                      ? "Complete"
+                      : "Incomplete"}
                   </Badge>
                 </Card>
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <Metric label={account.isLiability ? "Amount owed" : "Current value"} value={account.currentValueMinor} currency={account.currency} primary />
-                <Metric label="Contributions" value={analytics.metrics.contributionsMinor} currency={account.currency} />
-                <Metric label="Income" value={analytics.metrics.incomeMinor} currency={account.currency} />
-                <Metric label="Valuation change" value={analytics.metrics.estimatedGainMinor} currency={account.currency} />
+                <Metric
+                  label={account.isLiability ? "Amount owed" : "Current value"}
+                  value={account.currentValueMinor}
+                  currency={account.currency}
+                  primary
+                />
+                <Metric
+                  label="Contributions"
+                  value={analytics.metrics.contributionsMinor}
+                  currency={account.currency}
+                />
+                <Metric
+                  label="Income"
+                  value={analytics.metrics.incomeMinor}
+                  currency={account.currency}
+                />
+                <Metric
+                  label="Valuation change"
+                  value={analytics.metrics.estimatedGainMinor}
+                  currency={account.currency}
+                />
               </div>
             )}
             {account.trackingMode === "positions" &&
