@@ -84,6 +84,25 @@ describe("original settings page", () => {
   it("preserves the original card order and password placement", async () => {
     const user = userEvent.setup();
     const noop = vi.fn().mockResolvedValue(undefined);
+    const existingKey = {
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "CLI key",
+      prefix: "wbk_v1_00000000",
+      scopes: ["portfolio:read" as const],
+      createdAt: "2026-09-20T00:00:00Z",
+      expiresAt: null,
+      lastUsedAt: null,
+      revokedAt: null,
+    };
+    const getAPIKeys = vi.fn().mockResolvedValue({ keys: [existingKey] });
+    const createAPIKey = vi.fn().mockResolvedValue({
+      ...existingKey,
+      id: "00000000-0000-4000-8000-000000000003",
+      name: "Automation",
+      token: "wbk_v1_00000000_fixture-secret",
+    });
+    const revokeAPIKey = vi.fn().mockResolvedValue(undefined);
+    const revokeAllAPIKeys = vi.fn().mockResolvedValue({ revoked: 1 });
     const operations = {
       load: vi.fn().mockResolvedValue({
         settings,
@@ -102,6 +121,10 @@ describe("original settings page", () => {
       deleteAICredential: noop,
       disconnectAI: noop,
       clearAIUsage: noop,
+      getAPIKeys,
+      createAPIKey,
+      revokeAPIKey,
+      revokeAllAPIKeys,
       downloadExport: noop,
       restoreUser: noop,
       authentication: {
@@ -126,6 +149,7 @@ describe("original settings page", () => {
       "AI provider",
       "Authentication methods",
       "Password",
+      "Personal API keys",
       "Import, restore & export",
     ]);
     expect(
@@ -152,6 +176,97 @@ describe("original settings page", () => {
         "This endpoint must be enabled for your Wealthboard instance.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("creates, copies, dismisses, and revokes personal API keys", async () => {
+    const user = userEvent.setup();
+    const noop = vi.fn().mockResolvedValue(undefined);
+    const existingKey = {
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "CLI key",
+      prefix: "wbk_v1_00000000",
+      scopes: ["portfolio:read" as const],
+      createdAt: "2026-09-20T00:00:00Z",
+      expiresAt: null,
+      lastUsedAt: null,
+      revokedAt: null,
+    };
+    const createAPIKey = vi.fn().mockResolvedValue({
+      ...existingKey,
+      id: "00000000-0000-4000-8000-000000000003",
+      name: "Automation",
+      token: "wbk_v1_00000000_fixture-secret",
+    });
+    const revokeAPIKey = vi.fn().mockResolvedValue(undefined);
+    const revokeAllAPIKeys = vi.fn().mockResolvedValue({ revoked: 1 });
+    const operations = {
+      load: vi.fn().mockResolvedValue({
+        settings,
+        ai,
+        authConfig: {
+          localEnabled: true,
+          oidcEnabled: false,
+          providerName: "OIDC provider",
+        },
+      }),
+      updateSettings: noop,
+      createExchangeRate: noop,
+      deleteExchangeRate: noop,
+      saveAISettings: noop,
+      saveAICredential: noop,
+      deleteAICredential: noop,
+      disconnectAI: noop,
+      clearAIUsage: noop,
+      getAPIKeys: vi.fn().mockResolvedValue({ keys: [existingKey] }),
+      createAPIKey,
+      revokeAPIKey,
+      revokeAllAPIKeys,
+      downloadExport: noop,
+      restoreUser: noop,
+      authentication: {
+        linkOidc: noop,
+        unlinkOidc: noop,
+        reauthenticateOidc: noop,
+        enableLocalCredential: noop,
+        removeLocalCredential: noop,
+        changePassword: noop,
+      },
+    };
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(
+      <MemoryRouter>
+        <SettingsPage session={session} operations={operations} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("CLI key");
+    await user.type(screen.getByLabelText("Name", { selector: "#apiKeyName" }), "Automation");
+    await user.click(screen.getByRole("button", { name: "Create API key" }));
+    expect(await screen.findByLabelText("New API key secret")).toHaveValue(
+      "wbk_v1_00000000_fixture-secret",
+    );
+    expect(createAPIKey).toHaveBeenCalledWith(
+      { name: "Automation", scopes: ["portfolio:read"], expiresAt: null },
+      "csrf",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledWith("wbk_v1_00000000_fixture-secret");
+    await user.click(screen.getByRole("button", { name: "Dismiss API key secret" }));
+    expect(screen.queryByLabelText("New API key secret")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Revoke" }));
+    await waitFor(() =>
+      expect(revokeAPIKey).toHaveBeenCalledWith(existingKey.id, "csrf"),
+    );
+    await user.click(screen.getByRole("button", { name: "Revoke all active keys" }));
+    await waitFor(() => expect(revokeAllAPIKeys).toHaveBeenCalledWith("csrf"));
   });
 });
 

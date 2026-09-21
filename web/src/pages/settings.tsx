@@ -1,6 +1,7 @@
 import {
   ArchiveRestore,
   Building2,
+  Copy,
   Download,
   FolderCog,
   History,
@@ -22,15 +23,19 @@ import { Link, useNavigate } from "react-router-dom";
 
 import {
   clearAIUsage,
+  createAPIKey,
   createExchangeRate,
   deleteAICredential,
   deleteExchangeRate,
   disconnectAI,
   downloadExport,
   getAI,
+  getAPIKeys,
   getAuthConfig,
   getSettings,
   restoreUser,
+  revokeAllAPIKeys,
+  revokeAPIKey,
   saveAICredential,
   saveAISettings,
   updateSettings,
@@ -55,6 +60,9 @@ import {
 import { PrivateValue } from "@/components/privacy";
 import type {
   AIRead,
+  APIKeyMetadata,
+  CreateAPIKeyInput,
+  CreatedAPIKey,
   AuthConfig,
   ExchangeRateInput,
   Session,
@@ -94,6 +102,10 @@ type SettingsOperations = {
   deleteAICredential: typeof deleteAICredential;
   disconnectAI: typeof disconnectAI;
   clearAIUsage: typeof clearAIUsage;
+  getAPIKeys: typeof getAPIKeys;
+  createAPIKey: typeof createAPIKey;
+  revokeAPIKey: typeof revokeAPIKey;
+  revokeAllAPIKeys: typeof revokeAllAPIKeys;
   downloadExport: typeof downloadExport;
   restoreUser: typeof restoreUser;
   authentication: AuthenticationOperations;
@@ -116,6 +128,10 @@ const defaultOperations: SettingsOperations = {
   deleteAICredential,
   disconnectAI,
   clearAIUsage,
+  getAPIKeys,
+  createAPIKey,
+  revokeAPIKey,
+  revokeAllAPIKeys,
   downloadExport,
   restoreUser,
   authentication: authenticationOperations,
@@ -243,6 +259,10 @@ export function SettingsPage({
             operation={operations.authentication.changePassword}
           />
         ) : null}
+        <PersonalAPIKeys
+          session={session}
+          operations={operations}
+        />
         <DataPortability
           session={session}
           onChanged={changed}
@@ -251,6 +271,243 @@ export function SettingsPage({
         />
       </div>
     </>
+  );
+}
+
+const apiKeyScopes = [
+  ["portfolio:read", "Read portfolio data"],
+  ["portfolio:write", "Change portfolio data"],
+  ["imports:write", "Preview and commit imports"],
+  ["exports:read", "Download user exports"],
+  ["ai:invoke", "Invoke configured AI workflows"],
+] as const satisfies ReadonlyArray<
+  readonly [CreateAPIKeyInput["scopes"][number], string]
+>;
+
+function PersonalAPIKeys({
+  session,
+  operations,
+}: {
+  session: Session;
+  operations: Pick<
+    SettingsOperations,
+    "getAPIKeys" | "createAPIKey" | "revokeAPIKey" | "revokeAllAPIKeys"
+  >;
+}) {
+  const [version, setVersion] = useState(0);
+  const [created, setCreated] = useState<CreatedAPIKey>();
+  const [notice, setNotice] = useState<{ ok?: boolean; message?: string }>({});
+  const [pending, setPending] = useState(false);
+  const resource = useResource(operations.getAPIKeys, [operations, version]);
+  const refresh = () => setVersion((current) => current + 1);
+
+  const run = async (action: () => Promise<void>, success: string) => {
+    setPending(true);
+    setNotice({});
+    try {
+      await action();
+      setNotice({ ok: true, message: success });
+      refresh();
+    } catch (error) {
+      setNotice({
+        message:
+          error instanceof Error
+            ? error.message
+            : "The API key request could not be completed.",
+      });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>Personal API keys</CardTitle>
+          <p className="mt-1 text-sm text-slate-400">
+            Create scoped credentials for scripts and external API clients.
+          </p>
+        </div>
+        <KeyRound size={18} className="text-emerald-300" />
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {created ? (
+          <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium text-amber-100">
+                  Copy this key now
+                </p>
+                <p className="mt-1 text-xs text-amber-200/80">
+                  Wealthboard will not show the complete key again.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Dismiss API key secret"
+                onClick={() => setCreated(undefined)}
+              >
+                <X size={16} />
+              </Button>
+            </div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Input
+                aria-label="New API key secret"
+                readOnly
+                value={created.token}
+                className="font-mono text-xs"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void navigator.clipboard.writeText(created.token)}
+              >
+                <Copy size={16} /> Copy
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const formElement = event.currentTarget;
+            const form = new FormData(formElement);
+            const name = String(form.get("name") ?? "").trim();
+            const scopes = apiKeyScopes
+              .map(([scope]) => scope)
+              .filter((scope) => form.getAll("scopes").includes(scope));
+            const expiry = String(form.get("expiresAt") ?? "");
+            setPending(true);
+            setNotice({});
+            void operations
+              .createAPIKey(
+                {
+                  name,
+                  scopes,
+                  expiresAt: expiry
+                    ? new Date(`${expiry}T23:59:59.999Z`).toISOString()
+                    : null,
+                },
+                session.csrfToken,
+              )
+              .then((key) => {
+                setCreated(key);
+                setNotice({ ok: true, message: "API key created." });
+                formElement.reset();
+                refresh();
+              })
+              .catch((error) =>
+                setNotice({
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : "The API key could not be created.",
+                }),
+              )
+              .finally(() => setPending(false));
+          }}
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label htmlFor="apiKeyName">Name</Label>
+              <Input id="apiKeyName" name="name" maxLength={80} required />
+            </div>
+            <div>
+              <Label htmlFor="apiKeyExpiry">Expires on (optional)</Label>
+              <Input id="apiKeyExpiry" name="expiresAt" type="date" />
+            </div>
+          </div>
+          <fieldset>
+            <legend className="text-sm font-medium text-slate-200">Scopes</legend>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {apiKeyScopes.map(([scope, label]) => (
+                <Checkbox
+                  key={scope}
+                  name="scopes"
+                  value={scope}
+                  defaultChecked={scope === "portfolio:read"}
+                  label={label}
+                />
+              ))}
+            </div>
+          </fieldset>
+          <Button disabled={pending}>
+            <Plus size={16} /> {pending ? "Creating..." : "Create API key"}
+          </Button>
+        </form>
+
+        <ActionMessage {...notice} />
+        {resource.status === "loading" ? (
+          <p className="text-sm text-slate-400">Loading API keys...</p>
+        ) : resource.status === "error" ? (
+          <p role="alert" className="text-sm text-red-300">{resource.message}</p>
+        ) : resource.data.keys.length ? (
+          <div className="space-y-2">
+            {resource.data.keys.map((key: APIKeyMetadata) => (
+              <div
+                key={key.id}
+                className="flex flex-col gap-3 rounded-xl border border-white/[0.07] p-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-100">
+                    {key.name}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {key.prefix} · {key.scopes.join(", ")}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Created {localeDate(key.createdAt)}
+                    {key.expiresAt ? ` · Expires ${localeDate(key.expiresAt)}` : ""}
+                    {key.revokedAt ? " · Revoked" : ""}
+                  </p>
+                </div>
+                {!key.revokedAt ? (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    disabled={pending}
+                    onClick={() => {
+                      if (!window.confirm(`Revoke ${key.name}?`)) return;
+                      void run(
+                        () => operations.revokeAPIKey(key.id, session.csrfToken),
+                        "API key revoked.",
+                      );
+                    }}
+                  >
+                    <Trash2 size={16} /> Revoke
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+            {resource.data.keys.some((key: APIKeyMetadata) => !key.revokedAt) ? (
+              <Button
+                type="button"
+                variant="danger"
+                disabled={pending}
+                onClick={() => {
+                  if (!window.confirm("Revoke every active API key?")) return;
+                  void run(
+                    async () => {
+                      await operations.revokeAllAPIKeys(session.csrfToken);
+                    },
+                    "All active API keys revoked.",
+                  );
+                }}
+              >
+                <Trash2 size={16} /> Revoke all active keys
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">No API keys created yet.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
