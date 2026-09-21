@@ -115,8 +115,23 @@ func TestGoalForeignResourceMapsToNotFound(t *testing.T) {
 
 func TestGoalAlertIgnoresNonPositiveTarget(t *testing.T) {
 	goal := GoalRead{TargetAmountMinor: "0", CurrentAmountMinor: "0", TargetDate: "2027-01-01"}
-	if goalBehind(goal, time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)) {
+	if goalBehind(goal) {
 		t.Fatal("goal with a non-positive target must not produce a behind alert")
+	}
+}
+
+func TestGoalTrackingStatusUsesSavedPlanProjection(t *testing.T) {
+	goal := GoalRead{Scenarios: &GoalScenariosRead{SavedPlan: GoalScenarioRead{ReachesTarget: true}}}
+	if status := goalTrackingStatus(goal); status != "on_track" || goalBehind(goal) {
+		t.Fatalf("tracking status = %q, behind = %t", status, goalBehind(goal))
+	}
+	goal.Scenarios.SavedPlan.ReachesTarget = false
+	if status := goalTrackingStatus(goal); status != "behind" || !goalBehind(goal) {
+		t.Fatalf("tracking status = %q, behind = %t", status, goalBehind(goal))
+	}
+	goal.ValueIncomplete = true
+	if status := goalTrackingStatus(goal); status != "incomplete" || goalBehind(goal) {
+		t.Fatalf("tracking status = %q, behind = %t", status, goalBehind(goal))
 	}
 }
 
@@ -195,6 +210,9 @@ func TestGoalScenariosUseMinorUnitsAndAttributeGrowth(t *testing.T) {
 	}
 	if scenarios.SavedPlan.NewContributionsMinor != "10000000" || scenarios.SavedPlan.EstimatedGrowthMinor == "0" {
 		t.Fatalf("saved plan scenario = %+v", scenarios.SavedPlan)
+	}
+	if scenarios.SavedPlan.ReachesTarget || !scenarios.RequiredPace.ReachesTarget {
+		t.Fatalf("scenario target outcomes = %+v", scenarios)
 	}
 	projected, _ := new(big.Int).SetString(scenarios.SavedPlan.ProjectedAtTargetMinor, 10)
 	growth, _ := new(big.Int).SetString(scenarios.SavedPlan.EstimatedGrowthMinor, 10)

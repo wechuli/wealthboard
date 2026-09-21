@@ -105,6 +105,7 @@ type GoalRead struct {
 	Priority               int32                     `json:"priority"`
 	AssumedAnnualReturnBPS int32                     `json:"assumedAnnualReturnBps"`
 	ProgressPercent        string                    `json:"progressPercent"`
+	TrackingStatus         string                    `json:"trackingStatus"`
 	ValueIncomplete        bool                      `json:"valueIncomplete"`
 	MissingCurrencies      []string                  `json:"missingCurrencies"`
 	Plan                   *GoalPlanRead             `json:"plan"`
@@ -128,6 +129,7 @@ type GoalScenarioRead struct {
 	NewContributionsMinor    string  `json:"newContributionsMinor"`
 	EstimatedGrowthMinor     string  `json:"estimatedGrowthMinor"`
 	EstimatedCompletion      *string `json:"estimatedCompletion"`
+	ReachesTarget            bool    `json:"reachesTarget"`
 }
 
 type GoalScenarioInput struct {
@@ -440,7 +442,7 @@ func (service *GoalsReportsService) ListAlerts(ctx context.Context, userID uuid.
 	}
 	result := make([]GoalAlertRead, 0)
 	for _, goal := range goals {
-		if goal.Status != "active" || goal.ValueIncomplete || dismissed[goal.ID] || !goalBehind(goal, service.now()) {
+		if goal.Status != "active" || dismissed[goal.ID] || !goalBehind(goal) {
 			continue
 		}
 		result = append(result, GoalAlertRead{
@@ -588,6 +590,7 @@ func (service *GoalsReportsService) mapGoal(record GoalRecord, settings GoalsRep
 	}
 	goal.Projection = goalProjection(goal, service.now())
 	goal.Scenarios = goalScenarios(goal, service.now())
+	goal.TrackingStatus = goalTrackingStatus(goal)
 	return goal
 }
 
@@ -650,27 +653,18 @@ func (service *GoalsReportsService) loadCurrentSnapshot(ctx context.Context, use
 	}, nil
 }
 
-func goalBehind(goal GoalRead, now time.Time) bool {
-	current, _ := strconv.ParseInt(goal.CurrentAmountMinor, 10, 64)
-	target, _ := strconv.ParseInt(goal.TargetAmountMinor, 10, 64)
-	if target <= 0 {
-		return false
+func goalTrackingStatus(goal GoalRead) string {
+	if goal.ValueIncomplete || goal.Scenarios == nil {
+		return "incomplete"
 	}
-	location := timezoneLocation(goal.timezone)
-	targetDate, err := time.ParseInLocation(time.DateOnly, goal.TargetDate, location)
-	if err != nil {
-		return false
+	if goal.Scenarios.SavedPlan.ReachesTarget {
+		return "on_track"
 	}
-	now = now.In(location)
-	if !now.Before(targetDate) {
-		return goal.ProgressPercent != "100"
-	}
-	if !now.After(goal.createdAt) || !targetDate.After(goal.createdAt) {
-		return false
-	}
-	actual := new(big.Rat).SetFrac(big.NewInt(current), big.NewInt(target))
-	expected := new(big.Rat).SetFrac(big.NewInt(now.Sub(goal.createdAt).Nanoseconds()), big.NewInt(targetDate.Sub(goal.createdAt).Nanoseconds()))
-	return actual.Cmp(expected) < 0
+	return "behind"
+}
+
+func goalBehind(goal GoalRead) bool {
+	return goalTrackingStatus(goal) == "behind"
 }
 
 func dateInTimezone(value time.Time, timezone string) time.Time {

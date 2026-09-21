@@ -39,6 +39,7 @@ const fixtures = vi.hoisted(() => ({
     priority: 0,
     assumedAnnualReturnBps: 800,
     progressPercent: "25",
+    trackingStatus: "on_track" as const,
     valueIncomplete: false,
     missingCurrencies: [],
     plan: {
@@ -70,6 +71,7 @@ const fixtures = vi.hoisted(() => ({
         newContributionsMinor: "2400000",
         estimatedGrowthMinor: "5100000",
         estimatedCompletion: "2028-09-20",
+        reachesTarget: true,
       },
       requiredPace: {
         monthlyContributionMinor: "250000",
@@ -79,6 +81,7 @@ const fixtures = vi.hoisted(() => ({
         newContributionsMinor: "6000000",
         estimatedGrowthMinor: "1500000",
         estimatedCompletion: "2028-09-20",
+        reachesTarget: true,
       },
       lowerReturn: {
         monthlyContributionMinor: "100000",
@@ -88,6 +91,7 @@ const fixtures = vi.hoisted(() => ({
         newContributionsMinor: "2400000",
         estimatedGrowthMinor: "3100000",
         estimatedCompletion: "2029-06-20",
+        reachesTarget: false,
       },
     },
   },
@@ -268,11 +272,18 @@ describe("PlanningRoutes", () => {
       .closest("section");
     expect(requiredPace).not.toBeNull();
     expect(within(requiredPace!).getByText("KES 2,500.00")).toBeTruthy();
+    expect(within(requiredPace!).getByText("On track")).toBeTruthy();
     const savedPlan = screen
       .getByRole("heading", { name: "Saved plan" })
       .closest("section");
     expect(savedPlan).not.toBeNull();
     expect(within(savedPlan!).getByText("KES 51,000.00")).toBeTruthy();
+    expect(within(savedPlan!).getByText("On track")).toBeTruthy();
+    const lowerReturn = screen
+      .getByRole("heading", { name: "Lower return" })
+      .closest("section");
+    expect(lowerReturn).not.toBeNull();
+    expect(within(lowerReturn!).getByText("Shortfall")).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Milestones/ })).toBeTruthy();
     expectNoLegacyClasses(view.container);
 
@@ -315,9 +326,7 @@ describe("PlanningRoutes", () => {
       .getByRole("heading", { name: "Saved plan" })
       .closest("section");
     expect(savedPlan).not.toBeNull();
-    expect(
-      await within(savedPlan!).findByText("KES 130,000.00"),
-    ).toBeTruthy();
+    expect(await within(savedPlan!).findByText("KES 130,000.00")).toBeTruthy();
     expect(within(savedPlan!).getByText("KES 52,000.00")).toBeTruthy();
   });
 

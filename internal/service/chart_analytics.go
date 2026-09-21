@@ -1305,6 +1305,7 @@ func calculateGoalScenario(current, target, contribution *big.Int, annualReturnB
 		ProjectedAtTargetMinor: projected.String(), ProjectedProgressPercent: progressPercentBig(projected, target),
 		NewContributionsMinor: contributions.String(),
 		EstimatedGrowthMinor:  growth.String(), EstimatedCompletion: completion,
+		ReachesTarget: projected.Cmp(target) >= 0,
 	}
 }
 

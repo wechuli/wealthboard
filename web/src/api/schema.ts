@@ -2893,6 +2893,8 @@ export interface components {
             /** Format: int32 */
             assumedAnnualReturnBps: number;
             progressPercent: components["schemas"]["DecimalString"];
+            /** @enum {string} */
+            trackingStatus: "on_track" | "behind" | "incomplete";
             valueIncomplete: boolean;
             missingCurrencies: string[];
             plan: components["schemas"]["GoalPlan"] | null;
@@ -2914,6 +2916,7 @@ export interface components {
             estimatedGrowthMinor: components["schemas"]["MinorUnits"];
             /** Format: date */
             estimatedCompletion: string | null;
+            reachesTarget: boolean;
         };
         GoalProjectionPoint: {
             /** Format: date-time */

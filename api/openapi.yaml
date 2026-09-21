@@ -4709,6 +4709,7 @@ components:
           priority,
           assumedAnnualReturnBps,
           progressPercent,
+          trackingStatus,
           valueIncomplete,
           missingCurrencies,
           plan,
@@ -4735,6 +4736,9 @@ components:
         assumedAnnualReturnBps: { type: integer, format: int32 }
         progressPercent:
           $ref: "#/components/schemas/DecimalString"
+        trackingStatus:
+          type: string
+          enum: [on_track, behind, incomplete]
         valueIncomplete: { type: boolean }
         missingCurrencies:
           type: array
@@ -4771,6 +4775,7 @@ components:
           newContributionsMinor,
           estimatedGrowthMinor,
           estimatedCompletion,
+          reachesTarget,
         ]
       properties:
         monthlyContributionMinor: { $ref: "#/components/schemas/MinorUnits" }
@@ -4780,6 +4785,7 @@ components:
         newContributionsMinor: { $ref: "#/components/schemas/MinorUnits" }
         estimatedGrowthMinor: { $ref: "#/components/schemas/MinorUnits" }
         estimatedCompletion: { type: [string, "null"], format: date }
+        reachesTarget: { type: boolean }
     GoalProjectionPoint:
       type: object
       additionalProperties: false

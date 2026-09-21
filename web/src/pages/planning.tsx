@@ -209,12 +209,8 @@ export function GoalsPage({ session }: { session: Session }) {
 }
 
 function GoalCard({ goal }: { goal: Goal }) {
-  const requiredMonthly = requiredMonthlyForGoal(goal);
-  const tracking =
-    goal.valueIncomplete ||
-    BigInt(goal.plan?.plannedContributionMinor ?? "0") < BigInt(requiredMonthly)
-      ? "behind"
-      : "on_track";
+  const requiredMonthly =
+    goal.scenarios?.requiredPace.monthlyContributionMinor ?? "0";
   return (
     <Link
       to={`/goals/${goal.id}`}
@@ -230,8 +226,10 @@ function GoalCard({ goal }: { goal: Goal }) {
               {goal.linkedAccount?.name || "Directly tracked goal"}
             </p>
           </div>
-          <OriginalBadge tone={tracking === "behind" ? "warning" : "positive"}>
-            {tracking.replace("_", " ")}
+          <OriginalBadge
+            tone={goal.trackingStatus === "on_track" ? "positive" : "warning"}
+          >
+            {goal.trackingStatus.replace("_", " ")}
           </OriginalBadge>
         </OriginalCardHeader>
         <CardContent>
@@ -359,7 +357,8 @@ export function GoalDetailPage({ session }: { session: Session }) {
     <ResourceView state={state} loadingLabel="Loading goal...">
       {({ goal, milestones, activity }) => {
         const paused = goal.status === "paused";
-        const requiredMonthly = requiredMonthlyForGoal(goal);
+        const requiredMonthly =
+          goal.scenarios?.requiredPace.monthlyContributionMinor ?? "0";
         const contributions = activity.items.filter(
           (item) =>
             item.kind === "transaction" &&
@@ -451,8 +450,14 @@ export function GoalDetailPage({ session }: { session: Session }) {
                     </p>
                   </div>
                   <div className="text-right">
-                    <Badge tone={goal.valueIncomplete ? "warning" : "positive"}>
-                      {goal.valueIncomplete ? "behind" : "on track"}
+                    <Badge
+                      tone={
+                        goal.trackingStatus === "on_track"
+                          ? "positive"
+                          : "warning"
+                      }
+                    >
+                      {goal.trackingStatus.replace("_", " ")}
                     </Badge>
                     <p className="mt-2 text-lg font-semibold">
                       {goal.progressPercent}%
@@ -473,7 +478,10 @@ export function GoalDetailPage({ session }: { session: Session }) {
                   description={`Estimate assumes ${goal.assumedAnnualReturnBps / 100}% annual return and current planned contributions. Actual returns will vary.`}
                 />
                 <CardContent>
-                  <GoalProjectionChart data={goal.projection} currency={goal.currency} />
+                  <GoalProjectionChart
+                    data={goal.projection}
+                    currency={goal.currency}
+                  />
                 </CardContent>
               </Card>
               <Card>
@@ -481,11 +489,17 @@ export function GoalDetailPage({ session }: { session: Session }) {
                 <CardContent className="space-y-4 text-sm">
                   <Row
                     label="Tracking status"
-                    value={goal.valueIncomplete ? "behind" : "on track"}
+                    value={goal.trackingStatus.replace("_", " ")}
                   />
                   <Row
                     label="Estimated completion"
-                    value={forecastDateForGoal(goal)}
+                    value={
+                      goal.scenarios?.savedPlan.estimatedCompletion
+                        ? formatMonthYear(
+                            goal.scenarios.savedPlan.estimatedCompletion,
+                          )
+                        : "Not projected"
+                    }
                   />
                   <Row
                     label="Target date"
@@ -637,44 +651,6 @@ function formatMonthYear(value: string) {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${value.slice(0, 10)}T12:00:00.000Z`));
-}
-
-function requiredMonthlyForGoal(goal: Goal) {
-  const current = Number(goal.currentAmountMinor);
-  const target = Number(goal.targetAmountMinor);
-  const targetDate = new Date(`${goal.targetDate.slice(0, 10)}T12:00:00.000Z`);
-  const today = new Date();
-  const months = Math.max(
-    1,
-    (targetDate.getUTCFullYear() - today.getUTCFullYear()) * 12 +
-      targetDate.getUTCMonth() -
-      today.getUTCMonth(),
-  );
-  const monthlyRate = goal.assumedAnnualReturnBps / 10_000 / 12;
-  const projectedCurrent = current * (1 + monthlyRate) ** months;
-  const annuityFactor =
-    monthlyRate === 0
-      ? months
-      : ((1 + monthlyRate) ** months - 1) / monthlyRate;
-  return String(
-    Math.max(0, Math.ceil((target - projectedCurrent) / annuityFactor)),
-  );
-}
-
-function forecastDateForGoal(goal: Goal) {
-  const current = BigInt(goal.currentAmountMinor);
-  const target = BigInt(goal.targetAmountMinor);
-  if (current >= target) return formatMonthYear(new Date().toISOString());
-  const contribution = BigInt(goal.plan?.plannedContributionMinor ?? "0");
-  if (contribution <= 0n) return "Not projected";
-  const months = Number((target - current + contribution - 1n) / contribution);
-  const forecast = new Date();
-  forecast.setUTCMonth(forecast.getUTCMonth() + months);
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(forecast);
 }
 
 function GoalMilestonesPanel({
@@ -919,8 +895,6 @@ function GoalScenarioComparison({ goal }: { goal: Goal }) {
   );
   const [scenarioError, setScenarioError] = useState<string | null>(null);
   const [scenarioPending, setScenarioPending] = useState(false);
-  const current = BigInt(goal.currentAmountMinor);
-  const target = BigInt(goal.targetAmountMinor);
   if (!scenarios) return null;
 
   async function recalculate() {
@@ -1017,8 +991,12 @@ function GoalScenarioComparison({ goal }: { goal: Goal }) {
             >
               <div className="flex min-h-7 items-start justify-between gap-2">
                 <h3 className="font-medium text-slate-100">{name}</h3>
-                <Badge tone={current >= target ? "positive" : "warning"}>
-                  {current >= target ? "Target met" : "Shortfall"}
+                <Badge tone={scenario.reachesTarget ? "positive" : "warning"}>
+                  {goal.progressPercent === "100"
+                    ? "Target met"
+                    : scenario.reachesTarget
+                      ? "On track"
+                      : "Shortfall"}
                 </Badge>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
@@ -1129,172 +1107,237 @@ export function ReportsPage() {
         description="Long-term trends, allocation, returns, and comparable account performance."
       />
       <ResourceView state={state}>
-        {([summary, allocation]) => (
+        {([summary, allocation]) =>
           (() => {
             const history = summary.history;
-            const highest = history.reduce((value, point) => {
-              const amount = BigInt(point.netWorthMinor);
-              return amount > value ? amount : value;
-            }, BigInt(history[0]?.netWorthMinor ?? summary.totals.netWorth));
-            const first = BigInt(history[0]?.netWorthMinor ?? summary.totals.netWorth);
-            const last = BigInt(history.at(-1)?.netWorthMinor ?? summary.totals.netWorth);
-            const latestTime = history.at(-1) ? new Date(history.at(-1)!.date).getTime() : 0;
-            const yearAgo = BigInt(history.find((point) => new Date(point.date).getTime() >= latestTime - 365 * 86_400_000)?.netWorthMinor ?? first);
-            return <>
-            {!summary.currentComplete ? (
-              <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
-                Some allocations need exchange rates:{" "}
-                {summary.missingCurrencies.join(", ")}.
-              </div>
-            ) : null}
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <ReportStat
-                label="Highest net worth"
-                value={
-                  <MoneyValue
-                    amount={highest.toString()}
-                    currency={summary.baseCurrency}
+            const highest = history.reduce(
+              (value, point) => {
+                const amount = BigInt(point.netWorthMinor);
+                return amount > value ? amount : value;
+              },
+              BigInt(history[0]?.netWorthMinor ?? summary.totals.netWorth),
+            );
+            const first = BigInt(
+              history[0]?.netWorthMinor ?? summary.totals.netWorth,
+            );
+            const last = BigInt(
+              history.at(-1)?.netWorthMinor ?? summary.totals.netWorth,
+            );
+            const latestTime = history.at(-1)
+              ? new Date(history.at(-1)!.date).getTime()
+              : 0;
+            const yearAgo = BigInt(
+              history.find(
+                (point) =>
+                  new Date(point.date).getTime() >=
+                  latestTime - 365 * 86_400_000,
+              )?.netWorthMinor ?? first,
+            );
+            return (
+              <>
+                {!summary.currentComplete ? (
+                  <div className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
+                    Some allocations need exchange rates:{" "}
+                    {summary.missingCurrencies.join(", ")}.
+                  </div>
+                ) : null}
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <ReportStat
+                    label="Highest net worth"
+                    value={
+                      <MoneyValue
+                        amount={highest.toString()}
+                        currency={summary.baseCurrency}
+                      />
+                    }
+                    icon={<Award size={17} />}
                   />
-                }
-                icon={<Award size={17} />}
-              />
-              <ReportStat
-                label="Change since tracking"
-                value={
-                  <MoneyValue amount={(last - first).toString()} currency={summary.baseCurrency} />
-                }
-                icon={<TrendingUp size={17} />}
-              />
-              <ReportStat
-                label="Year-over-year"
-                value={
-                  <MoneyValue amount={(last - yearAgo).toString()} currency={summary.baseCurrency} />
-                }
-                icon={<BarChart3 size={17} />}
-              />
-              <ReportStat
-                label="Investment income"
-                value={
-                  <MoneyValue amount={summary.totals.income} currency={summary.baseCurrency} />
-                }
-                icon={<Coins size={17} />}
-              />
-            </div>
-
-            <Card className="mt-5">
-              <CardHeader
-                title="Net-worth history"
-                description="Monthly history across all tracked accounts"
-              />
-              <CardContent>
-                {!summary.historicalComplete ? <p className="mb-3 text-xs text-amber-200">Incomplete history: one or more effective-dated prices or exchange rates are unavailable.</p> : null}
-                <NetWorthChart data={summary.history} currency={summary.baseCurrency} range="all" />
-              </CardContent>
-            </Card>
-
-            <div className="mt-5 grid gap-5 lg:grid-cols-2">
-              <Card>
-                <CardHeader
-                  title="Portfolio allocation"
-                  description="Toggle total and investible assets"
-                />
-                <CardContent>
-                  <AllocationChart total={allocation.categories} investible={allocation.investibleCategories} currency={allocation.baseCurrency} />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader title="Income and returns" />
-                <CardContent>
-                  {!summary.compositionComplete ? <p className="mb-3 text-xs text-amber-200">{summary.completenessReasons.join(" ")}</p> : null}
-                  <ContributionsGrowthChart currency={summary.baseCurrency} values={[
-                    { name: "Contributions", valueMinor: summary.totals.contributions },
-                    { name: "Interest + dividends", valueMinor: summary.totals.income },
-                    { name: "Capital growth", valueMinor: summary.totals.capitalGrowth },
-                    { name: "Fees", valueMinor: `-${summary.totals.fees}` },
-                  ]} />
-                </CardContent>
-              </Card>
-            </div>
-
-            {allocation.instruments.length ? (
-              <Card className="mt-5">
-                <CardHeader title="Investment instruments" description={`Current position value by instrument in ${allocation.baseCurrency}`} />
-                <CardContent>
-                  <AllocationChart total={allocation.instruments} investible={allocation.instruments} currency={allocation.baseCurrency} />
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <div className="mt-5 grid gap-5 lg:grid-cols-3">
-              <AllocationList
-                title="By institution"
-                items={allocation.institutions}
-                currency={allocation.baseCurrency}
-              />
-              <AllocationList
-                title="By currency"
-                items={allocation.currencies}
-                currency={allocation.baseCurrency}
-              />
-              <Card>
-                <CardHeader title="Asset classification" />
-                <CardContent className="space-y-3">
-                  <ReportLine
-                    label="Liquid assets"
-                    amount={summary.totals.liquid}
-                    currency={summary.baseCurrency}
+                  <ReportStat
+                    label="Change since tracking"
+                    value={
+                      <MoneyValue
+                        amount={(last - first).toString()}
+                        currency={summary.baseCurrency}
+                      />
+                    }
+                    icon={<TrendingUp size={17} />}
                   />
-                  <ReportLine
-                    label="Illiquid assets"
-                    amount={(
-                      BigInt(summary.totals.assets) -
-                      BigInt(summary.totals.liquid)
-                    ).toString()}
-                    currency={summary.baseCurrency}
+                  <ReportStat
+                    label="Year-over-year"
+                    value={
+                      <MoneyValue
+                        amount={(last - yearAgo).toString()}
+                        currency={summary.baseCurrency}
+                      />
+                    }
+                    icon={<BarChart3 size={17} />}
                   />
-                  <ReportLine
-                    label="Investible assets"
-                    amount={summary.totals.investible}
-                    currency={summary.baseCurrency}
+                  <ReportStat
+                    label="Investment income"
+                    value={
+                      <MoneyValue
+                        amount={summary.totals.income}
+                        currency={summary.baseCurrency}
+                      />
+                    }
+                    icon={<Coins size={17} />}
                   />
-                  <ReportLine
-                    label="Lifestyle / other"
-                    amount={(
-                      BigInt(summary.totals.assets) -
-                      BigInt(summary.totals.investible)
-                    ).toString()}
-                    currency={summary.baseCurrency}
-                  />
-                </CardContent>
-              </Card>
-            </div>
+                </div>
 
-            <Card className="mt-5">
-              <CardHeader
-                title="Account comparison"
-                description="Annualized figures exclude net deposits. Periods under one year are marked as estimates. Position accounts remain unavailable until cash-flow-aware TWR is implemented."
-              />
-              <CardContent className="overflow-x-auto p-0">
-                <table className="w-full min-w-[950px] text-left text-sm">
-                  <thead className="border-y border-white/[0.06] bg-white/[0.025] text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="p-4">Account</th>
-                      <th className="p-4">Starting</th>
-                      <th className="p-4">Ending</th>
-                      <th className="p-4">Deposits</th>
-                      <th className="p-4">Withdrawals</th>
-                      <th className="p-4">Net income</th>
-                      <th className="p-4">Simple annualized</th>
-                      <th className="p-4">Effective annualized</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.06]" />
-                </table>
-              </CardContent>
-            </Card>
-            </>;
+                <Card className="mt-5">
+                  <CardHeader
+                    title="Net-worth history"
+                    description="Monthly history across all tracked accounts"
+                  />
+                  <CardContent>
+                    {!summary.historicalComplete ? (
+                      <p className="mb-3 text-xs text-amber-200">
+                        Incomplete history: one or more effective-dated prices
+                        or exchange rates are unavailable.
+                      </p>
+                    ) : null}
+                    <NetWorthChart
+                      data={summary.history}
+                      currency={summary.baseCurrency}
+                      range="all"
+                    />
+                  </CardContent>
+                </Card>
+
+                <div className="mt-5 grid gap-5 lg:grid-cols-2">
+                  <Card>
+                    <CardHeader
+                      title="Portfolio allocation"
+                      description="Toggle total and investible assets"
+                    />
+                    <CardContent>
+                      <AllocationChart
+                        total={allocation.categories}
+                        investible={allocation.investibleCategories}
+                        currency={allocation.baseCurrency}
+                      />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader title="Income and returns" />
+                    <CardContent>
+                      {!summary.compositionComplete ? (
+                        <p className="mb-3 text-xs text-amber-200">
+                          {summary.completenessReasons.join(" ")}
+                        </p>
+                      ) : null}
+                      <ContributionsGrowthChart
+                        currency={summary.baseCurrency}
+                        values={[
+                          {
+                            name: "Contributions",
+                            valueMinor: summary.totals.contributions,
+                          },
+                          {
+                            name: "Interest + dividends",
+                            valueMinor: summary.totals.income,
+                          },
+                          {
+                            name: "Capital growth",
+                            valueMinor: summary.totals.capitalGrowth,
+                          },
+                          {
+                            name: "Fees",
+                            valueMinor: `-${summary.totals.fees}`,
+                          },
+                        ]}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {allocation.instruments.length ? (
+                  <Card className="mt-5">
+                    <CardHeader
+                      title="Investment instruments"
+                      description={`Current position value by instrument in ${allocation.baseCurrency}`}
+                    />
+                    <CardContent>
+                      <AllocationChart
+                        total={allocation.instruments}
+                        investible={allocation.instruments}
+                        currency={allocation.baseCurrency}
+                      />
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                <div className="mt-5 grid gap-5 lg:grid-cols-3">
+                  <AllocationList
+                    title="By institution"
+                    items={allocation.institutions}
+                    currency={allocation.baseCurrency}
+                  />
+                  <AllocationList
+                    title="By currency"
+                    items={allocation.currencies}
+                    currency={allocation.baseCurrency}
+                  />
+                  <Card>
+                    <CardHeader title="Asset classification" />
+                    <CardContent className="space-y-3">
+                      <ReportLine
+                        label="Liquid assets"
+                        amount={summary.totals.liquid}
+                        currency={summary.baseCurrency}
+                      />
+                      <ReportLine
+                        label="Illiquid assets"
+                        amount={(
+                          BigInt(summary.totals.assets) -
+                          BigInt(summary.totals.liquid)
+                        ).toString()}
+                        currency={summary.baseCurrency}
+                      />
+                      <ReportLine
+                        label="Investible assets"
+                        amount={summary.totals.investible}
+                        currency={summary.baseCurrency}
+                      />
+                      <ReportLine
+                        label="Lifestyle / other"
+                        amount={(
+                          BigInt(summary.totals.assets) -
+                          BigInt(summary.totals.investible)
+                        ).toString()}
+                        currency={summary.baseCurrency}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card className="mt-5">
+                  <CardHeader
+                    title="Account comparison"
+                    description="Annualized figures exclude net deposits. Periods under one year are marked as estimates. Position accounts remain unavailable until cash-flow-aware TWR is implemented."
+                  />
+                  <CardContent className="overflow-x-auto p-0">
+                    <table className="w-full min-w-[950px] text-left text-sm">
+                      <thead className="border-y border-white/[0.06] bg-white/[0.025] text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="p-4">Account</th>
+                          <th className="p-4">Starting</th>
+                          <th className="p-4">Ending</th>
+                          <th className="p-4">Deposits</th>
+                          <th className="p-4">Withdrawals</th>
+                          <th className="p-4">Net income</th>
+                          <th className="p-4">Simple annualized</th>
+                          <th className="p-4">Effective annualized</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.06]" />
+                    </table>
+                  </CardContent>
+                </Card>
+              </>
+            );
           })()
-        )}
+        }
       </ResourceView>
     </>
   );
@@ -1594,14 +1637,8 @@ export function PlanningRoutes({ session }: { session: Session }) {
   return (
     <Routes>
       <Route path="/goals" element={<GoalsPage session={session} />} />
-      <Route
-        path="/goals/new"
-        element={<NewGoalPage session={session} />}
-      />
-      <Route
-        path="/goals/:id"
-        element={<GoalDetailPage session={session} />}
-      />
+      <Route path="/goals/new" element={<NewGoalPage session={session} />} />
+      <Route path="/goals/:id" element={<GoalDetailPage session={session} />} />
       <Route
         path="/goals/:id/edit"
         element={<EditGoalPage session={session} />}
