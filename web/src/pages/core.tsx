@@ -1464,20 +1464,18 @@ export function AccountDetailPage({ session }: PageProps) {
   const { id = "" } = useParams();
   const [searchParams] = useSearchParams();
   const [refresh, setRefresh] = useState(0);
-  const state = useResource(
-    async () => {
-      const account = await getAccount(id);
-      const [analytics, activity, valuations, goals, settings] = await Promise.all([
+  const state = useResource(async () => {
+    const account = await getAccount(id);
+    const [analytics, activity, valuations, goals, settings] =
+      await Promise.all([
         getAccountAnalytics(id),
         account.trackingMode === "balance" ? getAccountActivity(id) : null,
         account.trackingMode === "balance" ? getAccountValuations(id) : null,
         getGoals(),
         getSettings(),
       ]);
-      return [account, analytics, activity, valuations, goals, settings] as const;
-    },
-    [id, refresh],
-  );
+    return [account, analytics, activity, valuations, goals, settings] as const;
+  }, [id, refresh]);
   const accountState: typeof state =
     state.status === "ready" && state.data[0].id !== id
       ? { status: "loading" }
@@ -1532,7 +1530,9 @@ export function AccountDetailPage({ session }: PageProps) {
             />
             {account.trackingMode === "positions" &&
             analytics.positionSummary ? (
-              <div className={`grid gap-4 sm:grid-cols-2 ${account.currency !== settings.settings.baseCurrency ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+              <div
+                className={`grid gap-4 sm:grid-cols-2 ${account.currency !== settings.settings.baseCurrency ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}
+              >
                 <Metric
                   label="Current value"
                   value={account.currentValueMinor}
@@ -1552,7 +1552,11 @@ export function AccountDetailPage({ session }: PageProps) {
                       currency={settings.settings.baseCurrency}
                     />
                   ) : (
-                    <Card className="p-5" role="group" aria-label="Base-currency value metric">
+                    <Card
+                      className="p-5"
+                      role="group"
+                      aria-label="Base-currency value metric"
+                    >
                       <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
                         Base-currency value
                       </p>
@@ -1575,7 +1579,9 @@ export function AccountDetailPage({ session }: PageProps) {
                       ? "Complete"
                       : "Incomplete"}
                   </Badge>
-                  {analytics.positionSummary.positions.some((position) => position.stale) ? (
+                  {analytics.positionSummary.positions.some(
+                    (position) => position.stale,
+                  ) ? (
                     <p className="mt-2 text-xs text-amber-300">
                       One or more prices are stale.
                     </p>
@@ -1607,8 +1613,12 @@ export function AccountDetailPage({ session }: PageProps) {
                 />
               </div>
             )}
-            {account.trackingMode === "positions" && analytics.positionSummary ? (
-              <PositionsCard account={account} summary={analytics.positionSummary} />
+            {account.trackingMode === "positions" &&
+            analytics.positionSummary ? (
+              <PositionsCard
+                account={account}
+                summary={analytics.positionSummary}
+              />
             ) : null}
             {account.trackingMode === "positions" &&
             analytics.movementAttribution ? (
@@ -1828,29 +1838,29 @@ export function AccountDetailPage({ session }: PageProps) {
                     />
                   </CardContent>
                 </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Valuation history</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {valuations.items.length ? (
-                    <div className="divide-y divide-white/[0.06]">
-                      {valuations.items.map((valuation) => (
-                        <ValuationRow
-                          key={valuation.id}
-                          valuation={valuation}
-                          session={session}
-                          onChanged={() => setRefresh((value) => value + 1)}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="py-10 text-center text-sm text-slate-500">
-                      No manual valuations yet.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Valuation history</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {valuations.items.length ? (
+                      <div className="divide-y divide-white/[0.06]">
+                        {valuations.items.map((valuation) => (
+                          <ValuationRow
+                            key={valuation.id}
+                            valuation={valuation}
+                            session={session}
+                            onChanged={() => setRefresh((value) => value + 1)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="py-10 text-center text-sm text-slate-500">
+                        No manual valuations yet.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             ) : null}
             <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -2172,35 +2182,45 @@ function AccountWorkflowPage({
         ? "in-kind-transfers"
         : "stock-splits";
   const [refresh, setRefresh] = useState(0);
-  const state = useResource(
-    async () => {
-      const data = await Promise.all([
-        getAccount(id),
-        getAccounts(),
-        getAccountTransactions(id),
-        getAccountValuations(id),
-        getInstruments(),
-        getAccountPositionEvents(id),
-        getAccountPositionReconciliations(id),
-        mode === "positions" && eventId ? getAccountPositionEvent(id, eventId) : null,
-      ]);
-      const initialEvent = data[7];
-      const initialType = positionEventTypeSchema.safeParse(
-        mode === "positions" ? initialEvent?.type ?? requestedType ?? "opening_position" : "buy",
+  const state = useResource(async () => {
+    const data = await Promise.all([
+      getAccount(id),
+      getAccounts(),
+      getAccountTransactions(id),
+      getAccountValuations(id),
+      getInstruments(),
+      getAccountPositionEvents(id),
+      getAccountPositionReconciliations(id),
+      mode === "positions" && eventId
+        ? getAccountPositionEvent(id, eventId)
+        : null,
+    ]);
+    const initialEvent = data[7];
+    const initialType = positionEventTypeSchema.safeParse(
+      mode === "positions"
+        ? (initialEvent?.type ?? requestedType ?? "opening_position")
+        : "buy",
+    );
+    if (
+      !initialType.success ||
+      (mode === "positions" && initialEvent?.eventGroupId)
+    ) {
+      throw new Error(
+        "Use the managed investment workflow to change grouped or corporate-action activity.",
       );
-      if (!initialType.success || (mode === "positions" && initialEvent?.eventGroupId)) {
-        throw new Error("Use the managed investment workflow to change grouped or corporate-action activity.");
+    }
+    if (mode === "positions" && !initialEvent && requestedInstrumentId) {
+      const instrument = data[4].instruments.find(
+        (item) => item.id === requestedInstrumentId,
+      );
+      if (!instrument || instrument.archivedAt) {
+        throw new Error(
+          "Choose an active instrument before recording a holding.",
+        );
       }
-      if (mode === "positions" && !initialEvent && requestedInstrumentId) {
-        const instrument = data[4].instruments.find((item) => item.id === requestedInstrumentId);
-        if (!instrument || instrument.archivedAt) {
-          throw new Error("Choose an active instrument before recording a holding.");
-        }
-      }
-      return [...data, initialType.data] as const;
-    },
-    [id, eventId, mode, requestedType, requestedInstrumentId, refresh],
-  );
+    }
+    return [...data, initialType.data] as const;
+  }, [id, eventId, mode, requestedType, requestedInstrumentId, refresh]);
   return (
     <ResourceView state={state}>
       {([
@@ -2266,9 +2286,11 @@ function AccountWorkflowPage({
               initialEvent={initialEvent ?? undefined}
               initialType={initialType}
               initialInstrumentId={requestedInstrumentId ?? undefined}
-              onChanged={() => mode === "positions"
-                ? navigate(`/accounts/${id}`)
-                : setRefresh((value) => value + 1)}
+              onChanged={() =>
+                mode === "positions"
+                  ? navigate(`/accounts/${id}`)
+                  : setRefresh((value) => value + 1)
+              }
             />
           )}
         </div>
@@ -2386,7 +2408,10 @@ export function NewAccountInstrumentPage({ session }: PageProps) {
                 <CardTitle>Instrument details</CardTitle>
               </CardHeader>
               <CardContent>
-                <InstrumentForm session={session} onChanged={() => navigate(`/accounts/${id}`)} />
+                <InstrumentForm
+                  session={session}
+                  onChanged={() => navigate(`/accounts/${id}`)}
+                />
               </CardContent>
             </Card>
           </>
@@ -2401,22 +2426,23 @@ export function NewSecurityPricePage({ session }: PageProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const instrumentID = searchParams.get("instrumentId") ?? "";
-  const state = useResource(
-    async () => {
-      const [account, analytics] = await Promise.all([
-        getAccount(id),
-        getAccountAnalytics(id),
-      ]);
-      if (account.trackingMode !== "positions") {
-        throw new Error("Security prices are available for position-tracked accounts.");
-      }
-      const selectedInstrumentID =
-        instrumentID || analytics.positionSummary?.positions[0]?.instrumentId;
-      const detail = selectedInstrumentID ? await getInstrument(selectedInstrumentID) : null;
-      return [account, detail] as const;
-    },
-    [id, instrumentID],
-  );
+  const state = useResource(async () => {
+    const [account, analytics] = await Promise.all([
+      getAccount(id),
+      getAccountAnalytics(id),
+    ]);
+    if (account.trackingMode !== "positions") {
+      throw new Error(
+        "Security prices are available for position-tracked accounts.",
+      );
+    }
+    const selectedInstrumentID =
+      instrumentID || analytics.positionSummary?.positions[0]?.instrumentId;
+    const detail = selectedInstrumentID
+      ? await getInstrument(selectedInstrumentID)
+      : null;
+    return [account, detail] as const;
+  }, [id, instrumentID]);
   return (
     <div className="mx-auto max-w-3xl">
       <ResourceView state={state}>
@@ -2424,10 +2450,16 @@ export function NewSecurityPricePage({ session }: PageProps) {
           <>
             <PageHeader
               title="Update security price"
-              description={detail
-                ? `Record an effective-dated price for ${detail.instrument.name} in ${account.name}.`
-                : `Record an effective-dated price for ${account.name}.`}
-              actions={<Button asChild variant="secondary"><Link to={`/accounts/${id}`}>Back to account</Link></Button>}
+              description={
+                detail
+                  ? `Record an effective-dated price for ${detail.instrument.name} in ${account.name}.`
+                  : `Record an effective-dated price for ${account.name}.`
+              }
+              actions={
+                <Button asChild variant="secondary">
+                  <Link to={`/accounts/${id}`}>Back to account</Link>
+                </Button>
+              }
             />
             {detail ? (
               <InstrumentManager

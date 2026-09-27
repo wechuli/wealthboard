@@ -61,7 +61,9 @@ async function enableCurrency(page: Page, session: Session, currency: string) {
     displayName: settings.displayName,
     appName: settings.appName,
     baseCurrency: settings.baseCurrency,
-    supportedCurrencies: [...new Set([...settings.supportedCurrencies, currency])],
+    supportedCurrencies: [
+      ...new Set([...settings.supportedCurrencies, currency]),
+    ],
     timezone: settings.timezone,
     preferredDateFormat: settings.preferredDateFormat,
     defaultDashboardPeriod: settings.defaultDashboardPeriod,
@@ -71,7 +73,9 @@ async function enableCurrency(page: Page, session: Session, currency: string) {
     positionStaleDaysEtf: settings.positionStaleDaysEtf,
     positionStaleDaysFund: settings.positionStaleDaysFund,
   };
-  expect((await mutation(page, session, "PUT", "/settings", input)).ok()).toBeTruthy();
+  expect(
+    (await mutation(page, session, "PUT", "/settings", input)).ok(),
+  ).toBeTruthy();
 }
 
 async function createAccount(
@@ -363,7 +367,9 @@ test("exports a v8 archive and restores it through Go", async ({ page }) => {
   expect(restored.ok()).toBeTruthy();
   expect((await restored.json()).accounts).toBe(2);
 
-  const dashboardResponse = await page.request.get("/api/v1/dashboard?range=all");
+  const dashboardResponse = await page.request.get(
+    "/api/v1/dashboard?range=all",
+  );
   expect(dashboardResponse.ok()).toBeTruthy();
   const dashboard =
     (await dashboardResponse.json()) as components["schemas"]["Dashboard"];
@@ -384,7 +390,9 @@ test("exports a v8 archive and restores it through Go", async ({ page }) => {
   await expect(
     page.getByRole("group", { name: "All time net worth change" }),
   ).toContainText("KES 2,623.44");
-  await expect(page.getByText("Incomplete data", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Incomplete data", { exact: true })).toHaveCount(
+    0,
+  );
   await expect(page.getByText(/Incomplete history:/)).toHaveCount(0);
 });
 
@@ -394,10 +402,16 @@ test("restores position management, base-currency value, and private account his
 }, testInfo) => {
   const session = await signUp(page, "go-positions-owner");
   await enableCurrency(page, session, "USD");
-  expect((await mutation(page, session, "POST", "/exchange-rates", {
-    baseCurrency: "USD", quoteCurrency: "KES", rate: "2",
-    effectiveDate: "2026-01-01",
-  })).status()).toBe(201);
+  expect(
+    (
+      await mutation(page, session, "POST", "/exchange-rates", {
+        baseCurrency: "USD",
+        quoteCurrency: "KES",
+        rate: "2",
+        effectiveDate: "2026-01-01",
+      })
+    ).status(),
+  ).toBe(201);
   const createdAccount = await mutation(page, session, "POST", "/accounts", {
     idempotencyKey: randomUUID(),
     name: "History brokerage",
@@ -416,71 +430,121 @@ test("restores position management, base-currency value, and private account his
     ["Second Income Fund", "SINC", "10"],
   ]) {
     const created = await mutation(page, session, "POST", "/instruments", {
-      name, symbol, identifierType: "custom", identifier: symbol,
-      assetType: "etf", quoteCurrency: "USD",
+      name,
+      symbol,
+      identifierType: "custom",
+      identifier: symbol,
+      assetType: "etf",
+      quoteCurrency: "USD",
     });
     expect(created.status()).toBe(201);
     const instrumentId = ((await created.json()) as { id: string }).id;
     instrumentIds.push(instrumentId);
-    expect((await mutation(page, session, "PUT", "/security-prices", {
-      instrumentId, price, effectiveDate: "2026-01-01", source: "fictional statement",
-    })).ok()).toBeTruthy();
+    expect(
+      (
+        await mutation(page, session, "PUT", "/security-prices", {
+          instrumentId,
+          price,
+          effectiveDate: "2026-01-01",
+          source: "fictional statement",
+        })
+      ).ok(),
+    ).toBeTruthy();
   }
   await page.goto(`/accounts/${accountId}`);
   await expect(page.getByText(/No positions recorded/)).toBeVisible();
   await page.getByRole("link", { name: "Add holding", exact: true }).click();
   await expect(page.getByLabel("Event type")).toHaveValue("opening_position");
-  await page.getByLabel("Instrument", { exact: true }).selectOption(instrumentIds[0]);
+  await page
+    .getByLabel("Instrument", { exact: true })
+    .selectOption(instrumentIds[0]);
   await expect(page.getByLabel("Trade currency")).toHaveValue("USD");
   await page.getByLabel("Quantity", { exact: true }).fill("1.25");
   await page.getByLabel("Trade date", { exact: true }).fill("2026-01-05");
-  const openingResponse = page.waitForResponse((response) =>
-    response.url().endsWith("/api/v1/position-events") &&
-    response.request().method() === "POST",
+  const openingResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/position-events") &&
+      response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Record position event" }).click();
   const opening = await openingResponse;
   expect(opening.status()).toBe(201);
   const eventId = ((await opening.json()) as { id: string }).id;
   await expect(page).toHaveURL(`${origin}/accounts/${accountId}`);
-  await expect(page.getByRole("table", { name: "Current positions" })).toBeVisible();
-  expect((await mutation(page, session, "POST", "/position-events", {
-    accountId, instrumentId: instrumentIds[1], type: "opening_position",
-    quantity: "2", tradeDate: "2026-01-06", idempotencyKey: randomUUID(),
-  })).status()).toBe(201);
+  await expect(
+    page.getByRole("table", { name: "Current positions" }),
+  ).toBeVisible();
+  expect(
+    (
+      await mutation(page, session, "POST", "/position-events", {
+        accountId,
+        instrumentId: instrumentIds[1],
+        type: "opening_position",
+        quantity: "2",
+        tradeDate: "2026-01-06",
+        idempotencyKey: randomUUID(),
+      })
+    ).status(),
+  ).toBe(201);
   await page.reload();
-  await expect(page.getByRole("group", { name: "Current value metric" })).toContainText("USD 145.15");
-  await expect(page.getByRole("group", { name: "Base-currency value metric" })).toContainText("KES 290.30");
-  await expect(page.getByRole("group", { name: "Positions metric" })).toHaveCount(0);
+  await expect(
+    page.getByRole("group", { name: "Current value metric" }),
+  ).toContainText("USD 145.15");
+  await expect(
+    page.getByRole("group", { name: "Base-currency value metric" }),
+  ).toContainText("KES 290.30");
+  await expect(
+    page.getByRole("group", { name: "Positions metric" }),
+  ).toHaveCount(0);
 
-  await page.getByRole("link", { name: "Update Second Income Fund price" }).click();
+  await page
+    .getByRole("link", { name: "Update Second Income Fund price" })
+    .click();
   await expect(page).toHaveURL(new RegExp(`instrumentId=${instrumentIds[1]}`));
   await page.getByLabel("Price (USD)").fill("12.345678901");
   await page.getByLabel("Effective date", { exact: true }).fill("2026-09-20");
   await page.getByRole("button", { name: "Save price" }).click();
   await expect(page).toHaveURL(`${origin}/accounts/${accountId}`);
   await page.reload();
-  await expect(page.getByRole("row", { name: /Second Income Fund/ })).toContainText("USD 12.345678901");
-  await expect(page.getByRole("row", { name: /Second Income Fund/ })).toContainText("USD 24.69");
-  await expect(page.getByRole("group", { name: "Base-currency value metric" })).toContainText("KES 299.68");
-  await page.getByRole("link", { name: /^Edit Opening Position for Example World ETF/ }).click();
-  await expect(page.getByLabel("Quantity", { exact: true })).toHaveValue("1.25");
+  await expect(
+    page.getByRole("row", { name: /Second Income Fund/ }),
+  ).toContainText("USD 12.345678901");
+  await expect(
+    page.getByRole("row", { name: /Second Income Fund/ }),
+  ).toContainText("USD 24.69");
+  await expect(
+    page.getByRole("group", { name: "Base-currency value metric" }),
+  ).toContainText("KES 299.68");
+  await page
+    .getByRole("link", { name: /^Edit Opening Position for Example World ETF/ })
+    .click();
+  await expect(page.getByLabel("Quantity", { exact: true })).toHaveValue(
+    "1.25",
+  );
   await page.getByLabel("Quantity", { exact: true }).fill("1.5");
   await page.getByRole("button", { name: "Update position event" }).click();
   await expect(page).toHaveURL(`${origin}/accounts/${accountId}`);
   await page.reload();
-  await expect(page.getByRole("row", { name: /Example World ETF/ })).toContainText("USD 30.19");
-  await expect(page.getByRole("group", { name: "Base-currency value metric" })).toContainText("KES 309.76");
+  await expect(
+    page.getByRole("row", { name: /Example World ETF/ }),
+  ).toContainText("USD 30.19");
+  await expect(
+    page.getByRole("group", { name: "Base-currency value metric" }),
+  ).toContainText("KES 309.76");
 
   await page.getByRole("button", { name: "Hide financial values" }).click();
   const positions = page.getByRole("table", { name: "Current positions" });
   await expect(positions).not.toContainText("20.12345");
   await expect(positions).not.toContainText("12.345678901");
-  await expect(page.getByRole("list", { name: "Investment activity history" })).not.toContainText("12.345678901");
+  await expect(
+    page.getByRole("list", { name: "Investment activity history" }),
+  ).not.toContainText("12.345678901");
   await page.getByRole("button", { name: "Show financial values" }).click();
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+      .toBeLessThanOrEqual(width);
     if (width === 360 || width === 1440) {
       await page.screenshot({
         path: testInfo.outputPath(`positions-${width}.png`),
@@ -489,41 +553,78 @@ test("restores position management, base-currency value, and private account his
     }
   }
 
-  expect((await mutation(page, session, "POST", "/position-events", {
-    accountId, instrumentId: instrumentIds[0], type: "buy",
-    quantity: "0.25", unitPrice: "20.12345", tradeCurrency: "USD",
-    tradeDate: "2026-01-07", idempotencyKey: randomUUID(),
-  })).status()).toBe(201);
+  expect(
+    (
+      await mutation(page, session, "POST", "/position-events", {
+        accountId,
+        instrumentId: instrumentIds[0],
+        type: "buy",
+        quantity: "0.25",
+        unitPrice: "20.12345",
+        tradeCurrency: "USD",
+        tradeDate: "2026-01-07",
+        idempotencyKey: randomUUID(),
+      })
+    ).status(),
+  ).toBe(201);
   for (let index = 0; index < 26; index += 1) {
-    expect((await mutation(page, session, "POST", "/transactions", {
-      idempotencyKey: randomUUID(), accountId, type: "deposit", amountMinor: "1",
-      transactionDate: "2026-01-02", description: `Earlier cash entry ${index + 1}`,
-    })).status()).toBe(201);
+    expect(
+      (
+        await mutation(page, session, "POST", "/transactions", {
+          idempotencyKey: randomUUID(),
+          accountId,
+          type: "deposit",
+          amountMinor: "1",
+          transactionDate: "2026-01-02",
+          description: `Earlier cash entry ${index + 1}`,
+        })
+      ).status(),
+    ).toBe(201);
   }
-  const historyResponse = await page.request.get(`/api/v1/accounts/${accountId}/activity?limit=100`);
+  const historyResponse = await page.request.get(
+    `/api/v1/accounts/${accountId}/activity?limit=100`,
+  );
   expect(historyResponse.ok()).toBeTruthy();
-  const history = (await historyResponse.json()) as components["schemas"]["ActivityPage"];
+  const history =
+    (await historyResponse.json()) as components["schemas"]["ActivityPage"];
   expect(history.items.filter((item) => item.kind === "price")).toHaveLength(3);
-  expect(history.items.filter((item) => item.kind === "position")).toHaveLength(3);
+  expect(history.items.filter((item) => item.kind === "position")).toHaveLength(
+    3,
+  );
   await page.reload();
-  const pagination = page.getByRole("navigation", { name: "Investment activity pagination" });
+  const pagination = page.getByRole("navigation", {
+    name: "Investment activity pagination",
+  });
   await pagination.getByRole("link", { name: "Next" }).click();
   await expect(page).toHaveURL(/activityPage=2/);
-  await expect(page.getByRole("list", { name: "Investment activity history" }).getByText("Opening Balance", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("list", { name: "Investment activity history" })
+      .getByText("Opening Balance", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(pagination).toContainText("Page 2");
 
   const foreignContext = await browser.newContext();
   try {
-    const foreign = await signUpInContext(foreignContext, "go-positions-foreign");
-    const foreignAccountId = await createAccount(foreign.page, foreign.session, "Foreign savings");
+    const foreign = await signUpInContext(
+      foreignContext,
+      "go-positions-foreign",
+    );
+    const foreignAccountId = await createAccount(
+      foreign.page,
+      foreign.session,
+      "Foreign savings",
+    );
     for (const path of [
       `/accounts/${accountId}/analytics`,
       `/accounts/${accountId}/activity`,
       `/accounts/${accountId}/position-events/${eventId}`,
       `/accounts/${foreignAccountId}/position-events/${eventId}`,
     ]) {
-      expect((await foreign.page.request.get(`/api/v1${path}`)).status()).toBe(404);
+      expect((await foreign.page.request.get(`/api/v1${path}`)).status()).toBe(
+        404,
+      );
     }
   } finally {
     await foreignContext.close();

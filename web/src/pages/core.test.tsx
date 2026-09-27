@@ -13,7 +13,12 @@ import {
   coreRouteIntents,
 } from "@/pages/core";
 import { PrivacyBoundary } from "@/components/privacy";
-import type { AccountAnalytics, AccountPosition, Instrument, Session } from "@/lib/types";
+import type {
+  AccountAnalytics,
+  AccountPosition,
+  Instrument,
+  Session,
+} from "@/lib/types";
 
 const {
   getAccount,
@@ -273,10 +278,27 @@ beforeEach(() => {
     (_id, { limit = 100, offset = 0 } = {}) =>
       Promise.resolve({ items: [], limit, offset, hasMore: false }),
   );
-  getAccountPositionEvents.mockResolvedValue({ items: [], limit: 100, offset: 0, hasMore: false });
-  getAccountTransactions.mockResolvedValue({ items: [], limit: 100, offset: 0, hasMore: false });
-  getAccountPositionReconciliations.mockResolvedValue({ items: [], limit: 100, offset: 0, hasMore: false });
-  getAccountPositionEvent.mockRejectedValue(new Error("Position event not found."));
+  getAccountPositionEvents.mockResolvedValue({
+    items: [],
+    limit: 100,
+    offset: 0,
+    hasMore: false,
+  });
+  getAccountTransactions.mockResolvedValue({
+    items: [],
+    limit: 100,
+    offset: 0,
+    hasMore: false,
+  });
+  getAccountPositionReconciliations.mockResolvedValue({
+    items: [],
+    limit: 100,
+    offset: 0,
+    hasMore: false,
+  });
+  getAccountPositionEvent.mockRejectedValue(
+    new Error("Position event not found."),
+  );
   getInstruments.mockResolvedValue({ instruments: [instrument] });
   getInstrument.mockResolvedValue({ instrument, prices: [] });
 });
@@ -513,43 +535,65 @@ describe("ported core pages", () => {
     expect(
       screen.getByRole("group", { name: "Cash metric" }),
     ).toHaveTextContent("KES 250.00");
-    expect(screen.getByRole("table", { name: "Current positions" })).toHaveTextContent("KES 1,000.00");
-    expect(screen.queryByRole("group", { name: "Positions metric" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("group", { name: "Base-currency value metric" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: "Current positions" }),
+    ).toHaveTextContent("KES 1,000.00");
+    expect(
+      screen.queryByRole("group", { name: "Positions metric" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "Base-currency value metric" }),
+    ).not.toBeInTheDocument();
   });
 
   it.each([
     { converted: "250000", expected: "KES 2,500.00" },
     { converted: null, expected: "Incomplete data" },
-  ])("shows the server-provided base-currency value ($converted) without replacing the account value", async ({ converted, expected }) => {
-    getAccount.mockResolvedValue({
-      ...account,
-      trackingMode: "positions",
-      currency: "USD",
-      convertedValueMinor: converted,
-    });
-    getAccountAnalytics.mockResolvedValue({
-      ...positionAnalytics,
-      currency: "USD",
-      positionSummary: {
-        cashMinor: "25000",
-        positionsMinor: "100000",
-        complete: true,
-        positions: [{ ...position, quoteCurrency: "USD" }],
-      },
-    });
-    renderPage(
-      <Routes>
-        <Route path="/accounts/:id" element={<AccountDetailPage session={session} />} />
-      </Routes>,
-      ["/accounts/account-1"],
-    );
-    expect(await screen.findByRole("group", { name: "Base-currency value metric" })).toHaveTextContent(expected);
-    expect(screen.getByRole("group", { name: "Current value metric" })).toHaveTextContent("USD 1,250.00");
-    expect(screen.queryByRole("group", { name: "Positions metric" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Valuation history")).not.toBeInTheDocument();
-    expect(await screen.findByText("No investment activity on this page.")).toBeVisible();
-  });
+  ])(
+    "shows the server-provided base-currency value ($converted) without replacing the account value",
+    async ({ converted, expected }) => {
+      getAccount.mockResolvedValue({
+        ...account,
+        trackingMode: "positions",
+        currency: "USD",
+        convertedValueMinor: converted,
+      });
+      getAccountAnalytics.mockResolvedValue({
+        ...positionAnalytics,
+        currency: "USD",
+        positionSummary: {
+          cashMinor: "25000",
+          positionsMinor: "100000",
+          complete: true,
+          positions: [{ ...position, quoteCurrency: "USD" }],
+        },
+      });
+      renderPage(
+        <Routes>
+          <Route
+            path="/accounts/:id"
+            element={<AccountDetailPage session={session} />}
+          />
+        </Routes>,
+        ["/accounts/account-1"],
+      );
+      expect(
+        await screen.findByRole("group", {
+          name: "Base-currency value metric",
+        }),
+      ).toHaveTextContent(expected);
+      expect(
+        screen.getByRole("group", { name: "Current value metric" }),
+      ).toHaveTextContent("USD 1,250.00");
+      expect(
+        screen.queryByRole("group", { name: "Positions metric" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("Valuation history")).not.toBeInTheDocument();
+      expect(
+        await screen.findByText("No investment activity on this page."),
+      ).toBeVisible();
+    },
+  );
 
   it("defaults price entry to the first instrument held by the account", async () => {
     getAccount.mockResolvedValue({ ...account, trackingMode: "positions" });
@@ -576,24 +620,38 @@ describe("ported core pages", () => {
 
   it("updates the selected security and preserves entered precision when saving fails", async () => {
     const user = userEvent.setup();
-    const selected = { ...instrument, id: "33333333-3333-4333-8333-333333333333", name: "Second fund" };
+    const selected = {
+      ...instrument,
+      id: "33333333-3333-4333-8333-333333333333",
+      name: "Second fund",
+    };
     getAccount.mockResolvedValue({ ...account, trackingMode: "positions" });
     getAccountAnalytics.mockResolvedValue(positionAnalytics);
     getInstrument.mockResolvedValue({ instrument: selected, prices: [] });
-    upsertSecurityPrice.mockRejectedValue(new Error("Could not save the price. Try again."));
+    upsertSecurityPrice.mockRejectedValue(
+      new Error("Could not save the price. Try again."),
+    );
     renderPage(
       <Routes>
-        <Route path="/accounts/:id/prices/new" element={<NewSecurityPricePage session={session} />} />
+        <Route
+          path="/accounts/:id/prices/new"
+          element={<NewSecurityPricePage session={session} />}
+        />
       </Routes>,
       [`/accounts/account-1/prices/new?instrumentId=${selected.id}`],
     );
     const price = await screen.findByLabelText("Price (KES)");
     await user.type(price, "123.456789123");
     await user.click(screen.getByRole("button", { name: "Save price" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save the price.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not save the price.",
+    );
     expect(price).toHaveValue("123.456789123");
     expect(upsertSecurityPrice).toHaveBeenCalledWith(
-      expect.objectContaining({ instrumentId: selected.id, price: "123.456789123" }),
+      expect.objectContaining({
+        instrumentId: selected.id,
+        price: "123.456789123",
+      }),
       session.csrfToken,
     );
   });
@@ -613,13 +671,18 @@ describe("ported core pages", () => {
     });
     renderPage(
       <Routes>
-        <Route path="/accounts/:id/positions/:eventId/edit" element={<EditPositionEventPage session={session} />} />
+        <Route
+          path="/accounts/:id/positions/:eventId/edit"
+          element={<EditPositionEventPage session={session} />}
+        />
       </Routes>,
       [`/accounts/account-1/positions/${eventId}/edit`],
     );
     expect(await screen.findByLabelText("Quantity")).toHaveValue("1.125");
     expect(screen.getByLabelText("Event type")).toHaveValue("opening_position");
-    expect(screen.getByRole("button", { name: "Update position event" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Update position event" }),
+    ).toBeVisible();
     expect(getAccountPositionEvent).toHaveBeenCalledWith(account.id, eventId);
   });
 

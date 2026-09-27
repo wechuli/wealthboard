@@ -1290,20 +1290,28 @@ const positionSchema = z.object({
   notes: z.string(),
 });
 
-function positionEventValues(event: PositionEvent, accountCurrency: string): z.infer<typeof positionSchema> {
+function positionEventValues(
+  event: PositionEvent,
+  accountCurrency: string,
+): z.infer<typeof positionSchema> {
   return {
     instrumentId: event.instrumentId,
     type: positionEventTypeSchema.parse(event.type),
     quantity: event.quantity,
     unitPrice: event.unitPrice ?? "",
     tradeCurrency: event.tradeCurrency,
-    feeAmount: event.feeAmountMinor ? minorUnitsToDecimal(event.feeAmountMinor) : "",
+    feeAmount: event.feeAmountMinor
+      ? minorUnitsToDecimal(event.feeAmountMinor)
+      : "",
     feeCurrency: event.feeCurrency ?? accountCurrency,
-    cashEffect: event.cashEffectMinor === "0"
-      ? ""
-      : minorUnitsToDecimal(event.cashEffectMinor.replace("-", "")),
+    cashEffect:
+      event.cashEffectMinor === "0"
+        ? ""
+        : minorUnitsToDecimal(event.cashEffectMinor.replace("-", "")),
     appliedExchangeRate: event.appliedExchangeRate ?? "",
-    openingCostBasis: event.openingCostBasisMinor ? minorUnitsToDecimal(event.openingCostBasisMinor) : "",
+    openingCostBasis: event.openingCostBasisMinor
+      ? minorUnitsToDecimal(event.openingCostBasisMinor)
+      : "",
     tradeDate: event.tradeDate,
     settlementDate: event.settlementDate ?? "",
     externalId: event.externalId ?? "",
@@ -1456,10 +1464,14 @@ export function PositionTools({
             }
           })}
         >
-          <ErrorNotice message={Object.values(eventForm.formState.errors)
-            .map((field) => field.message)
-            .filter((message): message is string => typeof message === "string")
-            .join(" ")} />
+          <ErrorNotice
+            message={Object.values(eventForm.formState.errors)
+              .map((field) => field.message)
+              .filter(
+                (message): message is string => typeof message === "string",
+              )
+              .join(" ")}
+          />
           <div className="form-grid">
             <div>
               <label htmlFor="event-instrument">Instrument</label>
@@ -1467,13 +1479,26 @@ export function PositionTools({
                 id="event-instrument"
                 {...eventForm.register("instrumentId", {
                   onChange: (event: React.ChangeEvent<HTMLSelectElement>) => {
-                    const instrument = instruments.find((item) => item.id === event.target.value);
-                    if (instrument) eventForm.setValue("tradeCurrency", instrument.quoteCurrency);
+                    const instrument = instruments.find(
+                      (item) => item.id === event.target.value,
+                    );
+                    if (instrument)
+                      eventForm.setValue(
+                        "tradeCurrency",
+                        instrument.quoteCurrency,
+                      );
                   },
                 })}
               >
                 {instruments.map((item) => (
-                  <option key={item.id} value={item.id} disabled={Boolean(item.archivedAt) && initialEvent?.instrumentId !== item.id}>
+                  <option
+                    key={item.id}
+                    value={item.id}
+                    disabled={
+                      Boolean(item.archivedAt) &&
+                      initialEvent?.instrumentId !== item.id
+                    }
+                  >
                     {item.symbol || item.name}
                   </option>
                 ))}

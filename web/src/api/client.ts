@@ -85,9 +85,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     let problem:
-      | Problem
-      | { detail?: string; error?: string; code?: string }
-      | undefined;
+      Problem | { detail?: string; error?: string; code?: string } | undefined;
     try {
       problem = (await response.json()) as Problem;
     } catch {

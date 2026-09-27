@@ -742,8 +742,11 @@ export function InstrumentManager({
           })}
         >
           <ErrorNotice
-            message={priceForm.formState.errors.price?.message ??
-              priceForm.formState.errors.effectiveDate?.message ?? ""}
+            message={
+              priceForm.formState.errors.price?.message ??
+              priceForm.formState.errors.effectiveDate?.message ??
+              ""
+            }
           />
           <div className="form-grid">
             <div>

@@ -172,8 +172,7 @@ export type AccountHistoryImportResult =
 export type InvestmentHistoryImportResult =
   components["schemas"]["InvestmentHistoryImportResult"];
 export type ImportResult =
-  | AccountHistoryImportResult
-  | InvestmentHistoryImportResult;
+  AccountHistoryImportResult | InvestmentHistoryImportResult;
 export type RestoreSummary = components["schemas"]["RestoreSummary"];
 export type EstatePlanInput = components["schemas"]["EstatePlanInput"];
 export type BeneficiaryInput = components["schemas"]["BeneficiaryInput"];

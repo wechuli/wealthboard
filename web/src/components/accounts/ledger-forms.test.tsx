@@ -215,7 +215,9 @@ describe("PositionTools", () => {
     expect(screen.getByLabelText("Instrument")).toHaveValue(selected.id);
     expect(screen.getByLabelText("Trade currency")).toHaveValue("USD");
     await user.type(screen.getByLabelText("Quantity"), "1.125");
-    await user.click(screen.getByRole("button", { name: "Record position event" }));
+    await user.click(
+      screen.getByRole("button", { name: "Record position event" }),
+    );
     expect(createEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         instrumentId: selected.id,

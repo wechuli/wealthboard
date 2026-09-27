@@ -99,15 +99,24 @@ describe("position account detail", () => {
     expect(row.getByText("USD 11.39")).toBeVisible();
     expect(row.getByText("Fictional quote")).toBeVisible();
     expect(row.getByText("Stale")).toBeVisible();
-    expect(row.getByRole("link", { name: "Update Fractional ETF price" }))
-      .toHaveAttribute("href", `/accounts/${account.id}/prices/new?instrumentId=${instrumentId}`);
-    const missing = within(screen.getByRole("row", { name: /Unpriced holding/ }));
+    expect(
+      row.getByRole("link", { name: "Update Fractional ETF price" }),
+    ).toHaveAttribute(
+      "href",
+      `/accounts/${account.id}/prices/new?instrumentId=${instrumentId}`,
+    );
+    const missing = within(
+      screen.getByRole("row", { name: /Unpriced holding/ }),
+    );
     expect(missing.getByText("Missing price")).toBeVisible();
     expect(missing.getByText("Incomplete")).toBeVisible();
-    expect(screen.getByRole("link", { name: "Add holding" }))
-      .toHaveAttribute("href", `/accounts/${account.id}/positions/new?type=opening_position`);
-    expect(screen.getByRole("link", { name: "Add instrument" }))
-      .toHaveAttribute("href", `/accounts/${account.id}/instruments/new`);
+    expect(screen.getByRole("link", { name: "Add holding" })).toHaveAttribute(
+      "href",
+      `/accounts/${account.id}/positions/new?type=opening_position`,
+    );
+    expect(
+      screen.getByRole("link", { name: "Add instrument" }),
+    ).toHaveAttribute("href", `/accounts/${account.id}/instruments/new`);
   });
 
   it("masks quantities, unit prices, and values while keeping instruments identifiable", () => {
@@ -129,7 +138,12 @@ describe("position account detail", () => {
       <MemoryRouter>
         <PositionsCard
           account={account}
-          summary={{ cashMinor: "0", positionsMinor: "0", complete: true, positions: [] }}
+          summary={{
+            cashMinor: "0",
+            positionsMinor: "0",
+            complete: true,
+            positions: [],
+          }}
         />
       </MemoryRouter>,
     );
@@ -145,7 +159,9 @@ describe("position account detail", () => {
           account={account}
           summary={{
             ...summary,
-            positions: [{ ...summary.positions[0], complete: false, valueMinor: null }],
+            positions: [
+              { ...summary.positions[0], complete: false, valueMinor: null },
+            ],
           }}
         />
       </MemoryRouter>,
@@ -162,23 +178,46 @@ describe("position account detail", () => {
       description: `Deposit ${index + 1}`,
     }));
     items[0] = {
-      ...cash, kind: "position", id: "ordinary-event", type: "buy",
-      instrumentId, instrumentName: "Fractional ETF", quantity: "1.125",
+      ...cash,
+      kind: "position",
+      id: "ordinary-event",
+      type: "buy",
+      instrumentId,
+      instrumentName: "Fractional ETF",
+      quantity: "1.125",
       amountMinor: "-1139",
     };
     items[1] = {
-      ...cash, kind: "price", id: "price-1", type: "security_price",
-      instrumentId, instrumentName: "Fractional ETF", unitPrice: "10.12345678",
+      ...cash,
+      kind: "price",
+      id: "price-1",
+      type: "security_price",
+      instrumentId,
+      instrumentName: "Fractional ETF",
+      unitPrice: "10.12345678",
       amountMinor: "0",
     };
     items[2] = {
-      ...items[0], id: "grouped-event", eventGroupId: "group-1",
+      ...items[0],
+      id: "grouped-event",
+      eventGroupId: "group-1",
       description: "Grouped reinvestment",
     };
     getAccountActivity.mockImplementation((_id, { limit, offset }) =>
       Promise.resolve({
-        items: offset === 0 ? items : [{ ...cash, type: "opening_balance", description: "Original opening" }],
-        limit, offset, hasMore: offset === 0,
+        items:
+          offset === 0
+            ? items
+            : [
+                {
+                  ...cash,
+                  type: "opening_balance",
+                  description: "Original opening",
+                },
+              ],
+        limit,
+        offset,
+        hasMore: offset === 0,
       }),
     );
     render(
@@ -186,38 +225,61 @@ describe("position account detail", () => {
         <InvestmentActivity accountId={account.id} />
       </MemoryRouter>,
     );
-    const history = await screen.findByRole("list", { name: "Investment activity history" });
+    const history = await screen.findByRole("list", {
+      name: "Investment activity history",
+    });
     expect(within(history).getAllByRole("listitem")).toHaveLength(25);
     expect(within(history).getByText("USD 10.12345678")).toBeVisible();
     expect(within(history).getByText("Managed workflow")).toBeVisible();
-    expect(within(history).getAllByRole("link", { name: /Edit Buy/ })).toHaveLength(1);
-    expect(within(history).getByRole("link", { name: /Edit Buy/ }))
-      .toHaveAttribute("href", `/accounts/${account.id}/positions/ordinary-event/edit`);
+    expect(
+      within(history).getAllByRole("link", { name: /Edit Buy/ }),
+    ).toHaveLength(1);
+    expect(
+      within(history).getByRole("link", { name: /Edit Buy/ }),
+    ).toHaveAttribute(
+      "href",
+      `/accounts/${account.id}/positions/ordinary-event/edit`,
+    );
     await user.click(screen.getByRole("link", { name: "Next" }));
     expect(await screen.findByText("Original opening")).toBeVisible();
     expect(screen.getByText("Page 2")).toBeVisible();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-    expect(getAccountActivity).toHaveBeenLastCalledWith(account.id, { limit: 25, offset: 25 });
+    expect(getAccountActivity).toHaveBeenLastCalledWith(account.id, {
+      limit: 25,
+      offset: 25,
+    });
     await user.click(screen.getByRole("link", { name: "Previous" }));
     expect(await screen.findByText("Page 1")).toBeVisible();
   });
 
   it("shows history load failures instead of an empty success state", async () => {
-    getAccountActivity.mockRejectedValue(new Error("History is unavailable. Please retry."));
-    render(
-      <MemoryRouter><InvestmentActivity accountId={account.id} /></MemoryRouter>,
+    getAccountActivity.mockRejectedValue(
+      new Error("History is unavailable. Please retry."),
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent("History is unavailable.");
-    expect(screen.queryByText("No investment activity on this page.")).not.toBeInTheDocument();
+    render(
+      <MemoryRouter>
+        <InvestmentActivity accountId={account.id} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "History is unavailable.",
+    );
+    expect(
+      screen.queryByText("No investment activity on this page."),
+    ).not.toBeInTheDocument();
   });
 
   it("rejects invalid history pages before requesting financial data", async () => {
     render(
-      <MemoryRouter initialEntries={[`/accounts/${account.id}?activityPage=-1`]}>
+      <MemoryRouter
+        initialEntries={[`/accounts/${account.id}?activityPage=-1`]}
+      >
         <InvestmentActivity accountId={account.id} />
       </MemoryRouter>,
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent("Activity page must be between");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Activity page must be between",
+    );
     expect(getAccountActivity).not.toHaveBeenCalled();
   });
 });
