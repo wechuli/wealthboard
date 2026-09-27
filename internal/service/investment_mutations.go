@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/wechuli/wealthboard/internal/database/generated"
 	"github.com/wechuli/wealthboard/internal/domain"
 )
 
@@ -135,63 +136,46 @@ func (service *InvestmentMutations) PositionEvents(ctx context.Context, userID, 
 	if err := service.requirePositionAccount(ctx, userID, accountID); err != nil {
 		return Page[PositionEvent]{}, err
 	}
-	rows, err := service.db.QueryContext(ctx, `
-SELECT id, account_id, instrument_id, related_instrument_id, type, quantity::TEXT,
-       unit_price::TEXT, trade_currency, fee_amount_minor, fee_currency,
-       cash_effect_minor, applied_exchange_rate::TEXT, opening_cost_basis_minor,
-       action_ratio_numerator::TEXT, action_ratio_denominator::TEXT, trade_date,
-       event_sequence, settlement_date, external_id, event_group_id, description,
-       notes, created_at, updated_at
-FROM position_events
-WHERE user_id = $1 AND account_id = $2
-ORDER BY trade_date DESC, event_sequence DESC, created_at DESC, id DESC
-LIMIT $3 OFFSET $4`, userID, accountID, page.Limit+1, page.Offset)
+	rows, err := generated.New(service.db).ListInvestmentPositionEvents(ctx, generated.ListInvestmentPositionEventsParams{
+		UserID: userID, AccountID: accountID, Limit: int32(page.Limit + 1), Offset: int32(page.Offset),
+	})
 	if err != nil {
 		return Page[PositionEvent]{}, fmt.Errorf("list position events: %w", err)
 	}
-	defer rows.Close()
 	items := make([]PositionEvent, 0, page.Limit)
-	for rows.Next() {
-		var item PositionEvent
-		var relatedID, eventGroupID uuid.NullUUID
-		var unitPrice, feeCurrency, appliedRate, ratioNumerator, ratioDenominator sql.NullString
-		var feeMinor, openingCostBasis sql.NullInt64
-		var settlementDate sql.NullTime
-		var externalID, description, notes sql.NullString
-		var cashEffect int64
-		var tradeDate time.Time
-		if err := rows.Scan(&item.ID, &item.AccountID, &item.InstrumentID, &relatedID, &item.Type,
-			&item.Quantity, &unitPrice, &item.TradeCurrency, &feeMinor, &feeCurrency, &cashEffect,
-			&appliedRate, &openingCostBasis, &ratioNumerator, &ratioDenominator, &tradeDate,
-			&item.EventSequence, &settlementDate, &externalID, &eventGroupID, &description,
-			&notes, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			return Page[PositionEvent]{}, fmt.Errorf("scan position event: %w", err)
-		}
-		item.RelatedInstrumentID = uuidPointer(relatedID)
-		item.EventGroupID = uuidPointer(eventGroupID)
-		item.UnitPrice = unitPrice.String
-		item.FeeCurrency = feeCurrency.String
-		item.CashEffectMinor = strconv.FormatInt(cashEffect, 10)
-		item.AppliedExchangeRate = appliedRate.String
-		item.ActionRatioNumerator = ratioNumerator.String
-		item.ActionRatioDenominator = ratioDenominator.String
-		item.TradeDate = tradeDate.Format(time.DateOnly)
-		item.SettlementDate = formatInvestmentOptionalDate(settlementDate)
-		item.ExternalID = externalID.String
-		item.Description = description.String
-		item.Notes = notes.String
-		item.FeeAmountMinor = optionalInt64String(feeMinor)
-		item.OpeningCostBasisMinor = optionalInt64String(openingCostBasis)
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		return Page[PositionEvent]{}, fmt.Errorf("iterate position events: %w", err)
+	for _, row := range rows {
+		items = append(items, positionEventFromRead(generated.GetInvestmentPositionEventRow(row)))
 	}
 	hasMore := len(items) > page.Limit
 	if hasMore {
 		items = items[:page.Limit]
 	}
 	return Page[PositionEvent]{Items: items, Limit: page.Limit, Offset: page.Offset, HasMore: hasMore}, nil
+}
+
+func (service *InvestmentMutations) GetPositionEvent(ctx context.Context, userID, accountID, eventID uuid.UUID) (PositionEvent, error) {
+	row, err := generated.New(service.db).GetInvestmentPositionEvent(ctx, generated.GetInvestmentPositionEventParams{
+		UserID: userID, AccountID: accountID, ID: eventID,
+	})
+	if err != nil {
+		return PositionEvent{}, mutationNotFound(err)
+	}
+	return positionEventFromRead(row), nil
+}
+
+func positionEventFromRead(row generated.GetInvestmentPositionEventRow) PositionEvent {
+	return PositionEvent{
+		ID: row.ID, AccountID: row.AccountID, InstrumentID: row.InstrumentID,
+		RelatedInstrumentID: uuidPointer(row.RelatedInstrumentID), Type: row.Type, Quantity: row.Quantity,
+		UnitPrice: row.UnitPrice, TradeCurrency: row.TradeCurrency, FeeAmountMinor: optionalInt64String(row.FeeAmountMinor),
+		FeeCurrency: row.FeeCurrency.String, CashEffectMinor: strconv.FormatInt(row.CashEffectMinor, 10),
+		AppliedExchangeRate: row.AppliedExchangeRate, OpeningCostBasisMinor: optionalInt64String(row.OpeningCostBasisMinor),
+		ActionRatioNumerator: row.ActionRatioNumerator, ActionRatioDenominator: row.ActionRatioDenominator,
+		TradeDate: row.TradeDate.Format(time.DateOnly), EventSequence: int(row.EventSequence),
+		SettlementDate: formatInvestmentOptionalDate(row.SettlementDate), ExternalID: row.ExternalID.String,
+		EventGroupID: uuidPointer(row.EventGroupID), Description: row.Description.String, Notes: row.Notes.String,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
 }
 
 func (service *InvestmentMutations) PositionReconciliations(ctx context.Context, userID, accountID uuid.UUID, page ReadPage) (Page[PositionReconciliation], error) {

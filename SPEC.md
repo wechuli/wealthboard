@@ -968,6 +968,7 @@ Allow sorting by:
 Each account should have a dedicated page with:
 
 - Current value
+- The current total in the user's base currency when the account currency differs
 - Cash balance and position market value when position-tracked
 - Positions with quantity, effective unit price, quote currency, as-of date,
   source, and converted value
@@ -979,6 +980,7 @@ Each account should have a dedicated page with:
 - Historical value chart
 - Transaction list
 - Position-event and price history when position-tracked
+- Paginated investment activity with direct correction links for ordinary events
 - Valuation history
 - Linked goals
 - Notes

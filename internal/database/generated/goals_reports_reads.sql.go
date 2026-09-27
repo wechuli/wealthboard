@@ -126,21 +126,129 @@ func (q *Queries) GetGoalsReportsGoal(ctx context.Context, arg GetGoalsReportsGo
 }
 
 const getGoalsReportsSettings = `-- name: GetGoalsReportsSettings :one
-SELECT base_currency, timezone
+SELECT base_currency, timezone, position_stale_days_stock, position_stale_days_etf, position_stale_days_fund
 FROM user_settings
 WHERE user_id = $1
 `
 
 type GetGoalsReportsSettingsRow struct {
-	BaseCurrency string `json:"base_currency"`
-	Timezone     string `json:"timezone"`
+	BaseCurrency           string `json:"base_currency"`
+	Timezone               string `json:"timezone"`
+	PositionStaleDaysStock int32  `json:"position_stale_days_stock"`
+	PositionStaleDaysEtf   int32  `json:"position_stale_days_etf"`
+	PositionStaleDaysFund  int32  `json:"position_stale_days_fund"`
 }
 
 func (q *Queries) GetGoalsReportsSettings(ctx context.Context, userID uuid.UUID) (GetGoalsReportsSettingsRow, error) {
 	row := q.db.QueryRowContext(ctx, getGoalsReportsSettings, userID)
 	var i GetGoalsReportsSettingsRow
-	err := row.Scan(&i.BaseCurrency, &i.Timezone)
+	err := row.Scan(
+		&i.BaseCurrency,
+		&i.Timezone,
+		&i.PositionStaleDaysStock,
+		&i.PositionStaleDaysEtf,
+		&i.PositionStaleDaysFund,
+	)
 	return i, err
+}
+
+const listChartInstruments = `-- name: ListChartInstruments :many
+SELECT id, name, COALESCE(symbol, '') AS symbol, quote_currency, asset_type, archived_at
+FROM investment_instruments
+WHERE user_id = $1
+ORDER BY name, id
+`
+
+type ListChartInstrumentsRow struct {
+	ID            uuid.UUID    `json:"id"`
+	Name          string       `json:"name"`
+	Symbol        string       `json:"symbol"`
+	QuoteCurrency string       `json:"quote_currency"`
+	AssetType     string       `json:"asset_type"`
+	ArchivedAt    sql.NullTime `json:"archived_at"`
+}
+
+func (q *Queries) ListChartInstruments(ctx context.Context, userID uuid.UUID) ([]ListChartInstrumentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listChartInstruments, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChartInstrumentsRow{}
+	for rows.Next() {
+		var i ListChartInstrumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Symbol,
+			&i.QuoteCurrency,
+			&i.AssetType,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listChartPrices = `-- name: ListChartPrices :many
+SELECT price.instrument_id, instrument.name, COALESCE(instrument.symbol, '') AS symbol,
+       instrument.quote_currency, price.price::text AS unit_price, price.effective_date, price.created_at, price.source
+FROM security_prices price
+JOIN investment_instruments instrument
+  ON instrument.user_id = price.user_id AND instrument.id = price.instrument_id
+WHERE price.user_id = $1
+ORDER BY price.effective_date, price.created_at, price.id
+`
+
+type ListChartPricesRow struct {
+	InstrumentID  uuid.UUID `json:"instrument_id"`
+	Name          string    `json:"name"`
+	Symbol        string    `json:"symbol"`
+	QuoteCurrency string    `json:"quote_currency"`
+	UnitPrice     string    `json:"unit_price"`
+	EffectiveDate time.Time `json:"effective_date"`
+	CreatedAt     time.Time `json:"created_at"`
+	Source        string    `json:"source"`
+}
+
+func (q *Queries) ListChartPrices(ctx context.Context, userID uuid.UUID) ([]ListChartPricesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listChartPrices, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChartPricesRow{}
+	for rows.Next() {
+		var i ListChartPricesRow
+		if err := rows.Scan(
+			&i.InstrumentID,
+			&i.Name,
+			&i.Symbol,
+			&i.QuoteCurrency,
+			&i.UnitPrice,
+			&i.EffectiveDate,
+			&i.CreatedAt,
+			&i.Source,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listGoalsReportsAccounts = `-- name: ListGoalsReportsAccounts :many

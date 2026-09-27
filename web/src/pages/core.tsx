@@ -46,6 +46,7 @@ import {
   getAccount,
   getAccountAnalytics,
   getAccountActivity,
+  getAccountPositionEvent,
   getAccountPositionEvents,
   getAccountPositionReconciliations,
   getAccounts,
@@ -57,6 +58,7 @@ import {
   getGoals,
   getInstitutions,
   getInstruments,
+  getInstrument,
   getSettings,
   getTransactions,
 } from "@/api/client";
@@ -77,8 +79,13 @@ import {
   AccountCreateForm,
   LedgerManager,
   PositionTools,
+  positionEventTypeSchema,
   TransactionForm,
 } from "@/components/accounts/ledger-forms";
+import {
+  InvestmentActivity,
+  PositionsCard,
+} from "@/components/accounts/position-account-details";
 import { InstrumentForm, InstrumentManager } from "@/components/planning/forms";
 import { MoneyValue } from "@/components/privacy";
 import type {
@@ -1455,21 +1462,29 @@ function ActivityRows({ items }: { items: ActivityItem[] }) {
 
 export function AccountDetailPage({ session }: PageProps) {
   const { id = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const [refresh, setRefresh] = useState(0);
   const state = useResource(
-    () =>
-      Promise.all([
-        getAccount(id),
+    async () => {
+      const account = await getAccount(id);
+      const [analytics, activity, valuations, goals, settings] = await Promise.all([
         getAccountAnalytics(id),
-        getAccountActivity(id),
-        getAccountValuations(id),
+        account.trackingMode === "balance" ? getAccountActivity(id) : null,
+        account.trackingMode === "balance" ? getAccountValuations(id) : null,
         getGoals(),
-      ]),
+        getSettings(),
+      ]);
+      return [account, analytics, activity, valuations, goals, settings] as const;
+    },
     [id, refresh],
   );
+  const accountState: typeof state =
+    state.status === "ready" && state.data[0].id !== id
+      ? { status: "loading" }
+      : state;
   return (
-    <ResourceView state={state} loadingLabel="Loading account...">
-      {([account, analytics, activity, valuations, goals]) => {
+    <ResourceView state={accountState} loadingLabel="Loading account...">
+      {([account, analytics, activity, valuations, goals, settings]) => {
         const linkedGoals = goals.filter(
           (goal) => goal.linkedAccount?.id === id,
         );
@@ -1517,7 +1532,7 @@ export function AccountDetailPage({ session }: PageProps) {
             />
             {account.trackingMode === "positions" &&
             analytics.positionSummary ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className={`grid gap-4 sm:grid-cols-2 ${account.currency !== settings.settings.baseCurrency ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
                 <Metric
                   label="Current value"
                   value={account.currentValueMinor}
@@ -1529,11 +1544,22 @@ export function AccountDetailPage({ session }: PageProps) {
                   value={analytics.positionSummary.cashMinor}
                   currency={account.currency}
                 />
-                <Metric
-                  label="Positions"
-                  value={analytics.positionSummary.positionsMinor}
-                  currency={account.currency}
-                />
+                {account.currency !== settings.settings.baseCurrency ? (
+                  account.convertedValueMinor !== null ? (
+                    <Metric
+                      label="Base-currency value"
+                      value={account.convertedValueMinor}
+                      currency={settings.settings.baseCurrency}
+                    />
+                  ) : (
+                    <Card className="p-5" role="group" aria-label="Base-currency value metric">
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
+                        Base-currency value
+                      </p>
+                      <IncompleteValue className="mt-3 block text-amber-300" />
+                    </Card>
+                  )
+                ) : null}
                 <Card className="p-5">
                   <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
                     Data quality
@@ -1549,6 +1575,11 @@ export function AccountDetailPage({ session }: PageProps) {
                       ? "Complete"
                       : "Incomplete"}
                   </Badge>
+                  {analytics.positionSummary.positions.some((position) => position.stale) ? (
+                    <p className="mt-2 text-xs text-amber-300">
+                      One or more prices are stale.
+                    </p>
+                  ) : null}
                 </Card>
               </div>
             ) : (
@@ -1576,6 +1607,9 @@ export function AccountDetailPage({ session }: PageProps) {
                 />
               </div>
             )}
+            {account.trackingMode === "positions" && analytics.positionSummary ? (
+              <PositionsCard account={account} summary={analytics.positionSummary} />
+            ) : null}
             {account.trackingMode === "positions" &&
             analytics.movementAttribution ? (
               <Card className="mt-5">
@@ -1764,8 +1798,13 @@ export function AccountDetailPage({ session }: PageProps) {
                 </CardContent>
               </Card>
             </div>
-            <div className="mt-5 grid gap-5 xl:grid-cols-2">
-              {account.trackingMode === "balance" ? (
+            {account.trackingMode === "positions" ? (
+              <InvestmentActivity
+                key={`${account.id}:${searchParams.get("activityPage") ?? "1"}:${refresh}`}
+                accountId={account.id}
+              />
+            ) : activity && valuations ? (
+              <div className="mt-5 grid gap-5 xl:grid-cols-2">
                 <Card id="transactions" className="scroll-mt-24">
                   <CardHeader>
                     <div>
@@ -1789,7 +1828,6 @@ export function AccountDetailPage({ session }: PageProps) {
                     />
                   </CardContent>
                 </Card>
-              ) : null}
               <Card>
                 <CardHeader>
                   <CardTitle>Valuation history</CardTitle>
@@ -1813,7 +1851,8 @@ export function AccountDetailPage({ session }: PageProps) {
                   )}
                 </CardContent>
               </Card>
-            </div>
+              </div>
+            ) : null}
             <div className="mt-5 grid gap-5 lg:grid-cols-2">
               <Card>
                 <CardHeader>
@@ -2120,10 +2159,12 @@ function AccountWorkflowPage({
     | "import"
     | "corporate";
 }) {
-  const { id = "" } = useParams();
+  const { id = "", eventId = "" } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const command = searchParams.get("command");
+  const requestedType = searchParams.get("type");
+  const requestedInstrumentId = searchParams.get("instrumentId");
   const corporateActionKind =
     command === "reinvestment"
       ? "dividend-reinvestments"
@@ -2132,8 +2173,8 @@ function AccountWorkflowPage({
         : "stock-splits";
   const [refresh, setRefresh] = useState(0);
   const state = useResource(
-    () =>
-      Promise.all([
+    async () => {
+      const data = await Promise.all([
         getAccount(id),
         getAccounts(),
         getAccountTransactions(id),
@@ -2141,8 +2182,24 @@ function AccountWorkflowPage({
         getInstruments(),
         getAccountPositionEvents(id),
         getAccountPositionReconciliations(id),
-      ]),
-    [id, refresh],
+        mode === "positions" && eventId ? getAccountPositionEvent(id, eventId) : null,
+      ]);
+      const initialEvent = data[7];
+      const initialType = positionEventTypeSchema.safeParse(
+        mode === "positions" ? initialEvent?.type ?? requestedType ?? "opening_position" : "buy",
+      );
+      if (!initialType.success || (mode === "positions" && initialEvent?.eventGroupId)) {
+        throw new Error("Use the managed investment workflow to change grouped or corporate-action activity.");
+      }
+      if (mode === "positions" && !initialEvent && requestedInstrumentId) {
+        const instrument = data[4].instruments.find((item) => item.id === requestedInstrumentId);
+        if (!instrument || instrument.archivedAt) {
+          throw new Error("Choose an active instrument before recording a holding.");
+        }
+      }
+      return [...data, initialType.data] as const;
+    },
+    [id, eventId, mode, requestedType, requestedInstrumentId, refresh],
   );
   return (
     <ResourceView state={state}>
@@ -2154,6 +2211,8 @@ function AccountWorkflowPage({
         instruments,
         events,
         reconciliations,
+        initialEvent,
+        initialType,
       ]) => (
         <div
           className={
@@ -2198,12 +2257,18 @@ function AccountWorkflowPage({
             />
           ) : (
             <PositionTools
+              key={`${id}:${eventId}:${requestedType}:${requestedInstrumentId}`}
               account={account}
               instruments={instruments.instruments}
               events={events.items}
               reconciliations={reconciliations.items}
               session={session}
-              onChanged={() => setRefresh((value) => value + 1)}
+              initialEvent={initialEvent ?? undefined}
+              initialType={initialType}
+              initialInstrumentId={requestedInstrumentId ?? undefined}
+              onChanged={() => mode === "positions"
+                ? navigate(`/accounts/${id}`)
+                : setRefresh((value) => value + 1)}
             />
           )}
         </div>
@@ -2305,7 +2370,8 @@ export function EditPositionEventPage(props: PageProps) {
 
 export function NewAccountInstrumentPage({ session }: PageProps) {
   const { id = "" } = useParams();
-  const state = useResource(() => getAccount(id));
+  const navigate = useNavigate();
+  const state = useResource(() => getAccount(id), [id]);
   return (
     <div className="mx-auto max-w-3xl">
       <ResourceView state={state}>
@@ -2320,7 +2386,7 @@ export function NewAccountInstrumentPage({ session }: PageProps) {
                 <CardTitle>Instrument details</CardTitle>
               </CardHeader>
               <CardContent>
-                <InstrumentForm session={session} onChanged={() => undefined} />
+                <InstrumentForm session={session} onChanged={() => navigate(`/accounts/${id}`)} />
               </CardContent>
             </Card>
           </>
@@ -2332,39 +2398,43 @@ export function NewAccountInstrumentPage({ session }: PageProps) {
 
 export function NewSecurityPricePage({ session }: PageProps) {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const instrumentID = searchParams.get("instrumentId") ?? "";
   const state = useResource(
-    () =>
-      Promise.all([
+    async () => {
+      const [account, analytics] = await Promise.all([
         getAccount(id),
-        getInstruments(),
-        getAccountPositionEvents(id),
-      ]).then(([account, { instruments }, events]) => {
-        const selectedInstrumentID =
-          instrumentID || events.items[0]?.instrumentId;
-        return [
-          account,
-          instruments.find((item) => item.id === selectedInstrumentID) ?? null,
-        ] as const;
-      }),
+        getAccountAnalytics(id),
+      ]);
+      if (account.trackingMode !== "positions") {
+        throw new Error("Security prices are available for position-tracked accounts.");
+      }
+      const selectedInstrumentID =
+        instrumentID || analytics.positionSummary?.positions[0]?.instrumentId;
+      const detail = selectedInstrumentID ? await getInstrument(selectedInstrumentID) : null;
+      return [account, detail] as const;
+    },
     [id, instrumentID],
   );
   return (
     <div className="mx-auto max-w-3xl">
       <ResourceView state={state}>
-        {([account, instrument]) => (
+        {([account, detail]) => (
           <>
             <PageHeader
               title="Update security price"
-              description={`Record an effective-dated price for ${account.name}.`}
+              description={detail
+                ? `Record an effective-dated price for ${detail.instrument.name} in ${account.name}.`
+                : `Record an effective-dated price for ${account.name}.`}
+              actions={<Button asChild variant="secondary"><Link to={`/accounts/${id}`}>Back to account</Link></Button>}
             />
-            {instrument ? (
+            {detail ? (
               <InstrumentManager
-                instrument={instrument}
-                prices={[]}
+                instrument={detail.instrument}
+                prices={detail.prices}
                 session={session}
-                onChanged={() => undefined}
+                onChanged={() => navigate(`/accounts/${id}`)}
               />
             ) : (
               <Card>

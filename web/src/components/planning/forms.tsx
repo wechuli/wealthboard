@@ -663,12 +663,14 @@ export function InstrumentManager({
     try {
       await action();
       onChanged();
+      return true;
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
           : "The instrument could not be changed.",
       );
+      return false;
     }
   };
   return (
@@ -730,15 +732,19 @@ export function InstrumentManager({
         <form
           className="auth-form"
           onSubmit={priceForm.handleSubmit(async (values) => {
-            await run(() =>
+            const saved = await run(() =>
               upsertSecurityPrice(
                 { instrumentId: instrument.id, ...values },
                 session.csrfToken,
               ),
             );
-            priceForm.reset();
+            if (saved) priceForm.reset();
           })}
         >
+          <ErrorNotice
+            message={priceForm.formState.errors.price?.message ??
+              priceForm.formState.errors.effectiveDate?.message ?? ""}
+          />
           <div className="form-grid">
             <div>
               <label htmlFor="price-value">

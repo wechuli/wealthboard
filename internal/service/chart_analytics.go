@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/wechuli/wealthboard/internal/database/generated"
 )
 
 type chartAccount struct {
@@ -62,6 +65,16 @@ type chartPrice struct {
 	Price            string
 	EffectiveDate    time.Time
 	CreatedAt        time.Time
+	Source           string
+}
+
+type chartInstrument struct {
+	ID        uuid.UUID
+	Name      string
+	Symbol    string
+	Currency  string
+	AssetType string
+	Archived  bool
 }
 
 type chartData struct {
@@ -71,12 +84,14 @@ type chartData struct {
 	Rates          []chartRate
 	PositionEvents []chartPositionEvent
 	Prices         []chartPrice
+	Instruments    []chartInstrument
 }
 
 type chartPositionValue struct {
 	Quantity *big.Rat
 	Price    *chartPrice
 	Value    int64
+	Complete bool
 }
 
 type chartPositionSnapshot struct {
@@ -210,25 +225,27 @@ ORDER BY event.account_id,event.trade_date,event.event_sequence,event.created_at
 		return data, err
 	}
 
-	rows, err = repository.db.QueryContext(ctx, `
-SELECT price.instrument_id,instrument.name,COALESCE(instrument.symbol,''),instrument.quote_currency,price.price::text,price.effective_date,price.created_at
-FROM security_prices price
-JOIN investment_instruments instrument ON instrument.user_id=price.user_id AND instrument.id=price.instrument_id
-WHERE price.user_id=$1
-ORDER BY price.effective_date,price.created_at,price.id`, userID)
+	queries := generated.New(repository.db)
+	prices, err := queries.ListChartPrices(ctx, userID)
 	if err != nil {
 		return data, fmt.Errorf("load chart security prices: %w", err)
 	}
-	for rows.Next() {
-		var item chartPrice
-		if err := rows.Scan(&item.InstrumentID, &item.InstrumentName, &item.InstrumentSymbol, &item.Currency, &item.Price, &item.EffectiveDate, &item.CreatedAt); err != nil {
-			rows.Close()
-			return data, fmt.Errorf("scan chart security price: %w", err)
-		}
-		data.Prices = append(data.Prices, item)
+	for _, row := range prices {
+		data.Prices = append(data.Prices, chartPrice{
+			InstrumentID: row.InstrumentID, InstrumentName: row.Name, InstrumentSymbol: row.Symbol,
+			Currency: row.QuoteCurrency, Price: row.UnitPrice, EffectiveDate: row.EffectiveDate,
+			CreatedAt: row.CreatedAt, Source: row.Source,
+		})
 	}
-	if err := closeChartRows(rows); err != nil {
-		return data, err
+	instruments, err := queries.ListChartInstruments(ctx, userID)
+	if err != nil {
+		return data, fmt.Errorf("load chart instruments: %w", err)
+	}
+	for _, row := range instruments {
+		data.Instruments = append(data.Instruments, chartInstrument{
+			ID: row.ID, Name: row.Name, Symbol: row.Symbol, Currency: row.QuoteCurrency,
+			AssetType: row.AssetType, Archived: row.ArchivedAt.Valid,
+		})
 	}
 	return data, nil
 }
@@ -604,7 +621,7 @@ func buildChartPositionSnapshot(data chartData, account chartAccount, at time.Ti
 		if err != nil {
 			return chartPositionSnapshot{}, err
 		}
-		positions[key.instrumentID] = chartPositionValue{Quantity: cloneRat(quantity), Price: &price, Value: accountMinor}
+		positions[key.instrumentID] = chartPositionValue{Quantity: cloneRat(quantity), Price: &price, Value: accountMinor, Complete: true}
 	}
 	return chartPositionSnapshot{Total: total, Positions: positions, Complete: len(missing) == 0, Missing: missing}, nil
 }
@@ -857,22 +874,15 @@ func (service *GoalsReportsService) AccountAnalytics(ctx context.Context, userID
 	var movement *PositionMovementAttributionRead
 	var positionSummary *AccountPositionSummaryRead
 	if account.TrackingMode == "positions" {
-		snapshot, snapshotErr := buildChartPositionSnapshot(data, *account, endOfChartDay(service.now()))
-		if snapshotErr != nil {
-			return AccountAnalyticsRead{}, snapshotErr
+		settings, settingsErr := service.repository.GetSettings(ctx, userID)
+		if settingsErr != nil {
+			return AccountAnalyticsRead{}, fmt.Errorf("load position settings: %w", settingsErr)
 		}
-		positionsMinor := int64(0)
-		for _, position := range snapshot.Positions {
-			positionsMinor, err = checkedAdd(positionsMinor, position.Value)
-			if err != nil {
-				return AccountAnalyticsRead{}, err
-			}
+		summary, summaryErr := chartPositionSummary(data, *account, settings, endOfChartDay(service.now()))
+		if summaryErr != nil {
+			return AccountAnalyticsRead{}, summaryErr
 		}
-		positionSummary = &AccountPositionSummaryRead{
-			CashMinor:      strconv.FormatInt(snapshot.Total-positionsMinor, 10),
-			PositionsMinor: strconv.FormatInt(positionsMinor, 10),
-			Complete:       snapshot.Complete,
-		}
+		positionSummary = &summary
 	}
 	if account.TrackingMode == "positions" && len(dates) > 0 {
 		attribution, attributionErr := chartMovementAttribution(data, *account, endOfChartDay(dates[0]), endOfChartDay(service.now()))
@@ -887,6 +897,61 @@ func (service *GoalsReportsService) AccountAnalytics(ctx context.Context, userID
 	}
 	return AccountAnalyticsRead{AccountID: accountID, Currency: account.Currency, Metrics: metrics, PositionSummary: positionSummary, History: history,
 		HistoryComplete: complete, MovementAttributionAvailable: movement != nil, MovementAttribution: movement, CompletenessReasons: reasons}, nil
+}
+
+func chartPositionSummary(data chartData, account chartAccount, settings GoalsReportsSettings, at time.Time) (AccountPositionSummaryRead, error) {
+	snapshot, err := buildChartPositionSnapshot(data, account, at)
+	if err != nil {
+		return AccountPositionSummaryRead{}, err
+	}
+	instruments := make(map[uuid.UUID]chartInstrument, len(data.Instruments))
+	for _, instrument := range data.Instruments {
+		instruments[instrument.ID] = instrument
+	}
+	summary := AccountPositionSummaryRead{Complete: snapshot.Complete, Positions: []AccountPositionRead{}}
+	positionsMinor := int64(0)
+	for instrumentID, position := range snapshot.Positions {
+		instrument, found := instruments[instrumentID]
+		if !found {
+			return AccountPositionSummaryRead{}, errors.New("position instrument metadata is unavailable")
+		}
+		item := AccountPositionRead{
+			InstrumentID: instrumentID, InstrumentName: instrument.Name, InstrumentSymbol: instrument.Symbol,
+			QuoteCurrency: instrument.Currency, InstrumentArchived: instrument.Archived,
+			Quantity: canonicalRat(position.Quantity), Complete: position.Complete,
+		}
+		if position.Price != nil {
+			priceDate := position.Price.EffectiveDate.Format(time.DateOnly)
+			item.UnitPrice, item.PriceDate, item.PriceSource = &position.Price.Price, &priceDate, position.Price.Source
+			staleDays := settings.PositionStaleDaysStock
+			switch instrument.AssetType {
+			case "etf":
+				staleDays = settings.PositionStaleDaysETF
+			case "fund":
+				staleDays = settings.PositionStaleDaysFund
+			}
+			item.Stale = dateOnlyUTC(at).After(dateOnlyUTC(position.Price.EffectiveDate).AddDate(0, 0, staleDays))
+		}
+		if position.Complete {
+			value := strconv.FormatInt(position.Value, 10)
+			item.ValueMinor = &value
+			positionsMinor, err = checkedAdd(positionsMinor, position.Value)
+			if err != nil {
+				return AccountPositionSummaryRead{}, err
+			}
+		}
+		summary.Positions = append(summary.Positions, item)
+	}
+	sort.Slice(summary.Positions, func(i, j int) bool {
+		left, right := summary.Positions[i], summary.Positions[j]
+		if left.InstrumentName != right.InstrumentName {
+			return left.InstrumentName < right.InstrumentName
+		}
+		return left.InstrumentID.String() < right.InstrumentID.String()
+	})
+	summary.CashMinor = strconv.FormatInt(snapshot.Total-positionsMinor, 10)
+	summary.PositionsMinor = strconv.FormatInt(positionsMinor, 10)
+	return summary, nil
 }
 
 func chartAccountMetrics(data chartData, account chartAccount) (AccountFlowMetricsRead, error) {

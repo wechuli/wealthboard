@@ -168,7 +168,13 @@ SELECT
     currency,
     activity_date,
     description,
-    notes
+    notes,
+    instrument_id,
+    instrument_name,
+    instrument_symbol,
+    quantity,
+    unit_price,
+    event_group_id::text AS event_group_id
 FROM (
     SELECT
         'transaction'::text AS kind,
@@ -181,13 +187,19 @@ FROM (
         transactions.transaction_date AS activity_date,
         transactions.description,
         transactions.notes,
-        transactions.created_at
+        transactions.created_at,
+        ''::text AS instrument_id,
+        ''::text AS instrument_name,
+        ''::text AS instrument_symbol,
+        ''::text AS quantity,
+        ''::text AS unit_price,
+        COALESCE(transactions.event_group_id::text, '') AS event_group_id
     FROM transactions
     JOIN accounts
       ON accounts.user_id = transactions.user_id
      AND accounts.id = transactions.account_id
-    WHERE transactions.user_id = $1
-      AND transactions.account_id = $2
+    WHERE transactions.user_id = sqlc.arg(user_id)
+      AND transactions.account_id = sqlc.arg(account_id)
 
     UNION ALL
 
@@ -202,15 +214,79 @@ FROM (
         valuation_snapshots.valuation_date AS activity_date,
         NULL::text AS description,
         valuation_snapshots.notes,
-        valuation_snapshots.created_at
+        valuation_snapshots.created_at,
+        ''::text AS instrument_id,
+        ''::text AS instrument_name,
+        ''::text AS instrument_symbol,
+        ''::text AS quantity,
+        ''::text AS unit_price,
+        ''::text AS event_group_id
     FROM valuation_snapshots
     JOIN accounts
       ON accounts.user_id = valuation_snapshots.user_id
      AND accounts.id = valuation_snapshots.account_id
-    WHERE valuation_snapshots.user_id = $1
-      AND valuation_snapshots.account_id = $2
+    WHERE valuation_snapshots.user_id = sqlc.arg(user_id)
+      AND valuation_snapshots.account_id = sqlc.arg(account_id)
+
+    UNION ALL
+
+    SELECT
+        'position'::text AS kind,
+        event.id,
+        event.account_id,
+        accounts.name AS account_name,
+        event.type,
+        event.cash_effect_minor AS amount_minor,
+        accounts.currency,
+        event.trade_date AS activity_date,
+        event.description,
+        event.notes,
+        event.created_at,
+        instrument.id::text AS instrument_id,
+        instrument.name AS instrument_name,
+        COALESCE(instrument.symbol, '') AS instrument_symbol,
+        event.quantity::text,
+        COALESCE(event.unit_price::text, '') AS unit_price,
+        COALESCE(event.event_group_id::text, '') AS event_group_id
+    FROM position_events event
+    JOIN accounts ON accounts.user_id = event.user_id AND accounts.id = event.account_id
+    JOIN investment_instruments instrument
+      ON instrument.user_id = event.user_id AND instrument.id = event.instrument_id
+    WHERE event.user_id = sqlc.arg(user_id)
+      AND event.account_id = sqlc.arg(account_id)
+
+    UNION ALL
+
+    SELECT
+        'price'::text AS kind,
+        price.id,
+        accounts.id AS account_id,
+        accounts.name AS account_name,
+        'security_price'::text AS type,
+        0::bigint AS amount_minor,
+        price.currency,
+        price.effective_date AS activity_date,
+        price.source AS description,
+        NULL::text AS notes,
+        price.created_at,
+        instrument.id::text AS instrument_id,
+        instrument.name AS instrument_name,
+        COALESCE(instrument.symbol, '') AS instrument_symbol,
+        ''::text AS quantity,
+        price.price::text AS unit_price,
+        ''::text AS event_group_id
+    FROM security_prices price
+    JOIN investment_instruments instrument
+      ON instrument.user_id = price.user_id AND instrument.id = price.instrument_id
+    JOIN accounts ON accounts.user_id = price.user_id AND accounts.id = sqlc.arg(account_id)
+    WHERE price.user_id = sqlc.arg(user_id)
+      AND EXISTS (
+          SELECT 1 FROM position_events event
+          WHERE event.user_id = price.user_id AND event.account_id = accounts.id
+            AND (event.instrument_id = price.instrument_id OR event.related_instrument_id = price.instrument_id)
+      )
 ) AS activity
-WHERE ($3::date IS NULL OR activity_date >= $3)
-  AND ($4::date IS NULL OR activity_date <= $4)
-ORDER BY activity_date DESC, created_at DESC, id DESC
-LIMIT $5 OFFSET $6;
+WHERE (sqlc.narg(from_date)::date IS NULL OR activity_date >= sqlc.narg(from_date))
+  AND (sqlc.narg(to_date)::date IS NULL OR activity_date <= sqlc.narg(to_date))
+ORDER BY activity_date DESC, created_at DESC, kind DESC, id DESC
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);

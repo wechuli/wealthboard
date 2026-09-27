@@ -52,6 +52,26 @@ The current account value is:
 2. plus each replayed quantity multiplied by its effective unit price;
 3. converted into the account currency when the instrument is quoted elsewhere.
 
+For a foreign-currency account, **Base-currency value** shows that same current
+account total in your configured base currency. **Current value** and **Cash**
+remain in the account currency. A missing exchange rate is shown as incomplete,
+not as zero.
+
+The **Positions** table keeps each security's quantity separate and shows its
+effective unit price, date, source, and account-currency value. Use **Add holding**
+for an opening position, **Add instrument** for a new security reference, and the
+price edit control on a row to update that specific security. Prices are shared
+by all of your accounts holding that instrument.
+
+## Review investment history
+
+**Investment activity** combines cash transactions, position events, corporate
+actions, and price observations in one newest-first timeline. Use **Previous**
+and **Next** to browse older records; the selected page remains in the URL.
+Ordinary position events can be opened directly for correction, including
+events older than the first page of history. Grouped and corporate-action
+records remain managed through their dedicated workflows.
+
 ## Permanently delete an instrument
 
 Open **Instruments** and select the instrument's delete control. Confirming

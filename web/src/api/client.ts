@@ -35,6 +35,7 @@ import type {
   MutationID,
   MutationStatus,
   PositionEventPage,
+  PositionEvent,
   PositionEventInput,
   PositionReconciliationPage,
   PositionReconciliationInput,
@@ -195,8 +196,13 @@ export const getDashboard = (range = "1y") =>
   request<Dashboard>(`/dashboard?range=${encodeURIComponent(range)}`);
 export const getAccounts = () => request<AccountList>("/accounts");
 export const getAccount = (id: string) => request<Account>(`/accounts/${id}`);
-export const getAccountActivity = (id: string) =>
-  request<ActivityPage>(`/accounts/${id}/activity?limit=100`);
+export const getAccountActivity = (
+  id: string,
+  { limit = 100, offset = 0 }: { limit?: number; offset?: number } = {},
+) =>
+  request<ActivityPage>(
+    `/accounts/${id}/activity?${new URLSearchParams({ limit: String(limit), offset: String(offset) })}`,
+  );
 export const getAccountTransactions = (id: string) =>
   request<TransactionPage>(`/accounts/${id}/transactions?limit=100`);
 export const getAccountValuations = (id: string) =>
@@ -205,6 +211,8 @@ export const getAccountAnalytics = (id: string) =>
   request<AccountAnalytics>(`/accounts/${id}/analytics`);
 export const getAccountPositionEvents = (id: string) =>
   request<PositionEventPage>(`/accounts/${id}/position-events?limit=100`);
+export const getAccountPositionEvent = (accountId: string, eventId: string) =>
+  request<PositionEvent>(`/accounts/${accountId}/position-events/${eventId}`);
 export const getAccountPositionReconciliations = (id: string) =>
   request<PositionReconciliationPage>(
     `/accounts/${id}/position-reconciliations?limit=100`,

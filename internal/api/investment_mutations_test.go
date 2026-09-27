@@ -30,6 +30,11 @@ func (fake *fakeInvestmentMutationService) PositionEvents(_ context.Context, use
 	return service.Page[service.PositionEvent]{Items: []service.PositionEvent{}, Limit: page.Limit, Offset: page.Offset}, fake.err
 }
 
+func (fake *fakeInvestmentMutationService) GetPositionEvent(_ context.Context, userID, accountID, eventID uuid.UUID) (service.PositionEvent, error) {
+	fake.lastUserID, fake.lastAccount, fake.resultID = userID, accountID, eventID
+	return service.PositionEvent{ID: eventID, AccountID: accountID}, fake.err
+}
+
 func (fake *fakeInvestmentMutationService) PositionReconciliations(_ context.Context, userID, accountID uuid.UUID, page service.ReadPage) (service.Page[service.PositionReconciliation], error) {
 	fake.lastUserID, fake.lastAccount, fake.lastPage = userID, accountID, page
 	return service.Page[service.PositionReconciliation]{Items: []service.PositionReconciliation{}, Limit: page.Limit, Offset: page.Offset}, fake.err
@@ -80,6 +85,26 @@ func (fake *fakeInvestmentMutationService) CreatePositionReconciliation(context.
 
 func (fake *fakeInvestmentMutationService) DeletePositionReconciliation(context.Context, uuid.UUID, uuid.UUID) error {
 	return fake.err
+}
+
+func TestInvestmentPositionEventReadPassesOwnerAndAccount(t *testing.T) {
+	userID, accountID, eventID := uuid.New(), uuid.New(), uuid.New()
+	fake := &fakeInvestmentMutationService{}
+	router := investmentMutationRouter(fakeFeatureAuthenticator{principal: webauth.Principal{
+		UserID: userID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioRead},
+	}}, fake)
+	path := "/accounts/" + accountID.String() + "/position-events/" + eventID.String()
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+	if response.Code != http.StatusOK || fake.lastUserID != userID || fake.lastAccount != accountID || fake.resultID != eventID {
+		t.Fatalf("position read status=%d, user=%s, account=%s, event=%s", response.Code, fake.lastUserID, fake.lastAccount, fake.resultID)
+	}
+	fake.err = service.ErrInvestmentMutationNotFound
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("foreign or missing event status = %d", response.Code)
+	}
 }
 
 func TestInvestmentMutationSessionRequiresOriginAndCSRF(t *testing.T) {

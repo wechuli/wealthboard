@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/wechuli/wealthboard/internal/database/generated"
 )
 
 const (
@@ -97,11 +99,13 @@ type ValuationRow struct {
 }
 
 type ActivityRow struct {
-	Kind, AccountName, Type, Currency string
-	ID, AccountID                     uuid.UUID
-	AmountMinor                       int64
-	ActivityDate                      time.Time
-	Description, Notes                sql.NullString
+	Kind, AccountName, Type, Currency              string
+	ID, AccountID                                  uuid.UUID
+	AmountMinor                                    int64
+	ActivityDate                                   time.Time
+	Description, Notes                             sql.NullString
+	InstrumentID, InstrumentName, InstrumentSymbol string
+	Quantity, UnitPrice, EventGroupID              string
 }
 
 type CoreReadRepository interface {
@@ -212,16 +216,22 @@ type Valuation struct {
 }
 
 type ActivityItem struct {
-	Kind        string    `json:"kind"`
-	ID          uuid.UUID `json:"id"`
-	AccountID   uuid.UUID `json:"accountId"`
-	AccountName string    `json:"accountName"`
-	Type        string    `json:"type"`
-	AmountMinor string    `json:"amountMinor"`
-	Currency    string    `json:"currency"`
-	Date        string    `json:"date"`
-	Description string    `json:"description,omitempty"`
-	Notes       string    `json:"notes,omitempty"`
+	Kind             string    `json:"kind"`
+	ID               uuid.UUID `json:"id"`
+	AccountID        uuid.UUID `json:"accountId"`
+	AccountName      string    `json:"accountName"`
+	Type             string    `json:"type"`
+	AmountMinor      string    `json:"amountMinor"`
+	Currency         string    `json:"currency"`
+	Date             string    `json:"date"`
+	Description      string    `json:"description,omitempty"`
+	Notes            string    `json:"notes,omitempty"`
+	InstrumentID     string    `json:"instrumentId,omitempty"`
+	InstrumentName   string    `json:"instrumentName,omitempty"`
+	InstrumentSymbol string    `json:"instrumentSymbol,omitempty"`
+	Quantity         string    `json:"quantity,omitempty"`
+	UnitPrice        string    `json:"unitPrice,omitempty"`
+	EventGroupID     string    `json:"eventGroupId,omitempty"`
 }
 
 type Page[T any] struct {
@@ -411,7 +421,9 @@ func (service *CoreReadService) Activity(ctx context.Context, userID uuid.UUID, 
 		items = append(items, ActivityItem{Kind: row.Kind, ID: row.ID, AccountID: row.AccountID,
 			AccountName: row.AccountName, Type: row.Type, AmountMinor: strconv.FormatInt(row.AmountMinor, 10),
 			Currency: row.Currency, Date: row.ActivityDate.Format(time.DateOnly),
-			Description: row.Description.String, Notes: row.Notes.String})
+			Description: row.Description.String, Notes: row.Notes.String,
+			InstrumentID: row.InstrumentID, InstrumentName: row.InstrumentName, InstrumentSymbol: row.InstrumentSymbol,
+			Quantity: row.Quantity, UnitPrice: row.UnitPrice, EventGroupID: row.EventGroupID})
 	}
 	return Page[ActivityItem]{Items: items, Limit: filter.Page.Limit, Offset: filter.Page.Offset, HasMore: hasMore}, nil
 }
@@ -474,10 +486,7 @@ func uuidPointer(value uuid.NullUUID) *uuid.UUID {
 	return &result
 }
 
-type coreReadDB interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
+type coreReadDB = generated.DBTX
 
 type SQLCoreReadRepository struct{ db coreReadDB }
 
@@ -598,20 +607,34 @@ func (repository *SQLCoreReadRepository) ListValuations(ctx context.Context, use
 }
 
 func (repository *SQLCoreReadRepository) ListActivity(ctx context.Context, userID uuid.UUID, filter ActivityFilter) ([]ActivityRow, error) {
-	rows, err := repository.db.QueryContext(ctx, coreActivitySQL, userID, nullableUUID(filter.AccountID), filter.From, filter.To, filter.Page.Limit+1, filter.Page.Offset)
+	if filter.AccountID == nil {
+		return nil, errors.New("account is required for activity")
+	}
+	params := generated.ListCoreAccountActivityParams{
+		UserID: userID, AccountID: *filter.AccountID,
+		PageLimit: int32(filter.Page.Limit + 1), PageOffset: int32(filter.Page.Offset),
+	}
+	if filter.From != nil {
+		params.FromDate = sql.NullTime{Time: *filter.From, Valid: true}
+	}
+	if filter.To != nil {
+		params.ToDate = sql.NullTime{Time: *filter.To, Valid: true}
+	}
+	rows, err := generated.New(repository.db).ListCoreAccountActivity(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	result := []ActivityRow{}
-	for rows.Next() {
-		var row ActivityRow
-		if err := rows.Scan(&row.Kind, &row.ID, &row.AccountID, &row.AccountName, &row.Type, &row.AmountMinor, &row.Currency, &row.ActivityDate, &row.Description, &row.Notes); err != nil {
-			return nil, err
-		}
-		result = append(result, row)
+	result := make([]ActivityRow, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, ActivityRow{
+			Kind: row.Kind, ID: row.ID, AccountID: row.AccountID, AccountName: row.AccountName,
+			Type: row.Type, AmountMinor: row.AmountMinor, Currency: row.Currency, ActivityDate: row.ActivityDate,
+			Description: row.Description, Notes: row.Notes,
+			InstrumentID: row.InstrumentID, InstrumentName: row.InstrumentName, InstrumentSymbol: row.InstrumentSymbol,
+			Quantity: row.Quantity, UnitPrice: row.UnitPrice, EventGroupID: row.EventGroupID,
+		})
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func nullableUUID(value *uuid.UUID) any {
@@ -636,4 +659,3 @@ const coreAccountsSQL = `SELECT ` + coreAccountColumns + coreAccountJoins + ` WH
 const coreAccountSQL = `SELECT ` + coreAccountColumns + coreAccountJoins + ` WHERE accounts.user_id = $1 AND accounts.id = $2`
 const coreTransactionsSQL = `SELECT transactions.id, transactions.account_id, accounts.name, transactions.type, transactions.amount_minor, transactions.currency, transactions.transaction_date, transactions.description, transactions.notes, transactions.external_id, transactions.transfer_group_id, transactions.event_group_id FROM transactions JOIN accounts ON accounts.user_id = transactions.user_id AND accounts.id = transactions.account_id WHERE transactions.user_id = $1 AND ($2::uuid IS NULL OR transactions.account_id = $2) AND ($3::text IS NULL OR transactions.type = $3) AND ($4::date IS NULL OR transactions.transaction_date >= $4) AND ($5::date IS NULL OR transactions.transaction_date <= $5) ORDER BY transactions.transaction_date DESC, transactions.created_at DESC, transactions.id DESC LIMIT $6 OFFSET $7`
 const coreValuationsSQL = `SELECT valuation_snapshots.id, valuation_snapshots.account_id, accounts.name, valuation_snapshots.value_minor, valuation_snapshots.currency, valuation_snapshots.valuation_date, valuation_snapshots.notes FROM valuation_snapshots JOIN accounts ON accounts.user_id = valuation_snapshots.user_id AND accounts.id = valuation_snapshots.account_id WHERE valuation_snapshots.user_id = $1 AND valuation_snapshots.account_id = $2 AND ($3::date IS NULL OR valuation_snapshots.valuation_date >= $3) AND ($4::date IS NULL OR valuation_snapshots.valuation_date <= $4) ORDER BY valuation_snapshots.valuation_date DESC, valuation_snapshots.created_at DESC, valuation_snapshots.id DESC LIMIT $5 OFFSET $6`
-const coreActivitySQL = `SELECT kind, id, account_id, account_name, type, amount_minor, currency, activity_date, description, notes FROM (SELECT 'transaction' AS kind, transactions.id, transactions.account_id, accounts.name AS account_name, transactions.type, transactions.amount_minor, transactions.currency, transactions.transaction_date AS activity_date, transactions.description, transactions.notes, transactions.created_at FROM transactions JOIN accounts ON accounts.user_id = transactions.user_id AND accounts.id = transactions.account_id WHERE transactions.user_id = $1 AND transactions.account_id = $2 UNION ALL SELECT 'valuation' AS kind, valuation_snapshots.id, valuation_snapshots.account_id, accounts.name AS account_name, 'valuation' AS type, valuation_snapshots.value_minor AS amount_minor, valuation_snapshots.currency, valuation_snapshots.valuation_date AS activity_date, NULL AS description, valuation_snapshots.notes, valuation_snapshots.created_at FROM valuation_snapshots JOIN accounts ON accounts.user_id = valuation_snapshots.user_id AND accounts.id = valuation_snapshots.account_id WHERE valuation_snapshots.user_id = $1 AND valuation_snapshots.account_id = $2) activity WHERE ($3::date IS NULL OR activity_date >= $3) AND ($4::date IS NULL OR activity_date <= $4) ORDER BY activity_date DESC, created_at DESC, id DESC LIMIT $5 OFFSET $6`

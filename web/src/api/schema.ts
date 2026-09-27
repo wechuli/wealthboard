@@ -381,6 +381,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{accountID}/position-events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one position event for correction
+         * @description Requires portfolio:read. Both the account and event must belong to the authenticated user.
+         */
+        get: operations["getAccountPositionEvent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{accountID}/position-reconciliations": {
         parameters: {
             query?: never;
@@ -2765,7 +2785,7 @@ export interface components {
         };
         ActivityItem: {
             /** @enum {string} */
-            kind: "transaction" | "valuation";
+            kind: "transaction" | "valuation" | "position" | "price";
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -2778,6 +2798,14 @@ export interface components {
             date: string;
             description?: string;
             notes?: string;
+            /** Format: uuid */
+            instrumentId?: string;
+            instrumentName?: string;
+            instrumentSymbol?: string;
+            quantity?: components["schemas"]["DecimalString"];
+            unitPrice?: components["schemas"]["DecimalString"];
+            /** Format: uuid */
+            eventGroupId?: string;
         };
         TransactionPage: {
             items: components["schemas"]["Transaction"][];
@@ -3066,6 +3094,23 @@ export interface components {
             cashMinor: components["schemas"]["MinorUnits"];
             positionsMinor: components["schemas"]["MinorUnits"];
             complete: boolean;
+            positions: components["schemas"]["AccountPosition"][];
+        };
+        AccountPosition: {
+            /** Format: uuid */
+            instrumentId: string;
+            instrumentName: string;
+            instrumentSymbol: string;
+            quoteCurrency: string;
+            instrumentArchived: boolean;
+            quantity: components["schemas"]["DecimalString"];
+            unitPrice: components["schemas"]["DecimalString"] | null;
+            /** Format: date */
+            priceDate: string | null;
+            priceSource: string;
+            valueMinor: components["schemas"]["MinorUnits"] | null;
+            complete: boolean;
+            stale: boolean;
         };
         PositionMovementAttribution: {
             /** Format: date-time */
@@ -4471,6 +4516,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PositionEventPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getAccountPositionEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped account position event */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionEvent"];
                 };
             };
             400: components["responses"]["Problem"];

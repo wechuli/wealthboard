@@ -8,37 +8,49 @@ import {
   AccountsPage,
   DashboardPage,
   NewSecurityPricePage,
+  EditPositionEventPage,
   TransactionsPage,
   coreRouteIntents,
 } from "@/pages/core";
 import { PrivacyBoundary } from "@/components/privacy";
+import type { AccountAnalytics, AccountPosition, Instrument, Session } from "@/lib/types";
 
 const {
   getAccount,
   getAccountAnalytics,
   getAccountActivity,
   getAccountPositionEvents,
+  getAccountPositionEvent,
+  getAccountTransactions,
+  getAccountPositionReconciliations,
   getAccountValuations,
   getAccounts,
   getDashboard,
   getGoalAlerts,
   getGoals,
   getInstruments,
+  getInstrument,
   getSettings,
   getTransactions,
+  upsertSecurityPrice,
 } = vi.hoisted(() => ({
   getAccount: vi.fn(),
   getAccountAnalytics: vi.fn(),
   getAccountActivity: vi.fn(),
   getAccountPositionEvents: vi.fn(),
+  getAccountPositionEvent: vi.fn(),
+  getAccountTransactions: vi.fn(),
+  getAccountPositionReconciliations: vi.fn(),
   getAccountValuations: vi.fn(),
   getAccounts: vi.fn(),
   getDashboard: vi.fn(),
   getGoalAlerts: vi.fn(),
   getGoals: vi.fn(),
   getInstruments: vi.fn(),
+  getInstrument: vi.fn(),
   getSettings: vi.fn(),
   getTransactions: vi.fn(),
+  upsertSecurityPrice: vi.fn(),
 }));
 
 vi.mock("@/api/client", () => ({
@@ -46,22 +58,30 @@ vi.mock("@/api/client", () => ({
   deleteAccount: vi.fn(),
   deleteTransaction: vi.fn(),
   deleteValuation: vi.fn(),
+  createPositionEvent: vi.fn(),
+  updatePositionEvent: vi.fn(),
+  deletePositionEvent: vi.fn(),
+  createPositionReconciliation: vi.fn(),
+  deletePositionReconciliation: vi.fn(),
   getAccount,
   getAccountAnalytics,
   getAccountActivity,
   getAccountPositionEvents,
-  getAccountPositionReconciliations: vi.fn(),
-  getAccountTransactions: vi.fn(),
+  getAccountPositionEvent,
+  getAccountPositionReconciliations,
+  getAccountTransactions,
   getAccountValuations,
   getCategories: vi.fn(),
   getInstitutions: vi.fn(),
   getInstruments,
+  getInstrument,
   getAccounts,
   getDashboard,
   getGoalAlerts,
   getGoals,
   getSettings,
   getTransactions,
+  upsertSecurityPrice,
 }));
 
 const account = {
@@ -88,6 +108,63 @@ const transaction = {
   currency: "KES",
   transactionDate: "2026-09-20",
   description: "Monthly interest",
+};
+
+const session: Session = {
+  user: { id: "11111111-1111-4111-8111-111111111111", username: "owner" },
+  csrfToken: "csrf",
+};
+const instrument: Instrument = {
+  id: "22222222-2222-4222-8222-222222222222",
+  name: "Example World ETF",
+  symbol: "EWLD",
+  quoteCurrency: "KES",
+  identifierType: "custom",
+  assetType: "etf",
+  identifier: null,
+  exchangeMic: null,
+  externalId: null,
+  archivedAt: null,
+  createdAt: "2026-09-01T00:00:00Z",
+  updatedAt: "2026-09-01T00:00:00Z",
+  latestPrice: null,
+};
+const position: AccountPosition = {
+  instrumentId: instrument.id,
+  instrumentName: instrument.name,
+  instrumentSymbol: "EWLD",
+  quoteCurrency: "KES",
+  instrumentArchived: false,
+  quantity: "10",
+  unitPrice: "100",
+  priceDate: "2026-09-20",
+  priceSource: "fictional statement",
+  valueMinor: "100000",
+  complete: true,
+  stale: false,
+};
+const positionAnalytics: AccountAnalytics = {
+  accountId: account.id,
+  currency: "KES",
+  metrics: {
+    contributionsMinor: "100000",
+    withdrawalsMinor: "0",
+    incomeMinor: "0",
+    feesMinor: "0",
+    capitalGrowthMinor: "0",
+    estimatedGainMinor: "25000",
+  },
+  positionSummary: {
+    cashMinor: "25000",
+    positionsMinor: "100000",
+    complete: true,
+    positions: [position],
+  },
+  history: [],
+  historyComplete: true,
+  movementAttributionAvailable: false,
+  movementAttribution: null,
+  completenessReasons: [],
 };
 
 function renderPage(node: React.ReactNode, initialEntries = ["/"]) {
@@ -191,8 +268,17 @@ beforeEach(() => {
     movementAttributionAvailable: false,
     completenessReasons: [],
   });
-  getAccountActivity.mockResolvedValue({ items: [] });
   getAccountValuations.mockResolvedValue({ items: [] });
+  getAccountActivity.mockImplementation(
+    (_id, { limit = 100, offset = 0 } = {}) =>
+      Promise.resolve({ items: [], limit, offset, hasMore: false }),
+  );
+  getAccountPositionEvents.mockResolvedValue({ items: [], limit: 100, offset: 0, hasMore: false });
+  getAccountTransactions.mockResolvedValue({ items: [], limit: 100, offset: 0, hasMore: false });
+  getAccountPositionReconciliations.mockResolvedValue({ items: [], limit: 100, offset: 0, hasMore: false });
+  getAccountPositionEvent.mockRejectedValue(new Error("Position event not found."));
+  getInstruments.mockResolvedValue({ instruments: [instrument] });
+  getInstrument.mockResolvedValue({ instrument, prices: [] });
 });
 
 afterEach(cleanup);
@@ -381,6 +467,7 @@ describe("ported core pages", () => {
         cashMinor: "25000",
         positionsMinor: "100000",
         complete: true,
+        positions: [position],
       },
       history: [],
       historyComplete: true,
@@ -426,29 +513,47 @@ describe("ported core pages", () => {
     expect(
       screen.getByRole("group", { name: "Cash metric" }),
     ).toHaveTextContent("KES 250.00");
-    expect(
-      screen.getByRole("group", { name: "Positions metric" }),
-    ).toHaveTextContent("KES 1,000.00");
+    expect(screen.getByRole("table", { name: "Current positions" })).toHaveTextContent("KES 1,000.00");
+    expect(screen.queryByRole("group", { name: "Positions metric" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Base-currency value metric" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { converted: "250000", expected: "KES 2,500.00" },
+    { converted: null, expected: "Incomplete data" },
+  ])("shows the server-provided base-currency value ($converted) without replacing the account value", async ({ converted, expected }) => {
+    getAccount.mockResolvedValue({
+      ...account,
+      trackingMode: "positions",
+      currency: "USD",
+      convertedValueMinor: converted,
+    });
+    getAccountAnalytics.mockResolvedValue({
+      ...positionAnalytics,
+      currency: "USD",
+      positionSummary: {
+        cashMinor: "25000",
+        positionsMinor: "100000",
+        complete: true,
+        positions: [{ ...position, quoteCurrency: "USD" }],
+      },
+    });
+    renderPage(
+      <Routes>
+        <Route path="/accounts/:id" element={<AccountDetailPage session={session} />} />
+      </Routes>,
+      ["/accounts/account-1"],
+    );
+    expect(await screen.findByRole("group", { name: "Base-currency value metric" })).toHaveTextContent(expected);
+    expect(screen.getByRole("group", { name: "Current value metric" })).toHaveTextContent("USD 1,250.00");
+    expect(screen.queryByRole("group", { name: "Positions metric" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Valuation history")).not.toBeInTheDocument();
+    expect(await screen.findByText("No investment activity on this page.")).toBeVisible();
   });
 
   it("defaults price entry to the first instrument held by the account", async () => {
     getAccount.mockResolvedValue({ ...account, trackingMode: "positions" });
-    getInstruments.mockResolvedValue({
-      instruments: [
-        {
-          id: "instrument-1",
-          name: "Example World ETF",
-          symbol: "EWLD",
-          quoteCurrency: "KES",
-        },
-      ],
-    });
-    getAccountPositionEvents.mockResolvedValue({
-      items: [{ instrumentId: "instrument-1" }],
-      limit: 100,
-      offset: 0,
-      hasMore: false,
-    });
+    getAccountAnalytics.mockResolvedValue(positionAnalytics);
 
     renderPage(
       <Routes>
@@ -466,6 +571,56 @@ describe("ported core pages", () => {
       await screen.findByRole("heading", { name: "Update security price" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/^Price \(/)).toBeInTheDocument();
+    expect(getInstrument).toHaveBeenCalledWith(instrument.id);
+  });
+
+  it("updates the selected security and preserves entered precision when saving fails", async () => {
+    const user = userEvent.setup();
+    const selected = { ...instrument, id: "33333333-3333-4333-8333-333333333333", name: "Second fund" };
+    getAccount.mockResolvedValue({ ...account, trackingMode: "positions" });
+    getAccountAnalytics.mockResolvedValue(positionAnalytics);
+    getInstrument.mockResolvedValue({ instrument: selected, prices: [] });
+    upsertSecurityPrice.mockRejectedValue(new Error("Could not save the price. Try again."));
+    renderPage(
+      <Routes>
+        <Route path="/accounts/:id/prices/new" element={<NewSecurityPricePage session={session} />} />
+      </Routes>,
+      [`/accounts/account-1/prices/new?instrumentId=${selected.id}`],
+    );
+    const price = await screen.findByLabelText("Price (KES)");
+    await user.type(price, "123.456789123");
+    await user.click(screen.getByRole("button", { name: "Save price" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save the price.");
+    expect(price).toHaveValue("123.456789123");
+    expect(upsertSecurityPrice).toHaveBeenCalledWith(
+      expect.objectContaining({ instrumentId: selected.id, price: "123.456789123" }),
+      session.csrfToken,
+    );
+  });
+
+  it("loads an older position event directly rather than relying on the first history page", async () => {
+    const eventId = "44444444-4444-4444-8444-444444444444";
+    getAccount.mockResolvedValue({ ...account, trackingMode: "positions" });
+    getAccountPositionEvent.mockResolvedValue({
+      id: eventId,
+      accountId: account.id,
+      instrumentId: instrument.id,
+      type: "opening_position",
+      quantity: "1.125",
+      tradeCurrency: "KES",
+      cashEffectMinor: "0",
+      tradeDate: "2026-01-01",
+    });
+    renderPage(
+      <Routes>
+        <Route path="/accounts/:id/positions/:eventId/edit" element={<EditPositionEventPage session={session} />} />
+      </Routes>,
+      [`/accounts/account-1/positions/${eventId}/edit`],
+    );
+    expect(await screen.findByLabelText("Quantity")).toHaveValue("1.125");
+    expect(screen.getByLabelText("Event type")).toHaveValue("opening_position");
+    expect(screen.getByRole("button", { name: "Update position event" })).toBeVisible();
+    expect(getAccountPositionEvent).toHaveBeenCalledWith(account.id, eventId);
   });
 
   it("keeps every original page as a separate route intent", () => {

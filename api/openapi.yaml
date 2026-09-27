@@ -617,6 +617,29 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
+  /accounts/{accountID}/position-events/{id}:
+    get:
+      operationId: getAccountPositionEvent
+      summary: Read one position event for correction
+      description: Requires portfolio:read. Both the account and event must belong to the authenticated user.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Owner-scoped account position event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionEvent"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /accounts/{accountID}/position-reconciliations:
     get:
       operationId: listAccountPositionReconciliations
@@ -4512,7 +4535,7 @@ components:
       required:
         [kind, id, accountId, accountName, type, amountMinor, currency, date]
       properties:
-        kind: { type: string, enum: [transaction, valuation] }
+        kind: { type: string, enum: [transaction, valuation, position, price] }
         id: { type: string, format: uuid }
         accountId: { type: string, format: uuid }
         accountName: { type: string }
@@ -4523,6 +4546,12 @@ components:
         date: { type: string, format: date }
         description: { type: string }
         notes: { type: string }
+        instrumentId: { type: string, format: uuid }
+        instrumentName: { type: string }
+        instrumentSymbol: { type: string }
+        quantity: { $ref: "#/components/schemas/DecimalString" }
+        unitPrice: { $ref: "#/components/schemas/DecimalString" }
+        eventGroupId: { type: string, format: uuid }
     TransactionPage:
       type: object
       additionalProperties: false
@@ -5158,11 +5187,38 @@ components:
     AccountPositionSummary:
       type: object
       additionalProperties: false
-      required: [cashMinor, positionsMinor, complete]
+      required: [cashMinor, positionsMinor, complete, positions]
       properties:
         cashMinor: { $ref: "#/components/schemas/MinorUnits" }
         positionsMinor: { $ref: "#/components/schemas/MinorUnits" }
         complete: { type: boolean }
+        positions:
+          type: array
+          items: { $ref: "#/components/schemas/AccountPosition" }
+    AccountPosition:
+      type: object
+      additionalProperties: false
+      required:
+        [instrumentId, instrumentName, instrumentSymbol, quoteCurrency, instrumentArchived, quantity, unitPrice, priceDate, priceSource, valueMinor, complete, stale]
+      properties:
+        instrumentId: { type: string, format: uuid }
+        instrumentName: { type: string }
+        instrumentSymbol: { type: string }
+        quoteCurrency: { type: string }
+        instrumentArchived: { type: boolean }
+        quantity: { $ref: "#/components/schemas/DecimalString" }
+        unitPrice:
+          oneOf:
+            - { $ref: "#/components/schemas/DecimalString" }
+            - { type: "null" }
+        priceDate: { type: [string, "null"], format: date }
+        priceSource: { type: string }
+        valueMinor:
+          oneOf:
+            - { $ref: "#/components/schemas/MinorUnits" }
+            - { type: "null" }
+        complete: { type: boolean }
+        stale: { type: boolean }
     PositionMovementAttribution:
       type: object
       additionalProperties: false

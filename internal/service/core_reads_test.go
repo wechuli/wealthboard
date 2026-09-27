@@ -16,6 +16,7 @@ type fakeCoreReadRepository struct {
 	accountCalls     []uuid.UUID
 	activityCalls    int
 	transactions     []TransactionRow
+	activityRows     []ActivityRow
 }
 
 func (repository *fakeCoreReadRepository) GetSettings(context.Context, uuid.UUID) (SettingsRow, error) {
@@ -52,7 +53,7 @@ func (repository *fakeCoreReadRepository) ListValuations(context.Context, uuid.U
 
 func (repository *fakeCoreReadRepository) ListActivity(context.Context, uuid.UUID, ActivityFilter) ([]ActivityRow, error) {
 	repository.activityCalls++
-	return nil, nil
+	return repository.activityRows, nil
 }
 
 func TestCoreReadsRejectForeignAccountBeforeActivityQuery(t *testing.T) {
@@ -111,5 +112,38 @@ func TestCoreReadsRejectUnboundedPagination(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("Transactions() error = nil, want pagination validation error")
+	}
+}
+
+func TestCoreReadsPreserveInvestmentActivityAndPagination(t *testing.T) {
+	userID, accountID, instrumentID := uuid.New(), uuid.New(), uuid.New()
+	repository := &fakeCoreReadRepository{
+		ownerID: userID, foreignAccountID: accountID,
+		activityRows: []ActivityRow{
+			{
+				Kind: "position", ID: uuid.New(), AccountID: accountID, AccountName: "Brokerage",
+				Type: "buy", AmountMinor: -9_007_199_254_740_993, Currency: "USD",
+				ActivityDate: time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC),
+				InstrumentID: instrumentID.String(), InstrumentName: "Fictional fund", InstrumentSymbol: "FUND",
+				Quantity: "0.00000001", UnitPrice: "1.123456789123", EventGroupID: uuid.NewString(),
+			},
+			{Kind: "price", ID: uuid.New(), AccountID: accountID, Type: "security_price", Currency: "USD", UnitPrice: "2.123456789123"},
+		},
+	}
+	page, err := NewCoreReadService(repository).Activity(context.Background(), userID, ActivityFilter{
+		AccountID: &accountID, Page: ReadPage{Limit: 1, Offset: 25},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || !page.HasMore || page.Offset != 25 {
+		t.Fatalf("activity page = %+v", page)
+	}
+	item := page.Items[0]
+	if item.Kind != "position" || item.AmountMinor != "-9007199254740993" ||
+		item.Quantity != "0.00000001" || item.UnitPrice != "1.123456789123" ||
+		item.InstrumentID != instrumentID.String() || item.InstrumentName != "Fictional fund" ||
+		item.EventGroupID == "" || item.Date != "2026-09-20" {
+		t.Errorf("serialized position activity = %+v", item)
 	}
 }

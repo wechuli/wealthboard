@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createCorporateAction, mutate } from "@/api/client";
+import {
+  createCorporateAction,
+  getAccountActivity,
+  getAccountPositionEvent,
+  mutate,
+} from "@/api/client";
 
 describe("mutate", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -73,6 +78,30 @@ describe("mutate", () => {
           "Idempotency-Key": key,
         }),
       }),
+    );
+  });
+
+  it("loads paginated account history and individual events without private caching", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response("{}", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getAccountActivity("account-1", { limit: 25, offset: 100 });
+    await getAccountPositionEvent("account-1", "event-101");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/accounts/account-1/activity?limit=25&offset=100",
+      expect.objectContaining({ credentials: "same-origin", cache: "no-store" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/accounts/account-1/position-events/event-101",
+      expect.objectContaining({ credentials: "same-origin", cache: "no-store" }),
     );
   });
 });

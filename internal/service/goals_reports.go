@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/wechuli/wealthboard/internal/database/generated"
 )
 
 var (
@@ -18,10 +20,7 @@ var (
 	ErrGoalsReportsInvalidInput = errors.New("invalid goals and reports input")
 )
 
-type GoalsReportsDB interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
+type GoalsReportsDB = generated.DBTX
 
 type GoalsReportsRepository interface {
 	GetSettings(context.Context, uuid.UUID) (GoalsReportsSettings, error)
@@ -38,8 +37,11 @@ type SQLGoalsReportsRepository struct {
 }
 
 type GoalsReportsSettings struct {
-	BaseCurrency string
-	Timezone     string
+	BaseCurrency           string
+	Timezone               string
+	PositionStaleDaysStock int
+	PositionStaleDaysETF   int
+	PositionStaleDaysFund  int
 }
 
 type GoalRecord struct {
@@ -295,9 +297,25 @@ type AccountFlowMetricsRead struct {
 }
 
 type AccountPositionSummaryRead struct {
-	CashMinor      string `json:"cashMinor"`
-	PositionsMinor string `json:"positionsMinor"`
-	Complete       bool   `json:"complete"`
+	CashMinor      string                `json:"cashMinor"`
+	PositionsMinor string                `json:"positionsMinor"`
+	Complete       bool                  `json:"complete"`
+	Positions      []AccountPositionRead `json:"positions"`
+}
+
+type AccountPositionRead struct {
+	InstrumentID       uuid.UUID `json:"instrumentId"`
+	InstrumentName     string    `json:"instrumentName"`
+	InstrumentSymbol   string    `json:"instrumentSymbol"`
+	QuoteCurrency      string    `json:"quoteCurrency"`
+	InstrumentArchived bool      `json:"instrumentArchived"`
+	Quantity           string    `json:"quantity"`
+	UnitPrice          *string   `json:"unitPrice"`
+	PriceDate          *string   `json:"priceDate"`
+	PriceSource        string    `json:"priceSource"`
+	ValueMinor         *string   `json:"valueMinor"`
+	Complete           bool      `json:"complete"`
+	Stale              bool      `json:"stale"`
 }
 
 type PositionMovementAttributionRead struct {
@@ -729,8 +747,6 @@ func formatGoalsReportsDate(value *time.Time) *string {
 	return &formatted
 }
 
-const goalsReportsSettingsSQL = `SELECT base_currency, timezone FROM user_settings WHERE user_id = $1`
-
 const goalsReportsGoalSelectSQL = `SELECT
 g.id, g.name, g.description, g.target_amount_minor, g.current_amount_minor,
 g.currency, g.target_date, g.linked_account_id, g.icon, g.status, g.priority,
@@ -746,9 +762,16 @@ LEFT JOIN LATERAL (
 ) p ON TRUE`
 
 func (repository *SQLGoalsReportsRepository) GetSettings(ctx context.Context, userID uuid.UUID) (GoalsReportsSettings, error) {
-	var settings GoalsReportsSettings
-	err := repository.db.QueryRowContext(ctx, goalsReportsSettingsSQL, userID).Scan(&settings.BaseCurrency, &settings.Timezone)
-	return settings, err
+	row, err := generated.New(repository.db).GetGoalsReportsSettings(ctx, userID)
+	if err != nil {
+		return GoalsReportsSettings{}, err
+	}
+	return GoalsReportsSettings{
+		BaseCurrency: row.BaseCurrency, Timezone: row.Timezone,
+		PositionStaleDaysStock: int(row.PositionStaleDaysStock),
+		PositionStaleDaysETF:   int(row.PositionStaleDaysEtf),
+		PositionStaleDaysFund:  int(row.PositionStaleDaysFund),
+	}, nil
 }
 
 func (repository *SQLGoalsReportsRepository) ListGoals(ctx context.Context, userID uuid.UUID) ([]GoalRecord, error) {

@@ -421,11 +421,78 @@ func TestPositionMovementAttributionBridgesPriceChange(t *testing.T) {
 			{InstrumentID: instrumentID, Currency: "KES", Price: "120", EffectiveDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
+
 	attribution, err := chartMovementAttribution(data, data.Accounts[0], endOfChartDay(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)), endOfChartDay(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)))
 	if err != nil {
 		t.Fatalf("movement attribution: %v", err)
 	}
 	if !attribution.Complete || attribution.ChangeMinor != "20000" || attribution.PriceMovementMinor != "20000" || attribution.UnattributedMinor != "0" {
 		t.Fatalf("movement attribution = %+v", attribution)
+	}
+}
+
+func TestChartPositionSummaryKeepsExactHoldingsAndMissingData(t *testing.T) {
+	at := time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC)
+	accountID, otherAccountID := uuid.New(), uuid.New()
+	pricedID, unpricedID, foreignID, closedID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	account := chartAccount{ID: accountID, Currency: "USD", TrackingMode: "positions"}
+	event := func(owner, instrument uuid.UUID, kind, quantity string, date time.Time) chartPositionEvent {
+		return chartPositionEvent{positionEventRow: positionEventRow{
+			id: uuid.New(), accountID: owner, instrumentID: instrument,
+			eventType: kind, quantity: quantity, tradeDate: date,
+		}}
+	}
+	data := chartData{
+		Instruments: []chartInstrument{
+			{ID: pricedID, Name: "Fractional ETF", Currency: "USD", AssetType: "etf"},
+			{ID: unpricedID, Name: "Unpriced fund", Currency: "USD", AssetType: "fund"},
+			{ID: foreignID, Name: "Unconverted stock", Currency: "EUR", AssetType: "stock"},
+			{ID: closedID, Name: "Closed holding", Currency: "USD", AssetType: "stock"},
+		},
+		Transactions: []chartTransaction{{
+			AccountID: accountID, Type: "opening_balance", Amount: 12345, Currency: "USD", Date: at.AddDate(0, -1, 0),
+		}},
+		PositionEvents: []chartPositionEvent{
+			event(accountID, pricedID, "opening_position", "1.125", at.AddDate(0, -1, 0)),
+			event(accountID, unpricedID, "opening_position", "2", at.AddDate(0, -1, 0)),
+			event(accountID, foreignID, "opening_position", "1.5", at.AddDate(0, -1, 0)),
+			event(accountID, closedID, "opening_position", "1", at.AddDate(0, -1, 0)),
+			event(accountID, closedID, "transfer_out", "1", at.AddDate(0, 0, -1)),
+			event(otherAccountID, pricedID, "opening_position", "999", at.AddDate(0, -1, 0)),
+		},
+		Prices: []chartPrice{
+			{InstrumentID: pricedID, Currency: "USD", Price: "10.12345678", Source: "fictional statement", EffectiveDate: at.AddDate(0, 0, -8)},
+			{InstrumentID: pricedID, Currency: "USD", Price: "20", EffectiveDate: at.AddDate(0, 0, 1)},
+			{InstrumentID: unpricedID, Currency: "USD", Price: "5", EffectiveDate: at.AddDate(0, 0, 1)},
+			{InstrumentID: foreignID, Currency: "EUR", Price: "3.25", EffectiveDate: at},
+		},
+		Rates: []chartRate{{Base: "EUR", Quote: "USD", Rate: "2", EffectiveDate: at.AddDate(0, 0, 1)}},
+	}
+	settings := GoalsReportsSettings{PositionStaleDaysStock: 7, PositionStaleDaysETF: 7, PositionStaleDaysFund: 31}
+	summary, err := chartPositionSummary(data, account, settings, endOfChartDay(at))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Complete || summary.CashMinor != "12345" || summary.PositionsMinor != "1139" || len(summary.Positions) != 3 {
+		t.Fatalf("position summary = %+v", summary)
+	}
+	priced, foreign, unpriced := summary.Positions[0], summary.Positions[1], summary.Positions[2]
+	if priced.InstrumentID != pricedID || priced.Quantity != "1.125" || !priced.Complete || !priced.Stale ||
+		priced.UnitPrice == nil || *priced.UnitPrice != "10.12345678" || priced.PriceDate == nil || *priced.PriceDate != "2026-09-19" ||
+		priced.ValueMinor == nil || *priced.ValueMinor != "1139" || priced.PriceSource != "fictional statement" {
+		t.Errorf("priced holding = %+v", priced)
+	}
+	if foreign.InstrumentID != foreignID || foreign.UnitPrice == nil || foreign.ValueMinor != nil || foreign.Complete {
+		t.Errorf("holding missing FX = %+v", foreign)
+	}
+	if unpriced.InstrumentID != unpricedID || unpriced.UnitPrice != nil || unpriced.PriceDate != nil || unpriced.ValueMinor != nil || unpriced.Complete {
+		t.Errorf("holding missing price = %+v", unpriced)
+	}
+	later, err := chartPositionSummary(data, account, settings, endOfChartDay(at.AddDate(0, 0, 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !later.Complete || later.PositionsMinor != "4226" || later.CashMinor != "12345" {
+		t.Errorf("later summary = %+v", later)
 	}
 }

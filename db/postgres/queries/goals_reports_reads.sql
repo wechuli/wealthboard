@@ -1,7 +1,22 @@
 -- name: GetGoalsReportsSettings :one
-SELECT base_currency, timezone
+SELECT base_currency, timezone, position_stale_days_stock, position_stale_days_etf, position_stale_days_fund
 FROM user_settings
 WHERE user_id = $1;
+
+-- name: ListChartInstruments :many
+SELECT id, name, COALESCE(symbol, '') AS symbol, quote_currency, asset_type, archived_at
+FROM investment_instruments
+WHERE user_id = $1
+ORDER BY name, id;
+
+-- name: ListChartPrices :many
+SELECT price.instrument_id, instrument.name, COALESCE(instrument.symbol, '') AS symbol,
+       instrument.quote_currency, price.price::text AS unit_price, price.effective_date, price.created_at, price.source
+FROM security_prices price
+JOIN investment_instruments instrument
+  ON instrument.user_id = price.user_id AND instrument.id = price.instrument_id
+WHERE price.user_id = $1
+ORDER BY price.effective_date, price.created_at, price.id;
 
 -- name: ListGoalsReportsGoals :many
 SELECT

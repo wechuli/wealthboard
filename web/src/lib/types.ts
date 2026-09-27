@@ -42,6 +42,9 @@ export type Dashboard = components["schemas"]["Dashboard"];
 export type ReportSummary = components["schemas"]["ReportSummary"];
 export type ReportAllocation = components["schemas"]["ReportAllocation"];
 export type AccountAnalytics = components["schemas"]["AccountAnalytics"];
+export type AccountPosition = components["schemas"]["AccountPosition"];
+export type AccountPositionSummary =
+  components["schemas"]["AccountPositionSummary"];
 
 export type SecurityPrice = components["schemas"]["SecurityPrice"];
 export type Instrument = components["schemas"]["Instrument"];

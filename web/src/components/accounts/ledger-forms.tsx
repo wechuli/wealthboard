@@ -1266,9 +1266,15 @@ export function AccountConversionForm({
   );
 }
 
+export const positionEventTypeSchema = z.enum([
+  "opening_position",
+  "buy",
+  "sell",
+  "quantity_adjustment",
+]);
 const positionSchema = z.object({
   instrumentId: z.string().uuid(),
-  type: z.enum(["opening_position", "buy", "sell", "quantity_adjustment"]),
+  type: positionEventTypeSchema,
   quantity: z.string().min(1),
   unitPrice: z.string(),
   tradeCurrency: z.string().regex(/^[A-Z]{3}$/),
@@ -1283,6 +1289,29 @@ const positionSchema = z.object({
   description: z.string(),
   notes: z.string(),
 });
+
+function positionEventValues(event: PositionEvent, accountCurrency: string): z.infer<typeof positionSchema> {
+  return {
+    instrumentId: event.instrumentId,
+    type: positionEventTypeSchema.parse(event.type),
+    quantity: event.quantity,
+    unitPrice: event.unitPrice ?? "",
+    tradeCurrency: event.tradeCurrency,
+    feeAmount: event.feeAmountMinor ? minorUnitsToDecimal(event.feeAmountMinor) : "",
+    feeCurrency: event.feeCurrency ?? accountCurrency,
+    cashEffect: event.cashEffectMinor === "0"
+      ? ""
+      : minorUnitsToDecimal(event.cashEffectMinor.replace("-", "")),
+    appliedExchangeRate: event.appliedExchangeRate ?? "",
+    openingCostBasis: event.openingCostBasisMinor ? minorUnitsToDecimal(event.openingCostBasisMinor) : "",
+    tradeDate: event.tradeDate,
+    settlementDate: event.settlementDate ?? "",
+    externalId: event.externalId ?? "",
+    description: event.description ?? "",
+    notes: event.notes ?? "",
+  };
+}
+
 export function PositionTools({
   account,
   instruments,
@@ -1290,6 +1319,9 @@ export function PositionTools({
   reconciliations,
   session,
   onChanged,
+  initialEvent,
+  initialType = "buy",
+  initialInstrumentId,
   operations = {
     createEvent: createPositionEvent,
     updateEvent: updatePositionEvent,
@@ -1304,6 +1336,9 @@ export function PositionTools({
   reconciliations: PositionReconciliation[];
   session: Session;
   onChanged: () => void;
+  initialEvent?: PositionEvent;
+  initialType?: z.infer<typeof positionEventTypeSchema>;
+  initialInstrumentId?: string;
   operations?: {
     createEvent: typeof createPositionEvent;
     updateEvent: typeof updatePositionEvent;
@@ -1313,14 +1348,17 @@ export function PositionTools({
   };
 }) {
   const [eventKey, setEventKey] = useState(() => crypto.randomUUID());
-  const [eventID, setEventID] = useState("");
+  const [eventID, setEventID] = useState(initialEvent?.id ?? "");
   const [error, setError] = useState("");
+  const selectedInstrument = initialInstrumentId
+    ? instruments.find((instrument) => instrument.id === initialInstrumentId)
+    : instruments.find((instrument) => !instrument.archivedAt);
   const blankEvent = {
-    instrumentId: instruments[0]?.id ?? "",
-    type: "buy" as const,
+    instrumentId: selectedInstrument?.id ?? "",
+    type: initialType,
     quantity: "",
     unitPrice: "",
-    tradeCurrency: account.currency,
+    tradeCurrency: selectedInstrument?.quoteCurrency ?? account.currency,
     feeAmount: "0",
     feeCurrency: account.currency,
     cashEffect: "",
@@ -1334,7 +1372,9 @@ export function PositionTools({
   };
   const eventForm = useForm<z.infer<typeof positionSchema>>({
     resolver: zodResolver(positionSchema),
-    defaultValues: blankEvent,
+    defaultValues: initialEvent
+      ? positionEventValues(initialEvent, account.currency)
+      : blankEvent,
   });
   const reconciliationSchema = z.object({
     observationDate: z.iso.date(),
@@ -1360,30 +1400,7 @@ export function PositionTools({
   });
   const editEvent = (event: PositionEvent) => {
     setEventID(event.id);
-    eventForm.reset({
-      instrumentId: event.instrumentId,
-      type: event.type as z.infer<typeof positionSchema>["type"],
-      quantity: event.quantity,
-      unitPrice: event.unitPrice ?? "",
-      tradeCurrency: event.tradeCurrency,
-      feeAmount: event.feeAmountMinor
-        ? minorUnitsToDecimal(event.feeAmountMinor)
-        : "",
-      feeCurrency: event.feeCurrency ?? account.currency,
-      cashEffect:
-        event.cashEffectMinor === "0"
-          ? ""
-          : minorUnitsToDecimal(event.cashEffectMinor.replace("-", "")),
-      appliedExchangeRate: event.appliedExchangeRate ?? "",
-      openingCostBasis: event.openingCostBasisMinor
-        ? minorUnitsToDecimal(event.openingCostBasisMinor)
-        : "",
-      tradeDate: event.tradeDate,
-      settlementDate: event.settlementDate ?? "",
-      externalId: event.externalId ?? "",
-      description: event.description ?? "",
-      notes: event.notes ?? "",
-    });
+    eventForm.reset(positionEventValues(event, account.currency));
   };
   const resetEvent = () => {
     setEventID("");
@@ -1439,15 +1456,24 @@ export function PositionTools({
             }
           })}
         >
+          <ErrorNotice message={Object.values(eventForm.formState.errors)
+            .map((field) => field.message)
+            .filter((message): message is string => typeof message === "string")
+            .join(" ")} />
           <div className="form-grid">
             <div>
               <label htmlFor="event-instrument">Instrument</label>
               <select
                 id="event-instrument"
-                {...eventForm.register("instrumentId")}
+                {...eventForm.register("instrumentId", {
+                  onChange: (event: React.ChangeEvent<HTMLSelectElement>) => {
+                    const instrument = instruments.find((item) => item.id === event.target.value);
+                    if (instrument) eventForm.setValue("tradeCurrency", instrument.quoteCurrency);
+                  },
+                })}
               >
                 {instruments.map((item) => (
-                  <option key={item.id} value={item.id}>
+                  <option key={item.id} value={item.id} disabled={Boolean(item.archivedAt) && initialEvent?.instrumentId !== item.id}>
                     {item.symbol || item.name}
                   </option>
                 ))}
@@ -1598,12 +1624,7 @@ export function PositionTools({
           {events.map((event) => {
             const editable =
               !event.eventGroupId &&
-              [
-                "opening_position",
-                "buy",
-                "sell",
-                "quantity_adjustment",
-              ].includes(event.type);
+              positionEventTypeSchema.safeParse(event.type).success;
             const instrument = instruments.find(
               (item) => item.id === event.instrumentId,
             );

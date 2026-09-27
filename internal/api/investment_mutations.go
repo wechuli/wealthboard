@@ -19,6 +19,7 @@ type investmentMutationAuthenticator interface {
 
 type investmentMutationService interface {
 	PositionEvents(context.Context, uuid.UUID, uuid.UUID, service.ReadPage) (service.Page[service.PositionEvent], error)
+	GetPositionEvent(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (service.PositionEvent, error)
 	PositionReconciliations(context.Context, uuid.UUID, uuid.UUID, service.ReadPage) (service.Page[service.PositionReconciliation], error)
 	CreateInstrument(context.Context, uuid.UUID, service.InstrumentMutationInput) (uuid.UUID, error)
 	UpdateInstrument(context.Context, uuid.UUID, uuid.UUID, service.InstrumentMutationInput) error
@@ -45,6 +46,7 @@ func NewInvestmentMutationHandler(auth investmentMutationAuthenticator, mutation
 
 func RegisterInvestmentMutationRoutes(router chi.Router, handler *InvestmentMutationHandler) {
 	router.Get("/accounts/{accountID}/position-events", handler.PositionEvents)
+	router.Get("/accounts/{accountID}/position-events/{id}", handler.GetPositionEvent)
 	router.Get("/accounts/{accountID}/position-reconciliations", handler.PositionReconciliations)
 	router.Post("/instruments", handler.CreateInstrument)
 	router.Put("/instruments/{id}", handler.UpdateInstrument)
@@ -65,6 +67,19 @@ func (handler *InvestmentMutationHandler) PositionEvents(response http.ResponseW
 		return
 	}
 	result, err := handler.service.PositionEvents(request.Context(), principal.UserID, accountID, page)
+	handler.writeReadResult(response, result, err)
+}
+
+func (handler *InvestmentMutationHandler) GetPositionEvent(response http.ResponseWriter, request *http.Request) {
+	principal, accountID, _, ok := handler.authorizePositionRead(response, request)
+	if !ok {
+		return
+	}
+	eventID, ok := investmentPathID(response, request)
+	if !ok {
+		return
+	}
+	result, err := handler.service.GetPositionEvent(request.Context(), principal.UserID, accountID, eventID)
 	handler.writeReadResult(response, result, err)
 }
 
