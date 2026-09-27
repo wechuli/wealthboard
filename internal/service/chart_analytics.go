@@ -634,7 +634,7 @@ func latestSplitDate(events []positionEventRow, instrumentID uuid.UUID) time.Tim
 }
 
 func convertChartMinor(amount int64, from, to string, rates []chartRate, at time.Time) (int64, bool, error) {
-	if from == to {
+	if amount == 0 || from == to {
 		return amount, true, nil
 	}
 	var selected chartRate

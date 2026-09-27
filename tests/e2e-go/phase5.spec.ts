@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
+import type { components } from "../../web/src/api/schema";
+
 const origin = `http://127.0.0.1:${process.env.E2E_GO_PORT || 3200}`;
 const password = "fictional-go-e2e-password";
 
@@ -297,6 +299,51 @@ test("mutates estate data, snapshots it, and denies a foreign user", async ({
 test("exports a v8 archive and restores it through Go", async ({ page }) => {
   const session = await signUp(page, "go-portability-owner");
   await createAccount(page, session, "Portable savings");
+  const settingsResponse = await page.request.get("/api/v1/settings");
+  expect(settingsResponse.ok()).toBeTruthy();
+  const { settings } =
+    (await settingsResponse.json()) as components["schemas"]["SettingsRead"];
+  const settingsInput: components["schemas"]["SettingsMutationRequest"] = {
+    displayName: settings.displayName,
+    appName: settings.appName,
+    baseCurrency: settings.baseCurrency,
+    supportedCurrencies: [...new Set([...settings.supportedCurrencies, "USD"])],
+    timezone: settings.timezone,
+    preferredDateFormat: settings.preferredDateFormat,
+    defaultDashboardPeriod: settings.defaultDashboardPeriod,
+    sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
+    defaultGoalReturnBps: settings.defaultGoalReturnBps,
+    positionStaleDaysStock: settings.positionStaleDaysStock,
+    positionStaleDaysEtf: settings.positionStaleDaysEtf,
+    positionStaleDaysFund: settings.positionStaleDaysFund,
+  };
+  expect(
+    (await mutation(page, session, "PUT", "/settings", settingsInput)).ok(),
+  ).toBeTruthy();
+  expect(
+    (
+      await mutation(page, session, "POST", "/exchange-rates", {
+        baseCurrency: "USD",
+        quoteCurrency: "KES",
+        rate: "2.125",
+        effectiveDate: "2026-06-01",
+      })
+    ).status(),
+  ).toBe(201);
+  expect(
+    (
+      await mutation(page, session, "POST", "/accounts", {
+        idempotencyKey: randomUUID(),
+        name: "Later foreign brokerage",
+        categoryId: await firstCategoryId(page),
+        currency: "USD",
+        trackingMode: "positions",
+        openingValueMinor: "123456",
+        isIncludedInNetWorth: true,
+        openedAt: "2026-06-01",
+      })
+    ).status(),
+  ).toBe(201);
   const exported = await page.request.get("/api/v1/exports/user");
   expect(exported.ok()).toBeTruthy();
   expect(exported.headers()["cache-control"]).toContain("no-store");
@@ -312,7 +359,31 @@ test("exports a v8 archive and restores it through Go", async ({ page }) => {
     archive,
   );
   expect(restored.ok()).toBeTruthy();
-  expect((await restored.json()).accounts).toBe(1);
+  expect((await restored.json()).accounts).toBe(2);
+
+  const dashboardResponse = await page.request.get("/api/v1/dashboard?range=all");
+  expect(dashboardResponse.ok()).toBeTruthy();
+  const dashboard =
+    (await dashboardResponse.json()) as components["schemas"]["Dashboard"];
+  expect(dashboard.currentComplete).toBe(true);
+  expect(dashboard.historicalComplete).toBe(true);
+  expect(dashboard.totals.netWorth).toBe("262344");
+  expect(dashboard.periodChanges.allTime).toBe("262344");
+  expect(dashboard.history[0]).toEqual(
+    expect.objectContaining({
+      date: "2026-01-01T23:59:59Z",
+      netWorthMinor: "0",
+      complete: true,
+      missingCurrencies: [],
+    }),
+  );
+
+  await page.goto("/?range=all");
+  await expect(
+    page.getByRole("group", { name: "All time net worth change" }),
+  ).toContainText("KES 2,623.44");
+  await expect(page.getByText("Incomplete data", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Incomplete history:/)).toHaveCount(0);
 });
 
 test("extracts redacted text and rejects unsafe AI provider endpoints", async ({

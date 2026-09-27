@@ -16,6 +16,11 @@ Net worth is included assets minus included liabilities after conversion to the
 base currency. Dashboard period cards compare the current estimate with earlier
 replayed values.
 
+A zero balance does not need an exchange rate. Adding a foreign-currency account
+does not make earlier history incomplete when that account held no cash or
+positions at the time. Nonzero balances still need a rate effective on the
+historical date, and held positions still need an effective security price.
+
 Exchange-rate warnings distinguish current balances from historical calculations:
 
 - **Current total is incomplete:** a required currency pair has no rate effective

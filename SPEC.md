@@ -838,8 +838,11 @@ position-tracked accounts.
 Dashboard period changes and account 30-day changes use the same end-of-UTC-day
 cutoff. Show a signed change only when both endpoints are complete; otherwise
 show incomplete data. A missing historical rate must not hide a valid current
-base-currency value. Archived accounts are excluded from both current and
-historical calculations, regardless of their archive date.
+base-currency value. A known zero balance needs no exchange rate, including dates
+before an account's first activity. Held positions still require an effective
+price; an unpriced position is not a known zero balance. Archived accounts are
+excluded from both current and historical calculations, regardless of their
+archive date.
 
 ### Asset allocation chart
 

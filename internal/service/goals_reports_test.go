@@ -186,6 +186,161 @@ func TestChartPointUsesReplayAndEffectiveDatedRates(t *testing.T) {
 	}
 }
 
+func TestChartDashboardDoesNotRequireRatesBeforeForeignAccountFunding(t *testing.T) {
+	date := func(year int, month time.Month, day int) time.Time {
+		return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	}
+	for _, trackingMode := range []string{"balance", "positions"} {
+		t.Run(trackingMode, func(t *testing.T) {
+			savingsID, foreignID, instrumentID := uuid.New(), uuid.New(), uuid.New()
+			data := chartData{
+				Accounts: []chartAccount{
+					{ID: savingsID, Currency: "KES", TrackingMode: "balance", IsIncludedInNetWorth: true, IsLiquid: true},
+					{ID: foreignID, Currency: "USD", TrackingMode: trackingMode, IsIncludedInNetWorth: true, IsInvestible: true},
+				},
+				Transactions: []chartTransaction{
+					{AccountID: savingsID, Type: "opening_balance", Amount: 10000, Currency: "KES", Date: date(2025, 1, 1)},
+					{AccountID: savingsID, Type: "deposit", Amount: 2000, Currency: "KES", Date: date(2026, 1, 1)},
+					{AccountID: savingsID, Type: "deposit", Amount: 1000, Currency: "KES", Date: date(2026, 8, 30)},
+					{AccountID: foreignID, Type: "opening_balance", Amount: 1000, Currency: "USD", Date: date(2026, 6, 1)},
+				},
+				Rates: []chartRate{
+					{Base: "USD", Quote: "KES", Rate: "2", EffectiveDate: date(2026, 6, 1)},
+					{Base: "USD", Quote: "KES", Rate: "3", EffectiveDate: date(2026, 9, 1)},
+				},
+			}
+			if trackingMode == "balance" {
+				data.Valuations = []chartValuation{{AccountID: foreignID, Value: 1200, Date: date(2026, 8, 1)}}
+			} else {
+				data.PositionEvents = []chartPositionEvent{{
+					positionEventRow: positionEventRow{
+						id: uuid.New(), accountID: foreignID, instrumentID: instrumentID,
+						eventType: "buy", quantity: "2", tradeDate: date(2026, 7, 1),
+					},
+					CashEffect: -1000,
+				}}
+				data.Prices = []chartPrice{
+					{InstrumentID: instrumentID, Currency: "USD", Price: "5", EffectiveDate: date(2026, 7, 1)},
+					{InstrumentID: instrumentID, Currency: "USD", Price: "6", EffectiveDate: date(2026, 8, 1)},
+				}
+			}
+			for _, rangeName := range []string{"1m", "3m", "6m", "1y", "all"} {
+				t.Run(rangeName, func(t *testing.T) {
+					dashboard, err := buildChartDashboard(data, GoalsReportsSettings{BaseCurrency: "KES"}, date(2026, 9, 27), rangeName, 0)
+					if err != nil {
+						t.Fatalf("dashboard: %v", err)
+					}
+					if !dashboard.CurrentComplete || !dashboard.HistoricalComplete || len(dashboard.MissingCurrencies) != 0 {
+						t.Errorf("completeness: current=%v, history=%v, missing=%v", dashboard.CurrentComplete, dashboard.HistoricalComplete, dashboard.MissingCurrencies)
+					}
+					if dashboard.Totals.NetWorth != "16600" || dashboard.Totals.Liquid != "13000" || dashboard.Totals.Investible != "3600" {
+						t.Errorf("totals = %+v", dashboard.Totals)
+					}
+					for _, change := range []struct {
+						name, want string
+						got        *string
+					}{
+						{"one month", "2200", dashboard.PeriodChanges.OneMonth},
+						{"three months", "2600", dashboard.PeriodChanges.ThreeMonths},
+						{"one year", "6600", dashboard.PeriodChanges.OneYear},
+						{"all time", "16600", dashboard.PeriodChanges.AllTime},
+					} {
+						if change.got == nil {
+							t.Errorf("%s change is incomplete, want %s", change.name, change.want)
+						} else if *change.got != change.want {
+							t.Errorf("%s change = %s, want %s", change.name, *change.got, change.want)
+						}
+					}
+					if len(dashboard.History) == 0 {
+						t.Fatal("expected history")
+					}
+					for _, point := range dashboard.History {
+						if !point.Complete || len(point.MissingCurrencies) != 0 {
+							t.Errorf("incomplete point: %+v", point)
+						}
+					}
+				})
+			}
+			for _, check := range []struct {
+				name, want string
+				now        time.Time
+			}{
+				{"before funding", "0", date(2026, 5, 15)},
+				{"after funding", "2000", date(2026, 6, 15)},
+			} {
+				t.Run(check.name, func(t *testing.T) {
+					current, change, err := chartAccountListValues(data, data.Accounts[1], "KES", check.now)
+					if err != nil {
+						t.Fatalf("account list values: %v", err)
+					}
+					if current == nil || change == nil {
+						t.Fatalf("account values are incomplete: current=%v, change=%v", current, change)
+					}
+					if *current != check.want || *change != check.want {
+						t.Errorf("account current=%s, change=%s, want %s", *current, *change, check.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestConvertChartMinorRequiresRatesOnlyForNonzeroAmounts(t *testing.T) {
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	futureRates := []chartRate{{Base: "USD", Quote: "KES", Rate: "3", EffectiveDate: at.AddDate(0, 0, 1)}}
+	for _, test := range []struct {
+		name   string
+		amount int64
+		rates  []chartRate
+		found  bool
+	}{
+		{"zero without rates", 0, nil, true},
+		{"zero before first rate", 0, futureRates, true},
+		{"positive without rates", 100, nil, false},
+		{"positive before first rate", 100, futureRates, false},
+		{"negative without rates", -100, nil, false},
+		{"negative before first rate", -100, futureRates, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			value, found, err := convertChartMinor(test.amount, "USD", "KES", test.rates, at)
+			if err != nil {
+				t.Fatalf("convert chart amount: %v", err)
+			}
+			if value != 0 || found != test.found {
+				t.Errorf("conversion = %d, found=%v; want 0, found=%v", value, found, test.found)
+			}
+		})
+	}
+}
+
+func TestChartPointStillRequiresPricesForHeldPositions(t *testing.T) {
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	accountID, instrumentID := uuid.New(), uuid.New()
+	data := chartData{
+		Accounts: []chartAccount{{ID: accountID, Currency: "USD", TrackingMode: "positions", IsIncludedInNetWorth: true}},
+		PositionEvents: []chartPositionEvent{{positionEventRow: positionEventRow{
+			id: uuid.New(), accountID: accountID, instrumentID: instrumentID,
+			eventType: "opening_position", quantity: "1", tradeDate: at,
+		}}},
+		Prices: []chartPrice{{InstrumentID: instrumentID, Currency: "USD", Price: "5", EffectiveDate: at.AddDate(0, 0, 1)}},
+		Rates:  []chartRate{{Base: "USD", Quote: "KES", Rate: "2", EffectiveDate: at}},
+	}
+	point, err := chartPointAt(data, "KES", endOfChartDay(at))
+	if err != nil {
+		t.Fatalf("chart point: %v", err)
+	}
+	if point.Complete || !containsString(point.MissingCurrencies, "price:"+instrumentID.String()) {
+		t.Errorf("missing price was not reported: %+v", point)
+	}
+	point, err = chartPointAt(data, "KES", endOfChartDay(at.AddDate(0, 0, 1)))
+	if err != nil {
+		t.Fatalf("priced chart point: %v", err)
+	}
+	if !point.Complete || point.NetWorthMinor != "1000" {
+		t.Errorf("priced chart point = %+v", point)
+	}
+}
+
 func TestGoalProjectionUsesExactMinorUnitsAndContributionWindow(t *testing.T) {
 	goal := GoalRead{CurrentAmountMinor: "100", TargetAmountMinor: "1000", TargetDate: "2026-03-20", Plan: &GoalPlanRead{
 		PlannedContributionMinor: "10", StartDate: "2026-01-20", Frequency: "monthly",
