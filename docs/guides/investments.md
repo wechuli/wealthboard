@@ -22,7 +22,7 @@ Select the method when creating the account.
 
 | Method               | Use it for                                                                                     | Authoritative value                                                               |
 | -------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Total value**      | Cash, property, vehicles, liabilities, unsupported investments, or one manually valued holding | Monetary transactions and absolute valuations                                     |
+| **Account value**    | Cash, property, vehicles, liabilities, unsupported investments, or one manually valued holding | Monetary transactions and absolute valuations                                     |
 | **Units and prices** | A brokerage cash ledger with long-only stocks, ETFs, or directly priced funds                  | Cash transactions, position events, security prices, and effective exchange rates |
 
 An account cannot switch methods through normal editing. Use the guided
@@ -40,6 +40,10 @@ units and prices.
    cost basis.
 7. Add an effective-dated unit price.
 
+Leave **Fee amount**, **Cash effect**, and **Applied exchange rate** empty for
+opening positions and quantity adjustments. Those fields describe cash-settled
+buys and sells, not an opening holding; the form starts with no fee.
+
 An instrument has its own identity, symbol, type, quote currency, and optional
 exchange or MIC. A ticker is not globally unique, so include the exchange or a
 stable identifier when the source provides one.
@@ -51,6 +55,27 @@ The current account value is:
 1. replayed account-currency cash;
 2. plus each replayed quantity multiplied by its effective unit price;
 3. converted into the account currency when the instrument is quoted elsewhere.
+
+For a foreign-currency account, **Base-currency value** shows that same current
+account total in your configured base currency. **Current value** and **Cash**
+remain in the account currency. A missing exchange rate is shown as incomplete,
+not as zero. Account lists and detail pages use the same Go calculation and
+owner-scoped, effective-dated rates for base-currency values.
+
+The **Positions** table keeps each security's quantity separate and shows its
+effective unit price, date, source, and account-currency value. Use **Add holding**
+for an opening position, **Add instrument** for a new security reference, and the
+price edit control on a row to update that specific security. Prices are shared
+by all of your accounts holding that instrument.
+
+## Review investment history
+
+**Investment activity** combines cash transactions, position events, corporate
+actions, and price observations in one newest-first timeline. Use **Previous**
+and **Next** to browse older records; the selected page remains in the URL.
+Ordinary position events can be opened directly for correction, including
+events older than the first page of history. Grouped and corporate-action
+records remain managed through their dedicated workflows.
 
 ## Permanently delete an instrument
 
@@ -81,7 +106,9 @@ balance-account `Purchase` or `Sale` transaction types.
 For a cross-currency trade, enter either the actual settlement in the account
 currency or the applied settlement rate. Wealthboard does not substitute a
 later portfolio reporting rate for the broker's trade settlement. An applied
-rate is invalid when trade and account currency are the same.
+rate is invalid when trade and account currency are the same. An explicit
+settlement is the complete net cash movement, including fees; the fee field
+does not add another charge to that supplied amount.
 
 ## Record cash and dividend reinvestment
 
@@ -134,10 +161,11 @@ cannot value the new share count; the holding remains incomplete until a
 post-split quote is available. Earlier historical values are preserved.
 
 Configure separate stock, ETF, and fund freshness thresholds under
-**Settings → Preferences → Price freshness thresholds**. A missing price,
-missing exchange rate, or stale carried price identifies the affected
-instrument, currency, date range, last price, source, and provenance in account,
-goal, estate, dashboard, report, and import views.
+**Settings → Preferences → Price freshness thresholds**. The account's
+Positions table shows the instrument, quote currency, effective price date,
+source, and stale state. Account analytics, dashboard history, and reports flag
+incomplete values; the investment import report identifies missing prices and
+currencies. These views do not all provide detailed affected-date ranges.
 
 An unresolved component is excluded from the partial numeric total and marks
 the result incomplete. Do not interpret that partial total as zero exposure.
@@ -145,8 +173,10 @@ the result incomplete. Do not interpret that partial total as zero exposure.
 ## Reconcile a broker statement
 
 Choose **Reconcile** and record the statement date, reported total, optional
-reported cash, and notes. Wealthboard calculates cash plus positions on the same
-date and shows the difference.
+reported cash, and notes. The current screen stores these observations and
+lists reported totals; it does not calculate a same-date cash/position
+difference. Compare the statement with the account history before recording
+any corrections.
 
 A reconciliation observation is evidence for review. It never overwrites cash,
 quantity, prices, or the derived account value. Resolve differences by correcting
@@ -154,13 +184,14 @@ the underlying source event or adding a confirmed missing record.
 
 ## Convert an existing account
 
-Use **Convert** on an active, investible total-value account. The workflow does
+Use **Convert** on an active, investible Account value account. The workflow does
 not rewrite or infer historical units.
 
 1. Choose a conversion date no earlier than the account's latest activity.
 2. Enter explicit opening broker cash.
-3. Add each instrument, quantity, unit price, source, provenance, and optional
-   reference basis.
+3. Select an existing instrument and enter its quantity, unit price, and
+   optional reference basis. The current web form accepts one holding and uses
+   `conversion` as the price source; the Go API supports multiple holdings.
 4. Preview the source balance, opening cash, positions, projected total, and
    difference.
 5. Resolve the difference, or explicitly accept it when the source statement
@@ -174,25 +205,25 @@ linked position account. Earlier monetary history stays on the archived source.
 It remains in backup exports but is no longer included in financial views or
 historical totals.
 Existing goal and estate links move to the replacement atomically. The archived
-source cannot be restored while its replacement remains active because that
-would count the same investment twice.
+source cannot be restored while its conversion link remains, even if the
+replacement is archived.
 
 ## Import investment history
 
 Position accounts use **Investment History v1**, not Account History Import v1.
-The preview resolves instruments, replays every event in deterministic order,
-and shows before/after quantities, price impact ranges, projected cash and
-positions, net change, duplicates, conflicts, oversells, and completeness
-issues.
+The Go preview resolves instruments, replays every event in deterministic order,
+and returns before/after quantities, price effective dates, projected cash and
+positions, net change, duplicates, conflicts, oversells, and missing prices or
+rates. The page shows counts and the first 50 row outcomes. Download **Report**
+to inspect the complete preview before committing.
 
-The import page also provides a strict, currency-aware AI transformation prompt
-for complete JSON or one of the four CSV collections. Copy it into an AI service
-you trust and add the source statement there. Prompt generation and copying are
-entirely client-side; Wealthboard sends neither the prompt nor the statement.
-Complete JSON is recommended when records are interdependent or a dividend and
-its reinvestment buys must share one atomic group.
-
-![Client-only investment transformation prompt with a selectable output contract](/images/screenshots/investment-ai-prompt.png)
+The optional **Convert document with AI** workflow extracts a source in your
+self-hosted instance, then asks for approval before sending selected source
+sections to your configured provider. The current import page does not expose
+the older copyable transformation prompts. Review the generated JSON through
+the same preview and commit workflow; see [AI-assisted import](../reference/ai-import).
+Use complete JSON when records are interdependent or a dividend and its
+reinvestment buys must share one atomic group.
 
 ![Atomic investment import preview with instrument resolution, event ordering, quantities, and price impact](/images/screenshots/investment-import-preview.png)
 
@@ -205,9 +236,11 @@ It also refreshes the values of your other accounts holding that instrument.
 
 ## Understand downstream values
 
-- **Goals** use the linked account's complete market value as current progress.
-- **Estate planning** uses the account value and surfaces missing or stale data
-  as review items.
+- **Goals** currently read the linked account's cached value. Review
+  [goal valuation limitations](./goals#create-a-goal) before relying on progress.
+- **Estate planning** retains account-based instructions, but does not yet
+  perform complete effective-dated price and FX valuation. See
+  [Estate planning](./estate-planning#step-1-make-the-asset-list-trustworthy).
 - **Dashboard and reports** include complete converted exposure and identify
   unresolved components.
 - **Movement attribution** separates external cash, income, fees, internal trade
@@ -223,7 +256,7 @@ Privacy mode masks cash, quantities, unit prices, reference basis, and derived
 values. Instrument name, symbol, event type, and dates remain visible so the
 account can still be reconciled.
 
-Use a total-value account for unsupported holdings. Position mode intentionally
+Use an Account value account for unsupported holdings. Position mode intentionally
 does not cover shorts, margin, options, derivatives, bonds quoted as a percentage
 of par, cryptocurrency wallets, multi-leg trades, automatic trading, tax-grade
 lots, or silent corporate-action inference.

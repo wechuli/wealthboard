@@ -35,9 +35,16 @@ Before allocating anything:
 - verify whether jointly held property is wholly or partly yours.
 
 Liabilities appear in the estate estimate but cannot be allocated as gifts.
-Position-account values enter the plan through the same account boundary as
-other assets. An unresolved instrument or rate marks the estate total
-incomplete; stale prices create review warnings without changing allocations.
+
+::: warning Current valuation limits
+The Go estate endpoints retain cached account values; they do not perform a
+complete effective-dated position valuation or exchange-rate conversion.
+Live base-currency totals include only same-currency values and are marked
+incomplete. Adding exchange rates alone does not resolve this limitation.
+
+Review missing/stale prices in the account's Positions table. Do not rely on
+estate completion badges or gift estimates as a complete, reconciled valuation.
+:::
 
 ## Step 2: Add beneficiaries
 
@@ -60,8 +67,8 @@ Open **Distribution** and find the asset.
 ### Include this asset
 
 Turn off **Include this asset in the estate distribution plan** when the item is
-informational or deliberately outside the plan. An excluded asset contributes
-no estate gift value.
+informational or deliberately outside the plan. The account remains recorded,
+but is not intended for estate distribution.
 
 ### Estate ownership share
 
@@ -144,10 +151,14 @@ an asset to pass outside an estate or require special handling.
 
 Open **Summary**. Wealthboard separates:
 
-- **blocking mathematical items:** incomplete allocations, missing active
-  beneficiary coverage, archived recipients, or archived included assets;
-- **planning warnings:** stale values, unknown transfer context, undecided
-  methods, liabilities, and review dates.
+- **blocking mathematical items:** unconfigured assets, incomplete allocations,
+  missing active beneficiary coverage, or archived recipients;
+- **planning warnings:** zero values, unknown transfer context, undecided
+  methods, shared-title arrangements, liabilities, and an unrecorded plan review.
+
+Archived accounts are omitted from live estate views. Review their instructions
+before archiving, and check price freshness and FX separately in the financial
+account and report screens.
 
 ![Estate summary with a mathematically complete allocation and recorded liability](/images/screenshots/estate-summary.png)
 
@@ -159,6 +170,10 @@ legal-readiness badge.
 Select **Create summary** to retain an immutable, versioned snapshot with an
 as-of date and SHA-256 integrity hash. Later account or allocation changes do not
 rewrite it.
+
+The current snapshot retains source instructions and cached values, not a
+complete server-calculated allocation or historical price/FX valuation. An
+integrity hash confirms unchanged content, not financial or legal correctness.
 
 ![Estate Planning Summary print preview with sensitive values excluded](/images/screenshots/estate-print-preview.png)
 

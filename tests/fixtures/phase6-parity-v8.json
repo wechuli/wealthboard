@@ -1,0 +1,309 @@
+{
+  "format": "wealthboard-user-json",
+  "version": 8,
+  "exportedAt": "2026-01-02T12:00:00Z",
+  "settings": {
+    "displayName": "Phase Six Example",
+    "baseCurrency": "KES",
+    "supportedCurrencies": "[\"KES\",\"USD\"]",
+    "timezone": "UTC",
+    "preferredDateFormat": "dd MMM yyyy",
+    "appName": "Wealthboard",
+    "defaultDashboardPeriod": "1y",
+    "sessionTimeoutMinutes": 10080,
+    "defaultGoalReturnBps": 800,
+    "positionStaleDaysStock": 14,
+    "positionStaleDaysEtf": 14,
+    "positionStaleDaysFund": 45
+  },
+  "categories": [
+    {
+      "id": "category-assets",
+      "name": "Assets",
+      "slug": "phase-six-assets",
+      "icon": "Wallet",
+      "displayOrder": 1,
+      "assetOrLiability": "asset",
+      "description": null,
+      "isLiquid": true,
+      "isInvestible": true,
+      "isArchived": false,
+      "isSystem": false,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "institutions": [
+    {
+      "id": "institution-example",
+      "name": "Example Bank",
+      "type": "bank",
+      "websiteUrl": null,
+      "countryCode": "KE",
+      "address": null,
+      "notes": null,
+      "archivedAt": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "accounts": [
+    {
+      "id": "account-cash",
+      "name": "Everyday Cash",
+      "description": null,
+      "categoryId": "category-assets",
+      "institutionId": "institution-example",
+      "accountReference": null,
+      "currency": "KES",
+      "trackingMode": "balance",
+      "currentValueMinor": 999999,
+      "costBasisMinor": null,
+      "isLiability": false,
+      "isIncludedInNetWorth": true,
+      "goalId": "goal-reserve",
+      "notes": null,
+      "openedAt": "2026-01-01T12:00:00Z",
+      "archivedAt": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    },
+    {
+      "id": "account-brokerage",
+      "name": "Brokerage",
+      "description": null,
+      "categoryId": "category-assets",
+      "institutionId": "institution-example",
+      "accountReference": null,
+      "currency": "KES",
+      "trackingMode": "positions",
+      "currentValueMinor": 999999,
+      "costBasisMinor": null,
+      "isLiability": false,
+      "isIncludedInNetWorth": true,
+      "goalId": null,
+      "notes": null,
+      "openedAt": "2026-01-01T12:00:00Z",
+      "archivedAt": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "transaction-opening",
+      "accountId": "account-cash",
+      "type": "opening_balance",
+      "amountMinor": 1000,
+      "currency": "KES",
+      "transactionDate": "2026-01-01T12:00:00Z",
+      "description": "Opening",
+      "notes": null,
+      "externalId": "cash-opening",
+      "transferGroupId": null,
+      "eventGroupId": null,
+      "idempotencyKey": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    },
+    {
+      "id": "transaction-deposit",
+      "accountId": "account-cash",
+      "type": "deposit",
+      "amountMinor": 50,
+      "currency": "KES",
+      "transactionDate": "2026-01-03T12:00:00Z",
+      "description": "Deposit after valuation",
+      "notes": null,
+      "externalId": "cash-deposit",
+      "transferGroupId": null,
+      "eventGroupId": null,
+      "idempotencyKey": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "valuations": [
+    {
+      "id": "valuation-cash",
+      "accountId": "account-cash",
+      "valueMinor": 1200,
+      "currency": "KES",
+      "valuationDate": "2026-01-02T12:00:00Z",
+      "notes": "Absolute observation",
+      "createdAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "exchangeRates": [
+    {
+      "id": "rate-usd-kes",
+      "baseCurrency": "USD",
+      "quoteCurrency": "KES",
+      "rate": "130",
+      "effectiveDate": "2026-01-01T12:00:00Z",
+      "source": "phase-six-fixture",
+      "createdAt": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal-reserve",
+      "name": "Reserve",
+      "description": null,
+      "targetAmountMinor": 10000,
+      "currentAmountMinor": 0,
+      "currency": "KES",
+      "targetDate": "2027-01-01T12:00:00Z",
+      "linkedAccountId": "account-cash",
+      "icon": "Target",
+      "status": "active",
+      "priority": 1,
+      "assumedAnnualReturnBps": 800,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "goalContributionPlans": [
+    {
+      "id": "goal-plan-reserve",
+      "goalId": "goal-reserve",
+      "plannedContributionMinor": 100,
+      "frequency": "monthly",
+      "startDate": "2026-01-01T12:00:00Z",
+      "endDate": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "goalMilestones": [],
+  "goalAlertDismissals": [],
+  "beneficiaries": [
+    {
+      "id": "beneficiary-amina",
+      "kind": "person",
+      "name": "Amina Example",
+      "relationship": "Child",
+      "contactSummary": null,
+      "notes": null,
+      "archivedAt": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "estatePlans": [
+    {
+      "id": "estate-plan-family",
+      "title": "Family plan",
+      "jurisdiction": "Kenya",
+      "lastReviewedDate": null,
+      "reviewReminderDate": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "estateAccountDirectives": [
+    {
+      "id": "estate-directive-cash",
+      "estatePlanId": "estate-plan-family",
+      "accountId": "account-cash",
+      "isIncluded": true,
+      "ownershipShareBps": 10000,
+      "transferContext": "estate",
+      "distributionMethod": "sell_and_divide",
+      "documentReference": null,
+      "notes": null,
+      "reviewedAt": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "estateAllocations": [
+    {
+      "id": "estate-allocation-amina",
+      "estatePlanId": "estate-plan-family",
+      "directiveId": "estate-directive-cash",
+      "beneficiaryId": "beneficiary-amina",
+      "tier": "primary",
+      "allocationBps": 10000,
+      "notes": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "estateResiduaryAllocations": [],
+  "estatePlanSnapshots": [
+    {
+      "id": "estate-snapshot-family",
+      "estatePlanId": "estate-plan-family",
+      "version": 1,
+      "title": "Family plan",
+      "valueAsOfDate": "2026-01-02",
+      "baseCurrency": "KES",
+      "content": "{\"format\":\"wealthboard-estate-summary\",\"version\":1,\"assets\":[],\"beneficiaries\":[],\"reviewItems\":[]}",
+      "contentHash": "619b10f7db6b6eb83ad6dd463883b4b1766b582db02d18c0e44757810f05dda0",
+      "generatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "investmentInstruments": [
+    {
+      "id": "instrument-example-equity",
+      "externalId": "instrument-external",
+      "name": "Example Equity",
+      "symbol": "EXM",
+      "identifierType": "ticker_exchange",
+      "identifier": "EXM",
+      "exchangeMic": "XNAI",
+      "assetType": "stock",
+      "quoteCurrency": "KES",
+      "archivedAt": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "positionEvents": [
+    {
+      "id": "position-opening",
+      "accountId": "account-brokerage",
+      "instrumentId": "instrument-example-equity",
+      "relatedInstrumentId": null,
+      "type": "opening_position",
+      "quantity": "2",
+      "unitPrice": "100",
+      "tradeCurrency": "KES",
+      "grossAmountMinor": 20000,
+      "feeAmountMinor": null,
+      "feeCurrency": null,
+      "cashEffectMinor": 0,
+      "appliedExchangeRate": null,
+      "openingCostBasisMinor": 20000,
+      "actionRatioNumerator": null,
+      "actionRatioDenominator": null,
+      "tradeDate": "2026-01-01T12:00:00Z",
+      "eventSequence": 1,
+      "settlementDate": null,
+      "externalId": "position-external",
+      "eventGroupId": null,
+      "idempotencyKey": null,
+      "description": "Opening position",
+      "notes": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "securityPrices": [
+    {
+      "id": "price-example-equity",
+      "instrumentId": "instrument-example-equity",
+      "externalId": "price-external",
+      "price": "125",
+      "currency": "KES",
+      "effectiveDate": "2026-01-02T12:00:00Z",
+      "source": "phase-six-fixture",
+      "provenance": null,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-02T00:00:00Z"
+    }
+  ],
+  "positionReconciliations": [],
+  "accountConversions": []
+}

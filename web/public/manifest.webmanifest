@@ -1,0 +1,29 @@
+{
+  "name": "Wealthboard",
+  "short_name": "Wealthboard",
+  "description": "Private, self-hosted wealth and goals tracking.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f6",
+  "theme_color": "#60706b",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Add account", "short_name": "Account", "url": "/accounts/new" },
+    {
+      "name": "Record deposit",
+      "short_name": "Deposit",
+      "url": "/transactions/new?type=deposit"
+    },
+    { "name": "Create goal", "short_name": "Goal", "url": "/goals/new" }
+  ]
+}

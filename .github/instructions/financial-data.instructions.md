@@ -1,27 +1,27 @@
 ---
-description: "Use when changing the Drizzle schema, migrations, services, server actions, route handlers, money calculations, balances, valuations, transfers, exchange rates, goals, imports, exports, backups, or restores."
+description: "Use when changing PostgreSQL migrations, sqlc queries, Go services or API handlers, money calculations, balances, valuations, transfers, exchange rates, goals, imports, exports, backups, or restores."
 name: "Wealthboard Financial Data"
-applyTo: "db/**/*.ts, lib/services/**/*.ts, lib/db.ts, lib/money.ts, lib/finance.ts, lib/dates.ts, lib/validation.ts, app/**/actions.ts, app/api/**/*.ts, scripts/**/*.ts, scripts/**/*.mjs"
+applyTo: "db/postgres/**/*.sql, internal/domain/**/*.go, internal/service/**/*.go, internal/database/**/*.go, internal/operator/**/*.go, internal/api/**/*.go"
 ---
 
 # Financial data and mutations
 
-- Treat `db/schema.ts` as the schema source of truth and `lib/services` as the owner of financial behavior. UI components and route handlers should call those boundaries rather than reproduce calculations or SQL.
+- Treat `db/postgres/migrations` as the schema history and `internal/service` as the owner of financial behavior. UI components and HTTP handlers should call those boundaries rather than reproduce calculations or SQL.
 - Treat `SPEC.md` and `docs/ARCHITECTURE.md` as the current multi-user contract. Do not deploy authorization changes until cross-user isolation tests pass.
-- Derive `userId` only from `requireSession()` and pass it explicitly into services. Never accept a form, URL, header, import, or payload owner ID as authorization evidence.
+- Derive `userId` only from the verified authentication principal defined in `internal/auth/service.go` and pass it explicitly into services. Browser requests use a verified session; API-key requests require the operation's scope. Never accept a form, URL, header, import, or payload owner ID as authorization evidence.
 - Every private query and mutation must include the owner predicate. Fetch resources by `userId` and ID together, return not found for foreign resources, and include `userId` in private cache keys.
 - Validate same-owner relationships inside the transaction: category/account, transaction/account, valuation/account, goal/account, plan/goal, imported account references, and both sides of a transfer.
-- Preserve integer minor units end to end. Parse and format through `lib/money.ts`; use `bigint` or Decimal.js for arithmetic and conversion. Convert to `number` only at a display-library boundary after establishing that the value is safe and non-authoritative.
+- Preserve integer minor units end to end. Reuse the Go service's checked integer and `math/big` helpers for authoritative arithmetic and conversion; use client string/`bigint` formatting helpers with the appropriate currency precision. Convert to `number` only at a display-library boundary after establishing that the value is safe and non-authoritative.
 - Recalculate an account by replaying transactions and valuation snapshots in chronological order using the existing helpers. A valuation is an absolute balance observation, not income, gain, or contribution.
-- Keep transaction effects consistent with `lib/finance.ts`. Transfers must create both sides with one transfer group and idempotency key in a single database transaction.
+- Keep transaction effects consistent with `internal/service/ledger.go`. Transfers must create both sides with one transfer group and idempotency key in a single database transaction.
 - Ordinary transaction create/update paths must never target reserved `opening_balance` or `transfer` types; use their dedicated atomic workflows.
 - Imported external IDs are owner/account scoped, case-sensitive source identifiers. Identical records may be skipped, conflicts must never overwrite data, and fuzzy date/amount matching is not an identity policy.
 - Position quantities are replayed from ordered source events. Every mutation, correction, deletion, restore, or import must reject any sequence that becomes negative, and grouped cash/position events must commit and replay atomically.
 - Use the current user's most recent exchange rate effective on the date being calculated. Do not silently substitute the current rate for historical reports or reuse another user's rates.
-- Validate request and form data with the schemas in `lib/validation.ts`. Return the established `ActionState` shape for expected action errors; do not expose raw database errors to the client.
-- Every protected mutation must verify the session. Scope UUID idempotency keys to that user and perform multi-record financial changes atomically.
+- Validate requests at the Go API boundary and return the established problem JSON for expected errors; do not expose raw database errors to the client.
+- Every protected mutation must verify its session or permitted API-key principal. Browser mutations require trusted origin and CSRF checks. Scope UUID idempotency keys to that user and perform multi-record financial changes atomically.
 - Keep authentication, database handles, password hashes, backup contents, and raw financial exports in server-only modules. Do not add secrets or sensitive values to logs.
-- User-facing exports, imports, and restores contain only the current user's data. Raw SQLite backup and restore are deployment-operator operations, not ordinary authenticated endpoints.
-- For schema changes, use `npm run db:generate` to append a migration, then inspect it. Never delete, rename, or edit an applied migration or snapshot.
-- Test migrations against both a disposable empty database and a disposable database at the previous migration state, and verify `foreign_key_check` after upgrading.
+- User-facing exports, imports, and restores contain only the current user's data; user restore is browser-session-only. PostgreSQL custom-format backup and maintenance-mode restore are deployment-operator operations, not ordinary authenticated endpoints.
+- For schema changes, add and inspect a new Goose migration, update sqlc queries as needed, and run `make generate`. Never delete, rename, or edit an applied migration.
+- Test migrations against both a disposable empty database and a disposable database at the previous migration state. Verify PostgreSQL foreign-key constraints and negative cross-user relationship assertions after upgrading; SQLite PRAGMA checks do not apply.
 - Add focused tests for sign behavior, rounding, replay ordering, historical exchange rates, idempotency, rollback, and cross-user denial whenever the touched behavior could affect balances or ownership.

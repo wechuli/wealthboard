@@ -1,6 +1,7 @@
 .git
-.next
 node_modules
+**/node_modules
+web/dist
 data
 backups
 coverage

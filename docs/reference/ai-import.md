@@ -1,8 +1,9 @@
 # AI-assisted text-file import
 
-An account's **Import** page offers **Formatted CSV / JSON** and **Convert with
-AI**. Direct structured import and browser-only copyable prompts still work
-without an AI provider.
+An account's **Import** page offers **Formatted CSV / JSON** and **Convert
+document with AI**. Direct structured import works without an AI provider.
+The current Vite import page does not expose the older browser-only copyable
+prompts.
 
 ## Supported sources
 
@@ -24,17 +25,20 @@ truncated to fit these limits.
 ## Password-protected files
 
 For a password-protected PDF, select the file and enter **PDF password (if
-required)** before **Extract locally**. You can also try extraction first: a
+required)** before **Extract source**. You can also try extraction first: a
 missing or incorrect password produces a distinct error and focuses the password
 field. Re-enter the password and retry without selecting the file again.
 Passwords are case-sensitive and are passed through without trimming spaces.
-The field accepts up to 1,024 characters.
+The API accepts up to 1,024 UTF-8 bytes; non-ASCII passwords can reach that limit
+with fewer characters.
 
-The password is used only by PDF.js inside your Wealthboard server's isolated
-extraction worker. It is not an AI API key or application login password. It is
-cleared from the form at submission and on file changes, cancellation, or leaving
-the flow, and is never stored, logged, returned with extracted content, or sent
-to the AI provider. Retries require re-entry; use HTTPS for remote deployments.
+The password is used only by PDF.js inside the isolated extraction worker. It is
+not an AI API key or application login password. The API accepts it only in the
+multipart extraction request, clears its request copy after extraction, and does
+not include it in the response or provider request. The parser child has an empty
+environment and stderr is discarded. A sidecar operator must preserve the same
+no-log/no-storage boundary. Retries require re-entry; use HTTPS for remote
+deployments.
 Unlocking a PDF does not add OCR support or guarantee correct table extraction.
 
 | Protection                                              | Current behavior                                                                                     |
@@ -62,9 +66,25 @@ identifier. Remembered keys require the deployment's
 `AI_CREDENTIAL_ENCRYPTION_KEY`; otherwise enter a session-only key on the import
 page. Keys are never part of the model prompt.
 
-OpenAI uses the Responses API with native structured output. DeepSeek and
-operator-approved compatible endpoints must support text Chat Completions with
-JSON output. PDF, spreadsheet, or Word support is not required of the model:
+Generate a dedicated credential key with `openssl rand -base64 32`. It must be
+canonical base64 for exactly 32 bytes and must not reuse `SESSION_SECRET` or an
+OIDC secret. Keep it stable: changing it makes existing remembered credentials
+undecryptable. Remembered keys use AES-256-GCM with the user's immutable ID as
+associated data and are excluded from user exports.
+
+OpenAI always resolves to `https://api.openai.com/v1`; DeepSeek resolves to
+`https://api.deepseek.com`. A custom endpoint must exactly match a normalized
+HTTP(S) base URL in the comma-separated `AI_ALLOWED_ENDPOINTS` environment
+variable. URLs with credentials, query parameters, or fragments are rejected.
+The host is DNS-resolved when settings are saved and before requests; private,
+loopback, link-local, multicast, carrier-grade NAT, and other local ranges are
+blocked. Provider redirects and environment proxy variables are not used.
+
+OpenAI uses the Responses API with `store: false`; the current conversion call
+requests JSON through its prompt rather than supplying a native structured-output
+schema. DeepSeek and operator-approved compatible endpoints must support text
+Chat Completions with JSON output. Go validates responses before creating a
+draft. PDF, spreadsheet, or Word support is not required of the model:
 Wealthboard extracts text before submission. Model names are entered manually;
 access and compatibility errors surface when conversion runs. Wealthboard never
 silently substitutes a model or provider.
@@ -79,38 +99,69 @@ output tokens. A failed call with unknown usage retains that reservation.
 Increase the output-token limit or use a smaller source if the model response
 is incomplete. Retrying is explicit and may incur another provider charge.
 
+## Document extraction deployment
+
+UTF-8 CSV, TSV, JSON, and TXT are parsed directly by the Go service. PDF, XLSX,
+and DOCX require an isolated Node parser. On a direct installation, Wealthboard
+uses `node` and `AI_EXTRACTION_SCRIPT` (default
+`scripts/extract-import-source-cli.mjs`). The child receives no inherited
+environment, has bounded memory/output, and is killed at the 15-second deadline.
+
+The distroless application image contains neither Node nor parser dependencies.
+Compose runs the repository's separate `extraction-worker` image with no
+network. The Kubernetes example runs the same bounded worker as a sidecar; like
+all containers in a pod, it shares the pod network namespace. Both use a shared
+in-memory Unix socket.
+For each connection, the service writes one JSON
+object containing `extension`, base64 `bytes`, and `documentPassword`, closes
+its write side, and expects the same bounded JSON response produced by the CLI
+script. The daemon caps connections, request/response sizes, parser memory, and
+runtime; clears request buffers and its environment; suppresses worker output;
+and creates its socket with restricted permissions. Custom deployments must
+preserve those controls and keep the socket pod-local.
+Without Node or a reachable sidecar, plain text/table extraction still works,
+but PDF/XLSX/DOCX returns a bounded parser error.
+
 ## Workflow
 
-1. Choose **Convert with AI**, select a source, and select **Extract locally**.
-   Supply the PDF's document password if required. The file is processed inside
-   your self-hosted Wealthboard instance, not sent to an external provider.
+1. Choose **Convert document with AI**, select a source, and select
+   **Extract source**. Supply the PDF's document password if required. The file
+   is processed inside your self-hosted Wealthboard instance, not sent to an
+   external provider.
 2. Review the extracted sections and warnings. Select relevant activity and
-   redact sensitive text. Section labels and original filenames are not sent.
-3. Check the destination/model, account context, source size, and output ceiling.
+   redact sensitive text. Selected section IDs, location labels, and edited
+   text are sent; the original file is not. If a location label is sensitive,
+   exclude that section or prepare a redacted source file before extraction.
+3. Check the destination/model and account context, and confirm the output
+   limit under **Settings → AI provider**.
    Approve the sharing and possible charges, then select **Convert selected text**.
    Changing the text or selection clears consent. Saved credentials alone do
    not authorize sharing a statement.
 4. Inspect the JSON draft, source references, exclusions, and validation issues.
    Correct ambiguous dates/currencies/identifiers or missing fields and
    acknowledge excluded activity. A source reference is not proof of accuracy.
-5. Select **Use draft for preview**, then **Preview file**. Confirm only after
-   reviewing the existing balance or investment preview. **Edit draft** discards
-   that preview and requires another review/preview before confirmation.
+5. Select **Use draft for preview**, then **Preview**. Select **Commit import**
+   only after reviewing the existing balance or investment preview.
+   **Edit draft** discards that preview and requires another review/preview
+   before confirmation.
 
 The generated draft can also be downloaded for manual editing. Financial
-records are changed only by the normal commit operation. Balance imports keep
-their accepted-subset policy; investment imports retain all-or-nothing atomicity.
+records are changed only by the normal commit operation. The balance-import API
+can commit an accepted subset, but the current web form disables commit until
+failed rows are resolved. Investment imports retain all-or-nothing atomicity.
 The existing canonical file limits remain 5 MB/10,000 records; an AI extraction
 response is limited to 1,000 candidate records.
 
 ## Privacy and safety
 
-Only approved text and minimal schema/account context go to the model. It has
-no tools, database access, or authority to execute transactions. Source files,
+Only selected section IDs, location labels, edited text, and account
+tracking-mode/currency context go to the model. It has no tools, database access,
+or authority to execute transactions. Source files,
 extracted text, prompts, responses, and drafts are not logged or stored by
-Wealthboard. In-memory content is cleared on cancel, completion, navigation, or
-logout; document workers are terminated after use. Usage history contains
-metadata only. Privacy mode hides source content and drafts.
+Wealthboard as portfolio records. Source content and drafts are held in browser
+and request memory; cancel or leave the workflow when finished. Document workers
+are terminated after use. Usage history contains metadata only. Privacy mode
+hides source content and drafts.
 
 Provider-side retention follows the provider's policies; local cleanup cannot
 guarantee deletion there. Never assume selectable PDF text preserves table

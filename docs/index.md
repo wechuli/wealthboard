@@ -26,7 +26,7 @@ in the order most people use it, with real screens and concrete examples.
   </a>
   <a href="./admin/deployment">
     <strong>Run Wealthboard</strong>
-    <span>Deploy, configure authentication, back up SQLite, and recover safely.</span>
+    <span>Deploy, configure authentication, back up PostgreSQL, and recover safely.</span>
   </a>
 </div>
 
@@ -55,3 +55,4 @@ one.
 | Assign inheritance percentages                             | [Estate planning](./guides/estate-planning)              |
 | Move or restore my data                                    | [Import, export, and restore](./guides/data-portability) |
 | Configure the server                                       | [Deployment](./admin/deployment)                         |
+| Replace a legacy deployment                                | [Cutover and removal](./admin/cutover)                   |

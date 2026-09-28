@@ -11,17 +11,25 @@ the job.
 ## Account history import
 
 Use an account-scoped CSV or JSON file to append transactions to one existing
-active account. See [Transactions and values](./activity#import-detailed-account-history).
+active balance-tracked account. See [Transactions and values](./activity#import-detailed-account-history).
 
 The file cannot choose a user, account, institution, or currency. The signed-in
-session and account URL establish those values.
+session and account URL establish those values. Files are limited to 5 MB and
+10,000 rows. CSV requires exactly
+`external_id,type,amount,date,description,notes`; JSON requires the strict
+`wealthboard-account-history` version 1 envelope. Preview returns a SHA-256 hash,
+and commit accepts only the same bytes and hash. Identical stored external IDs
+are skipped, conflicting IDs reject commit, and accepted rows plus balance
+replay commit in one serializable transaction.
 
 ## Investment history import
 
 Use an active position account's **Import** action for instruments, opening
 holdings, trades, broker cash, and effective-dated prices. This is a strict,
 all-or-nothing workflow because one trade can depend on earlier quantities and
-cash.
+cash. JSON uses `wealthboard-investment-history` version 1. CSV accepts one of
+four exact templates: opening holdings, trades, cash, or prices. The 5 MB limit
+and 10,000-record combined limit also apply here.
 
 See [Investment History v1](../reference/investment-import) for the JSON
 envelope, four CSV templates, stable-ID policy, preview fields, and grouped
@@ -29,11 +37,12 @@ reinvestment rules.
 
 ## AI-assisted source conversion
 
-Both account modes offer **Convert with AI** for CSV, TSV, JSON, TXT, XLSX,
-text-based PDF, and DOCX sources. Wealthboard extracts text locally, then asks
-for approval before sending selected/redacted text to your configured provider
-using a remembered or session-only key. Review the generated draft before the
-normal import preview and confirmation; conversion itself never posts records.
+Both account modes offer **Convert document with AI** for CSV, TSV, JSON, TXT,
+XLSX, text-based PDF, and DOCX sources. Wealthboard extracts text within your
+self-hosted instance, then asks for approval before sending selected section
+IDs, location labels, and edited text to your configured provider using a
+remembered or session-only key. Review the generated draft before the normal
+import preview and confirmation; conversion itself never posts records.
 
 Scanned documents and images are unsupported. See
 [AI-assisted import](../reference/ai-import) for supported formats, limits,
@@ -50,7 +59,7 @@ Wealthboard backup.
 
 ## Complete user export
 
-Open **Settings → Data portability** and download the JSON export. Version 8
+Open **Settings → Import, restore & export → Export JSON**. Version 8
 contains the current user's settings and source records, including:
 
 - categories, institutions, accounts, transactions, and valuations;
@@ -71,17 +80,19 @@ access-controlled location.
 ## Restore a user export
 
 Restore replaces only the signed-in user's portfolio in one database
-transaction.
+transaction. Archives larger than 25 MB are rejected.
 
-1. Download a fresh pre-restore export when offered.
-2. Select the JSON file.
-3. Read the replacement warning carefully.
-4. Confirm restore.
+1. Select the JSON file under **Restore your JSON export**.
+2. Select **Replace my portfolio** and read the replacement warning.
+3. Confirm replacement. The browser downloads a pre-restore export before
+   sending the restore request.
+4. Keep that pre-restore copy until you have checked the restored portfolio.
 5. Verify settings, accounts, balances, goals, exchange rates, and estate plan.
 
-Wealthboard validates archive version, every field, relationship, percentage
-limit, and retained snapshot hash before replacement. IDs are remapped to the
-current user. Any failure rolls back the complete restore.
+Wealthboard validates the archive version, required fields, relationships,
+percentage limits, and retained snapshot hashes. IDs are remapped to the
+current user, and balances are replayed from restored records. Any failure
+rolls back the complete restore.
 
 Archives from versions 2 through 8 remain restorable. Version 7 position data
 upgrades deterministically. Versions 2 through 6 restore accounts in balance
@@ -106,6 +117,6 @@ or cost basis in versions 2 through 6.
 
 ::: danger A user export is not a deployment backup
 A JSON restore cannot recover login identities, OIDC mappings, or another user's
-portfolio. Operators must separately back up the SQLite database. See
+portfolio. Operators must separately back up PostgreSQL. See
 [Backup and recovery](../admin/backup-recovery).
 :::

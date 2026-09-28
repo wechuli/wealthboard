@@ -23,12 +23,15 @@ with all of these properties:
 | Client type                | Confidential web application                                   |
 | Client authentication      | Client secret in the token request body (`client_secret_post`) |
 | PKCE                       | Required or allowed, challenge method `S256`                   |
-| Redirect URI               | Exact `${APP_URL}/api/auth/oidc/callback`                      |
+| Redirect URI               | Exact `${APP_URL}/api/v1/auth/oidc/callback`                   |
 | Scopes                     | `openid profile email`                                         |
 | ID-token signing algorithm | `RS256`                                                        |
 | Subject                    | Stable, non-empty `sub` claim                                  |
 | Optional display claims    | `name`, then `preferred_username`                              |
 | Discovery                  | `${OIDC_ISSUER}/.well-known/openid-configuration`              |
+
+The Go runtime owns this flow. Older unversioned callback registrations must
+be updated to `/api/v1/auth/oidc/callback`; there is no legacy callback alias.
 
 Wealthboard also sends and verifies `state` and `nonce`. It validates the ID
 token's signature, issuer, audience, expiry, not-before time, subject, and
@@ -47,7 +50,7 @@ Production deployments must use HTTPS.
 
 ```text
 APP_URL=https://wealthboard.example.com
-CALLBACK_URL=https://wealthboard.example.com/api/auth/oidc/callback
+CALLBACK_URL=https://wealthboard.example.com/api/v1/auth/oidc/callback
 ```
 
 `APP_URL` must be an origin only. Do not add a path, query string, fragment, or
@@ -60,7 +63,7 @@ for example:
 
 ```text
 APP_URL=http://localhost:3000
-CALLBACK_URL=http://localhost:3000/api/auth/oidc/callback
+CALLBACK_URL=http://localhost:3000/api/v1/auth/oidc/callback
 ```
 
 Do not register broad redirect patterns, wildcards, the application root, or a
@@ -167,7 +170,7 @@ On the client's **Settings** tab, configure:
 | ------------------------------- | -------------------------------------------------------- |
 | Root URL                        | `https://wealthboard.example.com`                        |
 | Home URL                        | `https://wealthboard.example.com`                        |
-| Valid redirect URIs             | `https://wealthboard.example.com/api/auth/oidc/callback` |
+| Valid redirect URIs             | `https://wealthboard.example.com/api/v1/auth/oidc/callback` |
 | Web origins                     | Leave empty                                              |
 | Admin URL                       | Leave empty                                              |
 | Valid post logout redirect URIs | Leave empty                                              |
@@ -321,7 +324,7 @@ Use these settings in the App Integration Wizard:
 | --------------------- | -------------------------------------------------------- |
 | App integration name  | `Wealthboard`                                            |
 | Grant type            | Authorization Code only                                  |
-| Sign-in redirect URI  | `https://wealthboard.example.com/api/auth/oidc/callback` |
+| Sign-in redirect URI  | `https://wealthboard.example.com/api/v1/auth/oidc/callback` |
 | Sign-out redirect URI | Leave empty unless Okta requires a value                 |
 | Login initiated by    | App Only                                                 |
 | DPoP required         | Off                                                      |
@@ -380,7 +383,7 @@ The result must show all of these values:
   "application_type": "web",
   "grant_types": ["authorization_code"],
   "response_types": ["code"],
-  "redirect_uris": ["https://wealthboard.example.com/api/auth/oidc/callback"],
+  "redirect_uris": ["https://wealthboard.example.com/api/v1/auth/oidc/callback"],
   "token_endpoint_auth_method": "client_secret_post"
 }
 ```
@@ -520,6 +523,7 @@ installation directly from `local` to `oidc`.
 Put the values in the uncommitted `.env` file used by Compose:
 
 ```dotenv
+POSTGRES_PASSWORD=replace-with-a-stable-database-password
 SESSION_SECRET=replace-with-generated-session-secret
 APP_URL=https://wealthboard.example.com
 AUTH_METHODS=local,oidc
@@ -529,6 +533,11 @@ OIDC_CLIENT_SECRET=replace-with-provider-client-secret
 OIDC_PROVIDER_NAME=Company SSO
 OIDC_TRANSACTION_SECRET=replace-with-generated-transaction-secret
 ```
+
+Keep the PostgreSQL password and session secret stable across updates. Compose
+reads this file for interpolation; a directly launched Go binary does not load
+it automatically. Direct production installations must export their settings
+and set `NODE_ENV=production`.
 
 Then restart the application so startup validation reloads the policy:
 
@@ -581,10 +590,12 @@ requires an explicit linking step.
 9. Only after every active user is linked, change to `AUTH_METHODS=oidc` and
    restart.
 
-OIDC-only startup/readiness fails when an active user lacks an identity for the
+OIDC-only readiness fails when an active user lacks an identity for the
 configured issuer. Local-only readiness similarly fails when an active user has
 no password hash. Disable users deliberately or complete their method migration
-before changing modes.
+before changing modes. These are health-endpoint checks, not a pre-listen
+startup gate; require `/api/health/ready` to succeed before admitting traffic.
+Hybrid readiness does not establish that every user is ready for OIDC-only mode.
 
 Do not let an existing local user click provider login before linking if the
 goal is to retain the same portfolio. A first provider login creates a separate
@@ -626,8 +637,9 @@ Expected response:
 
 In hybrid mode, readiness remains available during a temporary provider outage
 so local login still works. The provider button reports temporary
-unavailability. OIDC-only startup fails closed if discovery is unavailable or
-invalid.
+unavailability. OIDC-only readiness fails when discovery cannot be validated,
+even though the process may already be listening. Malformed environment
+configuration, rather than a temporary discovery outage, stops startup.
 
 ### 3. Test the browser flow
 
@@ -667,16 +679,20 @@ without prompting for credentials. This is expected in the current release.
 
 ### Provider sign-in is temporarily unavailable
 
-- Fetch the discovery URL from the Wealthboard host or container.
+- Fetch the discovery URL from an operator host or diagnostic pod with the
+  same network reachability. The distroless application image has no shell or
+  `curl`.
 - Verify DNS, TLS trust, firewall, and proxy egress.
 - Confirm discovery returns the exact configured issuer.
 - Confirm all discovered endpoints use public HTTPS URLs.
 - For Keycloak behind a proxy, correct the Keycloak public hostname settings.
+- Add provider egress to the example Kubernetes NetworkPolicy, which allows
+  only DNS and PostgreSQL by default.
 
 ### Provider reports an invalid redirect URI
 
 - Compare the provider registration with
-  `${APP_URL}/api/auth/oidc/callback` character by character.
+  `${APP_URL}/api/v1/auth/oidc/callback` character by character.
 - Remove wildcard callbacks.
 - Ensure the external scheme and host match `APP_URL`, not an internal service
   name.
@@ -744,8 +760,9 @@ policy; verify whether both secrets remain valid before relying on overlap.
 
 ### Provider signing keys
 
-Keycloak and Okta publish signing keys through `jwks_uri`. Wealthboard caches
-the remote JWKS and reloads it when it encounters a new key after the cooldown.
+Keycloak and Okta publish signing keys through `jwks_uri`. Go caches the remote
+JWKS for five minutes and makes a forced refresh when an ID token names an
+unknown `kid`; this does not use the old JavaScript library's cooldown behavior.
 Keep old provider verification keys available long enough for already issued ID
 tokens to expire during a planned rotation.
 

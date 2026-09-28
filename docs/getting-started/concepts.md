@@ -35,9 +35,11 @@ valuation is not a contribution or investment return by itself.
 
 ## Transfers do not change net worth
 
-A transfer creates paired records in two accounts atomically. It moves value
-inside your portfolio; it does not create a contribution or return. For
-different currencies, enter both source and destination amounts explicitly.
+A transfer creates paired records in two of your active asset accounts
+atomically. It moves value inside your portfolio; it does not create a
+contribution or return. For different currencies, enter the actual destination
+amount or let the Go service derive it from your exchange rate effective on
+the transfer date.
 
 ## Source currency and base currency
 
@@ -60,24 +62,32 @@ A linked account is the source of truth for goal progress. Wealthboard does not
 copy that balance into a contribution record. An unlinked goal instead uses its
 own manually maintained current amount.
 
+Current goal reads use the account's cached value. Cross-currency links remain
+incomplete even when reporting rates exist, and position price-quality warnings
+are not propagated into goal progress. Check the linked account and use matching
+currencies; see [Goals](../guides/goals#create-a-goal).
+
 Forecasts and scenario comparisons are estimates based on the configured
 contribution plan and assumed return. They do not modify account history.
 
 ## Estate plans read the same accounts
 
-The estate planner stores instructions and percentages, not another set of
-balances. Indicative gift values are derived from:
+The estate planner stores instructions and percentages, not another financial
+ledger. Indicative gift displays use:
 
-1. the current account value;
+1. the cached account value;
 2. the share of the asset that belongs to the estate;
-3. primary or residual allocation percentages;
-4. effective exchange rates for the summary date.
+3. primary or residual allocation percentages.
 
-This means an updated valuation changes the current estate estimate, while a
-retained summary snapshot remains unchanged.
+The current estate endpoints do not perform complete effective-dated position
+valuation or exchange-rate conversion. Base-currency summaries omit
+foreign-currency values and must not be treated as a complete estate valuation.
+An updated source value can change the live estimate, while a retained summary's
+source snapshot remains unchanged.
 
 ## Archive is not delete
 
 Archiving an account or institution preserves its history. It removes the item
 from normal active choices but does not erase the underlying financial record.
-An archived asset already referenced by an estate plan is surfaced for review.
+Archived accounts are omitted from live estate views, so review their estate
+instructions before archiving rather than relying on a live warning.

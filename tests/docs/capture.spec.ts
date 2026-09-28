@@ -13,7 +13,6 @@ async function settle(page: Page) {
   await page.waitForLoadState("networkidle");
   await page.addStyleTag({
     content: `
-      nextjs-portal { display: none !important; }
       [data-sonner-toaster] { display: none !important; }
       * { caret-color: transparent !important; }
     `,
@@ -39,7 +38,9 @@ async function captureLocator(locator: Locator, name: string) {
 function cardForHeading(page: Page, name: string) {
   return page
     .getByRole("heading", { name, exact: true })
-    .locator('xpath=ancestor::div[contains(@class, "rounded-2xl")][1]');
+    .locator(
+      'xpath=ancestor::*[contains(@class, "read-card") or contains(@class, "rounded-2xl")][1]',
+    );
 }
 
 async function addBeneficiary(
@@ -80,16 +81,19 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
-  const seed = spawnSync("npm", ["run", "db:seed:demo"], {
-    cwd: projectRoot,
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DATABASE_PATH: "./data/docs-capture.db",
-      DEMO_DATA: "true",
-      TARGET_USERNAME: "guide-user",
+  const seed = spawnSync(
+    "make",
+    ["seed-demo", "DEMO_DATA=true", "TARGET_USERNAME=guide-user"],
+    {
+      cwd: projectRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DATABASE_URL:
+          "postgres://wealthboard_e2e:wealthboard_e2e@127.0.0.1:55434/wealthboard_e2e?sslmode=disable",
+      },
     },
-  });
+  );
   expect(seed.status, seed.stderr || seed.stdout).toBe(0);
 
   await page.goto("/accounts/new");
@@ -97,9 +101,7 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByLabel("Category").selectOption({ label: "Liability" });
   await page.getByLabel("Opening value").fill("650000");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Home renovation loan" }),
-  ).toBeVisible();
+  await expect(page.getByLabel("Account or asset name")).toHaveValue("");
 
   await page.goto("/");
   await capturePage(page, "dashboard-overview.png");
@@ -110,6 +112,9 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.goto("/accounts");
+  await expect(
+    page.getByText("Home renovation loan", { exact: true }),
+  ).toBeVisible();
   await capturePage(page, "accounts-workspace.png");
 
   await page.getByText("Southern Bypass Land", { exact: true }).first().click();
@@ -123,7 +128,7 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await capturePage(page, "goal-planning.png");
 
   const portfolioBeforeConversion = (await (
-    await page.request.get("/api/export/json")
+    await page.request.get("/api/v1/exports/user")
   ).json()) as {
     accounts: Array<{ id: string; name: string }>;
   };
@@ -132,16 +137,18 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   );
   expect(brokerage).toBeTruthy();
 
-  await page.goto(`/accounts/${brokerage!.id}/convert`);
-  await page.getByRole("link", { name: "Add instrument" }).click();
-  await page
-    .getByLabel("Instrument name")
-    .fill("Vanguard FTSE All-World UCITS ETF");
+  await page.goto("/instruments/new");
+  await page.getByLabel("Name").fill("Vanguard FTSE All-World UCITS ETF");
   await page.getByLabel("Symbol").fill("VWRA");
   await page.getByLabel("Identifier", { exact: true }).fill("VWRA");
   await page.getByLabel("Exchange MIC").fill("XLON");
-  await page.getByLabel("Quote currency").selectOption("USD");
+  await page.getByLabel("Quote currency").fill("USD");
   await page.getByRole("button", { name: "Create instrument" }).click();
+  await expect(page).toHaveURL(/\/instruments$/);
+  await expect(
+    page.getByText("Vanguard FTSE All-World UCITS ETF", { exact: true }),
+  ).toBeVisible();
+  await page.goto(`/accounts/${brokerage!.id}/convert`);
   await page
     .getByLabel("Replacement account name")
     .fill("Interactive Brokers Positions");
@@ -149,14 +156,17 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByLabel(/Opening cash/).fill("1111");
   await page.getByLabel("Quantity").fill("15");
   await page.getByLabel("Unit price").fill("200");
-  await page.getByLabel("Reference basis").fill("2800");
-  await page.getByLabel("Price source").fill("broker statement");
-  await page
-    .getByLabel("Price provenance")
-    .fill("Fictional 12 August 2026 statement");
+  await page.getByLabel("Opening cost basis").fill("2800");
   await page.getByRole("button", { name: "Preview conversion" }).click();
-  await expect(page.getByText("Projected total")).toBeVisible();
-  await page.getByText("Projected total").scrollIntoViewIfNeeded();
+  const conversionPreview = page.getByRole("status");
+  await expect(conversionPreview).toContainText("projected");
+  const differenceConfirmation = page.getByRole("checkbox", {
+    name: /accept this conversion difference/,
+  });
+  if (await differenceConfirmation.isVisible()) {
+    await differenceConfirmation.check();
+  }
+  await conversionPreview.scrollIntoViewIfNeeded();
   await capturePage(page, "account-conversion-preview.png");
   await page.getByRole("button", { name: "Convert account" }).click();
   await expect(
@@ -166,22 +176,25 @@ test("capture the Wealthboard product guide", async ({ page }) => {
 
   await page.getByRole("link", { name: "Buy", exact: true }).click();
   await page.getByLabel("Quantity").fill("1");
-  await page.getByLabel("Execution price per unit").fill("205");
+  await page.getByLabel("Unit price").fill("205");
   await page.getByLabel("Fee amount").fill("1");
   await page.getByLabel("Trade date").fill("2026-08-13");
   await page.getByLabel("Settlement date").fill("2026-08-14");
   await page.getByLabel("Description").fill("Fictional recurring investment");
   await captureLocator(
-    cardForHeading(page, "Position activity"),
+    cardForHeading(page, "Position event"),
     "position-trade-entry.png",
   );
-  await page.getByRole("button", { name: "Save position activity" }).click();
+  await page.getByRole("button", { name: "Record position event" }).click();
+  await expect(page.getByText(/Buy.*VWRA/)).toBeVisible();
 
-  await page
-    .getByLabel("Update Vanguard FTSE All-World UCITS ETF price")
-    .click();
-  await page.getByLabel("Unit price").fill("212");
-  await page.getByLabel("Price date").fill("2026-08-14");
+  await page.goto(`/accounts/${positionAccountId}`);
+  await expect(
+    page.getByRole("heading", { name: "Interactive Brokers Positions" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Price", exact: true }).click();
+  await page.getByLabel(/^Price \(/).fill("212");
+  await page.getByLabel("Effective date").fill("2026-08-14");
   await page.getByLabel("Source").fill("broker statement");
   await page
     .getByLabel("Provenance")
@@ -189,44 +202,57 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await capturePage(page, "security-price-entry.png");
   await page.getByRole("button", { name: "Save price" }).click();
 
+  await page.goto(`/accounts/${positionAccountId}`);
   await page.getByRole("link", { name: "Reinvest" }).click();
-  await page.getByLabel(/Dividend amount/).fill("106");
-  await page.getByLabel("Execution price per unit").fill("212");
-  await page.getByLabel("Purchased quantity").fill("0.5");
+  await page.getByLabel(/^Dividend \(/).fill("106");
+  await page.getByLabel("Unit price").fill("212");
+  await page.getByLabel("Quantity").fill("0.5");
   await page.getByLabel("Effective date").fill("2026-08-14");
-  await page.getByLabel("Private notes").fill("Fictional reinvestment");
+  await page.getByLabel("Notes").fill("Fictional reinvestment");
   await captureLocator(
-    cardForHeading(page, "Authoritative source activity"),
+    cardForHeading(page, "Corporate actions"),
     "investment-actions.png",
   );
-  await page
-    .getByRole("button", { name: "Save dividend reinvestment" })
-    .click();
+  await page.getByRole("button", { name: /Record Dividend/ }).click();
 
+  await page.goto(`/accounts/${positionAccountId}`);
   await page.getByRole("link", { name: "Reconcile" }).click();
-  await page.getByLabel("Statement date").fill("2026-08-14");
-  await page.getByLabel(/Reported cash/).fill("905");
-  await page.getByLabel(/Reported total/).fill("4405");
-  await page.getByLabel("Notes").fill("Fictional broker statement comparison");
-  await page.getByRole("button", { name: "Save reconciliation" }).click();
+  const reconciliation = page
+    .getByLabel("Observation date")
+    .locator("xpath=ancestor::form");
+  await reconciliation.getByLabel("Observation date").fill("2026-08-14");
+  await reconciliation.getByLabel(/Reported cash/).fill("905");
+  await reconciliation.getByLabel(/Reported total/).fill("4405");
+  await reconciliation
+    .getByLabel("Notes")
+    .fill("Fictional broker statement comparison");
+  await reconciliation
+    .getByRole("button", { name: "Save reconciliation" })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "Statement reconciliations" }),
+    page.getByText("Fictional broker statement comparison", { exact: true }),
   ).toBeVisible();
+  await page.goto(`/accounts/${positionAccountId}`);
   await capturePage(page, "position-account-detail.png");
+  await captureLocator(
+    cardForHeading(page, "Movement attribution"),
+    "position-movement-attribution.png",
+  );
 
   await page.goto(`/accounts/${positionAccountId}/import`);
+  await page.getByLabel("Convert document with AI").check();
   await expect(
-    page.getByRole("heading", {
-      name: "Prepare your investment file with AI",
-    }),
+    page.getByRole("heading", { name: "Source file conversion" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Show prompt" }).click();
   await captureLocator(
-    cardForHeading(page, "Prepare your investment file with AI"),
+    cardForHeading(page, "Source file conversion"),
     "investment-ai-prompt.png",
   );
-  await page.getByRole("button", { name: "Hide prompt" }).click();
-  await page.getByLabel("CSV or JSON file").setInputFiles({
+  await page.getByLabel("Formatted CSV / JSON").check();
+  const investmentImport = page
+    .getByRole("heading", { name: "Investment history import" })
+    .locator('xpath=ancestor::section[contains(@class, "read-card")][1]');
+  await investmentImport.getByLabel("Import file").setInputFiles({
     name: "fictional-investment-history.json",
     mimeType: "application/json",
     buffer: Buffer.from(
@@ -279,25 +305,15 @@ test("capture the Wealthboard product guide", async ({ page }) => {
       }),
     ),
   });
-  await page.getByRole("button", { name: "Preview file" }).click();
+  await investmentImport.getByRole("button", { name: "Preview" }).click();
+  await expect(investmentImport.getByText("Records")).toBeVisible();
   await expect(
-    page.getByText(/Interactive Brokers Positions · 3 source records/),
+    investmentImport.getByText("3", { exact: true }).first(),
   ).toBeVisible();
-  await page
-    .getByRole("columnheader", { name: "Instrument" })
-    .first()
-    .scrollIntoViewIfNeeded();
-  await captureLocator(
-    cardForHeading(page, "Confirm projected account"),
-    "investment-import-preview.png",
-  );
+  await captureLocator(investmentImport, "investment-import-preview.png");
 
   await page.goto("/reports");
   await capturePage(page, "reports-overview.png");
-  await captureLocator(
-    cardForHeading(page, "Position movement attribution"),
-    "position-movement-attribution.png",
-  );
 
   await page.goto("/estate/beneficiaries");
   await addBeneficiary(page, {
@@ -319,7 +335,7 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await capturePage(page, "estate-beneficiaries.png");
 
   const archive = (await (
-    await page.request.get("/api/export/json")
+    await page.request.get("/api/v1/exports/user")
   ).json()) as {
     accounts: Array<{
       id: string;
@@ -334,18 +350,6 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   expect(land).toBeTruthy();
 
   await page.goto(`/estate/distribution?account=${land!.id}#asset-${land!.id}`);
-  for (const account of archive.accounts.filter(
-    (account) =>
-      !account.isLiability && !account.archivedAt && account.id !== land!.id,
-  )) {
-    const card = page.locator(`#asset-${account.id}`);
-    await card
-      .getByLabel("Include this asset in the estate distribution plan")
-      .uncheck();
-    await card.getByRole("button", { name: "Save asset directive" }).click();
-    await expect(card.getByRole("status")).toHaveText("Asset directive saved.");
-  }
-
   let landCard = page.locator(`#asset-${land!.id}`);
   await landCard.getByLabel("Estate ownership share").fill("100");
   await landCard.getByLabel("Last checked").fill("2026-08-12");
@@ -359,10 +363,16 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await landCard
     .getByLabel("Planning notes")
     .fill("Confirm title details with the estate adviser.");
-  await landCard.getByRole("button", { name: "Save asset directive" }).click();
-  await expect(landCard.getByRole("status")).toHaveText(
-    "Asset directive saved.",
-  );
+  const [landResponse] = await Promise.all([
+    page.waitForResponse(
+      (candidate) =>
+        candidate.url().includes(`/api/v1/estate/directives/${land!.id}`) &&
+        candidate.request().method() === "PUT",
+    ),
+    landCard.getByRole("button", { name: "Save asset directive" }).click(),
+  ]);
+  expect(landResponse.ok(), await landResponse.text()).toBeTruthy();
+  landCard = page.locator(`#asset-${land!.id}`);
 
   landCard = page.locator(`#asset-${land!.id}`);
   await landCard
@@ -413,7 +423,8 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page.getByLabel("Last reviewed").fill("2026-08-12");
   await page.getByLabel("Review again on").fill("2027-08-12");
   await page.getByRole("button", { name: "Save plan details" }).click();
-  await expect(page.getByText("Allocation math complete")).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Plan details saved.");
+  await expect(page.getByText("Decisions needed")).toBeVisible();
   await capturePage(page, "estate-summary.png");
 
   await page.getByRole("button", { name: "Create summary" }).click();

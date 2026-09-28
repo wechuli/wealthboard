@@ -12,7 +12,12 @@ implemented baseline includes multi-user authentication and isolation,
 balance- and position-tracked accounts, paginated transaction history, goals,
 reports, imports and portability, estate planning, browser-local appearance
 themes, optional on-demand AI review, PWA behavior, and Docker/Kubernetes
-deployment.
+deployment. The runtime is Go/Chi with PostgreSQL and a Vite/React client;
+`/api/v1`, generated client types, scoped personal API keys, PostgreSQL recovery,
+and the legacy-runtime cutover are implemented, not future migration tasks.
+
+Item IDs are retained for existing references. Completed items are removed
+rather than renumbering the remaining backlog.
 
 The highest remaining risks are financial methodology and completeness,
 operator restore safety, service-boundary consistency, publication controls,
@@ -207,16 +212,18 @@ Effort estimates:
 
 - **Priority:** P2
 - **Estimated effort:** Epic
-- **Current gap:** Wealthboard is installable as a PWA but has no stable native
-  API, mobile device-session model, or iOS/Android application.
+- **Current gap:** Wealthboard has an installable PWA, a versioned Go API, and
+  scoped personal API keys, but no native mobile device-session model or
+  iOS/Android application.
 - **Product direction:** Build an Expo/React Native/TypeScript companion under
   `mobile/`. It connects directly to a user-selected self-hosted HTTPS instance;
-  the existing Next.js deployment remains the only backend and SQLite remains
+  the existing Go service remains the only backend and PostgreSQL remains
   server-owned.
-- **Versioned API:** Add `/api/v1` Route Handlers and an OpenAPI-generated client
-  for capabilities, current user, dashboard, accounts/history, transactions,
-  valuations, transfers, goals, institutions, categories, rates, settings, and
-  read-only position summaries. Derive ownership only from the API principal.
+- **Versioned API:** Reuse `/api/v1` and the OpenAPI contract for current user,
+  dashboard, accounts/history, transactions, valuations, transfers, goals,
+  institutions, categories, rates, settings, and read-only position summaries.
+  Generate the native client from that contract and add only missing
+  native-specific capabilities. Derive ownership only from the API principal.
 - **Authentication:** Use system-browser Authorization Code + PKCE and dedicated
   short-lived access/rotating refresh tokens. Never collect local passwords or
   expose provider tokens in native UI. Integrate refresh-token/device inventory
@@ -230,7 +237,7 @@ Effort estimates:
   import, backup/restore, auth-method management, advanced reports, and position
   mutations web-only until each has a native-safe workflow.
 - **Dependencies:** A5 typed errors, A6 HTTP/proxy security, F5 sessions, A8
-  workload limits, A11 SQLite envelope, and existing position replay/serialization.
+  workload limits, A11 PostgreSQL capacity envelope, and existing position replay/serialization.
 - **Acceptance criteria:** Supported production builds connect to arbitrary
   valid HTTPS Wealthboard instances, authenticate in every deployment auth
   mode, refresh/revoke device sessions, render exact owner-scoped data, preserve
@@ -340,12 +347,13 @@ financial prompts by default.
 - **Estimated effort:** Medium
 - **Implemented foundation:** Signup creates no fabricated rate. Current and
   historical aggregates carry completeness and missing-currency metadata.
-- **Remaining concern:** Rates lack a complete source/freshness model, and
+  Pair management and current missing/stale-rate warnings are implemented.
+- **Remaining concern:** Rates lack a complete provenance/source model, and
   incomplete historical periods do not consistently identify affected currency
   pairs, assets, and date ranges.
-- **Proposed change:** Add bounded provenance/source metadata and freshness,
-  expose affected historical ranges, and keep any automatic provider optional,
-  explicit, and provenance-preserving.
+- **Proposed change:** Add bounded provenance/source metadata, build on current
+  freshness warnings, expose affected historical ranges, and keep any automatic
+  provider optional, explicit, and provenance-preserving.
 - **Acceptance criteria:** Every rate has clear provenance/effective date and
   freshness; incomplete periods identify pair/assets/ranges; no total silently
   omits unresolved exposure; tests cover historical gaps and user isolation.
@@ -367,80 +375,79 @@ financial prompts by default.
   position-account coverage; reports show method and confidence and reconcile
   with an independent reference.
 
-### A3. Make Offline Database Restore Fail-Safe
+### A3. Harden PostgreSQL Restore Recovery
 
 - **Priority:** P0
 - **Estimated effort:** Medium
-- **Current concern:** Offline restore validates a candidate before replacement
-  but does not automatically create/verify a pre-restore recovery copy and roll
-  back after a failed swap/post-check.
-- **Proposed change:** Check free space, create and hash a timestamped recovery
-  copy, fsync staged files where supported, swap atomically, run integrity/schema
-  checks, and restore the original automatically on failure.
-- **Risks or trade-offs:** Restore requires approximately twice the database
-  size. Fail before touching the target when space is insufficient.
-- **Acceptance criteria:** Automated CLI tests cover success, corrupt source,
-  missing tables, interrupted swap, insufficient space, and post-check failure;
-  every failed case leaves the original byte-for-byte recoverable.
+- **Implemented foundation:** The Go operator command validates the archive,
+  creates a timestamped pre-restore custom-format dump, runs a clean
+  single-transaction `pg_restore`, validates schema/foreign keys, and retains
+  the safety dump. Native PostgreSQL backup/restore tests exist.
+- **Remaining concern:** Maintenance mode is acknowledged rather than enforced,
+  disk capacity is not preflighted, and validation after the restore transaction
+  commits does not automatically recover the prior database.
+- **Proposed change:** Add capacity and archive-verification preflights,
+  explicit writer exclusion, and a tested recovery procedure for interrupted
+  restores and failed post-checks.
+- **Risks or trade-offs:** Logical PostgreSQL recovery is not an atomic SQLite
+  file swap. Recovery must preserve the safety archive and keep traffic stopped
+  until the target has been verified.
+- **Acceptance criteria:** CLI tests cover writer conflicts, insufficient space,
+  interrupted tools, incompatible schemas, and failed post-checks; every failure
+  leaves the prior data recoverable through a documented and tested procedure.
 
-### A4. Enforce Goal-Link Account State in Services
-
-- **Priority:** P1
-- **Estimated effort:** Small
-- **Implemented foundation:** Normal transaction, valuation, transfer, import,
-  and supported-currency services reject archived/incompatible targets.
-- **Remaining concern:** Goal forms filter archived/liability accounts, but the
-  service relationship check does not enforce the same state under crafted or
-  stale requests.
-- **Proposed change:** Centralize the active/compatible owned-account predicate
-  and require it from goal create/update/link commands. Preserve the explicit
-  correction path for historical archived activity under F1.
-- **Acceptance criteria:** Archived accounts and liabilities cannot be linked to
-  savings goals through any caller; foreign resources remain not found; existing
-  valid links behave consistently; service tests cover create/update/direct IDs.
-
-### A5. Introduce Typed Domain Errors and Safe Client Mapping
+### A5. Standardize Go Domain Errors and Safe Client Mapping
 
 - **Priority:** P1
 - **Estimated effort:** Medium
-- **Current concern:** Actions and routes use several ad hoc policies and some
-  paths return arbitrary `Error.message`, risking internal SQLite/Drizzle detail
-  exposure.
-- **Proposed change:** Define a small domain error code union with safe messages,
-  field context, internal causes, and one mapping layer. Unexpected errors receive
-  request IDs and redacted structured logs.
+- **Implemented foundation:** Go services use domain/sentinel errors and HTTP
+  handlers return `application/problem+json` with safe expected-error messages.
+  Chi request IDs and structured HTTP logs already exist.
+- **Remaining concern:** Error classification, field context, cause logging,
+  and client-visible request correlation are not uniform across handlers.
+- **Proposed change:** Standardize Go error codes and HTTP mappings, preserve
+  actionable validation details, and attach safe request IDs to unexpected
+  failures without returning internal PostgreSQL or service errors.
 - **Acceptance criteria:** Database/schema text never reaches clients; expected
   errors remain actionable; every 5xx has a safe request ID; representative
-  action/route/import/restore mappings are tested.
+  API/import/restore mappings are tested.
 
 ### A6. Harden Proxy Trust, CSRF, and Browser Security Headers
 
 - **Priority:** P1
 - **Estimated effort:** Medium
-- **Current concern:** Trusted forwarding is an operator toggle without ingress
-  identity validation or IPv4/IPv6 prefix normalization. Browser CSP, HSTS,
-  frame, referrer, MIME, and permissions policies are not configured.
+- **Implemented foundation:** Browser mutations validate trusted origin and
+  session-bound CSRF tokens. Go uses the socket peer IP for rate limiting and
+  ignores forwarded IP headers; `TRUST_PROXY_HEADERS` is a legacy no-op.
+- **Remaining concern:** Proxy users can share one peer-address bucket, there
+  is no trusted-ingress/IP-prefix policy, and application-wide CSP, HSTS, frame,
+  referrer, MIME, and permissions policies are not configured. OIDC-specific
+  response headers do not provide an application-wide policy.
 - **Proposed change:** Define/document one supported proxy topology, accept
   sanitized client identity only from ingress-overwritten headers, normalize
-  IPv4/IPv6 rate-limit keys, test spoofed chains/cross-origin actions, and add a
+  IPv4/IPv6 rate-limit keys, test spoofed chains/cross-origin API mutations, and add a
   deployment-compatible CSP and standard headers.
 - **Risks or trade-offs:** Bad proxy trust can collapse users into one identity
-  or trust attackers; bad CSP can break Next/Recharts.
+  or trust attackers; bad CSP can break the Vite client or Recharts.
 - **Acceptance criteria:** Direct clients cannot choose rate-limit identity;
   supported ingress yields correct IPv4/prefix keys; unsupported chains fail
   closed; cross-origin mutations fail; automated header tests cover production
   HSTS and all declared policies.
 
-### A7. Gate Container Publication and Produce Supply-Chain Artifacts
+### A7. Complete Container Supply-Chain Gates and Artifacts
 
 - **Priority:** P1
 - **Estimated effort:** Medium
-- **Current concern:** Release publication builds/pushes without required lint,
-  typecheck, tests, E2E, production build, vulnerability policy, pinned action
-  SHAs, SBOM, provenance, or signature.
-- **Proposed change:** Add required validation before push, least-privilege jobs,
-  reviewed SHA-pinned actions, CycloneDX SBOM, SLSA provenance, Cosign/Sigstore
-  signing, and Trivy image scanning before release tags/latest.
+- **Implemented foundation:** Container publication depends on the reusable
+  validation workflow, including generated-code drift, lint, typecheck,
+  Go/Vite/PostgreSQL tests, browser builds/tests, and dependency scans. Workflow
+  actions are SHA-pinned.
+- **Remaining concern:** Publication does not explicitly enforce final-image
+  vulnerability scanning, signature verification, or a retained and documented
+  SBOM/provenance policy.
+- **Proposed change:** Add image scanning before release tags/latest and retain
+  reviewed SBOM, provenance, signatures, and verification commands for the
+  exact published application and extraction-worker digests.
 - **Risks or trade-offs:** CI time and scanner false positives require a bounded
   exception process.
 - **Acceptance criteria:** Any failed gate or unaccepted high/critical finding
@@ -451,9 +458,12 @@ financial prompts by default.
 
 - **Priority:** P1
 - **Estimated effort:** Large
-- **Current concern:** Large CSV/JSON parsing, restore writes, and historical
-  analytics run synchronously in the web process without deadlines, progress,
-  cancellation, or per-user concurrency limits.
+- **Implemented foundation:** Go handlers use request contexts and HTTP
+  timeouts, import inputs are bounded, and document extraction/provider calls
+  have dedicated limits.
+- **Remaining concern:** Synchronous import replay, user restore, and historical
+  analytics still need measured latency/memory budgets, progress reporting, and
+  consistent per-user concurrency and cancellation behavior.
 - **Proposed change:** Establish measured budgets. Keep small work synchronous;
   route larger operations through A13 jobs or reject clearly. Bound concurrency
   and cancellation without adding Redis by default.
@@ -465,8 +475,10 @@ financial prompts by default.
 
 - **Priority:** P1
 - **Estimated effort:** Large
-- **Current concern:** Backups are manual, with no schedule, retention, status,
-  stale/failure alerts, encrypted off-host guidance, or disposable restore drill.
+- **Implemented foundation:** Operator backups, native disposable restore tests,
+  and encrypted off-host/retention guidance are documented.
+- **Remaining concern:** Deployments still need scheduled backups, enforced
+  retention, visible status, stale/failure alerts, and recurring restore drills.
 - **Proposed change:** Add configurable scheduled backups, retention,
   post-backup integrity/hash checks, optional encrypted off-host copy, and
   periodic disposable restore verification using A3 primitives.
@@ -479,30 +491,30 @@ financial prompts by default.
 
 - **Priority:** P2
 - **Estimated effort:** Large
-- **Current concern:** Production visibility remains mostly console errors and
-  shallow health status, with no consistent request IDs, operation durations,
-  backup/job metrics, or privacy-safe user-visible audit trail.
-- **Proposed change:** Add redacted JSON logs, request IDs, durations,
-  auth/security/destructive events, backup/job status, optional error tracking,
-  and bounded retention.
+- **Implemented foundation:** Go emits structured JSON request logs with IDs,
+  status, byte count, and duration, plus database/schema/auth readiness checks.
+- **Remaining concern:** Domain-operation metrics, backup/job status, safe
+  client-to-server error correlation, and a user-visible audit trail are missing.
+- **Proposed change:** Extend the existing logging boundary with
+  auth/security/destructive events, metrics, backup/job status, optional error
+  tracking, and bounded retention.
 - **Acceptance criteria:** Errors correlate to safe request IDs; logs are
   machine-parseable/redacted; auth, restore, credential, deletion, backup, and
   job events are auditable without amounts, notes, secrets, or raw rows.
 
-### A11. Define SQLite Operating Envelope
+### A11. Define the PostgreSQL Operating Envelope
 
 - **Priority:** P2
 - **Estimated effort:** Medium
-- **Current concern:** SQLite fits the single-process product, but supported
-  user/event/concurrency ranges, lock/busy metrics, WAL maintenance, storage
-  monitoring, and database-migration triggers are not measured/documented.
-- **Proposed change:** Benchmark p95 read/write latency, lock failures, and WAL
-  growth; define checkpoint/quick-check/ANALYZE and storage runbooks; enforce
-  one-replica/single-writer constraints; publish measurable PostgreSQL review
-  triggers.
+- **Current concern:** PostgreSQL and multiple Go replicas are supported, but
+  user/event/concurrency ranges, aggregate connection-pool budgets, lock waits,
+  autovacuum behavior, storage growth, and saturation thresholds need measurement.
+- **Proposed change:** Benchmark p95 read/write latency and lock contention
+  across replicas; document pool sizing, vacuum/analyze monitoring, database
+  storage/backup capacity, and supported PostgreSQL upgrade procedures.
 - **Acceptance criteria:** Baselines and supported ranges are documented;
-  maintenance is tested; one-replica constraints are enforced; database
-  migration triggers are measurable rather than speculative.
+  maintenance is tested; concurrent replicas stay within database connection
+  and latency budgets; capacity triggers are measurable rather than speculative.
 
 ### A12. Optimize Historical Analytics After Benchmarking
 
@@ -524,26 +536,32 @@ financial prompts by default.
 - **Priority:** P2
 - **Estimated effort:** Large
 - **Current concern:** Scheduled summaries, recurring activity, notifications,
-  backups, and larger reports need durable execution. Idempotency/auth/AI usage
-  records also need explicit pruning.
-- **Proposed change:** Add an owner-aware SQLite job table with lease, attempts,
-  next-run, status, and idempotency. Run one controlled worker and define
-  retention for completed jobs, idempotency keys, auth attempts, and AI metadata.
+  backups, and larger reports need durable execution. Login attempts already
+  receive 24-hour cleanup during limiter activity; idempotency/AI metadata and
+  future job records still need documented retention.
+- **Proposed change:** Add owner-aware PostgreSQL job records with leases,
+  attempts, next-run time, status, and idempotency. Coordinate claims across Go
+  replicas and define retention for completed jobs, idempotency keys, auth
+  attempts, and AI metadata.
 - **Acceptance criteria:** Jobs are at-least-once and idempotent, recheck active
   user status, preserve isolation, recover after restart, expose failure status,
-  enforce one active worker, and prune to documented policy.
+  prevent concurrent claims of the same job, and prune to documented policy.
 
 ### A14. Complete Startup Configuration and Deployment Readiness
 
 - **Priority:** P2
 - **Estimated effort:** Medium
-- **Implemented foundation:** Liveness/readiness endpoints, auth readiness, and
-  Kubernetes startup/readiness/liveness probes exist.
-- **Remaining concern:** Startup does not fully validate migration availability,
-  schema state, data/backup path writability/free space, or graceful termination.
-- **Proposed change:** Add one server-only startup validator and cached readiness
-  checks for migration/schema and storage. Keep liveness independent of transient
-  dependencies and document shutdown behavior.
+- **Implemented foundation:** Startup validates required runtime configuration,
+  opens PostgreSQL, applies embedded migrations, and checks that Vite assets
+  exist. Readiness checks database/schema/auth state. SIGINT/SIGTERM triggers a
+  bounded graceful HTTP shutdown, and Kubernetes probes are supplied.
+- **Remaining concern:** Authentication readiness is not a pre-listen startup
+  gate. Timezone/policy validation, extraction-worker availability, operator
+  storage preflights, and deployment shutdown/recovery drills need consolidation.
+- **Proposed change:** Consolidate configuration validation, explicitly define
+  startup versus readiness responsibilities, and test graceful termination and
+  recovery. Keep liveness independent of transient dependencies and perform
+  operator-path storage checks before destructive work.
 - **Acceptance criteria:** Invalid secrets/URLs/timezone/paths fail before
   serving; readiness is false during migrations or unusable storage; liveness
   does not restart for temporary locks; startup probe and graceful termination
@@ -555,9 +573,10 @@ financial prompts by default.
 - **Estimated effort:** Large
 - **Implemented foundation:** The repository has broad unit, component, migration,
   documentation, isolation, OIDC, position, estate, PWA, and Chromium E2E tests.
-- **Remaining concern:** Coverage targets remain narrow and threshold-free;
-  restore CLI, service goal-link state, security-header/cross-origin, concurrency,
-  and performance risk matrices are incomplete.
+- **Remaining concern:** Coverage remains threshold-free; interrupted recovery,
+  application-wide security headers, concurrency, and performance risk matrices
+  need expansion. Native restore, goal-link state, and origin/CSRF regressions
+  already have Go coverage and should be retained.
 - **Proposed change:** Define module-specific thresholds for finance, money, auth,
   portability, and owner-scoped services; add missing high-risk regressions and
   trend-based performance fixtures without brittle wall-clock assertions.
@@ -583,14 +602,38 @@ financial prompts by default.
   and dark have no serious automated violations and pass documented keyboard and
   screen-reader checks.
 
+### A17. Close Remaining Go/Vite Workflow Parity Gaps
+
+- **Priority:** P0
+- **Estimated effort:** Large
+- **Implemented foundation:** The Go/Vite/PostgreSQL cutover, retained parity
+  fixtures, and core workflows are implemented.
+- **Remaining concern:** Current guide verification exposed gaps between the
+  product contract and the runtime: cached/incomplete linked-goal and estate
+  valuation, unchecked snapshot completeness, non-atomic exchange-rate edits
+  without position-cache rebuilding, reduced conversion/reconciliation
+  and import-preview surfaces, and an unmounted manual import-prompt workflow.
+  AI import also sends section location labels despite contrary UI copy and
+  lacks reliable cancellation/stale-response handling. OpenAI callers do not
+  enable the transport's native response-schema option.
+- **Proposed change:** Close each gap against `SPEC.md` with focused Go,
+  component, and browser regressions. Preserve exact arithmetic, current
+  ownership rules, and explicit import confirmation; keep guides honest about
+  limitations until the corresponding behavior is implemented.
+- **Acceptance criteria:** Goals and estate views propagate conversion and
+  position completeness; FX corrections are atomic; workflow surfaces match
+  their documented capabilities; AI consent accurately describes outbound
+  content and cancellation cannot resurrect a cleared draft. Two-user negative
+  assertions cover affected private boundaries.
+
 ## Technical Debt
 
 ### TD1. Split Large Modules Along Existing Ownership Boundaries
 
 - **Priority:** P2
 - **Estimated effort:** Large
-- **Issue:** Portability, account, analytics, settings, and central action modules
-  span multiple responsibilities and continue to grow.
+- **Issue:** Go portability, account replay, and analytics services, plus large
+  Vite settings/import components, still span multiple responsibilities.
 - **Improvement:** Separate archive schema/export/restore, account command/query/
   replay, analytics read models, and settings/security/import panels while
   preserving public domain APIs. Do not introduce generic repository layers
@@ -602,15 +645,15 @@ financial prompts by default.
 
 - **Priority:** P2
 - **Estimated effort:** Medium
-- **Issue:** Shared Zod coverage has improved, but some forms/actions retain
-  parallel schemas or unchecked `action as unknown` progressive-enhancement
-  casts.
-- **Improvement:** Define remaining dependency-light domain input contracts,
-  derive client/server types, and add typed form-action adapters without React ↔
-  service circular imports.
-- **Acceptance criteria:** Client/server reject the same inputs; settings/rates
-  and remaining forms use shared schemas; no form action needs an `unknown` cast;
-  field errors and progressive enhancement remain intact.
+- **Issue:** Zod client forms, OpenAPI-generated TypeScript types, and Go
+  request/domain validation now live in different language boundaries and can
+  drift without explicit contract coverage.
+- **Improvement:** Keep authoritative validation in Go, generate browser types
+  from OpenAPI, reuse client schemas, and add shared valid/invalid input
+  fixtures rather than reintroducing server actions or browser business rules.
+- **Acceptance criteria:** Client/API validation agrees on documented inputs,
+  serialization and field errors stay consistent, generated types do not drift,
+  and forms need no unsafe request-shape casts.
 
 ### TD3. Centralize Product Defaults and Runtime Policy
 
@@ -660,12 +703,12 @@ work. Item-level dependencies take precedence.
 
 ### Phase 1: Critical Correctness and Security
 
+- A17 remaining Go/Vite parity and consent gaps.
 - A1 exchange-rate provenance and freshness.
 - A2 cash-flow-aware return methodology.
-- A3 fail-safe restore.
-- A4 goal-link service rules.
+- A3 PostgreSQL restore recovery hardening.
 - A6 proxy/origin/header hardening.
-- A7 container publication and supply-chain gates.
+- A7 remaining container supply-chain gates and artifacts.
 - A15 risk-based regression and coverage gates.
 
 ### Phase 2: Core Product Completeness
@@ -675,14 +718,14 @@ work. Item-level dependencies take precedence.
 - F3 date-scoped downloadable reports.
 - F4 account deletion and retention controls.
 - F6 onboarding.
-- F9 mobile API and companion foundation.
+- F9 native device authentication and companion foundation over the Go API.
 
 ### Phase 3: Reliability and Operational Maturity
 
 - A8 bounded heavy workloads.
 - A9 backup automation and restore drills.
 - A10 observability and audit events.
-- A11 SQLite operating envelope.
+- A11 PostgreSQL operating envelope.
 - A12 analytics performance.
 - A13 durable jobs and retention.
 - A14 startup/readiness validation.
@@ -712,13 +755,12 @@ work. Item-level dependencies take precedence.
 
 "Quick" describes implementation size and independence, not urgency.
 
-- Enforce archived/liability goal-link rules in services (A4).
-- Add and verify a pre-restore recovery copy before database replacement (first
-  slice of A3).
-- Add tested browser security headers and trusted-proxy documentation (first
+- Add recovery-capacity and interrupted-tool regressions to PostgreSQL restore
+  coverage (first slice of A3).
+- Add tested browser security headers and a supported trusted-proxy policy (first
   slice of A6).
-- Add required lint/type/test/build and image-scan jobs before container push
-  (first slice of A7).
+- Add final-image scanning to the existing container publication gates (first
+  slice of A7).
 - Add stale manual-account badges using financial event dates (first slice of
   F2).
 - Record the account-deletion retention decision before implementation (F4).
@@ -727,13 +769,14 @@ work. Item-level dependencies take precedence.
 ## Recommended Next Five Tasks
 
 1. **Complete exchange-rate provenance and freshness (A1).** Add source and
-   freshness metadata plus affected historical date ranges so incomplete totals
+   provenance metadata plus affected historical date ranges so incomplete totals
    identify exactly what is excluded.
-2. **Implement fail-safe offline restore (A3).** Every restore must either
-   validate successfully or leave the previous database recoverable.
+2. **Harden PostgreSQL restore recovery (A3).** Extend the existing safety dump
+   and transactional restore with writer/capacity checks and tested recovery
+   after interruptions or failed post-checks.
 3. **Replace or remove naive annualized returns (A2).** Agree on TWR/XIRR
    methodology and protect it with independent golden fixtures.
-4. **Gate and attest container publication (A7).** Publish only tested, scanned,
-   signed, traceable images with retained SBOM/provenance.
-5. **Enforce goal-link account state in services (A4).** Reject archived,
-   liability, and foreign linked-account IDs regardless of caller.
+4. **Complete supply-chain publication controls (A7).** Add final-image scans,
+   signatures, and retained SBOM/provenance to the existing validation gates.
+5. **Close verified Go/Vite parity gaps (A17).** Prioritize complete planning
+   values, atomic FX corrections, and accurate AI consent/cancellation behavior.

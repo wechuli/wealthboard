@@ -1,15 +1,33 @@
 services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wealthboard
+      POSTGRES_USER: wealthboard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - wealthboard-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wealthboard -d wealthboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   wealthboard:
     build: .
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      extraction-worker:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
-      DATABASE_PATH: /data/wealthboard.db
-      BACKUP_PATH: /backups
-      SESSION_SECRET: ${SESSION_SECRET}
+      DATABASE_URL: postgres://wealthboard:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/wealthboard?sslmode=disable
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
       APP_URL: ${APP_URL:-http://localhost:3000}
-      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
       AUTH_METHODS: ${AUTH_METHODS:-local}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
@@ -19,24 +37,50 @@ services:
       TZ: ${TZ:-Africa/Nairobi}
       AI_CREDENTIAL_ENCRYPTION_KEY: ${AI_CREDENTIAL_ENCRYPTION_KEY:-}
       AI_ALLOWED_ENDPOINTS: ${AI_ALLOWED_ENDPOINTS:-}
+      AI_EXTRACTION_SOCKET: /run/wealthboard/extraction.sock
     volumes:
-      - wealthboard-data:/data
-      - wealthboard-backups:/backups
+      - wealthboard-extraction-socket:/run/wealthboard
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  extraction-worker:
+    build:
+      context: .
+      target: extraction-worker
+    restart: unless-stopped
+    environment:
+      AI_EXTRACTION_SOCKET: /run/wealthboard/extraction.sock
+    volumes:
+      - wealthboard-extraction-socket:/run/wealthboard
+    network_mode: none
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test:
         [
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+          "require('node:fs').statSync(process.env.AI_EXTRACTION_SOCKET).isSocket()||process.exit(1)",
         ]
-      interval: 30s
-      timeout: 5s
-      start_period: 20s
-      retries: 3
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
 
 volumes:
-  wealthboard-data:
-  wealthboard-backups:
+  wealthboard-postgres-data:
+  wealthboard-extraction-socket:

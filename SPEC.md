@@ -2,13 +2,45 @@
 
 ## Status and terminology
 
-This document defines the product contract for the implemented multi-user
-baseline. [backlog.md](backlog.md) contains only work that is not fully
+This document defines the product contract for the multi-user application.
+[backlog.md](backlog.md) contains work that is not fully
 implemented. The current schema includes balance- and position-tracked
 accounts, institutions, estate planning, configurable local/OIDC
 authentication, appearance themes, and versioned portability. Persisted
 databases advance only through append-only migrations; applied migrations and
 snapshots are immutable.
+
+The production runtime is the Go API serving the compiled Vite client over
+PostgreSQL. PostgreSQL installations start from the reviewed fresh schema;
+SQLite data is intentionally not migrated or dual-written. Legacy Next.js,
+Drizzle, and SQLite runtime source was removed after the Phase 6 gates passed.
+Frozen parity fixtures and archived Drizzle migrations remain as evidence.
+
+### Current implementation limits
+
+The runtime migration is complete, but that does not certify every product
+requirement below as fully implemented. The current guides describe what users
+can actually do. Known Go/Vite gaps include:
+
+- Goal progress uses cached linked-account values; cross-currency links and
+  position-price completeness do not yet meet the full planning contract.
+- Estate reads and snapshots do not yet provide complete, historically replayed
+  indicative valuation. Snapshot completeness is not a substitute for the live
+  review checks; print privacy switches do not redact downloaded snapshot JSON.
+- Exchange-rate corrections in the settings UI use separate delete/create
+  requests, not one atomic replacement, and rate writes do not rebuild cached
+  position balances.
+- Account conversion, reconciliation, and import previews expose less detail
+  than the full product contract, and the manual copyable-prompt workflow is
+  not mounted in the current import page.
+- AI import currently sends selected section location labels and does not
+  guarantee cancellation of in-flight requests when the user cancels or leaves.
+  OpenAI review/conversion requests use prompt-requested JSON with local Go
+  validation, not the native JSON Schema response option described below.
+
+These are implementation limitations, not permission to weaken ownership,
+exact-money, atomicity, or consent requirements. Track remaining parity work in
+[backlog A17](backlog.md#a17-close-remaining-govite-workflow-parity-gaps).
 
 To avoid ambiguity:
 
@@ -61,35 +93,37 @@ Make it easy to rename later through a configuration file.
 
 Use:
 
-- Next.js latest stable version
-- App Router
-- TypeScript with strict mode
-- React
-- SQLite
-- Drizzle ORM
+- Go 1.27 with Chi and `net/http`
+- PostgreSQL 18
+- Goose append-only PostgreSQL migrations
+- sqlc-generated database access
+- React with Vite and strict TypeScript
 - Recharts
 - Tailwind CSS
-- shadcn/ui
-- Zod
+- Zod for client-side form validation, with authoritative validation in Go
 - React Hook Form
 - Lucide icons
-- date-fns
-- Argon2 or bcrypt for password hashing
-- Next.js server actions or route handlers
+- bcrypt for password hashing
+- A versioned JSON API under `/api/v1`
 - Docker and Docker Compose
 - PWA support
 
-Do not create a separate backend application. The Next.js application should handle server-side operations and access SQLite directly.
+The browser must not access PostgreSQL directly. The Go service owns
+authentication, authorization, business rules, transactions, migrations, and
+operator commands. It serves the compiled Vite assets and SPA fallback from the
+same process. Production requires no Node.js server; Node is used only for
+builds and the isolated PDF/XLSX/DOCX extraction-worker exception.
 
-Use a persistent SQLite database file mounted through Docker.
+Use durable PostgreSQL storage and tested deployment-wide backups. New
+installations do not import SQLite databases.
 
 The application should be suitable for deployment to a home server or Kubernetes cluster.
 
 ## Important architectural principles
 
 - Support multiple independent application users in one deployment.
-- Enforce strict per-user data isolation in schema, services, actions, pages,
-  route handlers, exports, imports, analytics, caches, and tests.
+- Enforce strict per-user data isolation in schema, services, API handlers,
+  client pages, exports, imports, analytics, caches, and tests.
 - Do not implement organizations, teams, households, roles, invitations,
   shared portfolios, or cross-user financial accounts in the initial
   multi-user release.
@@ -99,10 +133,13 @@ The application should be suitable for deployment to a home server or Kubernetes
 - Prefer simple and reliable architecture over enterprise abstractions
 - Keep business logic separate from UI components
 - Use decimal-safe money handling
-- Store monetary values as integer minor units where practical
+- Store monetary values as integer minor units in PostgreSQL `bigint` columns
+- Store exchange rates as exact PostgreSQL `numeric` values and serialize them
+  as decimal strings
 - Store fractional quantities and unit prices as canonical decimal strings and
-  calculate them with Decimal.js; round only when producing a monetary amount
-- Do not use JavaScript floating-point arithmetic for financial calculations
+  calculate them with reviewed exact-decimal helpers; round only when producing
+  a monetary amount
+- Do not use floating-point arithmetic for authoritative financial calculations
 - Use transactions when updating balances and financial records
 - All dates should be stored in UTC and shown in the user’s configured timezone
 - Default timezone: Africa/Nairobi
@@ -151,8 +188,14 @@ Requirements:
   flow; local credential changes require fresh provider reauthentication. Never
   remove the last usable method. Every method change increments session version.
 - Include logout and clear user-specific client state when switching users.
-- Protect every application route except login, mode-enabled signup, the two
-  OIDC protocol endpoints, health checks, and public PWA assets.
+- Bootstrap the browser session before rendering private application screens
+  and authorize every private API request independently in Go. The public SPA
+  shell and assets contain no private portfolio data. Login, mode-enabled
+  signup, auth-mode configuration, the two OIDC protocol endpoints, and health
+  checks remain public.
+- Require the exact trusted `Origin` and the session's `X-CSRF-Token` for
+  authenticated browser mutations. Local login/signup require the trusted
+  origin before a session exists.
 - Rate-limit login by normalized username and client address, and rate-limit
   signup by client address. Login errors must not reveal whether a username
   exists.
@@ -162,15 +205,39 @@ Requirements:
   local credential for an OIDC-only user.
 - OIDC uses discovery, Authorization Code flow, PKCE S256, state, nonce, exact
   callback matching, RS256 verification, bounded network responses, and a
-  short-lived encrypted A256GCM transaction cookie. Provider codes, tokens,
-  verifiers, and claims are never persisted or logged.
-- OIDC-only startup/readiness requires valid discovery and a link for every
+  short-lived AES-256-GCM transaction cookie. The callback is
+  `${APP_URL}/api/v1/auth/oidc/callback`. Provider codes, tokens, verifiers, and
+  raw claim payloads are never persisted or logged; the identity mapping and
+  initial display name are retained.
+- OIDC-only readiness requires valid discovery and a link for every
   active user. Local-only readiness requires every active user to have a
-  password. Hybrid remains locally usable during provider outages.
+  password. Hybrid remains locally usable during provider outages. These
+  checks run at the readiness endpoint; a listening process alone does not
+  establish that the deployment is ready.
+
+### Personal API keys
+
+External clients authenticate to the same `/api/v1` service with owner-scoped
+bearer API keys. The full token is returned only at creation; PostgreSQL retains
+its SHA-256 hash, display prefix, name, scopes, optional expiry, usage timestamp,
+and revocation metadata.
+
+- Default to `portfolio:read`; additional explicit scopes are `portfolio:write`,
+  `imports:write`, `exports:read`, and `ai:invoke`.
+- Require a browser session for key management, plus trusted origin and CSRF
+  validation for key creation/revocation. Keys cannot manage authentication
+  methods or perform a user restore.
+- Reject expired/revoked keys and keys belonging to disabled users. An invalid
+  Authorization header must not fall back to a browser cookie.
+- Exclude API-key records from user portability. Include them only in protected
+  deployment-wide PostgreSQL backups.
+- Keep key revocation separate from browser session-version invalidation.
 
 ## Core data model
 
-Design a clean SQLite schema using Drizzle.
+Use append-only Goose migrations for the PostgreSQL schema. Queries under
+`db/postgres/queries` generate typed access through sqlc; transactional service
+operations also use explicit `database/sql` queries.
 
 ### Users
 
@@ -193,7 +260,7 @@ Store provider mappings separately with `id`, `userId`, canonical `issuer`,
 opaque `subject`, `createdAt`, `updatedAt`, and `lastLoginAt`. Enforce unique
 `(issuer, subject)` and `(userId, issuer)` and cascade-delete mappings with the
 internal user. Exclude mappings from per-user portability while retaining them
-in operator SQLite backups.
+in operator PostgreSQL backups.
 
 ### User settings
 
@@ -218,8 +285,9 @@ Fields should include:
   categories, financial accounts, transactions, valuations, exchange rates,
   investment instruments, position events, security prices, goals, goal
   contribution plans, and idempotency keys.
-- Derive `userId` exclusively from the verified session. Service functions
-  should accept it explicitly as their first ownership argument.
+- Derive `userId` exclusively from the verified session or API-key principal.
+  Service functions should accept it explicitly as their ownership argument;
+  never accept a client-supplied owner as authorization evidence.
 - Read, update, archive, and delete resources by both `userId` and resource ID.
   A request for another user's resource should behave as not found and must not
   disclose that the resource exists.
@@ -368,7 +436,8 @@ count as references. Deletion removes the instrument and its saved prices
 atomically and only for the current user; referenced instruments must be
 retained until the linked activity or accounts are permanently removed.
 
-Position events are immutable source records from which quantity is replayed.
+Position events are source records from which quantity is replayed. Supported
+corrections and deletions validate and replay the affected history atomically.
 Fields should include:
 
 - id
@@ -445,8 +514,9 @@ incomplete until a post-split quote is supplied; pre-split history is unchanged.
 For a position-tracked account, derive the value at a date from replayed cash
 plus every replayed quantity multiplied by its effective price and converted
 to the account currency when necessary. Calculate quantity times price with
-Decimal.js, round each quote value to that currency's minor unit, convert using
-the user's effective-dated exchange rate, and then sum integer minor units.
+exact `math/big` rational arithmetic, round each quote value to that currency's
+minor unit, convert using the user's effective-dated exchange rate, and then sum
+checked integer minor units.
 `currentValueMinor` remains a rebuildable cache so goals, estate planning,
 dashboard totals, and existing account-level consumers share one value.
 Importing a shared instrument price must rebuild every affected owner-scoped
@@ -498,11 +568,11 @@ visible separately rather than being assigned as gifts.
 Calculate indicative estate values from the authoritative replayed balance or
 position-derived account value multiplied by the user's asserted ownership
 share. Derive beneficiary values from allocation basis points with `bigint` and
-Decimal.js. Percentages are authoritative planning inputs; calculated currency
-values are estimates and must report missing effective-dated prices and exchange
-rates rather than silently omit holdings. Liabilities reduce the estimated net
-estate but do not automatically reduce or transfer an individual beneficiary's
-gift.
+exact `math/big` arithmetic. Percentages are authoritative planning inputs;
+calculated currency values are estimates and must report missing effective-dated
+prices and exchange rates rather than silently omit holdings. Liabilities reduce
+the estimated net estate but do not automatically reduce or transfer an
+individual beneficiary's gift.
 
 Allow users to create immutable, owner-scoped Estate Planning Summary snapshots
 with an as-of date, version, SHA-256 content hash, and minimized document
@@ -728,12 +798,13 @@ Example goal:
 - Linked account: KCB Car Fund
 - Planned monthly contribution: KES 120,000
 
-Goal contributions may either:
-
-1. Be recorded directly against the goal, or
-2. Be calculated from deposits into a linked account.
-
-Prefer linked-account tracking so balances are not duplicated.
+Unlinked goals retain a directly entered current amount. Linked goals use the
+linked account's value as the source of truth; deposits are not duplicated in
+separate goal-contribution records. A contribution plan describes expected
+future activity and does not post transactions or change a linked balance.
+Linked accounts must be active, same-owner asset accounts in an active asset
+category and may not already be assigned to another goal. Go enforces these
+checks inside goal mutations, not only in form selectors.
 
 A goal linked to a position-tracked account uses its complete derived account
 value. If a required price or exchange rate is missing, goal progress and
@@ -826,8 +897,11 @@ position-tracked accounts.
 Dashboard period changes and account 30-day changes use the same end-of-UTC-day
 cutoff. Show a signed change only when both endpoints are complete; otherwise
 show incomplete data. A missing historical rate must not hide a valid current
-base-currency value. Archived accounts are excluded from both current and
-historical calculations, regardless of their archive date.
+base-currency value. A known zero balance needs no exchange rate, including dates
+before an account's first activity. Held positions still require an effective
+price; an unpriced position is not a known zero balance. Archived accounts are
+excluded from both current and historical calculations, regardless of their
+archive date.
 
 ### Asset allocation chart
 
@@ -953,6 +1027,7 @@ Allow sorting by:
 Each account should have a dedicated page with:
 
 - Current value
+- The current total in the user's base currency when the account currency differs
 - Cash balance and position market value when position-tracked
 - Positions with quantity, effective unit price, quote currency, as-of date,
   source, and converted value
@@ -964,6 +1039,7 @@ Each account should have a dedicated page with:
 - Historical value chart
 - Transaction list
 - Position-event and price history when position-tracked
+- Paginated investment activity with direct correction links for ordinary events
 - Valuation history
 - Linked goals
 - Notes
@@ -1251,12 +1327,14 @@ Before a per-user restore:
 - Create a current-user export that can be downloaded before replacement.
 - Roll back the entire operation on any failure.
 
-A raw SQLite backup contains credentials and every user's financial data. Do
+A PostgreSQL deployment backup contains credentials and every user's financial data. Do
 not expose full-database backup or restore through an ordinary authenticated
 route or user settings. Deployment operators, who are outside the application
-role model, perform consistent full-database backup and offline restore through
-documented CLI or container operations. Document the persistent backup
-directory and require the app to be stopped for a raw-file restore.
+role model, use the `wealthboard backup` and maintenance-confirmed
+`wealthboard restore` commands with compatible `pg_dump` and `pg_restore`
+tools. Require every application replica and other writer to be stopped for a
+restore, retain the automatic pre-restore safety dump, and validate readiness
+before reopening traffic.
 
 ### LLM-assisted text-file import
 
@@ -1317,7 +1395,8 @@ application; only approved extracted text goes to the configured model.
   different destination. Source currency/account mismatches require resolution.
 - **Draft output:** Request a bounded structured response containing a draft of
   the matching v1 JSON envelope plus separate source references and extraction
-  issues. Validate it with Zod and the existing deterministic import rules.
+  issues. Validate it in Go against the bounded response contract and existing
+  deterministic import rules; client form validation is not authoritative.
   Preserve decimal values as strings and original source identifiers. Missing
   IDs may be derived only by deterministic application logic from stable source
   fields, never guessed by the model or based on changing row numbers; block
@@ -1505,7 +1584,8 @@ Include:
 - Install prompt where supported
 - Update-available notification
 
-Because SQLite is server-side, do not pretend full offline transaction creation is supported.
+Because PostgreSQL and the API are server-side, do not pretend full offline
+transaction creation is supported.
 
 When offline:
 
@@ -1714,6 +1794,7 @@ Implement:
 
 Use:
 
+- Go unit and PostgreSQL integration tests
 - Vitest for unit tests
 - React Testing Library for component tests
 - Playwright for end-to-end tests
@@ -1771,26 +1852,34 @@ Financial calculation logic should have comprehensive unit tests.
 
 Provide:
 
-- Dockerfile using a multi-stage build
+- Multi-stage Dockerfile that produces a non-root distroless Go application
+  image with compiled Vite assets
 - docker-compose.yml
-- Persistent volume for SQLite
-- Persistent volume for backups
+- Durable PostgreSQL storage in the Compose example
+- A separate extraction-worker image for PDF/XLSX/DOCX, with networking disabled
+  in Compose and bounded pod-local deployment in Kubernetes
 - Health-check endpoint
 - Environment variable example file
 - Production startup instructions
 - Kubernetes deployment example
 - Kubernetes Service
-- PersistentVolumeClaim example
+- External PostgreSQL configuration; the application manifest does not
+  provision a database, database volume, or backup controller
 - Ingress example
 - SecurityContext using a non-root user
 
 Required environment variables should include:
 
-- DATABASE_PATH
+- DATABASE_URL
 - SESSION_SECRET
 - APP_URL
-- TZ
-- BACKUP_PATH
+
+`AUTH_METHODS` defaults to `local` and `TZ` defaults to `Africa/Nairobi`.
+Set `NODE_ENV=production` for secure cookies in production. OIDC mode and
+remembered AI credentials have their own additional configuration requirements.
+
+Backups use an explicit operator-supplied file path and are not written by an
+HTTP route or scheduled by the application container.
 
 Do not bake secrets into the image.
 
@@ -1799,7 +1888,7 @@ Do not bake secrets into the image.
 Create a detailed README with:
 
 - Product overview
-- Screenshots placeholder
+- Published product guide with fictional screenshots
 - Local development
 - Docker deployment
 - Kubernetes deployment
@@ -1807,7 +1896,7 @@ Create a detailed README with:
 - Fresh database initialization
 - Password reset by username
 - Per-user export and restore
-- Deployment-wide backup and offline restore
+- Deployment-wide PostgreSQL backup and maintenance-mode restore
 - Database migrations
 - Updating the application
 - PWA installation
@@ -1850,27 +1939,32 @@ Keep the first version focused on manually tracking net worth, account values, c
 
 ## Database lifecycle
 
-- `db/schema.ts` is the source of truth.
-- Generated migrations are append-only and support both fresh Wealthboard
-  databases and upgrades of existing databases.
+- `db/postgres/migrations` is both the PostgreSQL schema authority and the
+  sqlc schema input, configured in `sqlc.yaml`.
+- Goose migrations are append-only and support fresh PostgreSQL databases plus
+  upgrades between PostgreSQL releases of Wealthboard.
 - Applied migration files must not be deleted, renamed, or modified. Schema
-  changes require a new generated migration.
-- Disposable pre-release databases may be deleted when their data is not needed;
-  persisted databases and backups must retain a valid upgrade path.
-- No data-claim path is required.
-- Run linting, type checking, relevant tests, and a production build after
-  schema changes.
+  changes require a new migration and regenerated sqlc output.
+- Existing SQLite data is intentionally discarded. There is no
+  SQLite-to-PostgreSQL importer, dual-write period, or in-place database
+  conversion contract.
+- Legacy Drizzle migrations remain unchanged under
+  `docs/archive/drizzle-migrations` as non-executable provenance.
+- Run migration checks, Go tests, frontend tests, linting, type checking, and a
+  production build after schema changes.
 
 ## Acceptance criteria
 
 The application is complete when:
 
-- An empty deployment presents signup and cannot create an application user by
-  environment variable, default credential, or any route other than signup.
-- The first and subsequent users can sign up and log in concurrently. Signup is
-  always available and has no enabled or disabled mode.
-- Signup creates settings, categories, and rates but no financial accounts or
-  sample portfolio data.
+- An empty local/hybrid deployment presents signup. OIDC-only deployments
+  provision users only after validated provider login. No environment variable,
+  default credential, or ownership claim can create an application user.
+- The first and subsequent users can sign up and log in concurrently when local
+  authentication is enabled. OIDC-only mode exposes neither local signup nor
+  password login.
+- Signup and OIDC provisioning create settings and categories, but no exchange
+  rates, financial accounts, or sample portfolio data.
 - Usernames are unique case-insensitively and login failures do not reveal
   whether a username exists.
 - Each user can see and change only their own settings, categories, exchange
@@ -1903,13 +1997,13 @@ The application is complete when:
 - I can install it as a PWA.
 - Logging out and signing in as another user on the same device never reveals
   cached data from the previous user.
-- My SQLite data persists across application upgrades.
+- My PostgreSQL data persists across application upgrades.
 - I can export and restore my own portfolio without receiving another user's
   records or credentials.
 - Position-account exports and restores preserve instruments, events, prices,
   cash links, conversion provenance, event ordering, quantities, and owner
   isolation exactly.
-- A deployment operator can back up and restore the complete SQLite database
-  outside ordinary user routes.
+- A deployment operator can back up and restore the complete PostgreSQL
+  database outside ordinary user routes while application writers are stopped.
 - The dashboard looks like a premium financial application.
 - The interface remains focused and easy to understand.

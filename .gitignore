@@ -36,6 +36,9 @@ bower_components
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
+# Go build output
+/wealthboard
+/bin/
 
 # Dependency directories
 node_modules/
@@ -84,12 +87,6 @@ credentials.*.json
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
-
-# Next.js build output
-.next
-.next-e2e
-.next-verification
-out
 
 # Nuxt.js build / generate output
 .nuxt

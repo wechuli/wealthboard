@@ -1,24 +1,31 @@
 # Wealthboard architecture
 
-> **Status:** This multi-user architecture is implemented. The repository ships
-> one baseline schema for fresh Wealthboard databases. Sections explicitly
-> marked "Planned" describe future work and are not runtime guarantees.
+> **Status:** The Go/Vite/PostgreSQL runtime is implemented, with the limitations
+> called out below and in the user guides. The repository ships
+> append-only Goose migrations for fresh and existing PostgreSQL databases.
+> Sections explicitly marked "Planned" describe future work and are not runtime
+> guarantees.
 
-Wealthboard remains a single-process Next.js application. Server Components read
-SQLite through Drizzle ORM, Server Actions perform validated mutations, and
-Route Handlers provide user-scoped import/export and health checks. There is no
-separate API service. One optional OIDC provider may authenticate internal users.
+Wealthboard is a Go HTTP service backed by PostgreSQL. It exposes the versioned
+JSON API and serves a compiled Vite/React single-page client. One optional OIDC
+provider may authenticate internal users.
+
+PostgreSQL is a fresh-start boundary, not an in-place SQLite migration. The
+repository intentionally has no SQLite importer or dual-write path. The Phase 6
+cutover removed the legacy Next.js, Drizzle, and SQLite runtime. Frozen parity
+fixtures and archived migration history remain as non-executable evidence.
 
 ## Decisions
 
-- **Runtime:** Next.js App Router on Node.js with strict TypeScript. Pages that
-  contain financial data are always dynamically rendered.
+- **Runtime:** Go 1.27 HTTP API and a strict-TypeScript Vite/React client.
 - **Tenancy:** One deployment supports multiple independent users. Users do not
   belong to organizations and cannot share portfolios, financial accounts,
   goals, categories, rates, or transfers.
-- **Persistence:** One WAL-mode SQLite database at `DATABASE_PATH`. Monetary
-  amounts are integer minor units. Exchange rates are decimal strings and all
-  financial arithmetic uses `bigint` or Decimal.js.
+- **Persistence:** PostgreSQL at required `DATABASE_URL`. Monetary
+  amounts are integer minor units in `bigint` columns. Exchange rates use exact
+  `numeric` columns and decimal strings at the API boundary. All
+  authoritative financial arithmetic uses checked integers plus `math/big`
+  integer and rational helpers.
 - **Currencies:** A client-safe ISO 4217 catalog defines discoverable currency
   metadata and fresh-user defaults. Each user's settings own the base and
   enabled set. Services reject disabled currencies, while existing referenced
@@ -35,89 +42,115 @@ separate API service. One optional OIDC provider may authenticate internal users
   SameSite=Strict cookie whose subject is the immutable user ID. Session
   verification loads that user and checks status, expiry, and session version.
   Failed login/signup and bounded OIDC start/callback traffic are rate-limited
-  in SQLite.
-- **OIDC protocol:** Native fetch plus `jose` performs exact-issuer discovery,
+  in PostgreSQL using the socket peer IP, not forwarding headers. The legacy
+  `TRUST_PROXY_HEADERS` setting has no effect in Go.
+- **Browser request protection:** Login/signup require the exact trusted origin.
+  Authenticated browser mutations also require the session's `X-CSRF-Token`.
+  `/api/v1/session` supplies the browser's session identity and CSRF token.
+- **API keys:** External clients use owner-scoped bearer keys with explicit
+  `portfolio:read`, `portfolio:write`, `imports:write`, `exports:read`, or
+  `ai:invoke` scopes. Only the token hash and metadata are retained. Browser
+  sessions alone may manage keys, credentials, and user restores; sensitive
+  browser mutations additionally require origin and CSRF checks. Revocation
+  and expiry are checked independently of browser session version.
+- **OIDC protocol:** Go `net/http`, standard-library cryptography, and
+  `github.com/golang-jwt/jwt/v5` perform exact-issuer discovery,
   Authorization Code + PKCE S256, state/nonce validation, bounded token exchange,
-  cached remote JWKS, and RS256 verification. Encrypted A256GCM transaction and
+  cached remote JWKS, and RS256 verification. The callback is
+  `${APP_URL}/api/v1/auth/oidc/callback`. Encrypted AES-256-GCM transaction and
   reauthentication cookies are distinct from the application session. No
   provider code, token, verifier, or claim payload is retained.
 - **Method management:** Hybrid links are explicit and require fresh local
   password confirmation. Local credential enable/remove operations require an
   exact linked-identity reauthentication. Identity claims never trigger merging,
   and successful changes increment session version.
-- **Readiness:** Startup and readiness reject mode changes that strand active
+- **Readiness:** Health checks reject mode changes that strand active
   users. OIDC-only also requires valid discovery. Hybrid remains ready through a
-  temporary provider outage so local login continues to work.
+  temporary provider outage so local login continues to work. Configuration and
+  migration failures stop startup; authentication readiness is checked on
+  `/api/health/ready`, not before the listener starts.
 - **Authorization:** Every private operation derives `userId` from the verified
-  session and supplies it to the owning service. Queries use both owner and
-  resource ID; client input is never accepted as ownership evidence.
+  session or API-key principal and supplies it to the owning service. Queries
+  use both owner and resource ID; client input is never accepted as ownership
+  evidence.
 - **Institutions:** Each user owns a private directory of financial providers.
   Accounts may link one institution through a composite owner foreign key or
   remain self-custodied. Names are normalized for per-user uniqueness; archived
   institutions retain existing links but cannot receive new ones.
-- **Balances:** Transactions and valuations are immutable inputs to a balance
+- **Balances:** Transactions and valuations are source inputs to a balance
   replay. A valuation sets the balance at that point without becoming a
   contribution; later transactions apply signed effects. Editing or deleting an
   event replays the account in the same database transaction.
 - **Transfers:** A transfer writes paired signed `Transfer` transactions under a
-  unique transfer group and idempotency key in one SQLite transaction.
+  unique transfer group and idempotency key in one PostgreSQL transaction.
 - **History:** Daily/monthly account balances are reconstructed from opening
   balances, transactions, and valuations, then converted using the most recent
   exchange rate owned by that user and effective on each date. Every point
   carries completeness metadata and affected currency codes when conversion is
   unavailable.
 - **Exchange-rate management:** Settings groups observations by unordered
-  currency pair while preserving effective-dated source rows. Updates upsert a
-  directional pair/date; corrections and deletions require an owner-scoped ID
-  and recalculate position account projections in the same transaction. New
-  inverse-only duplicates are rejected; existing bidirectional histories remain
-  reviewable without automatic data conversion. Current missing/stale rate
-  issues are distinct from historical pair/date gaps. Freshness uses the selected
-  rate's effective date and a one-calendar-month threshold; stale rates remain
-  usable and historical conversions never look ahead.
+  currency pair. Creation inserts a directional pair/date and conflicts with an
+  existing same-direction observation on that date; it also rejects an existing
+  reverse-direction pair. UI corrections use separate delete/create requests,
+  so they are not atomic. Rate writes do not rebuild cached position-account
+  balances. Go chart/report calculations select effective-dated direct or
+  inverse rates dynamically and never look ahead. The settings summary instead
+  shows the newest observation, including future dates, and warns when it is
+  more than 30 days old; this display is not proof of historical rate coverage.
 - **Goals:** A linked account is the source of truth for goal progress. Unlinked
-  goals retain a direct current amount. Forecasts use Decimal.js future-value
-  calculations and a configurable annual return assumption. Scenario
-  comparisons are pure client-side projections over immutable inputs.
+  goals retain a direct current amount. The current read path uses the linked
+  account's cached value; cross-currency links are marked incomplete rather
+  than converted, and position-price completeness is not fully propagated.
+  Projections and non-persistent scenario comparisons are calculated in Go via
+  `/api/v1/goals/{id}/scenarios`, not as authoritative browser calculations.
+  Active, same-owner asset-account linking is validated inside goal mutations.
   Milestones are owner-scoped source records with status derived from current
   progress and due date. Behind-plan reminders are computed on authenticated
   reads; owner-scoped dismissals suppress one goal for one user-calendar month.
-- **Estate planning:** `lib/services/estate-planning.ts` owns one private plan
+- **Estate planning:** `internal/service/estate_mutations.go` owns one private plan
   per user, beneficiaries, account directives, primary/contingent basis-point
-  allocations, residue, converted indicative values, deterministic review
-  items, and immutable SHA-256 snapshots. It never changes account ownership,
+  allocations, residue, and retained SHA-256 snapshots. Live valuation remains
+  incomplete; foreign-currency values are not converted into complete totals.
+  Live review checks are currently derived in the client. Snapshot creation
+  uses cached values, stores empty review items, and marks mathematical
+  completeness without those checks; that flag is not a validation guarantee.
+  It never changes account ownership,
   balances, sessions, or institution-held designations. Liabilities remain a
   separate estimate rather than inheritable allocations.
-- **Estate documents:** The print surface renders a minimized retained snapshot,
-  not live mutable data. Exact values, contacts, references, and notes are
-  independent opt-ins, and the global privacy setting remains authoritative.
+- **Estate documents:** The print surface renders a retained snapshot, not live
+  mutable data. Its as-of date is the generation date in the user's timezone,
+  not an arbitrary historical replay date. Exact values, contacts, references,
+  and notes are print opt-ins, and global privacy masks rendered values. These
+  controls do not redact retained/downloaded JSON. Restore validates the stored
+  content hash; ordinary snapshot reads do not recompute it. The hash proves
+  neither financial completeness nor legal validity.
   The document identifies itself as planning information rather than a legal
   will. No death trigger, executor access, notification, custody, or transfer
   automation exists.
 - **Portability:** JSON and CSV routes operate only on the authenticated user's
   records. A per-user JSON restore replaces only that user's portfolio in one
-  transaction. Export version 6 includes transaction external IDs and estate
-  plans with retained snapshot integrity hashes. Versions 2 through 5 remain
-  restorable; legacy transactions receive null external IDs and pre-v6 archives
-  begin with an empty estate plan. Legacy account institution strings are
-  normalized into owner-scoped records.
+  transaction. Export version 8 includes investment history, grouped cash,
+  account conversions, freshness settings, and retained estate snapshot hashes.
+  Versions 2 through 8 remain restorable through deterministic compatibility
+  upgrades; pre-v6 archives restore no estate data or inferred positions.
   Account history import uses stateless account-scoped preview and atomic commit
   routes with a strict CSV/JSON v1 contract and SHA-256 confirmation. Raw
-  SQLite backup and offline restore are deployment-operator commands, never
-  ordinary authenticated routes.
-- **Offline and updates:** Service workers are production-only; development
-  unregisters Wealthboard's worker and removes only Wealthboard caches. The
-  production worker precaches the offline shell and uses network-first static
-  application assets with cached offline fallback so stale code cannot hydrate
-  against newer server HTML. It never caches authenticated financial responses
-  or queues mutations. Logout clears user-specific client state before another
-  user can sign in on the device.
+  PostgreSQL custom-format backup and maintenance-mode restore are
+  deployment-operator commands, never ordinary authenticated routes.
+- **Offline and updates:** Production registers a service worker that precaches
+  only the offline page, manifest, and icons. Failed navigation falls back to
+  the offline page. `/api` is never intercepted, authenticated data is never
+  cached, and mutations are never queued. The client exposes connection state,
+  blocks marked financial forms while offline, and reports a waiting update.
+  Offline portfolio reads are not a runtime guarantee.
 - **AI review:** Optional on-demand reviews use a versioned, owner-scoped,
   read-only snapshot calculated by Wealthboard. The model never receives SQL or
   mutation tools and cannot become authoritative for balances, conversions,
-  performance, or goals. OpenAI, DeepSeek, and operator-approved
-  OpenAI-compatible endpoints share one Chat Completions adapter. Responses must
-  validate against a bounded schema and cite supplied evidence IDs.
+  performance, or goals. OpenAI uses Responses with `store: false` and a prompt
+  requesting JSON; the current callers do not supply the transport's optional
+  native JSON Schema response contract.
+  DeepSeek and operator-approved compatible endpoints use Chat Completions JSON.
+  Responses validate against bounded schemas and supplied evidence IDs.
 - **AI credentials and retention:** Session-only keys stay in client component
   memory for one request. Remembered keys use AES-256-GCM with a dedicated
   deployment key and immutable `userId` associated data. Usage rows contain
@@ -125,11 +158,52 @@ separate API service. One optional OIDC provider may authenticate internal users
   and provider keys are not retained. Custom endpoints require an exact
   operator allowlist and redirects are disabled.
 
+## Runtime and cutover boundary
+
+The supported production request path is browser or API client to the Go/Chi
+process, then PostgreSQL. Go serves `/api/v1/*`, health probes, compiled Vite
+assets, and the SPA fallback. There is no production Next.js process, React
+server rendering, Server Action, Node.js API handler, or SQLite database.
+
+The one JavaScript runtime exception is document extraction for PDF, XLSX, and
+DOCX. Direct installations may run the bounded Node child configured by
+`AI_EXTRACTION_SCRIPT`. Containers use the separate `extraction-worker` image
+over a shared Unix socket; Compose disables worker networking, while Kubernetes
+containers share the pod network. Node is absent from the distroless application
+image. UTF-8 CSV, TSV, JSON, and TXT remain parsed in Go.
+
+Phase 6 acceptance and removal evidence is recorded in
+`docs/admin/cutover-evidence.md`.
+
+## Implementation layout
+
+- `cmd/wealthboard` wires the HTTP service and operator commands.
+- `internal/api` owns Chi routes, HTTP validation, authentication checks, and
+  `application/problem+json` responses.
+- `internal/auth` owns local/OIDC authentication, browser sessions, CSRF,
+  personal API keys, and PostgreSQL-backed rate limiting.
+- `internal/service` owns persistence, business operations, and the current
+  exact financial arithmetic/replay helpers. `internal/domain` currently
+  contains shared currency metadata and validation.
+- `db/postgres/migrations` is the embedded Goose history and sqlc schema input.
+  `db/postgres/queries` generates accessors in `internal/database/generated`;
+  service transactions also contain explicit `database/sql` queries.
+- `internal/operator` invokes PostgreSQL backup/restore tools, and
+  `internal/static` serves the built client from `WEB_DIST_PATH`.
+- `api/openapi.yaml` defines the HTTP contract and generates
+  `web/src/api/schema.ts`. `web/src/api` handles browser requests; React routes,
+  components, and presentation helpers live under `web/src`.
+
+The Go binary does not load `.env` files or embed the Vite assets into the
+executable. Direct installations must provide process environment variables
+and the built asset directory. The container packages both the binary and assets.
+
 ## Position-account architecture
 
-Position source records, derived values, conversion, imports, advanced actions,
-portability, and downstream completeness are part of the current runtime
-contract.
+Go owns position source records, valuation, conversion, imports, advanced
+actions, and portability. Downstream goal/estate completeness still has the
+limitations described above; those consumers do not yet satisfy every
+cross-feature requirement in `SPEC.md`.
 
 - Existing accounts retain `balance` tracking, where transactions and absolute
   valuation snapshots replay to one monetary value. An opt-in `positions`
@@ -149,7 +223,8 @@ contract.
   not independently editable authoritative balances. Same-owner relationships
   use composite foreign keys and every lookup, aggregate, import, and cache key
   includes `userId`.
-- Quantities and unit prices use canonical decimal strings and Decimal.js so
+- Quantities and unit prices use canonical decimal strings and exact
+  `math/big` rational arithmetic so
   fractional units and sub-minor-unit quotes remain exact. Gross amounts, fee
   amounts, cash effects, and derived account values remain integer minor units
   with their currencies retained; an applied settlement rate is a canonical
@@ -165,7 +240,7 @@ contract.
 - In-kind transfers write paired owner-scoped `transfer_out` and `transfer_in`
   events. Selected corporate actions use explicit split, spin-off, and merger
   source records with positive ratios and related-instrument relationships.
-  Every grouped edit or deletion replays all affected accounts in one SQLite
+  Every grouped edit or deletion replays all affected accounts in one PostgreSQL
   transaction. Same-date events use an explicit per-account sequence before
   timestamp and ID tie-breakers.
   Mutations and restores validate recorded spin-off and merger entitlements
@@ -180,8 +255,9 @@ contract.
   rates make affected current and historical totals incomplete; stale prices
   remain visible with their as-of date and provenance. Stock, ETF, and fund
   freshness thresholds are user-configurable. Detailed issues carry the
-  affected range, instrument, currency, last price, source, and provenance to
-  account, goal, estate, dashboard, report, and import-preview consumers.
+  affected range, instrument, currency, last price, source, and provenance where
+  the account, chart/report, or import read model supplies them. Goal and estate
+  consumers do not yet propagate the same completeness information.
   Snapshot and import-preview price selection share a split-date cutoff:
   quotes before the latest recorded split cannot value split-adjusted holdings.
 - Account History Import v1 remains unchanged. Position accounts receive a
@@ -214,21 +290,22 @@ contract.
 ## LLM-assisted text-file import
 
 The implemented conversion layer sits upstream of existing import services;
-it is not a financial write path. Strict v1 contracts and the browser-only
-manual prompt workflow remain unchanged. OCR/image processing remains backlog AI3.
+it is not a financial write path. Strict v1 contracts remain unchanged. Manual
+copyable-prompt components remain in source but are not mounted in the current
+import page. OCR/image processing remains backlog AI3.
 
 1. The account import UI offers direct structured import or explicit AI
-   conversion. Account-scoped POST routes,
-   `/api/accounts/[id]/import/{extract,convert}`, handle bounded multipart/JSON concerns,
-   verifies the session and trusted origin, and delegates to a server-only
-   service in `lib/services/import-conversion.ts`. Resolve the active account by `userId` and account ID
-   before expensive parsing or external calls; return not found for foreign
-   accounts. The account's tracking mode selects the target schema.
+   conversion. Go exposes `/api/v1/ai/import/extract` and
+   `/api/v1/ai/import/convert` for bounded extraction and model conversion.
+   Browser calls require the verified session, trusted origin, and CSRF token;
+   API keys require `ai:invoke`. The later account-scoped preview and commit
+   routes resolve the active account by session-derived `userId` and account ID
+   before any financial write and return not found for foreign accounts.
 2. Bounded local parsers prepare source text/tables and stable page/sheet/row
    references for user review, selection, and redaction before external
-   submission. `lib/services/import-source.ts` handles UTF-8 CSV, TSV, JSON, and
-   TXT; a terminable Node worker in `scripts/extract-import-source.mjs` handles
-   XLSX, text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
+   submission. `internal/aiworkflow/extraction.go` handles UTF-8 CSV, TSV, JSON,
+   and TXT; a terminable Node worker or isolated socket daemon handles XLSX,
+   text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
    XLSX numeric cells remain original strings. Formula caches and excluded
    image/Word/PDF content have review warnings; no OCR is performed. Enforce
    extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
@@ -251,34 +328,46 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    Never execute macros, formulas, embedded scripts, or external references.
    Reject unsupported encryption, corrupt, or over-limit input rather than
    silently truncating.
-3. After explicit per-request consent, resolve the current user's provider and
-   credentials through `lib/services/ai-provider.ts`. Reuse encrypted-key
+3. After explicit per-request consent, `Service` in `internal/aiworkflow/service.go` resolves
+   the current user's provider and credentials. Reuse encrypted-key
    handling, endpoint allowlisting, disabled redirects, cancellation, and safe
    errors. Existing usage reservation/completion functions enforce shared
    review/conversion rate and monthly token budgets. The settings form, Zod
    schema, and service enforce a 10,000 to 100,000,000 monthly token range.
-   Both provider transports use a 120,000 ms SDK timeout with retries disabled;
-   local extraction retains its separate 15-second timeout. Existing saved
-   limits remain unchanged. A configuration fingerprint
-   binds consent to the reviewed provider/model/output limit and account context.
+   Both provider transports use a 120-second Go HTTP client timeout without
+   application-level retries; local extraction retains its separate 15-second
+   timeout. Existing saved
+   limits remain unchanged. A configuration fingerprint covers the provider,
+   endpoint, model, output limit, settings timestamp, tracking mode, and currency.
+   It does not bind the source text, draft bytes, or selected account ID and is
+   not proof of human review.
    Record only owner-scoped status/model/token/latency metadata; no source names,
    financial values, prompts, output, or credentials. Reserve conservatively
    from prompt bytes plus the output ceiling; retain the reservation on failed
-   conversion when usage is unknown. Requests have bounded streaming body reads
-   and active preparations are limited to one per user/four per module instance.
-4. `lib/ai/provider.ts` exposes a separate extraction operation and strict Zod
-   schema from `lib/ai/import-schemas.ts`; it never calls the portfolio-review
-   snapshot builder. OpenAI uses native structured output through Responses;
+   conversion when usage is unknown. Requests have bounded body reads. Review
+   and conversion share a limit of 10 reservations per rolling minute per user
+   plus the UTC calendar-month token budget. There is no Go preparation
+   semaphore per user or process; the socket daemon caps open connections at
+   four, which is a different limit.
+4. The Go AI workflow exposes a separate conversion operation and validates its
+   bounded request and response models independently of the portfolio-review
+   snapshot builder. OpenAI uses Responses with `store: false` and a JSON
+   instruction, but review and conversion currently omit the transport's
+   optional native response schema.
    DeepSeek/custom models must support text Chat Completions and JSON output.
    The configured model ID is not discovered or probed during settings save;
    incompatible requests fail without model/provider substitution. Both paths
    validate locally and reject refusals, malformed JSON, and incomplete output.
-   Provider response bodies are bounded to 8 MB, extracted JSON to 5 MB, and
-   candidate records to 1,000. No document or vision model capability is needed.
+   Provider response bodies are bounded to 8 MiB, review JSON to 64 KiB, and
+   conversion output to 1,000 candidate records, 1,000 exclusions, and 100
+   issues. A generated import file still must satisfy the canonical 5 MiB
+   import limit. No document or vision model capability is needed.
    The model receives only approved text, minimal account/schema context,
    and no internal owner/account IDs, SQL, tools, URL fetching, or write access.
-   Filenames and source location labels are not sent. Treat source text as
-   untrusted data, including instructions embedded in it.
+   Original files and filenames are not sent, but selected section IDs,
+   types, and location labels accompany the approved text. Review labels for
+   sensitive content; current UI copy understates this sharing. Treat source
+   text as untrusted data, including instructions embedded in it.
 5. Validate a bounded extraction envelope containing candidate v1 records,
    source references, exclusions, and issues, with metadata outside the canonical
    contract. The conversion service maps string-valued fields deterministically
@@ -298,20 +387,29 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    draft invalidates its preview/hash. Confirmation sends those same canonical
    bytes and hash to the corresponding existing commit route. Commit rechecks
    ownership, account state, duplicates, and replay in its transaction; it
-   never invokes AI. Preserve balance accepted-subset commits, investment
-   whole-file atomicity, and canonical 5 MB/10,000-record limits.
+   never invokes AI. Both Go commit services verify the submitted bytes against
+   the supplied SHA-256 hash; this is stateless integrity checking, not stored
+   proof that a preview or human confirmation occurred. Balance imports can
+   accept ready rows while skipping invalid rows, but any conflicting existing
+   external ID aborts the commit. The current UI blocks confirmation whenever
+   any row failed. Investment imports remain whole-file atomic, with canonical
+   5 MiB/10,000-record limits.
 
-The implementation is bounded and request-scoped within the existing
-Next.js process, with no new backend, durable document store, or required job
-queue. Apply abort signals and time/output limits across parsing and provider
+The implementation is bounded and request-scoped within the Go service, with no
+durable document store or required job queue. Plain text parsing runs in Go;
+PDF/XLSX/DOCX uses a bounded local Node child or the bundled Unix-socket sidecar.
+Apply cancellation and time/output limits across parsing and provider
 work; no silent chunking, retries, truncation, or automatic partial acceptance.
 Larger-document/background processing requires a separate durable-job design.
 Content stays in memory; workers are terminated on completion, failure, timeout,
 or cancellation, and no temporary document files are written. All financial
 responses use `Cache-Control: no-store` and remain outside service-worker caches.
-Client drafts are cleared on completion, cancel, navigation, or logout and never
-stored in localStorage/IndexedDB. Disable provider storage where supported and
-disclose that local cleanup cannot control provider retention.
+Client drafts are held in React state rather than localStorage/IndexedDB.
+Cancel clears visible state, but the current client does not abort pending
+extraction/conversion requests or guard every late response; unmounting or
+logging out is not a provider-request cancellation guarantee. Disable provider
+storage where supported and disclose that local cleanup cannot control provider
+retention. These cleanup and consent-copy gaps remain tracked in backlog A17.
 
 Regression coverage includes deterministic parser/identity fixtures, both
 account modes, direct-import/no-provider regressions, two-user account and
@@ -328,8 +426,8 @@ responses in tests; never use real statements or credentials.
 - All user-owned tables carry a non-null `userId` foreign key even when
   ownership can also be reached through a parent record. This makes filtering
   explicit and supports efficient owner-first indexes.
-- Service functions accept session-derived `userId` as their first ownership
-  argument. Pages, actions, and handlers never perform an unscoped lookup and
+- Service functions accept verified-principal-derived `userId` as their ownership
+  argument. API handlers and client pages never perform an unscoped lookup and
   then decide in the UI whether the result belongs to the user.
 - Reads, writes, archives, and deletes use `userId` and resource ID together.
   A foreign resource returns not found so its existence is not disclosed.
@@ -351,10 +449,16 @@ responses in tests; never use real statements or credentials.
 | ------------------------------ | ------------------------------------------------------------------------- |
 | `users`                        | Login identity, password hash, status, and session version                |
 | `oidc_identities`              | Internal-user mapping for one canonical issuer and opaque subject         |
+| `api_keys`                     | Owner-scoped token hashes, scopes, expiry, usage, and revocation metadata  |
 | `user_settings`                | One user's locale, display, dashboard, and goal preferences               |
 | `categories`                   | One user's seeded and custom classifications                              |
 | `institutions`                 | One user's financial-provider directory and reference details             |
 | `accounts`                     | One user's holdings and liabilities with replayed values                  |
+| `investment_instruments`       | Owner-scoped security identifiers and quote currencies                    |
+| `account_conversions`          | Source/replacement provenance for balance-to-position conversion          |
+| `position_events`              | Ordered instrument quantity events and grouped investment activity        |
+| `security_prices`              | Effective-dated instrument prices and source metadata                     |
+| `position_reconciliations`     | Broker observations that do not overwrite calculated account values       |
 | `transactions`                 | User-owned cash flows, returns, transfers, and account-scoped source IDs  |
 | `valuation_snapshots`          | User-owned absolute valuations, separate from cash flow                   |
 | `exchange_rates`               | One user's effective-dated decimal exchange rates                         |
@@ -373,9 +477,16 @@ responses in tests; never use real statements or credentials.
 | `ai_provider_settings`         | Owner-scoped provider, sharing defaults, limits, encrypted key            |
 | `ai_usage_events`              | Owner-scoped request status, latency, model, and token metadata           |
 
-Every table except `login_attempts` is either the identity table or is owned by
-one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
-operations retain source records. All timestamps are UTC ISO-8601 strings.
+Every application table except `login_attempts` is either the identity table or
+is owned by one user. Goose separately maintains `goose_db_version`.
+Foreign keys enforce relationships. Resource IDs are UUIDs. Account and category archive
+operations retain source records. Timestamps are stored in PostgreSQL and
+serialized in UTC.
+
+Goose migrations under `db/postgres/migrations` are the append-only schema
+authority. SQL files under `db/postgres/queries` feed sqlc generation. Legacy
+Drizzle migrations are archived under `docs/archive/drizzle-migrations` as
+provenance only and are not applied to PostgreSQL.
 
 Archived accounts are excluded from current and historical totals, activity,
 comparisons, live estate views, goal progress, ordinary CSV reports, and
@@ -396,7 +507,9 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 
 - `/login` — renders only deployment-enabled login methods
 - `/signup` — public local registration only when local authentication is enabled
-- `/api/auth/oidc/{start,callback}` — public only when OIDC is enabled
+- `/api/v1/auth/oidc/{start,callback}` — public only when OIDC is enabled
+- `/api/v1/auth/config` — public deployment-enabled authentication methods
+- `/api/v1/session`, `/api/v1/auth/principal`, `/api/v1/api-keys`
 - `/` — net-worth dashboard
 - `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/[id]/edit`,
   `/accounts/[id]/import`
@@ -406,25 +519,26 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 - `/estate/{beneficiaries,distribution,summary}` and
   `/estate/snapshots/[id]` — private estate planning and retained print views
 - `/reports`, `/categories`, `/institutions`, `/settings`
-- `/api/export/*`, `/api/accounts/[id]/history-import/{preview,commit}`, `/api/restore/user`,
-  `/api/estate/snapshots/[id]`, `/api/ai/review`, `/api/health/{live,ready}`
+- `/api/v1/exports/*`, `/api/v1/accounts/[id]/history-import/{preview,commit}`, `/api/v1/restore/user`,
+  `/api/v1/accounts/[id]/investment-import/{preview,commit}`,
+  `/api/v1/estate/snapshots/[id]`, `/api/v1/ai/review`, `/api/health/{live,ready}`
 - `/review` — on-demand, evidence-linked AI portfolio critique
-- `/offline`, `/manifest.webmanifest`, `/sw.js`
+- `/offline.html`, `/manifest.webmanifest`, `/sw.js`
 
 The protected layout owns the responsive sidebar, header, mobile bottom
 navigation, privacy-value toggle, quick-add flow, PWA status, and toast region.
-Reusable form controls and cards live in `components/ui`; business visualizations
-live in `components/charts`; validated financial operations live under `lib`.
+Reusable form controls, cards, and visualizations live in `web/src/components`;
+authoritative validation and financial operations live in Go's `internal/api`,
+`internal/service`, and `internal/domain`, not browser helpers.
 The protected layout may display the current user's identity, but it does not
 own authorization decisions.
 
 ## Database lifecycle
 
-- `db/schema.ts` defines the current schema.
-- `db/migrations` contains an append-only generated migration history for fresh
+- `db/postgres/migrations` contains the embedded append-only migration history for fresh
   databases and upgrades of existing databases.
-- Startup verifies that the latest applied migration still exists unchanged,
-  then applies pending migrations before serving requests.
+- Startup applies pending migrations before serving requests; readiness checks
+  the expected schema version.
 - Disposable pre-release databases may be deleted and recreated, but persisted
   databases must be upgraded without replacing or modifying applied migrations.
 - No ownership-claim or account-bootstrap path is supported.
@@ -433,8 +547,9 @@ own authorization decisions.
 
 - `Purchase` increases a tracked holding and `Sale` decreases it. Transfer
   amounts are signed internally but entered as positive values in the UI.
-- Account values are stored in their own currencies. Goal targets are compared
-  after currency conversion when a linked account uses another currency.
+- Account values are stored in their own currencies. Cross-currency linked-goal
+  conversion remains incomplete in the current read model; do not treat the
+  cached account value as already converted to the goal currency.
 - “Investible” and “liquid” are category properties so users can reclassify
   custom holdings without changing account history.
 - Application users are independent tenants. There are no administrator roles,
@@ -450,7 +565,7 @@ own authorization decisions.
   Email linking/recovery, SAML, multiple simultaneous issuers, and mandatory
   external services remain out of scope.
 - Appearance is a non-sensitive browser-local preference with System, Light,
-  and Dark choices. A pre-hydration bootstrap resolves semantic CSS tokens;
+  and Dark choices. A bootstrap before React renders resolves semantic CSS tokens;
   appearance is not user settings, financial data, or portable state.
 - AI review output remains explanatory, non-authoritative, and non-advisory. Reviews
   are never persisted, cannot execute financial changes, and omit unreliable

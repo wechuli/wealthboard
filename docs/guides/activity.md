@@ -53,8 +53,9 @@ units.
 
 Buys and sells are internal allocation changes, not contributions or
 withdrawals. Cross-currency trades require the actual account-currency
-settlement or explicit applied settlement rate. A grouped reinvestment saves and
-deletes its dividend and buys atomically.
+settlement or explicit applied settlement rate. An explicit settlement is the
+full net cash debit or credit, including fees; fees are not added again to that
+amount. A grouped reinvestment saves and deletes its dividend and buys atomically.
 
 See [Position-tracked investments](./investments) for corporate actions,
 reconciliation, conversion, and price behavior.
@@ -93,8 +94,14 @@ deposit, contribution, income item, or transfer.
 
 ## Transfer between accounts
 
-Choose **Transfer**, then select two active accounts. For the same currency,
-enter one amount. For different currencies, also enter the destination amount.
+Choose **Transfer**, then select two active asset accounts belonging to you.
+Liability accounts cannot participate. Enter the source amount and, optionally,
+the actual destination amount.
+
+If the destination amount is omitted, the Go service uses the source amount for
+the same currency or converts it with your rate effective on the transfer date.
+A cross-currency transfer without an explicit destination amount requires that
+historical rate.
 
 The paired records are committed together. Deleting a transfer removes both
 sides together and replays both balances.
@@ -107,10 +114,15 @@ Start from the target account and select **Import**. Wealthboard accepts:
 - JSON using the Account History Import v1 envelope;
 - up to 5 MB and 10,000 rows.
 
-Preview does not write anything. It shows the selected account, date range,
-current balance, projected balance, and each row outcome. On confirmation the
-browser resends the file and its SHA-256 hash; Wealthboard reparses it and
-commits the valid subset atomically.
+Select **Preview** before committing. Preview does not write anything. The page
+shows outcome counts and the first 50 row results; download **Report** for all
+rows, the selected account, date range, and current/projected balances.
+
+**Commit import** resends the file and its SHA-256 hash. The Go service reparses
+it and commits accepted rows plus balance replay atomically. The API supports
+an accepted subset, but the current web form requires resolving failed rows
+before enabling commit. A conflicting stored external ID blocks the entire
+commit.
 
 ::: warning Stable external IDs matter
 Reimporting an identical external ID is safely skipped. Reusing an existing ID

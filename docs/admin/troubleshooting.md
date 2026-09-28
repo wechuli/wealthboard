@@ -12,17 +12,21 @@ then the user workflow.
 
 Check:
 
-- Node.js is version 22 or newer;
+- `DATABASE_URL` reaches PostgreSQL;
 - `SESSION_SECRET` is present and long enough;
 - `APP_URL` is a valid absolute URL;
-- the database directory exists and is writable;
 - no other process is using the requested port;
-- pending migrations have not been edited or removed.
+- embedded migrations can be applied by the configured database role.
 
-Run migrations explicitly to separate database failure from Next.js startup:
+The Go binary does not load `.env` automatically. Export the settings in the
+process environment, and confirm `WEB_DIST_PATH` contains the compiled Vite
+client. If startup reports that the Vite build is unavailable, run `make build`
+after installing both the root and web dependencies.
+
+Run migrations explicitly to separate database failure from HTTP startup:
 
 ```bash
-npm run db:migrate
+make migrate
 ```
 
 ## Liveness is healthy but readiness is not
@@ -31,11 +35,30 @@ Request `/api/health/ready` and inspect server logs. Common causes are:
 
 - an authentication mode would strand active users;
 - OIDC-only mode cannot reach or validate provider discovery;
-- the SQLite database is unavailable;
+- PostgreSQL is unavailable;
 - schema migrations are incomplete.
+
+Authentication readiness checks run after the listener starts. A running process
+or successful liveness probe is not enough to admit production traffic.
 
 Do not point liveness at an external identity provider; a temporary provider
 outage should not restart the Wealthboard process.
+
+## Vite loads but API requests fail
+
+The development client listens at `http://127.0.0.1:5173` and proxies `/api` to
+`http://127.0.0.1:3100`. Run Go with `PORT=3100` and
+`APP_URL=http://127.0.0.1:5173`, not the default port `3000`. Use that exact
+browser origin rather than switching between `localhost` and `127.0.0.1`.
+Authenticated mutations also need the session CSRF token, which the client
+loads through `/api/v1/session`.
+
+## Users behind a proxy share login rate limits
+
+Go uses the socket peer IP for rate limiting and ignores forwarding headers.
+`TRUST_PROXY_HEADERS` is retained only as a legacy setting and has no effect.
+Clients reaching Go through one proxy may therefore share its bucket; account
+for that in the ingress topology and ingress-side rate limiting.
 
 ## Totals are incomplete
 
@@ -98,18 +121,21 @@ Open **Estate → Summary**. Blocking items usually mean:
 - an included asset has no directive;
 - primary allocations and primary residue do not cover 100%;
 - a contingent tier is present but incomplete;
-- an allocated beneficiary or asset was archived.
+- an allocated beneficiary was archived.
 
-Warnings about stale values, liabilities, transfer context, or review date do
-not change percentage arithmetic, but they should be resolved before relying on
-the summary.
+The live workspace also warns about liabilities, unknown transfer context,
+undecided methods, zero values, shared title, and a missing last-reviewed date.
+It does not provide a complete stale-value or overdue-review check. Snapshot
+creation does not rerun those client review checks, and retained completeness
+flags are not a guarantee that every issue was resolved. See
+[Estate planning](../guides/estate-planning) for current valuation and review
+limitations.
 
-## The browser shows stale navigation or a hydration warning
+## The browser shows stale navigation or assets
 
-Current Wealthboard registers its service worker only in production.
-Development automatically unregisters Wealthboard's worker and deletes only
-Wealthboard caches. In production, code assets are network-first with cached
-offline fallback.
+Current Wealthboard registers its service worker only in production. It caches
+the offline page, manifest, and icons, but not application pages or API
+responses. A failed navigation shows the offline page.
 
 For a browser that previously ran an older build:
 
@@ -117,7 +143,7 @@ For a browser that previously ran an older build:
 2. If needed, close all Wealthboard tabs and reopen the site.
 3. Clear only the site's storage in browser developer tools.
 
-Do not clear the SQLite database; this is browser cache state, not server data.
+Do not alter PostgreSQL; this is browser cache state, not server data.
 
 ## OIDC login returns an error
 
@@ -125,12 +151,17 @@ Verify exact issuer, callback URL, client ID, confidential secret, provider
 assignment, RS256 support, PKCE S256, server clock, and HTTPS reachability. Use
 the commands in [OIDC provider configuration](../example/oidc_configuration).
 
+Register `${APP_URL}/api/v1/auth/oidc/callback`, not the legacy unversioned
+callback. The example Kubernetes egress policy allows only DNS and PostgreSQL;
+it needs additional provider egress before OIDC or AI can connect.
+
 Provider claims are not account-link evidence. Existing local users must link
 from Settings in hybrid mode.
 
-## SQLite reports busy or locked
+## PostgreSQL is unavailable or restore failed
 
-Confirm only one Wealthboard process/replica writes the database, storage is
-local or supports SQLite locking correctly, and no backup/restore tool is
-replacing files while the app runs. Preserve the database before invasive
-repair and use a disposable copy for investigation.
+Verify `DATABASE_URL`, DNS, TLS mode, credentials, NetworkPolicy, and the
+database service. Keep the application in maintenance mode after a failed
+restore. The restore command prints the automatic pre-restore safety dump path;
+preserve it and investigate with a disposable database before another
+destructive attempt.

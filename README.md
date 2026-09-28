@@ -2,8 +2,8 @@
 
 Wealthboard is a self-hosted, multi-user wealth and goals tracker. Each user has
 an independent portfolio, settings, categories, exchange rates, reports, and
-portable exports. The Next.js application reads SQLite directly and requires no
-separate backend or financial integration. Authentication can remain fully
+portable exports. The current application is a Go HTTP service backed by
+PostgreSQL and serves a Vite/React web client. Authentication can remain fully
 local or use one operator-configured OpenID Connect provider.
 
 See the [product guide](https://wechuliprojects.github.io/wealthboard/) for
@@ -12,6 +12,7 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 ## Features
 
 - Deployment-selected local, OpenID Connect, or hybrid authentication
+- Versioned Go API with owner-scoped, revocable personal API keys
 - Strict owner-scoped accounts, transactions, valuations, goals, analytics,
   rates, imports, exports, restores, caches, and idempotency keys
 - Accounts and liabilities with custom categories, archives, filters, and
@@ -26,20 +27,22 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Non-persistent goal scenario comparisons, milestones, and dismissible
   behind-plan dashboard reminders
 - Private beneficiary and estate-distribution planning with printable,
-  privacy-controlled as-of summaries
+  privacy-controlled retained summaries
 - Per-user JSON portability and account/transaction CSV export
-- Operator-only full SQLite backup and offline restore
+- Operator-only PostgreSQL custom-format backup and maintenance-mode restore
 - Installable PWA shell with explicit offline safety
 - Browser-local System, Light, and Dark appearance themes
 - Optional on-demand, evidence-linked AI portfolio review with private BYOK
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
-Money is stored as integer minor units. Exchange rates are effective-dated
-decimal strings, and calculations use `bigint` or Decimal.js.
+Money is stored as integer minor units in PostgreSQL `bigint` columns. Exchange
+rates are effective-dated exact `numeric` values serialized as decimal strings,
+and authoritative server calculations use checked integers and exact
+`math/big` arithmetic.
 
 ## Product guide
 
-The user and operator guide is published at https://wechuli.github.io/wealthboard/. It covers first setup,
+The user and operator guide is published at https://wechuliprojects.github.io/wealthboard/. It covers first setup,
 accounts, position-tracked investments, activity, goals, reports, estate
 planning, portability, deployment, authentication, backups, and troubleshooting
 with fictional product screenshots.
@@ -47,6 +50,7 @@ with fictional product screenshots.
 Documentation source lives under `docs/` and is built with VitePress:
 
 ```bash
+npm ci
 npm run docs:dev
 DOCS_BASE=/wealthboard/ npm run docs:build
 npm run docs:preview
@@ -66,32 +70,57 @@ to `docs/public/images/screenshots/`.
 Open `/estate` to maintain private beneficiaries, describe how each active asset
 is held, allocate primary and contingent percentages, cover unallocated property
 through residual beneficiaries, and review recorded liabilities separately.
-Percentages use exact basis points and indicative values follow the same
-effective-dated currency rules as reports.
+Percentages use exact basis points. Current estate valuations are incomplete;
+retained summaries are not a fully replayed historical valuation. Review the
+[estate guide](docs/guides/estate-planning.md) before relying on indicative values.
 
 The Summary view creates immutable, hashed Estate Planning Summary snapshots.
 Its print/Save as PDF controls exclude exact values, contacts, account/document
 references, and notes until you deliberately include them; the global privacy
-toggle can still mask all values. These documents are planning worksheets, not
+toggle can still mask rendered values. These controls do not redact stored or
+downloaded JSON, and a snapshot's completeness flag is not a full
+server-validated financial check. These documents are planning worksheets, not
 legally executed wills, and do not grant beneficiary access or transfer assets.
+
+### Current limitations
+
+The Go/PostgreSQL migration is complete, but some legacy product contracts
+remain incomplete. Linked goals and estate summaries do not yet propagate every
+valuation/completeness case; exchange-rate edits are not atomic in the settings
+UI; some conversion and import surfaces are narrower than the full contract.
+The guides describe those limits, and
+[backlog A17](backlog.md#a17-close-remaining-govite-workflow-parity-gaps) tracks
+the implementation work.
 
 ## Requirements
 
-- Node.js 22 or newer
-- npm
-- A persistent local filesystem for SQLite
+- Go 1.27 or newer
+- Node.js 24 and npm for building the Vite client and documentation
+- PostgreSQL 18 and matching `pg_dump`/`pg_restore` tools for operator recovery
 
 ## Local development
 
 ```bash
-npm install
-cp .env.example .env
-npm run dev
+make postgres-up
+npm ci
+make web-install
+make build
+DATABASE_URL='postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable' \
+SESSION_SECRET="$(openssl rand -hex 32)" \
+APP_URL=http://localhost:3000 \
+AUTH_METHODS=local \
+./bin/wealthboard serve
 ```
 
-Set `SESSION_SECRET` to at least 32 random characters before starting. The
-development command applies pending migrations, then starts Next.js at
-<http://localhost:3000>.
+`serve` applies pending PostgreSQL migrations before listening on
+<http://localhost:3000>. Keep `SESSION_SECRET` stable and at least 32
+characters; the command above generates a disposable development secret.
+The Go binary reads process environment variables, not `.env` files.
+`.env.example` documents the available settings; export them or supply them
+through your process manager. Compose reads `.env` for its own interpolation.
+
+The root npm dependencies support documentation, browser tests, and direct-install
+document extraction. The separate `web/` dependencies build and test the client.
 
 The default `AUTH_METHODS=local` mode preserves the original workflow. Open
 `/signup` to create local users. Signup atomically creates the internal identity,
@@ -100,34 +129,60 @@ create exchange rates, financial accounts, goals, or sample data. OIDC-only
 deployments have no local signup or password-login path and provision internal
 users only after a validated provider login.
 
+### Vite hot reload
+
+Build the client once so `web/dist` exists, then export `DATABASE_URL` and a
+stable `SESSION_SECRET` in the Go terminal and run:
+
+```bash
+PORT=3100 APP_URL=http://127.0.0.1:5173 AUTH_METHODS=local make go-run
+```
+
+In a second terminal:
+
+```bash
+make web-dev
+```
+
+Open <http://127.0.0.1:5173>. Vite proxies `/api` to
+`http://127.0.0.1:3100`, and `APP_URL` must match the browser origin for mutation
+origin checks. The Go listener still serves the last built client; it does not
+provide Vite hot reload. Do not start another server on an occupied port.
+
 ### Optional fictional demo data
 
 Demo data is never loaded by signup. Target one existing user explicitly:
 
 ```bash
-DEMO_DATA=true TARGET_USERNAME=alice npm run db:seed:demo
+make seed-demo DEMO_DATA=true TARGET_USERNAME=alice
 ```
 
-The command never creates an identity or seeds every user.
+Both `DEMO_DATA=true` and an explicit existing username are required. The
+command never creates an identity or seeds every user; deterministic IDs and
+conflict handling make repeat runs safe for the same target.
 
 ## Environment variables
 
-| Variable                       | Purpose                                                         |
-| ------------------------------ | --------------------------------------------------------------- |
-| `DATABASE_PATH`                | Persistent SQLite file; default `./data/wealthboard.db`         |
-| `SESSION_SECRET`               | HMAC session secret; at least 32 characters                     |
-| `APP_URL`                      | Canonical deployment URL used for origin validation             |
-| `TRUST_PROXY_HEADERS`          | Trust one ingress-overwritten client IP header; default `false` |
-| `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`; default `local`               |
-| `OIDC_ISSUER`                  | Exact provider issuer when OIDC is enabled                      |
-| `OIDC_CLIENT_ID`               | Confidential OIDC client ID                                     |
-| `OIDC_CLIENT_SECRET`           | Confidential OIDC client secret                                 |
-| `OIDC_PROVIDER_NAME`           | Login-button provider label; 1-60 characters                    |
-| `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key           |
-| `TZ`                           | Default timezone for new users; default `Africa/Nairobi`        |
-| `BACKUP_PATH`                  | Operator backup directory; default `./backups`                  |
-| `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys |
-| `AI_ALLOWED_ENDPOINTS`         | Optional comma-separated exact custom OpenAI-compatible URLs    |
+| Variable                       | Purpose                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `DATABASE_URL`                 | Required PostgreSQL connection URL                                        |
+| `SESSION_SECRET`               | HMAC session secret; at least 32 characters                               |
+| `APP_URL`                      | Canonical deployment URL used for origin validation                       |
+| `NODE_ENV`                     | Set `production` to require secure session cookies                        |
+| `PORT`                         | Go HTTP listener port; default `3000`                                     |
+| `TRUST_PROXY_HEADERS`          | Legacy setting; ignored by Go, which uses the socket peer IP for rate limits |
+| `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`; default `local`                         |
+| `OIDC_ISSUER`                  | Exact provider issuer when OIDC is enabled                                |
+| `OIDC_CLIENT_ID`               | Confidential OIDC client ID                                               |
+| `OIDC_CLIENT_SECRET`           | Confidential OIDC client secret                                           |
+| `OIDC_PROVIDER_NAME`           | Login-button provider label; 1-60 characters                              |
+| `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key                     |
+| `TZ`                           | Default timezone for new users; default `Africa/Nairobi`                  |
+| `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys           |
+| `AI_ALLOWED_ENDPOINTS`         | Comma-separated exact custom OpenAI-compatible base URLs                  |
+| `AI_EXTRACTION_SOCKET`         | Optional Unix socket for the isolated document parser                     |
+| `AI_EXTRACTION_SCRIPT`         | Local Node parser script; default `scripts/extract-import-source-cli.mjs` |
+| `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                                     |
 
 There is no initial-user password or environment-created identity.
 
@@ -142,8 +197,9 @@ There is no initial-user password or environment-created identity.
 | `local,oidc` | Local login/signup plus explicit OIDC login and linking          |
 
 OIDC uses Authorization Code flow, PKCE S256, state, nonce, discovery, and
-RS256 ID-token verification through `jose`. The exact callback is
-`${APP_URL}/api/auth/oidc/callback`; register that URI with the provider. Use an
+RS256 ID-token verification through Go's `github.com/golang-jwt/jwt/v5`.
+The exact callback is
+`${APP_URL}/api/v1/auth/oidc/callback`; register that URI with the provider. Use an
 HTTPS `APP_URL` and issuer in production. Plain HTTP is accepted only for an
 explicit localhost address. Issuer URLs may contain a path, such as a Keycloak
 realm, but not credentials, a query, or a fragment.
@@ -158,9 +214,10 @@ openssl rand -base64 32    # OIDC_TRANSACTION_SECRET
 Do not reuse either value as `OIDC_CLIENT_SECRET`. OIDC transaction state is
 encrypted in a short-lived, callback-scoped, HTTP-only `SameSite=Lax` cookie.
 Provider tokens, authorization codes, PKCE verifiers, and claim payloads are
-never stored in SQLite, exports, browser storage, analytics, or logs. A
+never stored in PostgreSQL, exports, browser storage, analytics, or logs. A
 successful callback issues the ordinary Wealthboard session containing only the
-internal user UUID, session version, and expiry.
+internal user UUID, session version, issue/expiry times, and a per-session CSRF
+token, not provider credentials.
 
 ### Keycloak example
 
@@ -169,7 +226,7 @@ client authentication enabled, PKCE method S256, and this exact valid redirect
 URI:
 
 ```text
-https://wealthboard.example.com/api/auth/oidc/callback
+https://wealthboard.example.com/api/v1/auth/oidc/callback
 ```
 
 Assign only intended users or groups to the client. Wealthboard accepts every
@@ -201,20 +258,22 @@ portfolios:
    Authentication methods** after confirming their password.
 3. Confirm every active user has a link, then change to `oidc` and restart.
 
-Startup/readiness refuses OIDC-only mode while any active user lacks a link for
+Readiness refuses OIDC-only mode while any active user lacks a link for
 the configured issuer. It likewise refuses local-only mode while any active user
 lacks a password. Disable users deliberately or complete their migration first.
 Password hashes and identity links remain dormant when their method is disabled,
 so rollback does not require recreating credentials. Hybrid mode remains ready
 and local login remains usable during a temporary provider outage; OIDC-only
-login and readiness are unavailable until discovery succeeds.
+login and readiness require valid discovery. Invalid startup configuration fails
+before listening, but authentication readiness is evaluated by the health
+endpoint, not as a startup gate. Check `/api/health/ready` before routing traffic.
 
-Rate limiting ignores forwarding headers by default. This prevents a direct
-client from choosing its own limit key, but direct clients share one
-conservative bucket. Set `TRUST_PROXY_HEADERS=true` only behind one trusted
-ingress that strips client-supplied `X-Forwarded-For` and `X-Real-IP` values and
-writes exactly one client IP. Forwarding chains and malformed addresses fall
-into shared fail-closed buckets.
+Go rate limiting uses the socket peer IP (`RemoteAddr`). `X-Forwarded-For`,
+`X-Real-IP`, and the legacy `TRUST_PROXY_HEADERS` toggle do not change that
+identity. Direct clients cannot spoof it through headers, but clients behind
+the same reverse proxy can share its rate-limit bucket. Account for this when
+configuring ingress-side throttling; enabling the legacy toggle does not
+provide per-client rate limiting behind a proxy.
 
 Generate a dedicated AI credential key only when users should be able to save
 provider keys:
@@ -223,14 +282,14 @@ provider keys:
 openssl rand -base64 32
 ```
 
-Do not reuse `SESSION_SECRET`. Without this variable, users can still enter a
-session-only API key on the Portfolio Review page. OpenAI and DeepSeek use fixed
-built-in endpoints; custom endpoints are rejected unless their exact normalized
-URL appears in `AI_ALLOWED_ENDPOINTS`. An operator can explicitly allow a local
-endpoint, for example `http://ollama:11434/v1`, but ordinary users cannot select
-arbitrary internal hosts. Keep the encryption key stable across restarts and
-restores; rotating it currently requires users to delete and save their provider
-credentials again.
+Do not reuse `SESSION_SECRET`. The value must be canonical base64 for exactly 32
+bytes. Without it, users can still submit a session-only provider key for one
+request. OpenAI and DeepSeek use fixed built-in endpoints; custom endpoints
+must exactly match a normalized URL in `AI_ALLOWED_ENDPOINTS`. Every provider
+hostname is resolved again before use, and private, loopback, link-local,
+multicast, and other local ranges are rejected even if allowlisted. Redirects
+and environment HTTP proxies are disabled. Keep the encryption key stable;
+changing it makes remembered keys undecryptable until users replace them.
 
 ## Password changes and operator reset
 
@@ -244,9 +303,9 @@ username; the password is read from the environment rather than command
 arguments:
 
 ```bash
-TARGET_USERNAME=alice \
 NEW_USER_PASSWORD='a-new-password-with-12-characters' \
-npm run password:reset
+DATABASE_URL='postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable' \
+./bin/wealthboard reset-password --username alice
 ```
 
 The reset command works only when local authentication is enabled and only for a
@@ -257,56 +316,79 @@ For Docker Compose:
 
 ```bash
 docker compose exec \
-  -e TARGET_USERNAME=alice \
   -e NEW_USER_PASSWORD='a-new-password-with-12-characters' \
-  wealthboard npm run password:reset
+  wealthboard /app/wealthboard reset-password --username alice
 ```
+
+## API authentication
+
+The browser uses the signed session cookie. Authenticated browser mutations
+require the exact `Origin` from `APP_URL` and the session's `X-CSRF-Token`;
+login/signup require the trusted origin before a session exists. The client
+retrieves its session and CSRF token from `/api/v1/session`.
+
+External clients may use personal API keys in `Authorization: Bearer <token>`.
+Keys are owner-scoped, show their full secret only at creation, and default to
+`portfolio:read`. Other explicit scopes are `portfolio:write`, `imports:write`,
+`exports:read`, and `ai:invoke`. They do not grant credential management or
+user-restore access. Password resets invalidate browser sessions, not API keys;
+revoke keys separately when needed.
+
+See [Go authentication and API keys](docs/reference/go-authentication.md) and
+the [OpenAPI contract](api/openapi.yaml) for endpoints and request formats.
 
 ## Database migrations
 
-`db/schema.ts` is the schema source of truth. Generated migrations under
-`db/migrations` form an append-only history that supports both fresh databases
-and upgrades of existing databases.
+The Go service embeds the append-only PostgreSQL migrations under
+`db/postgres/migrations`. `serve` runs pending migrations at startup; operators
+can run or inspect them separately with `make migrate` and
+`make migrate-status`. Never edit an applied migration.
+
+PostgreSQL is a fresh-start boundary. There is no SQLite-to-PostgreSQL importer,
+dual-write mode, or supported in-place conversion. The legacy Next.js, Drizzle,
+and SQLite runtime was removed after the
+[cutover checklist](docs/admin/cutover.md) passed. Historical Drizzle migrations
+remain under `docs/archive` as non-executable provenance.
+
+## Operator commands
+
+The Go binary owns runtime and database operations:
 
 ```bash
-npm run db:generate
-npm run db:migrate
+./bin/wealthboard serve
+./bin/wealthboard migrate
+./bin/wealthboard migrate-status
+NEW_USER_PASSWORD='replacement-password' ./bin/wealthboard reset-password --username alice
+./bin/wealthboard backup --file /secure/wealthboard.dump
+./bin/wealthboard restore --file /secure/wealthboard.dump --confirm-maintenance
+DEMO_DATA=true ./bin/wealthboard seed-demo --username alice
+./bin/wealthboard healthcheck
 ```
 
-After changing the schema, generate and review a new migration. Never delete,
-rename, or edit a migration that may already have been applied. The migration
-runner verifies the latest applied migration before executing pending SQL and
-stops with a migration-history error if files were replaced or modified.
+`make migrate`, `make migrate-status`, `make backup`, `make restore`, and
+`make seed-demo` are source-tree wrappers around these commands. Backup and
+restore require compatible PostgreSQL client tools on the operator host; they
+are intentionally absent from the distroless application image.
 
-If that check fails, restore the original migration files from the application
-version that created the database, then generate a new migration. A disposable
-development database can instead be backed up if needed, deleted, and recreated;
-do not manually change its migration ledger.
+Export the intended deployment's `DATABASE_URL` before operator commands.
+The Makefile's fallback URL targets the local development database, not a
+Compose or Kubernetes production deployment.
 
-## Docker deployment
+## Container deployment
 
-Create `.env` with `SESSION_SECRET`, `APP_URL`, `AUTH_METHODS`, and any required
-OIDC values, then run:
+The application image is a non-root distroless Go runtime serving the built
+Vite assets. Compose and Kubernetes enforce a read-only application filesystem.
+The image contains neither PostgreSQL client tools nor Node.js.
+Supply an external `DATABASE_URL` and run operator backups from a trusted host
+or admin job with matching PostgreSQL tools. The Compose stack builds the
+separate, network-disabled `extraction-worker` target for PDF/XLSX/DOCX.
 
-```bash
-docker compose up -d --build
-docker compose ps
-```
-
-Compose mounts `/data` for SQLite and `/backups` for operator backups. Both
-volumes survive image replacement. The container runs as UID/GID 1001, applies
-migrations on startup, and exposes `/api/health/live` and
-`/api/health/ready`. The legacy `/api/health` path has readiness semantics.
-
-To update:
-
-```bash
-npm run backup
-docker compose up -d --build
-```
-
-Terminate TLS in a trusted reverse proxy and do not mount the SQLite volume
-read-write into multiple application replicas.
+The Compose examples use `postgres:18` and mount database storage at
+`/var/lib/postgresql`, matching the image's versioned data directory.
+An existing PostgreSQL 17 volume requires a deliberate major-version upgrade;
+changing the image tag or mount path does not migrate its data. Follow the
+[PostgreSQL upgrade guidance](docs/admin/deployment.md#upgrading-from-postgresql-17)
+and retain a verified backup before replacing the database container.
 
 ## Kubernetes deployment
 
@@ -321,20 +403,23 @@ kubectl create secret generic wealthboard-secrets \
 kubectl apply -f deploy/kubernetes.yaml
 ```
 
-The OIDC keys may be omitted while `AUTH_METHODS=local`. The example uses one
-replica with a `Recreate` strategy, ReadWriteOnce PVCs, separate startup,
-readiness, and liveness probes, an Ingress, resource bounds, and a non-root
-security context. TLS must terminate at the configured `APP_URL`, and the proxy
-must preserve the original host and scheme. The example enables trusted proxy
-headers for its single ingress; that ingress must overwrite rather than append
-client-supplied forwarding headers.
+Create the separate `wealthboard-database` secret with its `database-url` key.
+The manifest deploys two rolling application replicas with a pod-local
+extraction sidecar, but no PostgreSQL server, database volume, or backup
+controller. Operate PostgreSQL, point the egress policy at its actual
+namespace/labels, schedule and retain backups outside the application pods, and
+test restores. TLS must terminate at
+the configured `APP_URL`; the ingress must overwrite rather than append
+client-supplied forwarding headers. The example egress policy allows only DNS
+and the selected PostgreSQL pods. Add narrowly scoped provider egress before
+enabling OIDC or AI; those integrations cannot use the default policy unchanged.
 
 ## AI portfolio review
 
 Portfolio Review is optional, read-only, and generated only on request. Configure
 OpenAI, DeepSeek, or an operator-approved OpenAI-compatible endpoint under
 **Settings → AI portfolio review**, then open **Review**. The integration uses the
-provider's Chat Completions API through the official OpenAI Node client.
+provider's supported HTTP API through the Go AI workflow.
 
 Wealthboard calculates a bounded, versioned snapshot before contacting a model.
 By default it contains ratios, concentration, goal trajectory, and data-quality
@@ -346,19 +431,29 @@ figures are never sent.
 Generated reviews are not stored. The database retains only owner-scoped usage
 metadata such as provider host, model, status, latency, and token counts; users
 can clear that history or disconnect the provider. Prompts, responses, API keys,
-and portfolio values are not written to usage records. A one-minute cooldown,
-UTC calendar-month token limit, response-token bound, redirect blocking, strict response
-validation, and evidence-reference checks apply to every request.
+and portfolio values are not written to usage records. Review and import
+conversion share a limit of 10 reservations per rolling minute per user, a UTC
+calendar-month token budget, response bounds, redirect blocking, and local
+response validation. OpenAI uses Responses with `store: false`; current review
+and conversion requests ask for JSON in the prompt rather than enabling the
+transport's optional native JSON Schema output.
 
 AI reviews and import conversion use a two-minute provider request timeout with
 automatic retries disabled. The monthly token limit accepts 10,000 to
 100,000,000 tokens; existing saved limits are not increased automatically.
 
-Provider keys entered on the Review page remain in browser component memory for
-that request and are cleared after success. Remembered keys are encrypted with
-AES-256-GCM and bound to the owning user. They are excluded from per-user exports,
-but deployment-wide SQLite backups contain the encrypted credential rows and must
-remain access-restricted. AI output is explanatory and is not financial advice.
+Provider keys entered for one request are not persisted. Remembered keys are
+encrypted with AES-256-GCM and bound to the owning user. They are excluded from
+per-user exports, but deployment-wide PostgreSQL backups contain encrypted
+credential rows and must remain access-restricted. AI output is explanatory and
+is not financial advice.
+
+UTF-8 CSV/TSV/JSON/TXT extraction runs in Go. PDF/XLSX/DOCX extraction uses
+`AI_EXTRACTION_SOCKET` when set. Compose runs the bundled worker without a
+network; Kubernetes runs it as a bounded sidecar sharing only the pod-local
+Unix socket with the application. Without a socket, a direct installation falls
+back to `node` plus `AI_EXTRACTION_SCRIPT`. The distroless application image has
+no Node fallback.
 
 ## Per-user import, export, and restore
 
@@ -369,22 +464,22 @@ Settings provides:
 - A validated JSON restore that replaces only the authenticated user's
   portfolio in one transaction
 
-Each active account provides an **Import** action for strict Account History
-Import v1 CSV or JSON files. The import page publishes templates, a JSON Schema,
-field and balance-direction rules, and an optional currency-aware prompt that can
-be copied into an external AI service to transform a provider statement. The
-manual prompt workflow runs entirely in the browser; Wealthboard does not send the prompt,
-statement, or generated file to an AI provider. Use only an AI provider you
-trust, then preview and validate the generated file in Wealthboard before
-confirming the import.
+Each active balance-tracked account provides an **Import** action for strict
+Account History Import v1 CSV or JSON files. The direct workflow accepts a file
+or pasted content and performs no provider request. Templates and format rules
+are available in the guides. The legacy browser-only copyable-prompt component
+is not currently mounted on the import page.
 
 The separate **Convert with AI** mode supports CSV, TSV, JSON, TXT, XLSX,
 text-based PDF, and DOCX. Wealthboard extracts text locally in the self-hosted
 application, lets you select/redact sections, and requests explicit consent
-before sending only approved text to your configured provider/model. It reuses
+before contacting your configured provider/model. Selected text is sent with
+section IDs, types, and location labels; review labels for sensitive content
+despite the current UI's narrower sharing description. It reuses
 your encrypted remembered key or accepts a session-only key. Review and correct
 the generated JSON draft, then use the existing preview and confirmation flow.
-No conversion automatically posts financial records.
+No conversion automatically posts financial records. Cancel clears visible
+draft state but does not reliably abort an in-flight extraction/provider request.
 
 Sources are limited to 5 MB and extracted content to 64 KB/1,000 sections.
 Password-protected PDFs accept an optional one-time password for local extraction;
@@ -395,12 +490,11 @@ provider-side retention policies still apply to approved text. See
 [AI-assisted import](docs/reference/ai-import.md) for limits and provider requirements.
 
 Position-tracked investment accounts instead use strict Investment History v1
-JSON or dedicated holdings, trades, cash, and price CSV templates. Preview
-shows instrument resolution, before/after quantities, projected cash/value,
-date range, net change, duplicate/conflict outcomes, oversells, and detailed
-missing or stale price/rate ranges. Confirmation commits the complete
-interdependent sequence atomically. Optional JSON event groups represent one
-dividend plus its same-date reinvestment buys.
+JSON or dedicated holdings, trades, cash, and price CSV templates. The current
+preview shows row outcomes and a summary, with detailed results in its
+downloadable report; it does not render every API projection as a UI table.
+Confirmation commits the complete interdependent sequence atomically. Optional
+JSON event groups represent one dividend plus its same-date reinvestment buys.
 
 Exports contain no credentials, AI provider settings or usage, login attempts,
 session data, idempotency records, or another user's rows. Restore downloads a pre-restore user export,
@@ -429,60 +523,92 @@ account or user fields. Every row requires a stable, case-sensitive
 selected account currency and date is `YYYY-MM-DD`. Opening balances and
 transfers use their dedicated workflows. Files are previewed without writes;
 identical external IDs are skipped, conflicts are never overwritten, and all
-currently valid rows commit atomically before one balance replay.
+accepted rows commit atomically before one balance replay. Go supports skipping
+invalid rows, but the current browser disables confirmation if any row failed.
+A conflict with an existing external ID aborts the whole commit.
 
-## Deployment-wide backup and offline restore
+## Deployment-wide PostgreSQL backup and restore
 
-A raw SQLite file contains every user's password hash and financial records. It
-is never available through an authenticated HTTP route.
+A database archive contains every user's password hash, identity mappings,
+personal API-key hashes and metadata, encrypted remembered AI keys, and
+financial records. It is never available through an authenticated HTTP route.
 
 Create a consistent operator backup:
 
 ```bash
-npm run backup
+mkdir -p backups
+make backup BACKUP_FILE="$PWD/backups/wealthboard-$(date -u +%Y%m%dT%H%M%SZ).dump"
 ```
 
-`BACKUP_PATH` must be persistent and access-restricted. To restore, stop the
-application first, then run:
+The explicit destination directory must already exist and the file must not.
+The command uses `pg_dump --format=custom`, omits ownership/privileges, verifies
+a nonempty regular file, and sets mode `0600`.
+
+Restore is destructive and requires maintenance mode: stop every application
+replica and other writer, then run:
 
 ```bash
-CONFIRM_OFFLINE_RESTORE=true \
-RESTORE_FILE=/backups/wealthboard-2026-08-02T10-00-00Z.db \
-npm run backup:restore
+make restore RESTORE_FILE="$PWD/backups/wealthboard-20260920T120000Z.dump"
 ```
 
-Start Wealthboard afterward so pending migrations run. Test backups regularly
-and retain an external copy before destructive maintenance.
+The command validates the custom archive, creates a timestamped
+`wealthboard-pre-restore-*.dump` beside it, and only then runs a clean,
+single-transaction restore. It validates readiness and foreign keys afterward
+and retains the safety dump on success or failure. Start Wealthboard only after
+the command completes successfully, and test recovery regularly in a disposable
+database. The maintenance flag acknowledges that you stopped writers; it does
+not stop them for you. A failed post-restore validation leaves the safety dump
+available for operator recovery, not an automatic rollback.
 
 ## PWA and offline behavior
 
-Use the browser install action or Wealthboard's **Install app** prompt. On iOS,
-use **Share → Add to Home Screen**.
-
-Production registers the service worker; development automatically unregisters
-Wealthboard workers and clears Wealthboard caches so stale development chunks
-cannot hydrate against newer server HTML. The production worker precaches only
-the offline shell and static assets. Application chunks and icons are
-network-first with cached offline fallback, which prevents an older bundle from
-overriding a deployed update. It does not cache authenticated financial
-responses or queue mutations. Financial submits are blocked while offline, and
-logout clears Wealthboard client state before a different user signs in on the
-same device.
+Production registers the service worker. It precaches only the standalone
+offline page, manifest, and application icons. Failed navigation shows that
+offline page; API requests are never intercepted, authenticated financial
+responses are never cached, and no background-sync handler queues mutations.
+Previously viewed dashboards and records are therefore not guaranteed to work
+offline. The client displays connection state, blocks forms marked as financial
+mutations while `navigator.onLine` is false, and offers Reload when a replacement
+worker is waiting. It provides no mutation queue or in-app install prompt; use
+the browser's install action where available and retry writes only after
+connectivity returns.
 
 ## Verification
 
+Install both npm dependency sets first. For migration/integration checks, set
+`DATABASE_URL` to a disposable PostgreSQL test database, never a production
+database. Those Make targets pass it as `TEST_DATABASE_URL`; the test role needs
+schema-creation privileges and `CREATEDB` for native backup/restore tests.
+Install PostgreSQL 18 `pg_dump` and `pg_restore` on the test host and ensure
+those binaries are first on `PATH`. An older `pg_dump` cannot back up a newer
+server. CI installs the versioned client package explicitly rather than using
+the runner's bundled PostgreSQL tools.
+
 ```bash
-npm run lint
-npm run typecheck
-npm test
+npm ci
+npm --prefix web ci
+make generate
+make lint
+make typecheck
+make test
+make migrate-check
+make go-test-integration
+make security
 npx playwright install chromium
-npm run test:e2e
-npm run build
+make test-e2e-go
+make build
+npm run docs:build
 ```
 
-Automated tests use disposable SQLite files, exercise two-user isolation and
-portability attacks, and verify
-layouts at 360, 390, 768, 1024, and 1440 px.
+Go integration tests create and migrate disposable PostgreSQL schemas or
+databases themselves, so they work against an empty test database without a
+prior `make migrate`. Service fixtures use a separate schema for each test and
+clean it up afterward. They exercise two-user isolation and portability attacks. Without
+`TEST_DATABASE_URL`, database-backed cases in ordinary `go test` runs are
+skipped. Playwright owns a separate disposable PostgreSQL Compose project,
+builds Go/Vite, starts mock providers, and verifies layouts at 360, 390, 768,
+1024, and 1440 px. Docker must be running for browser tests and screenshot
+capture; do not run them against a real portfolio database.
 
 ## Security considerations
 
@@ -492,9 +618,9 @@ layouts at 360, 390, 768, 1024, and 1440 px.
 - Production session cookies are Secure, HTTP-only, SameSite=Strict, and
   explicitly expiring. OIDC transaction cookies are separate, callback-scoped,
   Secure, HTTP-only, SameSite=Lax, and expire within ten minutes.
-- Restrict filesystem access to SQLite databases, backups, and exports.
+- Restrict PostgreSQL access and filesystem access to backups and exports.
 - Never publish raw backups or user exports to public object storage.
-- Keep TLS, the host, Node.js, the base image, and dependencies updated.
+- Keep TLS, PostgreSQL, Go, Node.js build tooling, the base image, and dependencies updated.
 - Users are independent; Wealthboard has no roles, organizations, invitations,
   shared portfolios, or cross-user transfers.
 - Database errors are logged by class or name without submitted secrets.

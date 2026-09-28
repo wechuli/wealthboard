@@ -1,0 +1,83 @@
+---
+title: Cutover and removal
+description: Completed legacy-runtime cutover and a deployment-specific acceptance checklist.
+---
+
+# Cutover and removal
+
+This records the completed legacy-runtime cutover. The current runtime is a Go
+process serving the Vite SPA and `/api/v1`, backed by a fresh
+PostgreSQL database. There is no SQLite data migration or dual-write period.
+
+The acceptance gates passed and the owner authorized removal on 20 September 2026. See [Phase 6 cutover evidence](./cutover-evidence) for the retained
+fixtures and post-cutover validation surface.
+
+For a new installation or routine PostgreSQL-backed upgrade, follow
+[Deployment](./deployment) and [Backup and recovery](./backup-recovery).
+The unchecked items below are a reusable per-deployment checklist, not
+unfinished product migration work. Legacy references describe the historical
+replacement boundary; the repository no longer contains that runtime.
+
+## Before cutover
+
+- [ ] Record the release, image digest, PostgreSQL version, and configuration.
+- [ ] Confirm users understand that legacy SQLite data will not be imported.
+- [ ] Provision an empty PostgreSQL database with durable storage, restricted
+      credentials, required TLS, and capacity for expected users.
+- [ ] Run `wealthboard migrate` and verify `wealthboard migrate-status`.
+- [ ] Configure stable `SESSION_SECRET`, exact `APP_URL`, `AUTH_METHODS`, and
+      any OIDC or AI secrets outside the image.
+- [ ] Build the Vite client and Go binary or immutable application image.
+- [ ] Configure PDF/XLSX/DOCX extraction either through the isolated socket
+      worker or a bounded direct-install Node fallback. Do not add Node to the
+      distroless application image.
+- [ ] Verify `/api/health/live`, `/api/health/ready`, SPA deep links, login,
+      logout, and the configured signup policy.
+- [ ] Complete representative two-user isolation, financial replay, import,
+      portability, estate, AI, PWA, mobile, and API-key acceptance checks.
+- [ ] Create and test a PostgreSQL custom-format backup in a disposable target.
+
+## Switch traffic
+
+- [ ] Stop the legacy application before directing users to the replacement.
+- [ ] Start only the Go/Vite deployment against the prepared PostgreSQL
+      database.
+- [ ] Route TLS traffic to the Go service; do not route `/api` to legacy
+      Next.js handlers.
+- [ ] Confirm static assets, SPA fallback, `/api/v1`, and health probes reach
+      the new release.
+- [ ] Verify representative accounts, totals, goals, reports, imports, exports,
+      and privacy mode with controlled users.
+- [ ] Monitor request IDs, structured errors, PostgreSQL saturation, and
+      extraction-worker failures without logging private payloads.
+
+## Rollback readiness
+
+- [ ] If a historical rollback is required, retain the old release and
+      deployment definition separately but stopped; do not reintroduce legacy
+      code into the current runtime.
+- [ ] Keep PostgreSQL backups and configuration from before each replacement
+      release; test the documented maintenance-mode restore procedure.
+- [ ] Define who can stop all writers, restore PostgreSQL, verify readiness,
+      and reopen traffic.
+- [ ] Treat legacy SQLite state as a separate historical system, not a rollback
+      target for writes made after PostgreSQL cutover.
+
+## Completed legacy-removal authorization
+
+Legacy Next.js, Drizzle, SQLite, and obsolete Node scripts were removed in a
+separate reviewed change after these gates passed:
+
+- [x] The Go/Vite production path has completed the agreed observation period.
+- [x] No deployment, operator procedure, documentation page, package script,
+      or supported test depends on the legacy runtime.
+- [x] API and UI parity acceptance is recorded, including responsive and PWA
+      behavior.
+- [x] PostgreSQL backup and restore evidence is retained.
+- [x] The extraction-worker files and dependencies have been distinguished from
+      removable legacy Node code.
+- [x] The owner explicitly approves removal and the rollback plan no longer
+      depends on the retained source.
+
+The removal is complete. Post-cutover validation no longer executes Next.js,
+SQLite, Drizzle, or the deleted cross-runtime parity harness.

@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wealthboard
+      POSTGRES_USER: wealthboard
+      POSTGRES_PASSWORD: wealthboard
+    ports:
+      - "5433:5432"
+    volumes:
+      - wealthboard-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wealthboard -d wealthboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  wealthboard-postgres-data:
