@@ -1,21 +1,27 @@
 ---
 title: Cutover and removal
-description: Validate the Go, Vite, and PostgreSQL runtime before retiring legacy code.
+description: Completed legacy-runtime cutover and a deployment-specific acceptance checklist.
 ---
 
 # Cutover and removal
 
-Use this checklist when replacing a legacy Wealthboard deployment. The target
-runtime is one Go process serving the Vite SPA and `/api/v1`, backed by a fresh
+This records the completed legacy-runtime cutover. The current runtime is a Go
+process serving the Vite SPA and `/api/v1`, backed by a fresh
 PostgreSQL database. There is no SQLite data migration or dual-write period.
 
 The acceptance gates passed and the owner authorized removal on 20 September 2026. See [Phase 6 cutover evidence](./cutover-evidence) for the retained
 fixtures and post-cutover validation surface.
 
+For a new installation or routine PostgreSQL-backed upgrade, follow
+[Deployment](./deployment) and [Backup and recovery](./backup-recovery).
+The unchecked items below are a reusable per-deployment checklist, not
+unfinished product migration work. Legacy references describe the historical
+replacement boundary; the repository no longer contains that runtime.
+
 ## Before cutover
 
-- [x] Record the release, image digest, PostgreSQL version, and configuration.
-- [x] Confirm users understand that legacy SQLite data will not be imported.
+- [ ] Record the release, image digest, PostgreSQL version, and configuration.
+- [ ] Confirm users understand that legacy SQLite data will not be imported.
 - [ ] Provision an empty PostgreSQL database with durable storage, restricted
       credentials, required TLS, and capacity for expected users.
 - [ ] Run `wealthboard migrate` and verify `wealthboard migrate-status`.
@@ -47,7 +53,9 @@ fixtures and post-cutover validation surface.
 
 ## Rollback readiness
 
-- [ ] Keep the legacy code and deployment definition available but stopped.
+- [ ] If a historical rollback is required, retain the old release and
+      deployment definition separately but stopped; do not reintroduce legacy
+      code into the current runtime.
 - [ ] Keep PostgreSQL backups and configuration from before each replacement
       release; test the documented maintenance-mode restore procedure.
 - [ ] Define who can stop all writers, restore PostgreSQL, verify readiness,
@@ -55,10 +63,10 @@ fixtures and post-cutover validation surface.
 - [ ] Treat legacy SQLite state as a separate historical system, not a rollback
       target for writes made after PostgreSQL cutover.
 
-## Authorize legacy removal
+## Completed legacy-removal authorization
 
-Remove legacy Next.js, Drizzle, SQLite, and obsolete Node scripts only in a
-separate reviewed change after all of these are true:
+Legacy Next.js, Drizzle, SQLite, and obsolete Node scripts were removed in a
+separate reviewed change after these gates passed:
 
 - [x] The Go/Vite production path has completed the agreed observation period.
 - [x] No deployment, operator procedure, documentation page, package script,

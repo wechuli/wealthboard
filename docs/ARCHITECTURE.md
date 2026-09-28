@@ -1,8 +1,9 @@
 # Wealthboard architecture
 
 > **Status:** This multi-user architecture is implemented. The repository ships
-> one baseline schema for fresh Wealthboard databases. Sections explicitly
-> marked "Planned" describe future work and are not runtime guarantees.
+> append-only Goose migrations for fresh and existing PostgreSQL databases.
+> Sections explicitly marked "Planned" describe future work and are not runtime
+> guarantees.
 
 Wealthboard is a Go HTTP service backed by PostgreSQL. It exposes the versioned
 JSON API and serves a compiled Vite/React single-page client. One optional OIDC
@@ -20,7 +21,8 @@ fixtures and archived migration history remain as non-executable evidence.
   belong to organizations and cannot share portfolios, financial accounts,
   goals, categories, rates, or transfers.
 - **Persistence:** PostgreSQL at required `DATABASE_URL`. Monetary
-  amounts are integer minor units. Exchange rates are decimal strings and all
+  amounts are integer minor units in `bigint` columns. Exchange rates use exact
+  `numeric` columns and decimal strings at the API boundary. All
   authoritative financial arithmetic uses checked integers plus `math/big`
   integer and rational helpers.
 - **Currencies:** A client-safe ISO 4217 catalog defines discoverable currency
@@ -39,27 +41,42 @@ fixtures and archived migration history remain as non-executable evidence.
   SameSite=Strict cookie whose subject is the immutable user ID. Session
   verification loads that user and checks status, expiry, and session version.
   Failed login/signup and bounded OIDC start/callback traffic are rate-limited
-  in PostgreSQL.
-- **OIDC protocol:** Native fetch plus `jose` performs exact-issuer discovery,
+  in PostgreSQL using the socket peer IP, not forwarding headers. The legacy
+  `TRUST_PROXY_HEADERS` setting has no effect in Go.
+- **Browser request protection:** Login/signup require the exact trusted origin.
+  Authenticated browser mutations also require the session's `X-CSRF-Token`.
+  `/api/v1/session` supplies the browser's session identity and CSRF token.
+- **API keys:** External clients use owner-scoped bearer keys with explicit
+  `portfolio:read`, `portfolio:write`, `imports:write`, `exports:read`, or
+  `ai:invoke` scopes. Only the token hash and metadata are retained. Browser
+  sessions alone may manage keys, credentials, and user restores; sensitive
+  browser mutations additionally require origin and CSRF checks. Revocation
+  and expiry are checked independently of browser session version.
+- **OIDC protocol:** Go `net/http`, standard-library cryptography, and
+  `github.com/golang-jwt/jwt/v5` perform exact-issuer discovery,
   Authorization Code + PKCE S256, state/nonce validation, bounded token exchange,
-  cached remote JWKS, and RS256 verification. Encrypted A256GCM transaction and
+  cached remote JWKS, and RS256 verification. The callback is
+  `${APP_URL}/api/v1/auth/oidc/callback`. Encrypted AES-256-GCM transaction and
   reauthentication cookies are distinct from the application session. No
   provider code, token, verifier, or claim payload is retained.
 - **Method management:** Hybrid links are explicit and require fresh local
   password confirmation. Local credential enable/remove operations require an
   exact linked-identity reauthentication. Identity claims never trigger merging,
   and successful changes increment session version.
-- **Readiness:** Startup and readiness reject mode changes that strand active
+- **Readiness:** Health checks reject mode changes that strand active
   users. OIDC-only also requires valid discovery. Hybrid remains ready through a
-  temporary provider outage so local login continues to work.
+  temporary provider outage so local login continues to work. Configuration and
+  migration failures stop startup; authentication readiness is checked on
+  `/api/health/ready`, not before the listener starts.
 - **Authorization:** Every private operation derives `userId` from the verified
-  session and supplies it to the owning service. Queries use both owner and
-  resource ID; client input is never accepted as ownership evidence.
+  session or API-key principal and supplies it to the owning service. Queries
+  use both owner and resource ID; client input is never accepted as ownership
+  evidence.
 - **Institutions:** Each user owns a private directory of financial providers.
   Accounts may link one institution through a composite owner foreign key or
   remain self-custodied. Names are normalized for per-user uniqueness; archived
   institutions retain existing links but cannot receive new ones.
-- **Balances:** Transactions and valuations are immutable inputs to a balance
+- **Balances:** Transactions and valuations are source inputs to a balance
   replay. A valuation sets the balance at that point without becoming a
   contribution; later transactions apply signed effects. Editing or deleting an
   event replays the account in the same database transaction.
@@ -142,6 +159,29 @@ distroless application image. UTF-8 CSV, TSV, JSON, and TXT remain parsed in Go.
 
 Phase 6 acceptance and removal evidence is recorded in
 `docs/admin/cutover-evidence.md`.
+
+## Implementation layout
+
+- `cmd/wealthboard` wires the HTTP service and operator commands.
+- `internal/api` owns Chi routes, HTTP validation, authentication checks, and
+  `application/problem+json` responses.
+- `internal/auth` owns local/OIDC authentication, browser sessions, CSRF,
+  personal API keys, and PostgreSQL-backed rate limiting.
+- `internal/service` owns persistence, business operations, and the current
+  exact financial arithmetic/replay helpers. `internal/domain` currently
+  contains shared currency metadata and validation.
+- `db/postgres/migrations` is the embedded Goose history and sqlc schema input.
+  `db/postgres/queries` generates accessors in `internal/database/generated`;
+  service transactions also contain explicit `database/sql` queries.
+- `internal/operator` invokes PostgreSQL backup/restore tools, and
+  `internal/static` serves the built client from `WEB_DIST_PATH`.
+- `api/openapi.yaml` defines the HTTP contract and generates
+  `web/src/api/schema.ts`. `web/src/api` handles browser requests; React routes,
+  components, and presentation helpers live under `web/src`.
+
+The Go binary does not load `.env` files or embed the Vite assets into the
+executable. Direct installations must provide process environment variables
+and the built asset directory. The container packages both the binary and assets.
 
 ## Position-account architecture
 
@@ -276,7 +316,8 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    errors. Existing usage reservation/completion functions enforce shared
    review/conversion rate and monthly token budgets. The settings form, Zod
    schema, and service enforce a 10,000 to 100,000,000 monthly token range.
-   Both provider transports use a 120,000 ms SDK timeout with retries disabled;
+   Both provider transports use a 120-second Go HTTP client timeout without
+   application-level retries;
    local extraction retains its separate 15-second timeout. Existing saved
    limits remain unchanged. A configuration fingerprint
    binds consent to the reviewed provider/model/output limit and account context.
@@ -348,7 +389,7 @@ responses in tests; never use real statements or credentials.
 - All user-owned tables carry a non-null `userId` foreign key even when
   ownership can also be reached through a parent record. This makes filtering
   explicit and supports efficient owner-first indexes.
-- Service functions accept session-derived `userId` as their ownership
+- Service functions accept verified-principal-derived `userId` as their ownership
   argument. API handlers and client pages never perform an unscoped lookup and
   then decide in the UI whether the result belongs to the user.
 - Reads, writes, archives, and deletes use `userId` and resource ID together.
@@ -371,10 +412,16 @@ responses in tests; never use real statements or credentials.
 | ------------------------------ | ------------------------------------------------------------------------- |
 | `users`                        | Login identity, password hash, status, and session version                |
 | `oidc_identities`              | Internal-user mapping for one canonical issuer and opaque subject         |
+| `api_keys`                     | Owner-scoped token hashes, scopes, expiry, usage, and revocation metadata  |
 | `user_settings`                | One user's locale, display, dashboard, and goal preferences               |
 | `categories`                   | One user's seeded and custom classifications                              |
 | `institutions`                 | One user's financial-provider directory and reference details             |
 | `accounts`                     | One user's holdings and liabilities with replayed values                  |
+| `investment_instruments`       | Owner-scoped security identifiers and quote currencies                    |
+| `account_conversions`          | Source/replacement provenance for balance-to-position conversion          |
+| `position_events`              | Ordered instrument quantity events and grouped investment activity        |
+| `security_prices`              | Effective-dated instrument prices and source metadata                     |
+| `position_reconciliations`     | Broker observations that do not overwrite calculated account values       |
 | `transactions`                 | User-owned cash flows, returns, transfers, and account-scoped source IDs  |
 | `valuation_snapshots`          | User-owned absolute valuations, separate from cash flow                   |
 | `exchange_rates`               | One user's effective-dated decimal exchange rates                         |
@@ -393,8 +440,9 @@ responses in tests; never use real statements or credentials.
 | `ai_provider_settings`         | Owner-scoped provider, sharing defaults, limits, encrypted key            |
 | `ai_usage_events`              | Owner-scoped request status, latency, model, and token metadata           |
 
-Every table except `login_attempts` is either the identity table or is owned by
-one user. Foreign keys are enabled. IDs are UUIDs. Account and category archive
+Every application table except `login_attempts` is either the identity table or
+is owned by one user. Goose separately maintains `goose_db_version`.
+Foreign keys enforce relationships. Resource IDs are UUIDs. Account and category archive
 operations retain source records. Timestamps are stored in PostgreSQL and
 serialized in UTC.
 
@@ -422,7 +470,9 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 
 - `/login` — renders only deployment-enabled login methods
 - `/signup` — public local registration only when local authentication is enabled
-- `/api/auth/oidc/{start,callback}` — public only when OIDC is enabled
+- `/api/v1/auth/oidc/{start,callback}` — public only when OIDC is enabled
+- `/api/v1/auth/config` — public deployment-enabled authentication methods
+- `/api/v1/session`, `/api/v1/auth/principal`, `/api/v1/api-keys`
 - `/` — net-worth dashboard
 - `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/[id]/edit`,
   `/accounts/[id]/import`
@@ -433,14 +483,16 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
   `/estate/snapshots/[id]` — private estate planning and retained print views
 - `/reports`, `/categories`, `/institutions`, `/settings`
 - `/api/v1/exports/*`, `/api/v1/accounts/[id]/history-import/{preview,commit}`, `/api/v1/restore/user`,
-  `/api/estate/snapshots/[id]`, `/api/ai/review`, `/api/health/{live,ready}`
+  `/api/v1/accounts/[id]/investment-import/{preview,commit}`,
+  `/api/v1/estate/snapshots/[id]`, `/api/v1/ai/review`, `/api/health/{live,ready}`
 - `/review` — on-demand, evidence-linked AI portfolio critique
 - `/offline.html`, `/manifest.webmanifest`, `/sw.js`
 
 The protected layout owns the responsive sidebar, header, mobile bottom
 navigation, privacy-value toggle, quick-add flow, PWA status, and toast region.
-Reusable form controls and cards live in `components/ui`; business visualizations
-live in `components/charts`; validated financial operations live under `lib`.
+Reusable form controls, cards, and visualizations live in `web/src/components`;
+authoritative validation and financial operations live in Go's `internal/api`,
+`internal/service`, and `internal/domain`, not browser helpers.
 The protected layout may display the current user's identity, but it does not
 own authorization decisions.
 
@@ -475,7 +527,7 @@ own authorization decisions.
   Email linking/recovery, SAML, multiple simultaneous issuers, and mandatory
   external services remain out of scope.
 - Appearance is a non-sensitive browser-local preference with System, Light,
-  and Dark choices. A pre-hydration bootstrap resolves semantic CSS tokens;
+  and Dark choices. A bootstrap before React renders resolves semantic CSS tokens;
   appearance is not user settings, financial data, or portable state.
 - AI review output remains explanatory, non-authoritative, and non-advisory. Reviews
   are never persisted, cannot execute financial changes, and omit unreliable

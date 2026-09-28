@@ -12,6 +12,7 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 ## Features
 
 - Deployment-selected local, OpenID Connect, or hybrid authentication
+- Versioned Go API with owner-scoped, revocable personal API keys
 - Strict owner-scoped accounts, transactions, valuations, goals, analytics,
   rates, imports, exports, restores, caches, and idempotency keys
 - Accounts and liabilities with custom categories, archives, filters, and
@@ -34,9 +35,10 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Optional on-demand, evidence-linked AI portfolio review with private BYOK
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
-Money is stored as integer minor units. Exchange rates are effective-dated
-decimal strings, and authoritative server calculations use checked integers and
-exact `math/big` arithmetic.
+Money is stored as integer minor units in PostgreSQL `bigint` columns. Exchange
+rates are effective-dated exact `numeric` values serialized as decimal strings,
+and authoritative server calculations use checked integers and exact
+`math/big` arithmetic.
 
 ## Product guide
 
@@ -48,6 +50,7 @@ with fictional product screenshots.
 Documentation source lives under `docs/` and is built with VitePress:
 
 ```bash
+npm ci
 npm run docs:dev
 DOCS_BASE=/wealthboard/ npm run docs:build
 npm run docs:preview
@@ -86,6 +89,7 @@ legally executed wills, and do not grant beneficiary access or transfer assets.
 
 ```bash
 make postgres-up
+npm ci
 make web-install
 make build
 DATABASE_URL='postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable' \
@@ -97,7 +101,13 @@ AUTH_METHODS=local \
 
 `serve` applies pending PostgreSQL migrations before listening on
 <http://localhost:3000>. Keep `SESSION_SECRET` stable and at least 32
-characters.
+characters; the command above generates a disposable development secret.
+The Go binary reads process environment variables, not `.env` files.
+`.env.example` documents the available settings; export them or supply them
+through your process manager. Compose reads `.env` for its own interpolation.
+
+The root npm dependencies support documentation, browser tests, and direct-install
+document extraction. The separate `web/` dependencies build and test the client.
 
 The default `AUTH_METHODS=local` mode preserves the original workflow. Open
 `/signup` to create local users. Signup atomically creates the internal identity,
@@ -105,6 +115,26 @@ selected base/enabled currency settings, and default categories; it does not
 create exchange rates, financial accounts, goals, or sample data. OIDC-only
 deployments have no local signup or password-login path and provision internal
 users only after a validated provider login.
+
+### Vite hot reload
+
+Build the client once so `web/dist` exists, then export `DATABASE_URL` and a
+stable `SESSION_SECRET` in the Go terminal and run:
+
+```bash
+PORT=3100 APP_URL=http://127.0.0.1:5173 AUTH_METHODS=local make go-run
+```
+
+In a second terminal:
+
+```bash
+make web-dev
+```
+
+Open <http://127.0.0.1:5173>. Vite proxies `/api` to
+`http://127.0.0.1:3100`, and `APP_URL` must match the browser origin for mutation
+origin checks. The Go listener still serves the last built client; it does not
+provide Vite hot reload. Do not start another server on an occupied port.
 
 ### Optional fictional demo data
 
@@ -127,7 +157,7 @@ conflict handling make repeat runs safe for the same target.
 | `APP_URL`                      | Canonical deployment URL used for origin validation                       |
 | `NODE_ENV`                     | Set `production` to require secure session cookies                        |
 | `PORT`                         | Go HTTP listener port; default `3000`                                     |
-| `TRUST_PROXY_HEADERS`          | Trust one ingress-overwritten client IP header; default `false`           |
+| `TRUST_PROXY_HEADERS`          | Legacy setting; ignored by Go, which uses the socket peer IP for rate limits |
 | `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`; default `local`                         |
 | `OIDC_ISSUER`                  | Exact provider issuer when OIDC is enabled                                |
 | `OIDC_CLIENT_ID`               | Confidential OIDC client ID                                               |
@@ -154,8 +184,9 @@ There is no initial-user password or environment-created identity.
 | `local,oidc` | Local login/signup plus explicit OIDC login and linking          |
 
 OIDC uses Authorization Code flow, PKCE S256, state, nonce, discovery, and
-RS256 ID-token verification through `jose`. The exact callback is
-`${APP_URL}/api/auth/oidc/callback`; register that URI with the provider. Use an
+RS256 ID-token verification through Go's `github.com/golang-jwt/jwt/v5`.
+The exact callback is
+`${APP_URL}/api/v1/auth/oidc/callback`; register that URI with the provider. Use an
 HTTPS `APP_URL` and issuer in production. Plain HTTP is accepted only for an
 explicit localhost address. Issuer URLs may contain a path, such as a Keycloak
 realm, but not credentials, a query, or a fragment.
@@ -172,7 +203,8 @@ encrypted in a short-lived, callback-scoped, HTTP-only `SameSite=Lax` cookie.
 Provider tokens, authorization codes, PKCE verifiers, and claim payloads are
 never stored in PostgreSQL, exports, browser storage, analytics, or logs. A
 successful callback issues the ordinary Wealthboard session containing only the
-internal user UUID, session version, and expiry.
+internal user UUID, session version, issue/expiry times, and a per-session CSRF
+token, not provider credentials.
 
 ### Keycloak example
 
@@ -181,7 +213,7 @@ client authentication enabled, PKCE method S256, and this exact valid redirect
 URI:
 
 ```text
-https://wealthboard.example.com/api/auth/oidc/callback
+https://wealthboard.example.com/api/v1/auth/oidc/callback
 ```
 
 Assign only intended users or groups to the client. Wealthboard accepts every
@@ -213,20 +245,22 @@ portfolios:
    Authentication methods** after confirming their password.
 3. Confirm every active user has a link, then change to `oidc` and restart.
 
-Startup/readiness refuses OIDC-only mode while any active user lacks a link for
+Readiness refuses OIDC-only mode while any active user lacks a link for
 the configured issuer. It likewise refuses local-only mode while any active user
 lacks a password. Disable users deliberately or complete their migration first.
 Password hashes and identity links remain dormant when their method is disabled,
 so rollback does not require recreating credentials. Hybrid mode remains ready
 and local login remains usable during a temporary provider outage; OIDC-only
-login and readiness are unavailable until discovery succeeds.
+login and readiness require valid discovery. Invalid startup configuration fails
+before listening, but authentication readiness is evaluated by the health
+endpoint, not as a startup gate. Check `/api/health/ready` before routing traffic.
 
-Rate limiting ignores forwarding headers by default. This prevents a direct
-client from choosing its own limit key, but direct clients share one
-conservative bucket. Set `TRUST_PROXY_HEADERS=true` only behind one trusted
-ingress that strips client-supplied `X-Forwarded-For` and `X-Real-IP` values and
-writes exactly one client IP. Forwarding chains and malformed addresses fall
-into shared fail-closed buckets.
+Go rate limiting uses the socket peer IP (`RemoteAddr`). `X-Forwarded-For`,
+`X-Real-IP`, and the legacy `TRUST_PROXY_HEADERS` toggle do not change that
+identity. Direct clients cannot spoof it through headers, but clients behind
+the same reverse proxy can share its rate-limit bucket. Account for this when
+configuring ingress-side throttling; enabling the legacy toggle does not
+provide per-client rate limiting behind a proxy.
 
 Generate a dedicated AI credential key only when users should be able to save
 provider keys:
@@ -270,8 +304,25 @@ For Docker Compose:
 ```bash
 docker compose exec \
   -e NEW_USER_PASSWORD='a-new-password-with-12-characters' \
-  wealthboard reset-password --username alice
+  wealthboard /app/wealthboard reset-password --username alice
 ```
+
+## API authentication
+
+The browser uses the signed session cookie. Authenticated browser mutations
+require the exact `Origin` from `APP_URL` and the session's `X-CSRF-Token`;
+login/signup require the trusted origin before a session exists. The client
+retrieves its session and CSRF token from `/api/v1/session`.
+
+External clients may use personal API keys in `Authorization: Bearer <token>`.
+Keys are owner-scoped, show their full secret only at creation, and default to
+`portfolio:read`. Other explicit scopes are `portfolio:write`, `imports:write`,
+`exports:read`, and `ai:invoke`. They do not grant credential management or
+user-restore access. Password resets invalidate browser sessions, not API keys;
+revoke keys separately when needed.
+
+See [Go authentication and API keys](docs/reference/go-authentication.md) and
+the [OpenAPI contract](api/openapi.yaml) for endpoints and request formats.
 
 ## Database migrations
 
@@ -308,8 +359,9 @@ are intentionally absent from the distroless application image.
 
 ## Container deployment
 
-The application image is a non-root, read-only, distroless Go runtime serving
-the built Vite assets. It contains neither PostgreSQL client tools nor Node.js.
+The application image is a non-root distroless Go runtime serving the built
+Vite assets. Compose and Kubernetes enforce a read-only application filesystem.
+The image contains neither PostgreSQL client tools nor Node.js.
 Supply an external `DATABASE_URL` and run operator backups from a trusted host
 or admin job with matching PostgreSQL tools. The Compose stack builds the
 separate, network-disabled `extraction-worker` target for PDF/XLSX/DOCX.
@@ -334,7 +386,9 @@ controller. Operate PostgreSQL, point the egress policy at its actual
 namespace/labels, schedule and retain backups outside the application pods, and
 test restores. TLS must terminate at
 the configured `APP_URL`; the ingress must overwrite rather than append
-client-supplied forwarding headers.
+client-supplied forwarding headers. The example egress policy allows only DNS
+and the selected PostgreSQL pods. Add narrowly scoped provider egress before
+enabling OIDC or AI; those integrations cannot use the default policy unchanged.
 
 ## AI portfolio review
 
@@ -383,7 +437,7 @@ Settings provides:
 - A validated JSON restore that replaces only the authenticated user's
   portfolio in one transaction
 
-Each active account provides an **Import** action for strict Account History
+Each active balance-tracked account provides an **Import** action for strict Account History
 Import v1 CSV or JSON files. The import page publishes templates, a JSON Schema,
 field and balance-direction rules, and an optional currency-aware prompt that can
 be copied into an external AI service to transform a provider statement. The
@@ -448,8 +502,8 @@ currently valid rows commit atomically before one balance replay.
 ## Deployment-wide PostgreSQL backup and restore
 
 A database archive contains every user's password hash, identity mappings,
-encrypted remembered AI keys, and financial records. It is never available
-through an authenticated HTTP route.
+personal API-key hashes and metadata, encrypted remembered AI keys, and
+financial records. It is never available through an authenticated HTTP route.
 
 Create a consistent operator backup:
 
@@ -473,7 +527,10 @@ The command validates the custom archive, creates a timestamped
 `wealthboard-pre-restore-*.dump` beside it, and only then runs a clean,
 single-transaction restore. It validates readiness and foreign keys afterward
 and retains the safety dump on success or failure. Start Wealthboard only after
-the command completes, and test recovery regularly in a disposable database.
+the command completes successfully, and test recovery regularly in a disposable
+database. The maintenance flag acknowledges that you stopped writers; it does
+not stop them for you. A failed post-restore validation leaves the safety dump
+available for operator recovery, not an automatic rollback.
 
 ## PWA and offline behavior
 
@@ -490,22 +547,35 @@ connectivity returns.
 
 ## Verification
 
+Install both npm dependency sets first. For migration/integration checks, set
+`DATABASE_URL` to a disposable PostgreSQL test database, never a production
+database. Those Make targets pass it as `TEST_DATABASE_URL`; the test role needs
+schema-creation privileges and `CREATEDB` for native backup/restore tests.
+Install matching `pg_dump` and `pg_restore` on the test host.
+
 ```bash
+npm ci
+npm --prefix web ci
 make generate
 make lint
 make typecheck
 make test
 make migrate-check
 make go-test-integration
+make security
 npx playwright install chromium
 make test-e2e-go
 make build
 npm run docs:build
 ```
 
-Automated integration tests use disposable PostgreSQL schemas, exercise
-two-user isolation and portability attacks, and verify
-layouts at 360, 390, 768, 1024, and 1440 px.
+Go integration tests create disposable PostgreSQL schemas or databases and
+exercise two-user isolation and portability attacks. Without
+`TEST_DATABASE_URL`, database-backed cases in ordinary `go test` runs are
+skipped. Playwright owns a separate disposable PostgreSQL Compose project,
+builds Go/Vite, starts mock providers, and verifies layouts at 360, 390, 768,
+1024, and 1440 px. Docker must be running for browser tests and screenshot
+capture; do not run them against a real portfolio database.
 
 ## Security considerations
 

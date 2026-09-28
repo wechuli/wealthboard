@@ -21,49 +21,52 @@ does not make earlier history incomplete when that account held no cash or
 positions at the time. Nonzero balances still need a rate effective on the
 historical date, and held positions still need an effective security price.
 
-Exchange-rate warnings distinguish current balances from historical calculations:
+Current and historical completeness are separate. A current total can be
+complete while earlier calculations lack a price or rate. Transaction-based
+contributions, income, and gains can also be affected.
 
-- **Current total is incomplete:** a required currency pair has no rate effective
-  on or before today. Affected holdings are excluded until a rate is supplied.
-- **Rate is over a month old:** the effective date is older than one calendar
-  month. The rate still converts current balances; age alone does not make a
-  total incomplete. Editing the value does not refresh its effective date.
-- **Some historical totals are incomplete:** older calculations lack a rate.
-  The warning beside the history chart identifies each pair and affected date
-  range, and says whether the current total is complete. Transaction-based
-  contributions, income, and gains can also be affected.
+The current screens show missing-currency and incomplete-history warnings, not
+per-pair affected-date ranges or prefilled **Add earlier rate** links. Open
+**Settings → Exchange rates** and enter an observation appropriate for the
+missing historical date rather than substituting today's rate.
 
-Each warning links to the matching pair in Settings. **Add earlier rate** also
-prefills the earliest identified missing date, leaving the rate blank. Enter
-a rate appropriate for that date rather than substituting today's rate.
+Settings labels a rate **Over a month old** after 30 days. The rate still
+converts values where applicable; age alone does not make a total incomplete.
 
 ## Managing exchange rates
 
 Under **Settings > Exchange rates**, each currency pair has one summary row
-showing its latest effective rate, date, and freshness. The rate is quote units
-per base unit: USD/KES 130 means one USD buys 130 KES. The inverse conversion is
-automatic; do not add KES/USD separately.
+showing its most recently dated observation, date, and freshness. The rate is
+quote units per base unit: USD/KES 130 means one USD buys 130 KES. The inverse
+conversion is automatic; do not add KES/USD separately.
 
-Use the update icon to enter a rate for today or another effective date. Saving
-a new date adds an observation and preserves older ones. Saving the same pair
-and date updates that observation.
+Use **Add pair** to add an observation, including a new date for an existing
+pair, while preserving older entries. Adding the same pair and date again is
+rejected rather than overwriting it.
 
-Expand **History** to correct a dated entry or delete it. Corrections may change
-the rate or effective date, but not its currency pair. Moving an entry to a date
-that already has an entry is rejected; correct the existing entry instead.
-Deletion requires confirmation, then calculations fall back to an older rate
-where available. Removing the only applicable rate can make current or
-historical totals incomplete.
+Expand **History** to inspect or delete an entry. Deletion requires confirmation,
+then calculations fall back to an older applicable rate where available.
+Removing the only applicable rate can make current or historical totals
+incomplete.
 
-Older data may contain entries in both directions. They appear together with a
-review notice; Wealthboard does not silently invert, merge, or remove them.
-Review and correct or delete erroneous entries in History. Future-dated rates
-remain in history but do not replace the rate currently in effect.
+::: warning Rate edits currently replace a record
+The update icon and History edit control delete the selected observation before
+creating its replacement. This is not an atomic edit: a validation or network
+failure can leave the old entry deleted. Export your portfolio first and
+double-check the pair, date, and rate. Use **Add pair**, not update, when adding
+a new observation that must retain history.
+:::
+
+Older data may contain entries in both directions; History groups them together.
+Review the direction shown on each entry. New reverse pairs are rejected because
+the inverse is calculated automatically. A future-dated observation may appear
+in the summary row, but financial calculations ignore it until it is effective.
 
 For a position account, a missing security price has the same completeness
-effect. The unresolved component is excluded from the partial numeric total,
-and the warning identifies its instrument, currency, affected range, last price,
-source, and provenance. Resolve the source record before relying on the total.
+effect. The unresolved component is excluded from the partial numeric total.
+Open the account's Positions table for instrument, quote currency, effective
+price date, source, and stale state. Resolve the source record before relying
+on the total.
 
 ## Allocation
 
@@ -73,8 +76,10 @@ category can change reports without changing account history.
 
 ## Contributions, income, gains, and fees
 
-These values come from transaction classifications. A valuation is excluded
-from contribution and income totals because it is an absolute observation.
+Contributions, income, and fees come from transaction classifications.
+Balance-account capital growth also includes valuation changes relative to the
+replayed balance. A valuation remains excluded from contribution and income
+totals because it is an absolute observation.
 Transfers move value within the portfolio and do not create net contributions.
 
 ## Account comparison
@@ -111,7 +116,8 @@ screens. The setting is stored in the current browser.
 
 Privacy mode does not remove data from the server or from a user export. It is a
 display safeguard for screen sharing and shared devices. Log out when finished;
-logout clears Wealthboard-specific client state.
+logout clears user-specific client state. Browser appearance is retained
+separately.
 
 For position accounts, privacy mode masks cash, quantities, prices, reference
 basis, movement amounts, and derived values. Instrument names, symbols, dates,

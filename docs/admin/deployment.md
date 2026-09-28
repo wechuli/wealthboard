@@ -9,10 +9,11 @@ Wealthboard is a Go HTTP service backed by PostgreSQL. It serves a compiled
 Vite/React client and can run multiple stateless application replicas against
 one managed or self-operated PostgreSQL database.
 
-PostgreSQL deployments start from the fresh Goose schema. Wealthboard does not
-import or dual-write legacy SQLite databases. Review the
-[cutover and removal checklist](./cutover) before replacing an existing runtime
-or deleting retained legacy source.
+New PostgreSQL deployments start from the Goose migrations; later releases
+upgrade that database through append-only migrations. Wealthboard does not
+import or dual-write legacy SQLite databases. The
+[legacy cutover and removal](./cutover) is complete and remains documented as
+historical context, not an outstanding installation step.
 
 ## Requirements
 
@@ -24,6 +25,24 @@ or deleting retained legacy source.
 - HTTPS termination in a trusted reverse proxy for production
 - a deployment plan for maintenance mode during destructive restore
 
+## PostgreSQL deployment
+
+Create the database and login role before starting Wealthboard. The application
+applies its schema migrations but does not provision a PostgreSQL server or
+create the target database. Its configured role must be able to apply DDL in the
+application schema and read/write its tables; no application user needs a
+PostgreSQL login.
+
+The current migrations require no extra PostgreSQL extensions. The Go connection
+pool defaults to 10 open and 5 idle connections per application process. Budget
+database connections across all replicas and operator jobs; these pool settings
+are currently code defaults, not environment-variable controls.
+
+Use authenticated TLS for remote PostgreSQL. The development Compose URL's
+`sslmode=disable` is for the local test stack, not a remote production default.
+Use the tested PostgreSQL 17 server/client baseline for backup and restore, and
+handle PostgreSQL major-version upgrades separately from application migrations.
+
 ## Essential configuration
 
 | Variable                       | Purpose                                                                   |
@@ -34,7 +53,7 @@ or deleting retained legacy source.
 | `NODE_ENV`                     | Set `production` so application session cookies require HTTPS             |
 | `PORT`                         | Go HTTP listener port; default `3000`                                     |
 | `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`                                          |
-| `TRUST_PROXY_HEADERS`          | Enable only behind an ingress that overwrites forwarded client-IP headers |
+| `TRUST_PROXY_HEADERS`          | Legacy no-op; Go rate limits use the socket peer IP                       |
 | `TZ`                           | Default timezone for new users                                            |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Canonical base64 32-byte key for remembered provider credentials          |
 | `AI_ALLOWED_ENDPOINTS`         | Exact comma-separated custom provider base URLs                           |
@@ -50,6 +69,7 @@ installation; the supplied container image already sets it.
 
 ```bash
 make postgres-up
+npm ci
 make web-install
 make build
 DATABASE_URL='postgres://wealthboard:wealthboard@localhost:5433/wealthboard?sslmode=disable' \
@@ -60,6 +80,15 @@ AUTH_METHODS=local \
 ```
 
 `serve` applies embedded PostgreSQL migrations before accepting requests.
+The example generates a disposable development session secret; keep a stable
+secret for persistent deployments. Go reads exported process variables and does
+not automatically load `.env`. Export `DATABASE_URL` for subsequent operator
+commands; `.env.example` is a configuration reference, not a Go dotenv loader.
+
+Root npm dependencies support docs, browser tests, and local document extraction;
+the separate `web/` dependencies support the Vite client. A deployment that
+only runs a prebuilt Go binary and client needs neither set unless it uses the
+direct-install Node parser.
 
 Useful operator commands are:
 
@@ -74,16 +103,18 @@ DEMO_DATA=true ./bin/wealthboard seed-demo --username alice
 Backup and restore are covered separately because restore requires exclusive
 maintenance mode and the explicit `--confirm-maintenance` flag.
 
-For development:
+For client hot reload, build once as above, export `DATABASE_URL` and
+`SESSION_SECRET`, and run Go in one terminal:
 
 ```bash
-make postgres-up
-make web-build
-make go-run
+PORT=3100 APP_URL=http://127.0.0.1:5173 AUTH_METHODS=local make go-run
 ```
 
-Run `make web-dev` in a separate terminal only when actively developing the
-client; the Go server continues to serve `web/dist` until it is rebuilt.
+Run `make web-dev` in a second terminal and open <http://127.0.0.1:5173>.
+Vite proxies `/api` to Go on port `3100`. The browser origin must match
+`APP_URL` for origin/CSRF protection; opening the Go listener instead still
+shows the last `web/dist` build. Reuse an existing development server rather
+than starting another on the same port.
 
 ## Dependency security and npm registry
 
@@ -96,20 +127,29 @@ approve every pending script automatically.
 Upgrade direct dependencies to maintained stable releases and resolve
 transitive advisories by upgrading their owning package. Do not use
 `npm audit fix --force` when it proposes a downgrade or unreviewed breaking
-change. The reviewed dependency baseline has zero findings from both
-`npm audit` and `npm audit --omit=dev`; rerun both after dependency changes.
+change. Run `make security` against the current dependency set: it checks Go
+vulnerabilities and audits the root, web, and extraction-worker npm packages.
+Install the corresponding dependencies before auditing; a previous clean scan
+is not a guarantee about newly published advisories.
 
 ## Containers
 
 The production-style Compose stack starts PostgreSQL, Wealthboard, and the
-network-disabled extraction worker:
+network-disabled extraction worker. Set `POSTGRES_PASSWORD`, a stable
+`SESSION_SECRET`, and the browser-facing `APP_URL` in an uncommitted `.env` or
+exported environment before starting it:
 
 ```bash
-POSTGRES_PASSWORD="$(openssl rand -hex 24)" \
-SESSION_SECRET="$(openssl rand -hex 32)" \
 docker compose up -d --build
 docker compose ps
 ```
+
+Generate secrets once (for example, with `openssl rand -hex 24` for the database
+password and `openssl rand -hex 32` for the session secret) and keep them in
+private deployment configuration. Do not regenerate the database password on
+each update: the existing PostgreSQL volume retains its initialized credentials.
+Use HTTPS at the configured external origin in production; the image already
+sets `NODE_ENV=production`.
 
 `docker-compose.go.yml` remains the minimal PostgreSQL-only development stack.
 Neither Compose file schedules database backups. Build only the application
@@ -120,7 +160,8 @@ docker build -t wealthboard:local .
 ```
 
 Run that image with an external `DATABASE_URL` and the required authentication
-environment. The image runs as non-root with a read-only application filesystem.
+environment. The image runs as non-root; the supplied Compose and Kubernetes
+configurations additionally enforce a read-only application filesystem.
 
 Node.js is not part of the application container. It remains an intentional
 runtime exception only in the separate extraction worker for PDF, XLSX, and
@@ -137,7 +178,7 @@ Verify readiness after migrations finish.
 
 ## Position-account migration
 
-The PostgreSQL financial-domain migration introduces account tracking mode,
+The PostgreSQL migration lineage includes account tracking mode,
 instruments, position events, security prices, reconciliation observations,
 conversion provenance, advanced-action relationships, grouped cash,
 deterministic event order, and freshness settings.
@@ -177,7 +218,11 @@ responsible for PostgreSQL availability, upgrades, point-in-time or scheduled
 backup policy, retention, encryption, and restore drills. The application image
 is distroless and contains no `pg_dump`, `pg_restore`, Node.js, or shell, so run
 database operations from a trusted admin host/job. Adjust the example egress
-NetworkPolicy to match the real PostgreSQL namespace and labels.
+NetworkPolicy to match the real PostgreSQL namespace and labels. It permits
+only DNS and that PostgreSQL destination by default. OIDC and AI require
+additional, deliberately scoped outbound access to their configured providers.
+All replicas must share the same session, OIDC transaction, and optional AI
+credential-encryption secrets.
 
 ## Optional fictional demo data
 
@@ -199,6 +244,9 @@ It never creates an identity or seeds every user.
 | `/api/health`       | Legacy readiness-compatible endpoint                                    |
 
 Readiness may reject an authentication mode that would strand active users.
+These checks run on health requests, not as a pre-listen startup gate. Route
+traffic only after `/api/health/ready` succeeds. `wealthboard healthcheck` checks
+that endpoint on the local Go listener.
 
 ## Publish this documentation
 

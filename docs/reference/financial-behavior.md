@@ -10,9 +10,12 @@ accounting, tax, lending, or investment advice.
 
 ## Money representation
 
-Money is stored as integer minor units. Currency decimal precision is enforced
-when input is parsed. Financial calculations use `bigint` and Decimal.js, not
-JavaScript floating-point arithmetic.
+Money is stored as integer minor units in PostgreSQL. The Go API and
+`internal/service` own balance replay and financial calculations; exact
+integer/rational arithmetic uses Go's `math/big`, with checked conversion to
+stored 64-bit minor units. Currency decimal precision is enforced when input is
+parsed. The Vite client is not the authoritative owner of balances or financial
+rules.
 
 Exchange rates are precise decimal strings.
 
@@ -35,8 +38,8 @@ Exchange rates are precise decimal strings.
 | Liability increase | Increase amount owed                            |
 | Transfer           | Signed paired decrease/increase in two accounts |
 
-Input amounts are positive except signed manual adjustments. Transfer signing is
-internal.
+Ordinary transaction amounts are positive except signed manual adjustments.
+An opening balance may be zero. Transfer signing is internal.
 
 ## Replay ordering
 
@@ -62,21 +65,24 @@ deletion and leaves every source record unchanged.
 ## Position valuation
 
 At a requested date, each non-zero position uses the latest price effective on
-or before that date. Future prices are never used. Wealthboard multiplies the
-canonical Decimal.js quantity by the canonical unit price, rounds once to the
-quote currency's minor unit, converts with the effective-dated owned rate, and
-sums those integer values with replayed account cash.
+or before that date. Future prices are never used. Go multiplies the
+canonical decimal quantity by the canonical unit price using exact rational
+arithmetic, rounds once to the quote currency's minor unit, converts with the
+effective-dated owned rate, and sums those integer values with replayed account
+cash.
 
 A missing price or exchange rate excludes that unresolved component and marks
-the result incomplete. Structured issues name the instrument, currency,
-affected range, last price, source, provenance, and configured stock/ETF/fund
-freshness threshold. Carrying an earlier price forward retains its as-of date
-and stale state.
+the result incomplete. Account position tables expose instrument identity,
+quote currency, effective price date, source, and stale state. Dashboard/report
+completeness and import reports expose missing data, but detailed diagnostics
+vary by view. Carrying an earlier price forward retains its as-of date; stock,
+ETF, and fund freshness thresholds are user-configurable.
 
 Buys and sells exchange account cash for units and are not external
 contributions. Cross-currency trades require either the actual account-currency
 settlement or an explicit applied settlement rate. A same-currency trade cannot
-apply an exchange rate.
+apply an exchange rate. An explicit settlement is the full net cash movement
+including fees; fees are not added to it a second time.
 
 Guided conversion never rewrites a balance account. It calculates the source
 balance at an as-of date no earlier than the latest source activity, previews
@@ -104,8 +110,10 @@ calculation.
 ## Contribution classification
 
 Contributions, income, gains, fees, and withdrawals are derived from transaction
-types. Valuations are excluded from cash-flow categories. Transfers do not
-change net worth or total contribution.
+types. Balance-account capital growth also includes the non-cash difference
+introduced by a valuation during replay. Valuations remain excluded from
+contributions, withdrawals, income, and fees. Transfers do not create a
+contribution or income.
 
 ## Currency conversion
 
@@ -121,7 +129,7 @@ silently treated as zero or converted with a later rate.
 
 Goal forecasts use:
 
-- current linked-account or manual goal value;
+- cached linked-account or manual goal value;
 - target amount and date;
 - contribution frequency and window;
 - assumed annual return with monthly compounding.
@@ -129,18 +137,23 @@ Goal forecasts use:
 Scenario comparison changes inputs temporarily and never writes financial
 activity.
 
+The current goal read model marks cross-currency links incomplete rather than
+converting them, and does not propagate position price-quality metadata. Check
+the linked account before relying on progress or a forecast.
+
 ## Estate calculations
 
-For each included asset:
+The Go service stores ownership shares and allocations as exact basis points
+and validates per-tier limits. Primary and contingent instructions remain
+separate; complete primary residual allocations describe the portion not
+specifically assigned.
 
-1. current source value is multiplied by estate ownership basis points;
-2. primary account allocations receive their exact shares;
-3. any remaining share flows through complete primary residual allocations;
-4. contingent tiers are calculated separately and excluded from primary totals;
-5. source values are converted to base currency for plan totals when rates exist.
-
-Minor-unit allocation uses deterministic apportionment so beneficiary amounts
-reconcile exactly to the allocated asset amount despite indivisible cents.
+Current estate endpoints return cached source values and explicitly do not
+provide complete effective-dated position valuation or FX conversion. Live
+base-currency totals omit foreign-currency values. Displayed gift estimates are
+indicative, not authoritative minor-unit apportionments guaranteed to reconcile
+every cent. Retained summaries preserve source instructions and cached values;
+their integrity hashes do not certify the calculations.
 
 Liabilities reduce the estimated net estate but are not assigned to individual
 beneficiaries. Taxes, administration costs, secured claims, and liquidity needs

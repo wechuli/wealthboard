@@ -11,7 +11,7 @@ access control, patching, backups, and careful data handling.
 ## User isolation
 
 Every private resource is scoped to the immutable internal user ID derived from
-the verified session. Services query by owner and resource ID together. Another
+the verified session or API-key principal. Services query by owner and resource ID together. Another
 user's direct ID behaves as not found.
 
 Users are independent. There are no organizations, invitations, roles, shared
@@ -22,6 +22,12 @@ portfolios, or cross-user transfers.
 Application sessions use signed HTTP-only cookies with explicit expiry,
 SameSite restrictions, user status, and session version checks. Password and
 authentication-method changes invalidate older sessions.
+
+Authenticated browser mutations require the exact trusted `Origin` and a
+session-bound `X-CSRF-Token`. External clients use separately scoped API keys;
+keys are not revoked by password changes and must be revoked explicitly when
+needed. Credential management and user restore remain browser-session-only.
+See [Go authentication and API keys](./go-authentication).
 
 Use HTTPS in production. Keep `SESSION_SECRET` unique to the deployment and out
 of images, logs, source control, and public automation output.
@@ -35,6 +41,7 @@ The database can contain:
 - beneficiary names and contact summaries;
 - estate allocation and document-location notes;
 - password hashes and OIDC identity mappings;
+- personal API-key hashes, scopes, and revocation metadata;
 - encrypted AI provider credentials when enabled.
 
 Protect PostgreSQL, database backups, and user exports accordingly.
@@ -57,9 +64,9 @@ identified by safe operation/request metadata rather than private payloads.
 
 ## Imports and exports
 
-All user-facing import, export, and restore routes derive ownership from the
-session and return private responses with `Cache-Control: no-store` where
-appropriate.
+All import and export routes derive ownership from verified authentication;
+user restore requires a browser session. Financial API responses use
+`Cache-Control: no-store`.
 
 Exports intentionally contain no credentials or sessions, but still contain
 highly sensitive financial and estate data.
@@ -112,7 +119,7 @@ executor portal, or replace legal documents and provider beneficiary forms.
 - Keep Go, PostgreSQL, Node.js parser/build dependencies, images, host OS, and proxy patched.
 - Back up regularly and test restore into a disposable location.
 - Keep every replica on the same migration-compatible release.
-- Follow the [cutover checklist](../admin/cutover) before removing retained
-  legacy code or rollback artifacts.
+- Treat the [completed legacy cutover](../admin/cutover) as historical context;
+  retain tested PostgreSQL recovery artifacts for current releases.
 - Review production dependency and image scan results.
 - Disable users deliberately when access should end.

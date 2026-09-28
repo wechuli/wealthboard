@@ -1,8 +1,9 @@
 # AI-assisted text-file import
 
-An account's **Import** page offers **Formatted CSV / JSON** and **Convert with
-AI**. Direct structured import and browser-only copyable prompts still work
-without an AI provider.
+An account's **Import** page offers **Formatted CSV / JSON** and **Convert
+document with AI**. Direct structured import works without an AI provider.
+The current Vite import page does not expose the older browser-only copyable
+prompts.
 
 ## Supported sources
 
@@ -24,11 +25,12 @@ truncated to fit these limits.
 ## Password-protected files
 
 For a password-protected PDF, select the file and enter **PDF password (if
-required)** before **Extract locally**. You can also try extraction first: a
+required)** before **Extract source**. You can also try extraction first: a
 missing or incorrect password produces a distinct error and focuses the password
 field. Re-enter the password and retry without selecting the file again.
 Passwords are case-sensitive and are passed through without trimming spaces.
-The field accepts up to 1,024 characters.
+The API accepts up to 1,024 UTF-8 bytes; non-ASCII passwords can reach that limit
+with fewer characters.
 
 The password is used only by PDF.js inside the isolated extraction worker. It is
 not an AI API key or application login password. The API accepts it only in the
@@ -78,9 +80,11 @@ The host is DNS-resolved when settings are saved and before requests; private,
 loopback, link-local, multicast, carrier-grade NAT, and other local ranges are
 blocked. Provider redirects and environment proxy variables are not used.
 
-OpenAI uses the Responses API with native structured output. DeepSeek and
-operator-approved compatible endpoints must support text Chat Completions with
-JSON output. PDF, spreadsheet, or Word support is not required of the model:
+OpenAI uses the Responses API with `store: false`; the current conversion call
+requests JSON through its prompt rather than supplying a native structured-output
+schema. DeepSeek and operator-approved compatible endpoints must support text
+Chat Completions with JSON output. Go validates responses before creating a
+draft. PDF, spreadsheet, or Word support is not required of the model:
 Wealthboard extracts text before submission. Model names are entered manually;
 access and compatibility errors surface when conversion runs. Wealthboard never
 silently substitutes a model or provider.
@@ -120,36 +124,44 @@ but PDF/XLSX/DOCX returns a bounded parser error.
 
 ## Workflow
 
-1. Choose **Convert with AI**, select a source, and select **Extract locally**.
-   Supply the PDF's document password if required. The file is processed inside
-   your self-hosted Wealthboard instance, not sent to an external provider.
+1. Choose **Convert document with AI**, select a source, and select
+   **Extract source**. Supply the PDF's document password if required. The file
+   is processed inside your self-hosted Wealthboard instance, not sent to an
+   external provider.
 2. Review the extracted sections and warnings. Select relevant activity and
-   redact sensitive text. Section labels and original filenames are not sent.
-3. Check the destination/model, account context, source size, and output ceiling.
+   redact sensitive text. Selected section IDs, location labels, and edited
+   text are sent; the original file is not. If a location label is sensitive,
+   exclude that section or prepare a redacted source file before extraction.
+3. Check the destination/model and account context, and confirm the output
+   limit under **Settings → AI provider**.
    Approve the sharing and possible charges, then select **Convert selected text**.
    Changing the text or selection clears consent. Saved credentials alone do
    not authorize sharing a statement.
 4. Inspect the JSON draft, source references, exclusions, and validation issues.
    Correct ambiguous dates/currencies/identifiers or missing fields and
    acknowledge excluded activity. A source reference is not proof of accuracy.
-5. Select **Use draft for preview**, then **Preview file**. Confirm only after
-   reviewing the existing balance or investment preview. **Edit draft** discards
-   that preview and requires another review/preview before confirmation.
+5. Select **Use draft for preview**, then **Preview**. Select **Commit import**
+   only after reviewing the existing balance or investment preview.
+   **Edit draft** discards that preview and requires another review/preview
+   before confirmation.
 
 The generated draft can also be downloaded for manual editing. Financial
-records are changed only by the normal commit operation. Balance imports keep
-their accepted-subset policy; investment imports retain all-or-nothing atomicity.
+records are changed only by the normal commit operation. The balance-import API
+can commit an accepted subset, but the current web form disables commit until
+failed rows are resolved. Investment imports retain all-or-nothing atomicity.
 The existing canonical file limits remain 5 MB/10,000 records; an AI extraction
 response is limited to 1,000 candidate records.
 
 ## Privacy and safety
 
-Only approved text and minimal schema/account context go to the model. It has
-no tools, database access, or authority to execute transactions. Source files,
+Only selected section IDs, location labels, edited text, and account
+tracking-mode/currency context go to the model. It has no tools, database access,
+or authority to execute transactions. Source files,
 extracted text, prompts, responses, and drafts are not logged or stored by
-Wealthboard. In-memory content is cleared on cancel, completion, navigation, or
-logout; document workers are terminated after use. Usage history contains
-metadata only. Privacy mode hides source content and drafts.
+Wealthboard as portfolio records. Source content and drafts are held in browser
+and request memory; cancel or leave the workflow when finished. Document workers
+are terminated after use. Usage history contains metadata only. Privacy mode
+hides source content and drafts.
 
 Provider-side retention follows the provider's policies; local cleanup cannot
 guarantee deletion there. Never assume selectable PDF text preserves table

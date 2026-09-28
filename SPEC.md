@@ -74,10 +74,9 @@ Use:
 - React with Vite and strict TypeScript
 - Recharts
 - Tailwind CSS
-- Zod
+- Zod for client-side form validation, with authoritative validation in Go
 - React Hook Form
 - Lucide icons
-- date-fns
 - bcrypt for password hashing
 - A versioned JSON API under `/api/v1`
 - Docker and Docker Compose
@@ -108,7 +107,9 @@ The application should be suitable for deployment to a home server or Kubernetes
 - Prefer simple and reliable architecture over enterprise abstractions
 - Keep business logic separate from UI components
 - Use decimal-safe money handling
-- Store monetary values as integer minor units where practical
+- Store monetary values as integer minor units in PostgreSQL `bigint` columns
+- Store exchange rates as exact PostgreSQL `numeric` values and serialize them
+  as decimal strings
 - Store fractional quantities and unit prices as canonical decimal strings and
   calculate them with reviewed exact-decimal helpers; round only when producing
   a monetary amount
@@ -161,8 +162,14 @@ Requirements:
   flow; local credential changes require fresh provider reauthentication. Never
   remove the last usable method. Every method change increments session version.
 - Include logout and clear user-specific client state when switching users.
-- Protect every application route except login, mode-enabled signup, the two
-  OIDC protocol endpoints, health checks, and public PWA assets.
+- Bootstrap the browser session before rendering private application screens
+  and authorize every private API request independently in Go. The public SPA
+  shell and assets contain no private portfolio data. Login, mode-enabled
+  signup, auth-mode configuration, the two OIDC protocol endpoints, and health
+  checks remain public.
+- Require the exact trusted `Origin` and the session's `X-CSRF-Token` for
+  authenticated browser mutations. Local login/signup require the trusted
+  origin before a session exists.
 - Rate-limit login by normalized username and client address, and rate-limit
   signup by client address. Login errors must not reveal whether a username
   exists.
@@ -172,16 +179,39 @@ Requirements:
   local credential for an OIDC-only user.
 - OIDC uses discovery, Authorization Code flow, PKCE S256, state, nonce, exact
   callback matching, RS256 verification, bounded network responses, and a
-  short-lived encrypted A256GCM transaction cookie. Provider codes, tokens,
-  verifiers, and claims are never persisted or logged.
-- OIDC-only startup/readiness requires valid discovery and a link for every
+  short-lived AES-256-GCM transaction cookie. The callback is
+  `${APP_URL}/api/v1/auth/oidc/callback`. Provider codes, tokens, verifiers, and
+  raw claim payloads are never persisted or logged; the identity mapping and
+  initial display name are retained.
+- OIDC-only readiness requires valid discovery and a link for every
   active user. Local-only readiness requires every active user to have a
-  password. Hybrid remains locally usable during provider outages.
+  password. Hybrid remains locally usable during provider outages. These
+  checks run at the readiness endpoint; a listening process alone does not
+  establish that the deployment is ready.
+
+### Personal API keys
+
+External clients authenticate to the same `/api/v1` service with owner-scoped
+bearer API keys. The full token is returned only at creation; PostgreSQL retains
+its SHA-256 hash, display prefix, name, scopes, optional expiry, usage timestamp,
+and revocation metadata.
+
+- Default to `portfolio:read`; additional explicit scopes are `portfolio:write`,
+  `imports:write`, `exports:read`, and `ai:invoke`.
+- Require a browser session for key management, plus trusted origin and CSRF
+  validation for key creation/revocation. Keys cannot manage authentication
+  methods or perform a user restore.
+- Reject expired/revoked keys and keys belonging to disabled users. An invalid
+  Authorization header must not fall back to a browser cookie.
+- Exclude API-key records from user portability. Include them only in protected
+  deployment-wide PostgreSQL backups.
+- Keep key revocation separate from browser session-version invalidation.
 
 ## Core data model
 
-Design a clean PostgreSQL schema using append-only Goose migrations and access
-it through sqlc-generated queries and explicit transactions.
+Use append-only Goose migrations for the PostgreSQL schema. Queries under
+`db/postgres/queries` generate typed access through sqlc; transactional service
+operations also use explicit `database/sql` queries.
 
 ### Users
 
@@ -229,8 +259,9 @@ Fields should include:
   categories, financial accounts, transactions, valuations, exchange rates,
   investment instruments, position events, security prices, goals, goal
   contribution plans, and idempotency keys.
-- Derive `userId` exclusively from the verified session. Service functions
-  should accept it explicitly as their first ownership argument.
+- Derive `userId` exclusively from the verified session or API-key principal.
+  Service functions should accept it explicitly as their ownership argument;
+  never accept a client-supplied owner as authorization evidence.
 - Read, update, archive, and delete resources by both `userId` and resource ID.
   A request for another user's resource should behave as not found and must not
   disclose that the resource exists.
@@ -1336,7 +1367,8 @@ application; only approved extracted text goes to the configured model.
   different destination. Source currency/account mismatches require resolution.
 - **Draft output:** Request a bounded structured response containing a draft of
   the matching v1 JSON envelope plus separate source references and extraction
-  issues. Validate it with Zod and the existing deterministic import rules.
+  issues. Validate it in Go against the bounded response contract and existing
+  deterministic import rules; client form validation is not authoritative.
   Preserve decimal values as strings and original source identifiers. Missing
   IDs may be derived only by deterministic application logic from stable source
   fields, never guessed by the model or based on changing row numbers; block
@@ -1802,7 +1834,8 @@ Provide:
 - Production startup instructions
 - Kubernetes deployment example
 - Kubernetes Service
-- PersistentVolumeClaim example
+- External PostgreSQL configuration; the application manifest does not
+  provision a database, database volume, or backup controller
 - Ingress example
 - SecurityContext using a non-root user
 
@@ -1811,8 +1844,10 @@ Required environment variables should include:
 - DATABASE_URL
 - SESSION_SECRET
 - APP_URL
-- AUTH_METHODS
-- TZ
+
+`AUTH_METHODS` defaults to `local` and `TZ` defaults to `Africa/Nairobi`.
+Set `NODE_ENV=production` for secure cookies in production. OIDC mode and
+remembered AI credentials have their own additional configuration requirements.
 
 Backups use an explicit operator-supplied file path and are not written by an
 HTTP route or scheduled by the application container.
@@ -1824,7 +1859,7 @@ Do not bake secrets into the image.
 Create a detailed README with:
 
 - Product overview
-- Screenshots placeholder
+- Published product guide with fictional screenshots
 - Local development
 - Docker deployment
 - Kubernetes deployment
@@ -1832,7 +1867,7 @@ Create a detailed README with:
 - Fresh database initialization
 - Password reset by username
 - Per-user export and restore
-- Deployment-wide backup and offline restore
+- Deployment-wide PostgreSQL backup and maintenance-mode restore
 - Database migrations
 - Updating the application
 - PWA installation
@@ -1875,8 +1910,8 @@ Keep the first version focused on manually tracking net worth, account values, c
 
 ## Database lifecycle
 
-- `db/postgres/migrations` is the PostgreSQL schema authority and
-  `db/postgres/schema.sql` is the sqlc schema input.
+- `db/postgres/migrations` is both the PostgreSQL schema authority and the
+  sqlc schema input, configured in `sqlc.yaml`.
 - Goose migrations are append-only and support fresh PostgreSQL databases plus
   upgrades between PostgreSQL releases of Wealthboard.
 - Applied migration files must not be deleted, renamed, or modified. Schema
@@ -1893,12 +1928,14 @@ Keep the first version focused on manually tracking net worth, account values, c
 
 The application is complete when:
 
-- An empty deployment presents signup and cannot create an application user by
-  environment variable, default credential, or any route other than signup.
-- The first and subsequent users can sign up and log in concurrently. Signup is
-  always available and has no enabled or disabled mode.
-- Signup creates settings, categories, and rates but no financial accounts or
-  sample portfolio data.
+- An empty local/hybrid deployment presents signup. OIDC-only deployments
+  provision users only after validated provider login. No environment variable,
+  default credential, or ownership claim can create an application user.
+- The first and subsequent users can sign up and log in concurrently when local
+  authentication is enabled. OIDC-only mode exposes neither local signup nor
+  password login.
+- Signup and OIDC provisioning create settings and categories, but no exchange
+  rates, financial accounts, or sample portfolio data.
 - Usernames are unique case-insensitively and login failures do not reveal
   whether a username exists.
 - Each user can see and change only their own settings, categories, exchange

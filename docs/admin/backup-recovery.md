@@ -33,9 +33,9 @@ DATABASE_URL='postgres://…' ./bin/wealthboard backup --file /secure/wealthboar
 The target directory must already exist and the file must not. The command uses
 `DATABASE_URL` and `pg_dump --format=custom --no-owner --no-privileges`, checks
 that the result is a nonempty regular file, and sets mode `0600`. A database
-archive contains password hashes, OIDC mappings, encrypted remembered AI keys,
-provider settings, and every user's financial data. Treat it as a
-high-sensitivity secret.
+archive contains password hashes, OIDC mappings, personal API-key hashes and
+metadata, encrypted remembered AI keys, provider settings, and every user's
+financial data. Treat it as a high-sensitivity secret.
 
 ## Retention
 
@@ -76,6 +76,17 @@ it only after you explicitly invoke `restore`. The restore workflow:
 The safety dump is retained on success or failure and its path is printed. A
 failed restore must be investigated while maintenance mode remains active.
 
+The flag is an operator acknowledgment; it does not stop application replicas
+or prevent another writer from connecting. PostgreSQL rolls back errors inside
+the single restore transaction. The later schema/foreign-key checks run after
+that transaction has committed, so a post-check failure does not automatically
+restore the safety dump.
+
+Use a Wealthboard binary whose expected schema version matches the archive.
+Restore does not apply migrations to an older archive before checking readiness;
+restore with the matching release first, then perform the application upgrade
+as a separate, backed-up operation.
+
 Before restore:
 
 1. Confirm the target deployment and backup timestamp.
@@ -105,6 +116,7 @@ regular drill should verify:
 
 ## User restore is different
 
-The authenticated JSON restore replaces only one user's portable portfolio. It
-does not restore passwords, sessions, OIDC mappings, login attempts, or another
-user. See [Import, export, and restore](../guides/data-portability).
+The browser-session-authenticated JSON restore replaces only one user's
+portable portfolio. It does not restore passwords, sessions, API keys, OIDC
+mappings, login attempts, or another user. See
+[Import, export, and restore](../guides/data-portability).

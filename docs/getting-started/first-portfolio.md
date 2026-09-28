@@ -14,7 +14,7 @@ property, vehicle, business, cash holding, or debt.
 Open **Settings** and check:
 
 - **Base currency:** the currency for combined dashboard and report totals.
-- **Enabled currencies:** choices offered by account, goal, and exchange-rate forms.
+- **Enabled currencies:** currencies accepted for accounts, goals, and exchange rates.
 - **Timezone:** controls local dates and reminders.
 - **Date format:** changes how dates are displayed, not how they are stored.
 
@@ -27,8 +27,8 @@ Institutions are optional provider records. Use them for banks, brokers, fund
 managers, pension providers, lenders, and wallets. Leave property, vehicles,
 cash, and self-custodied assets unlinked when no provider is useful.
 
-You can create an institution directly from the account form or manage fuller
-details from **Institutions**.
+Create the institution under **Institutions**, then select it in the account
+form. The account form links existing institutions; it does not create them.
 
 ## 3. Create an account
 
@@ -40,7 +40,7 @@ Open **Accounts**, then select **Add account**.
 | Category                 | Determines asset/liability classification and reporting behavior.                         |
 | Institution              | Optional provider link.                                                                   |
 | Currency                 | The account's permanent source currency.                                                  |
-| Tracking method          | Use total value for monetary replay or units and prices for a long-only brokerage ledger. |
+| Tracking method          | Use Account value for monetary replay or Units and prices for a long-only brokerage ledger. |
 | Opening value            | Starting balance or current value when tracking begins.                                   |
 | Cost basis               | Optional reference; Wealthboard does not calculate tax basis.                             |
 | Opened or acquired       | Date from which the opening value applies.                                                |

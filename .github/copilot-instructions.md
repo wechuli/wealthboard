@@ -15,13 +15,13 @@
 
 ## Non-negotiable invariants
 
-- Store money as integer minor units. Use `bigint` and Decimal.js helpers; never use JavaScript floating-point arithmetic for financial values or exchange rates.
+- Store money as integer minor units. Use checked Go integers and exact `math/big` helpers for authoritative calculations, and string/`bigint` helpers at client serialization boundaries; never use JavaScript floating-point arithmetic for financial values or exchange rates.
 - Store timestamps in UTC and format dates in the configured user timezone. Exchange rates remain effective-dated decimal strings.
 - Preserve balance replay semantics: valuations set an absolute value without becoming contributions, edits and deletions recalculate balances, and transfers write paired records atomically without changing net worth.
 - A linked account is the source of truth for goal progress. Do not duplicate its balance in a goal contribution record.
-- Derive the immutable application `userId` only from the verified session. Never trust a client-supplied owner ID, and never fetch a private resource by ID without the owner predicate.
+- Derive the immutable application `userId` only from the verified session or scoped API-key principal. Credential management and user restore require a browser session. Never trust a client-supplied owner ID, and never fetch a private resource by ID without the owner predicate.
 - Scope settings, categories, rates, financial accounts, transactions, valuations, goals, analytics, imports, exports, idempotency keys, and private caches to one user. Validate every relationship and both transfer accounts belong to that user.
-- Validate untrusted input with Zod. Protected mutations must verify the session, preserve established idempotency behavior, use a database transaction when multiple financial records change, and invalidate only affected user-scoped routes or caches.
+- Validate client forms with Zod and enforce authoritative request/domain validation in Go. Protected browser mutations must verify the session, trusted origin, and CSRF token; supported API-key mutations must verify the required scope. Preserve established idempotency behavior, use a database transaction when multiple financial records change, and invalidate only affected user-scoped routes or caches.
 - Never log or commit usernames with passwords, password hashes, session secrets, submitted sensitive values, database files, backups, or exports. Return not found for another user's resource instead of revealing it exists.
 
 ## Database changes

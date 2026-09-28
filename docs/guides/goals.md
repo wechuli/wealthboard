@@ -20,14 +20,21 @@ Open **Goals**, then select **Create goal**. Enter:
 - assumed annual return;
 - priority and status.
 
-When an account is linked, its live balance supplies current progress. Use an
+When an account is linked, its cached balance supplies current progress. Use an
 unlinked goal only when no account should be the source of truth.
 
-A linked position account supplies its complete price-derived market value. A
-missing price or exchange rate marks goal progress incomplete, while stale
-prices remain visible for review. Goal progress does not treat account-internal
-buys or sells as contributions and does not calculate a position-account return
-percentage.
+::: warning Check linked-account values
+The current Go goal read model does not convert a linked account into the goal's
+currency. A currency mismatch is marked incomplete even when exchange rates
+exist; use the same currency for the goal and account.
+
+Position-account progress also uses the cached value, without propagating
+missing-price, missing-rate, or stale-price warnings. Review the account's
+Positions table and analytics before relying on goal progress or forecasts.
+:::
+
+Goal progress does not treat account-internal buys or sells as contributions
+and does not calculate a position-account return percentage.
 
 ## Read the forecast
 
@@ -51,10 +58,11 @@ saving them. Use them to ask questions such as:
 
 - What monthly amount reaches the target on time?
 - How does a lower return assumption affect completion?
-- What happens if contributions stop earlier?
+- How does increasing the monthly contribution change the projected target value?
 
 Reloading the page restores the saved plan; scenario edits are deliberately
-temporary.
+temporary. The scenario controls change monthly contribution and annual return,
+not plan start/end dates; change those dates in the saved goal plan.
 
 ## Add milestones
 

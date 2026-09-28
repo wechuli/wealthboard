@@ -21,21 +21,25 @@ Files are limited to 5 MB and 10,000 combined source records. Dates are
 non-future `YYYY-MM-DD` values. Quantities, prices, rates, and money are decimal
 strings, not JSON numbers.
 
-The position import page can generate a strict prompt for an external AI
-service. It supports complete JSON and each CSV collection, includes the account
-currency and enabled currency set, and treats source content as untrusted data.
-Wealthboard only generates and copies the prompt in the browser; it does not
-send the prompt or financial file. Always inspect the resulting import preview.
+The position import page also offers optional **Convert document with AI**.
+Extraction happens within your self-hosted instance; selected source sections
+are sent to the configured provider only after approval. The resulting JSON
+draft must pass the normal import preview. See [AI-assisted import](./ai-import).
 
 ## Stable external IDs
 
-Every source record needs a stable, case-sensitive external ID no longer than
-200 characters. Instrument references use the instrument's external ID rather
-than a Wealthboard database ID.
+Supply stable, case-sensitive external IDs no longer than 200 characters.
+Instruments, position events, and prices require them. A cash row with no ID
+receives a derived date/type/minor-amount ID; supply your own to distinguish
+otherwise identical source events. Instrument references use the instrument's
+external ID rather than a Wealthboard database ID.
 
 - An identical stored ID is skipped as a duplicate.
 - An existing ID with different authoritative fields is a conflict.
-- Every occurrence of an ID repeated inside one file is invalid.
+- Every occurrence of an ID repeated inside its identity scope is invalid.
+- Instrument IDs are user-scoped; position-event and cash IDs are scoped to the
+  user/account and their respective collections; price IDs are scoped to the
+  user/instrument.
 - Deleting an imported position event, cash transaction, or price releases its
   external ID for an intentional reimport. Archived instruments retain their
   identity and external ID.
@@ -86,10 +90,10 @@ identity. Ticker alone is not assumed globally unique.
 | `type`                   | Yes                        | `opening_position`, `buy`, `sell`, or `quantity_adjustment`                   |
 | `quantity`               | Yes                        | Positive except a signed, non-zero quantity adjustment                        |
 | `unit_price`             | Buy/sell                   | Positive execution price                                                      |
-| `trade_currency`         | Yes                        | Enabled three-letter currency code                                            |
+| `trade_currency`         | No                         | Enabled three-letter code; defaults to the instrument quote currency          |
 | `fee_amount`             | No                         | Non-negative fee in `fee_currency` or trade currency                          |
 | `fee_currency`           | No                         | Enabled fee currency                                                          |
-| `cash_effect`            | Cross-currency alternative | Positive actual settlement in account currency; direction comes from buy/sell |
+| `cash_effect`            | Cross-currency alternative | Positive net cash movement including fees, in account currency; direction comes from buy/sell |
 | `applied_exchange_rate`  | Cross-currency alternative | Positive settlement rate; invalid for same-currency trades                    |
 | `opening_cost_basis`     | Opening only               | Optional non-negative reference in account currency                           |
 | `event_group_id`         | No                         | JSON-only dividend-reinvestment group reference                               |
@@ -98,14 +102,15 @@ identity. Ticker alone is not assumed globally unique.
 | `description`, `notes`   | No                         | Optional source context                                                       |
 
 A cross-currency buy or sell requires `cash_effect` or
-`applied_exchange_rate`. The complete existing plus imported sequence must stay
-long-only at every date and explicit same-date order.
+`applied_exchange_rate`. An explicit `cash_effect` is used as the complete cash
+debit or credit; the fee is not applied again. The complete existing plus
+imported sequence must stay long-only at every date and explicit same-date order.
 
 ### Cash transactions
 
 | Field                  | Required | Rule                                                                           |
 | ---------------------- | -------- | ------------------------------------------------------------------------------ |
-| `external_id`          | Yes      | Stable cash source reference                                                   |
+| `external_id`          | No       | Stable source reference; strongly recommended to avoid derived-ID collisions |
 | `type`                 | Yes      | `deposit`, `withdrawal`, `interest`, `dividend`, `fee`, or `manual_adjustment` |
 | `amount`               | Yes      | Positive except a signed, non-zero manual adjustment                           |
 | `date`                 | Yes      | Financial date                                                                 |
@@ -133,8 +138,9 @@ silently overwrite a conflicting observation on the same effective date.
 
 ## CSV contracts
 
-Each CSV is one collection with an exact header. Missing, extra, or renamed
-columns reject the file. CSV does not wrap records in a JSON envelope.
+Each CSV uses one exact set of header names; column order may vary. Missing,
+extra, duplicate, or renamed columns reject the file. CSV does not wrap records
+in a JSON envelope.
 
 ### Opening holdings
 
@@ -143,7 +149,8 @@ instrument_external_id,event_external_id,price_external_id,instrument_name,symbo
 ```
 
 Each row creates or resolves an instrument, writes one opening position, and
-writes its effective price.
+writes its effective price. It counts as three records against the combined
+10,000-record limit.
 
 ### Trades
 
@@ -168,23 +175,27 @@ external_id,instrument_external_id,price,effective_date,source,provenance
 
 ## Preview and commit
 
-Preview writes nothing. It reports:
+Preview writes nothing. The downloadable **Report** contains:
 
 - existing or new instrument resolution;
 - per-instrument and per-event before/after quantities;
 - deterministic date/order placement;
 - current and projected cash, position value, total, and net change;
-- price impact ranges, source, and provenance;
-- missing or stale prices and exchange rates;
+- price values, currencies, sources, and affected-from dates;
+- missing prices and currencies;
 - duplicates, conflicts, invalid relationships, and oversells.
 
 ![Investment import preview showing exact quantity and value effects](/images/screenshots/investment-import-preview.png)
 
+The current page shows summary counts and the first 50 row outcomes. Use the
+report for complete quantities and projected values; stale-price diagnostics
+remain in the account's Positions table rather than this import result.
+
 Confirmation requires the same file bytes and SHA-256 hash. Wealthboard
 reparses the file, rechecks ownership and duplicates, inserts every accepted
 source record, validates grouped relationships and long-only replay, and
-rebuilds the account value inside one serializable PostgreSQL transaction. Any unexpected error
-rolls back the entire investment import.
+rebuilds the account value inside one serializable PostgreSQL transaction. Any
+unexpected error rolls back the entire investment import.
 
 ## Common rejection reasons
 

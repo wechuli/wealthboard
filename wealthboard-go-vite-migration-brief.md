@@ -1,6 +1,18 @@
 # Wealthboard migration brief: React/Vite frontend, Go API, and PostgreSQL
 
-## Instructions to the implementation agent
+> **Historical plan - completed.** The Go/Vite/PostgreSQL cutover and legacy
+> runtime removal completed on 20 September 2026. The original instructions,
+> phase descriptions, and legacy file references below are retained as design
+> history, not current setup steps or work still to perform. Use
+> [README.md](README.md), [SPEC.md](SPEC.md),
+> [the architecture](docs/ARCHITECTURE.md), and
+> [cutover evidence](docs/admin/cutover-evidence.md) for the supported runtime.
+> Applied Goose migrations, not the proposed `schema.sql` in this plan, are the
+> current sqlc schema input. Vite assets are packaged beside the Go binary, not
+> embedded in it. Node remains only in build tooling and the documented
+> document-extraction exception.
+
+## Original instructions to the implementation agent
 
 You are migrating the existing repository at `https://github.com/wechuli/wealthboard` from a single-process Next.js App Router application backed by SQLite to a client-rendered React/Vite application backed by an explicit Go HTTP API and PostgreSQL.
 
