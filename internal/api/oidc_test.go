@@ -86,6 +86,52 @@ func TestOIDCStartCreatesPKCETransactionCookie(t *testing.T) {
 	}
 }
 
+func TestOIDCStartAuthenticatedRedirectUsesConfiguredOrigin(t *testing.T) {
+	handler, _ := testAuthHandler(t, &fakeAuthenticationService{
+		principal: webauth.Principal{UserID: uuid.New(), Method: "session"},
+	}, &fakeLoginRateLimiter{})
+	handler.policy = webauth.Policy{OIDCEnabled: true}
+	handler.EnableOIDC(webauth.NewOIDCClient(webauth.OIDCConfig{
+		CallbackURL: "https://wealthboard.example/api/v1/auth/oidc/callback",
+	}, true), &fakeOIDCIdentityService{})
+
+	for _, test := range []struct {
+		next string
+		want string
+	}{
+		{"", "/"},
+		{"/", "/"},
+		{"/accounts?period=1y", "/accounts?period=1y"},
+		{"/accounts/one%20two?view=active", "/accounts/one%20two?view=active"},
+		{"/accounts?next=https%3A%2F%2Fexternal.example", "/accounts?next=https%3A%2F%2Fexternal.example"},
+		{"https://external.example/accounts", "/"},
+		{"//external.example/accounts", "/"},
+		{"//:443/accounts", "/"},
+		{`/\external.example/accounts`, "/"},
+		{"/accounts#fragment", "/"},
+		{"/%zz", "/"},
+		{"/accounts\r\nLocation: https://external.example", "/"},
+	} {
+		t.Run(test.next, func(t *testing.T) {
+			query := url.Values{"next": {test.next}}
+			request := httptest.NewRequest(http.MethodGet, "https://untrusted.example/api/v1/auth/oidc/start?"+query.Encode(), nil)
+			request.Header.Set("Origin", "https://untrusted.example")
+			request.Header.Set("X-Forwarded-Host", "untrusted.example")
+			request.AddCookie(&http.Cookie{Name: webauth.SessionCookieName, Value: "test-session"})
+			response := httptest.NewRecorder()
+
+			handler.OIDCStart(response, request)
+
+			if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "https://wealthboard.example"+test.want {
+				t.Fatalf("status = %d, location = %q, want trusted origin and %q", response.Code, response.Header().Get("Location"), test.want)
+			}
+			if len(response.Result().Cookies()) != 0 {
+				t.Fatal("authenticated redirect must not create or replace authentication cookies")
+			}
+		})
+	}
+}
+
 func TestOIDCCallbackAlwaysConsumesTransactionCookie(t *testing.T) {
 	handler, _ := testAuthHandler(t, &fakeAuthenticationService{}, &fakeLoginRateLimiter{decision: webauth.LoginRateLimit{Allowed: true}})
 	handler.policy = webauth.Policy{OIDCEnabled: true}

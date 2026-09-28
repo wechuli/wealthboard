@@ -217,11 +217,11 @@ func parseBoundedInt(value string, fallback, minimum, maximum int) (int, error) 
 	if value == "" {
 		return fallback, nil
 	}
-	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed < minimum || parsed > maximum {
+	parsed, err := strconv.ParseInt(value, 10, 32)
+	if err != nil || parsed < int64(minimum) || parsed > int64(maximum) {
 		return 0, errors.New("integer outside supported range")
 	}
-	return parsed, nil
+	return int(parsed), nil
 }
 
 func parseOptionalDate(value string) (*time.Time, error) {

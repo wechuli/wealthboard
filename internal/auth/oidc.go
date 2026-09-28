@@ -355,7 +355,7 @@ func SafeRelativePath(value string) string {
 		return "/"
 	}
 	parsed, err := url.Parse(value)
-	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.Fragment != "" {
+	if err != nil || parsed.IsAbs() || parsed.Hostname() != "" || parsed.Fragment != "" {
 		return "/"
 	}
 	return parsed.RequestURI()

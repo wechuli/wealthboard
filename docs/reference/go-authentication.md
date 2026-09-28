@@ -32,6 +32,11 @@ The public HTML/JavaScript shell contains no private portfolio data. Each
 private API handler validates the session or supported API-key principal
 independently of client-side route protection.
 
+OIDC return paths must start with a single `/` and may retain a query string.
+Absolute URLs, network-path references, backslashes, fragments, and malformed
+paths fall back to `/`. Redirects use the configured application origin, not
+client-supplied host or forwarding headers.
+
 ## Password reset
 
 The operator reset command is available only when local authentication is enabled. It invalidates the target user's existing browser sessions by incrementing the session version.

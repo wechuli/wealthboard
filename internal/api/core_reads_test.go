@@ -147,6 +147,45 @@ func TestCoreReadRejectsOversizedPageBeforeServiceCall(t *testing.T) {
 	}
 }
 
+func TestActivityFilterPaginationBoundaries(t *testing.T) {
+	for _, test := range []struct {
+		query   string
+		page    service.ReadPage
+		message string
+	}{
+		{"", service.ReadPage{Limit: 50}, ""},
+		{"?limit=1&offset=0", service.ReadPage{Limit: 1}, ""},
+		{"?limit=100&offset=10000", service.ReadPage{Limit: 100, Offset: 10000}, ""},
+		{"?limit=%2B025&offset=00005", service.ReadPage{Limit: 25, Offset: 5}, ""},
+		{"?limit=0", service.ReadPage{}, "limit must be between 1 and 100"},
+		{"?limit=101", service.ReadPage{}, "limit must be between 1 and 100"},
+		{"?limit=-1", service.ReadPage{}, "limit must be between 1 and 100"},
+		{"?limit=2147483648", service.ReadPage{}, "limit must be between 1 and 100"},
+		{"?offset=-1", service.ReadPage{}, "offset must be between 0 and 10000"},
+		{"?offset=10001", service.ReadPage{}, "offset must be between 0 and 10000"},
+		{"?offset=2147483647", service.ReadPage{}, "offset must be between 0 and 10000"},
+		{"?offset=2147483648", service.ReadPage{}, "offset must be between 0 and 10000"},
+		{"?offset=-2147483649", service.ReadPage{}, "offset must be between 0 and 10000"},
+		{"?offset=9223372036854775808", service.ReadPage{}, "offset must be between 0 and 10000"},
+		{"?offset=1.5", service.ReadPage{}, "offset must be between 0 and 10000"},
+		{"?offset=%201", service.ReadPage{}, "offset must be between 0 and 10000"},
+	} {
+		t.Run(test.query, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/transactions"+test.query, nil)
+			filter, err := parseActivityFilter(request, nil, true)
+			if test.message != "" {
+				if err == nil || err.Error() != test.message {
+					t.Fatalf("error = %v, want %q", err, test.message)
+				}
+				return
+			}
+			if err != nil || filter.Page != test.page {
+				t.Fatalf("pagination = %+v, error = %v, want %+v", filter.Page, err, test.page)
+			}
+		})
+	}
+}
+
 func TestCoreReadRejectsInvalidArchiveFilterBeforeServiceCall(t *testing.T) {
 	reads := &fakeCoreReadService{}
 	handler := NewCoreReadHandler(fakeCoreReadAuthenticator{principal: webauth.Principal{
