@@ -4,12 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestReplayPositionEventsRejectsNegativeQuantity(t *testing.T) {
@@ -39,15 +37,7 @@ func TestReplayPositionEventsValidatesExistingMerger(t *testing.T) {
 }
 
 func TestInvestmentMutationsPostgreSQL(t *testing.T) {
-	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-	db, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatalf("open PostgreSQL: %v", err)
-	}
-	defer db.Close()
+	db := openServiceTestDatabase(t)
 
 	ctx := context.Background()
 	ownerID, foreignID := uuid.New(), uuid.New()

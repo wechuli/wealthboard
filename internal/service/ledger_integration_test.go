@@ -5,25 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"math"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestLedgerPostgreSQLReplayTransfersIdempotencyAndOwnership(t *testing.T) {
-	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-	db, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatalf("open PostgreSQL: %v", err)
-	}
-	defer db.Close()
+	db := openServiceTestDatabase(t)
 
 	ctx := context.Background()
 	now := time.Date(2026, time.September, 20, 12, 0, 0, 0, time.UTC)
@@ -225,15 +215,7 @@ func TestLedgerPostgreSQLReplayTransfersIdempotencyAndOwnership(t *testing.T) {
 }
 
 func TestLedgerPostgreSQLAccountLifecycle(t *testing.T) {
-	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-	db, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatalf("open PostgreSQL: %v", err)
-	}
-	defer db.Close()
+	db := openServiceTestDatabase(t)
 	ctx := context.Background()
 	userID, categoryID := uuid.New(), uuid.New()
 	seedLedgerOwner(t, ctx, db, userID, categoryID, "ledger-lifecycle-")

@@ -15,7 +15,7 @@ import (
 )
 
 func TestPhase6ParityEvidence(t *testing.T) {
-	db := openPhase5TestDatabase(t)
+	db := openServiceTestDatabase(t)
 	ctx := context.Background()
 	userID := uuid.New()
 	if _, err := db.ExecContext(ctx, `

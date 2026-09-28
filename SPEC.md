@@ -94,7 +94,7 @@ Make it easy to rename later through a configuration file.
 Use:
 
 - Go 1.27 with Chi and `net/http`
-- PostgreSQL 17
+- PostgreSQL 18
 - Goose append-only PostgreSQL migrations
 - sqlc-generated database access
 - React with Vite and strict TypeScript

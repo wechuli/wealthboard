@@ -16,7 +16,9 @@ convert or restore a legacy SQLite database into PostgreSQL.
 
 ## Create an operator backup
 
-Install PostgreSQL client tools compatible with the server. Create an
+Install PostgreSQL 18 client tools and ensure `pg_dump` and `pg_restore` on
+`PATH` are version 18. An older `pg_dump` refuses to back up a newer server;
+the application image intentionally includes neither tool. Create an
 access-controlled destination directory, then choose a new explicit filename:
 
 First export `DATABASE_URL` for the intended deployment. The Makefile otherwise
@@ -91,6 +93,10 @@ Use a Wealthboard binary whose expected schema version matches the archive.
 Restore does not apply migrations to an older archive before checking readiness;
 restore with the matching release first, then perform the application upgrade
 as a separate, backed-up operation.
+
+PostgreSQL server major-version upgrades are separate from Wealthboard schema
+migrations. See [upgrading from PostgreSQL 17](./deployment#upgrading-from-postgresql-17)
+before changing an existing container's image or persistent-volume mount.
 
 Before restore:
 

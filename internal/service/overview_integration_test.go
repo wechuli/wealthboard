@@ -2,26 +2,15 @@ package service
 
 import (
 	"context"
-	"os"
 	"testing"
 
-	"database/sql"
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/wechuli/wealthboard/internal/database/generated"
 )
 
 func TestOverviewQueriesAreOwnerScoped(t *testing.T) {
-	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-	db, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatalf("open PostgreSQL: %v", err)
-	}
-	defer db.Close()
+	db := openServiceTestDatabase(t)
 	ctx := context.Background()
 	userOne, userTwo := uuid.New(), uuid.New()
 	categoryOne, categoryTwo := uuid.New(), uuid.New()

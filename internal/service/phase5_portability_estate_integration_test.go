@@ -8,17 +8,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestPortabilityPostgreSQLVersionsIsolationAndRollback(t *testing.T) {
-	db := openPhase5TestDatabase(t)
+	db := openServiceTestDatabase(t)
 	ctx := context.Background()
 	ownerID, otherID := uuid.New(), uuid.New()
 	ownerSettingsID, otherSettingsID := uuid.New(), uuid.New()
@@ -243,7 +241,7 @@ func duplicateRepresentativeCategoryJSON(t *testing.T, version int) []byte {
 }
 
 func TestEstateMutationsPostgreSQLSnapshotImmutabilityHashAndIsolation(t *testing.T) {
-	db := openPhase5TestDatabase(t)
+	db := openServiceTestDatabase(t)
 	ctx := context.Background()
 	ownerID, otherID := uuid.New(), uuid.New()
 	categoryID, otherCategoryID, accountID := uuid.New(), uuid.New(), uuid.New()
@@ -316,18 +314,4 @@ func TestEstateMutationsPostgreSQLSnapshotImmutabilityHashAndIsolation(t *testin
 	if err := estate.DeleteSnapshot(ctx, ownerID, snapshot.ID); err != nil {
 		t.Fatalf("delete owner snapshot: %v", err)
 	}
-}
-
-func openPhase5TestDatabase(t *testing.T) *sql.DB {
-	t.Helper()
-	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-	db, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatalf("open PostgreSQL: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
 }

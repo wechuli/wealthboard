@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -201,9 +202,10 @@ func TestPostgreSQLNativeBackupRestore(t *testing.T) {
 	}
 
 	archivePath := filepath.Join(t.TempDir(), "wealthboard.dump")
-	tools := NewPostgresTools(io.Discard, io.Discard)
+	var toolErrors bytes.Buffer
+	tools := NewPostgresTools(io.Discard, &toolErrors)
 	if err := tools.Backup(ctx, BackupOptions{DatabaseURL: targetURL.String(), FilePath: archivePath}); err != nil {
-		t.Fatalf("backup disposable database: %v", err)
+		t.Fatalf("backup disposable database: %v\nPostgreSQL tools: %s", err, toolErrors.String())
 	}
 
 	db, err = sql.Open("pgx", targetURL.String())
@@ -222,7 +224,7 @@ func TestPostgreSQLNativeBackupRestore(t *testing.T) {
 		DatabaseURL: targetURL.String(), FilePath: archivePath, ConfirmMaintenance: true,
 	})
 	if err != nil {
-		t.Fatalf("restore disposable database: %v", err)
+		t.Fatalf("restore disposable database: %v\nPostgreSQL tools: %s", err, toolErrors.String())
 	}
 	if info, err := os.Stat(result.SafetyDumpPath); err != nil || info.Size() == 0 {
 		t.Fatalf("pre-restore safety backup is missing or empty: info=%v err=%v", info, err)

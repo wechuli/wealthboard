@@ -2,18 +2,10 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"net/url"
-	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/wechuli/wealthboard/internal/config"
-	"github.com/wechuli/wealthboard/internal/database"
 )
 
 func TestDemoIDsAreStableAndNamespacedByUser(t *testing.T) {
@@ -39,41 +31,8 @@ func TestDemoSeederRequiresOptInBeforeDatabaseAccess(t *testing.T) {
 }
 
 func TestDemoSeederIsGatedAndIdempotent(t *testing.T) {
-	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-
+	db := openServiceTestDatabase(t)
 	ctx := context.Background()
-	admin, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatalf("open admin database: %v", err)
-	}
-	defer admin.Close()
-	schema := fmt.Sprintf("wealthboard_demo_seed_%d", time.Now().UnixNano())
-	if _, err := admin.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	defer admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE")
-
-	parsed, err := url.Parse(databaseURL)
-	if err != nil {
-		t.Fatalf("parse TEST_DATABASE_URL: %v", err)
-	}
-	query := parsed.Query()
-	query.Set("search_path", schema)
-	parsed.RawQuery = query.Encode()
-	db, err := database.Open(ctx, config.Database{
-		URL: parsed.String(), MaxOpenConns: 2, MaxIdleConns: 1,
-		ConnMaxLifetime: time.Minute, ConnMaxIdleTime: time.Minute, PingTimeout: 5 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("open isolated database: %v", err)
-	}
-	defer db.Close()
-	if err := database.MigrateUp(ctx, db); err != nil {
-		t.Fatalf("migrate isolated database: %v", err)
-	}
 	userID := uuid.New()
 	if _, err := db.ExecContext(ctx, `INSERT INTO users (id, username, created_at, updated_at) VALUES ($1,'demo-user',now(),now())`, userID); err != nil {
 		t.Fatalf("insert user: %v", err)

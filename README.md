@@ -96,7 +96,7 @@ the implementation work.
 
 - Go 1.27 or newer
 - Node.js 24 and npm for building the Vite client and documentation
-- PostgreSQL 17 and matching `pg_dump`/`pg_restore` tools for operator recovery
+- PostgreSQL 18 and matching `pg_dump`/`pg_restore` tools for operator recovery
 
 ## Local development
 
@@ -383,6 +383,13 @@ Supply an external `DATABASE_URL` and run operator backups from a trusted host
 or admin job with matching PostgreSQL tools. The Compose stack builds the
 separate, network-disabled `extraction-worker` target for PDF/XLSX/DOCX.
 
+The Compose examples use `postgres:18` and mount database storage at
+`/var/lib/postgresql`, matching the image's versioned data directory.
+An existing PostgreSQL 17 volume requires a deliberate major-version upgrade;
+changing the image tag or mount path does not migrate its data. Follow the
+[PostgreSQL upgrade guidance](docs/admin/deployment.md#upgrading-from-postgresql-17)
+and retain a verified backup before replacing the database container.
+
 ## Kubernetes deployment
 
 Edit the image, hostname, auth mode/provider values, storage classes, and
@@ -572,7 +579,10 @@ Install both npm dependency sets first. For migration/integration checks, set
 `DATABASE_URL` to a disposable PostgreSQL test database, never a production
 database. Those Make targets pass it as `TEST_DATABASE_URL`; the test role needs
 schema-creation privileges and `CREATEDB` for native backup/restore tests.
-Install matching `pg_dump` and `pg_restore` on the test host.
+Install PostgreSQL 18 `pg_dump` and `pg_restore` on the test host and ensure
+those binaries are first on `PATH`. An older `pg_dump` cannot back up a newer
+server. CI installs the versioned client package explicitly rather than using
+the runner's bundled PostgreSQL tools.
 
 ```bash
 npm ci
@@ -590,8 +600,10 @@ make build
 npm run docs:build
 ```
 
-Go integration tests create disposable PostgreSQL schemas or databases and
-exercise two-user isolation and portability attacks. Without
+Go integration tests create and migrate disposable PostgreSQL schemas or
+databases themselves, so they work against an empty test database without a
+prior `make migrate`. Service fixtures use a separate schema for each test and
+clean it up afterward. They exercise two-user isolation and portability attacks. Without
 `TEST_DATABASE_URL`, database-backed cases in ordinary `go test` runs are
 skipped. Playwright owns a separate disposable PostgreSQL Compose project,
 builds Go/Vite, starts mock providers, and verifies layouts at 360, 390, 768,

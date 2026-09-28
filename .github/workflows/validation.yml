@@ -24,7 +24,7 @@ jobs:
         timeout-minutes: 30
         services:
             postgres:
-                image: postgres:17-alpine
+                image: postgres:18
                 env:
                     POSTGRES_DB: wealthboard
                     POSTGRES_USER: wealthboard
@@ -59,6 +59,21 @@ jobs:
                   npm ci
                   npm --prefix web ci
 
+            - name: Install PostgreSQL 18 client tools
+              run: |
+                  sudo install -d /usr/share/postgresql-common/pgdg
+                  sudo curl --fail --silent --show-error \
+                    --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+                    https://www.postgresql.org/media/keys/ACCC4CF8.asc
+                  . /etc/os-release
+                  echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+                    | sudo tee /etc/apt/sources.list.d/pgdg.list
+                  sudo apt-get update
+                  sudo apt-get install --yes --no-install-recommends postgresql-client-18
+                  echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+                  /usr/lib/postgresql/18/bin/pg_dump --version
+                  /usr/lib/postgresql/18/bin/pg_restore --version
+
             - name: Verify generated code has no drift
               run: |
                   make generate
@@ -89,7 +104,7 @@ jobs:
         timeout-minutes: 30
         services:
             postgres:
-                image: postgres:17-alpine
+                image: postgres:18
                 env:
                     POSTGRES_DB: wealthboard
                     POSTGRES_USER: wealthboard

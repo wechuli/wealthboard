@@ -19,8 +19,8 @@ historical context, not an outstanding installation step.
 
 - Go 1.27 or newer for a direct source build
 - Node.js 24 and npm for the Vite client build
-- PostgreSQL 17 with durable storage and tested backups
-- compatible `pg_dump` and `pg_restore` clients for operator recovery
+- PostgreSQL 18 with durable storage and tested backups
+- PostgreSQL 18 `pg_dump` and `pg_restore` clients for operator recovery
 - persistent, access-controlled storage for backups
 - HTTPS termination in a trusted reverse proxy for production
 - a deployment plan for maintenance mode during destructive restore
@@ -40,8 +40,35 @@ are currently code defaults, not environment-variable controls.
 
 Use authenticated TLS for remote PostgreSQL. The development Compose URL's
 `sslmode=disable` is for the local test stack, not a remote production default.
-Use the tested PostgreSQL 17 server/client baseline for backup and restore, and
+Use the tested PostgreSQL 18 server/client baseline for backup and restore, and
 handle PostgreSQL major-version upgrades separately from application migrations.
+
+### Upgrading from PostgreSQL 17
+
+The Compose examples now use `postgres:18`. The official image stores data in
+`/var/lib/postgresql/18/docker` and expects the volume at `/var/lib/postgresql`,
+not the PostgreSQL 17 mount at `/var/lib/postgresql/data`.
+
+Do not point PostgreSQL 18 at an existing PostgreSQL 17 data directory or assume
+that changing the image/mount upgrades it. Goose upgrades Wealthboard's schema,
+not the PostgreSQL storage format.
+
+1. Stop application writes and take a verified custom-format backup of the old
+   database. Keep its original volume and stable deployment secrets.
+2. Provision PostgreSQL 18 with a **new empty volume** and a separate temporary
+   endpoint or Compose project. Do not delete or overwrite the old volume.
+3. Use PostgreSQL 18 client tools to restore into the new database, following
+   [maintenance-mode recovery](./backup-recovery). Use the Wealthboard release
+   matching the archive's application schema; handle any application upgrade
+   separately after recovery.
+4. Verify readiness, authentication, financial totals, and backups on the new
+   database before switching the application's `DATABASE_URL`.
+5. Retain the old database and backup until recovery validation is complete.
+
+Managed PostgreSQL operators may instead use their provider's tested
+major-version upgrade process or a properly staged `pg_upgrade`. Do not use
+Compose volume deletion as a migration procedure. The official image documents
+the [PostgreSQL 18 data-directory change](https://github.com/docker-library/docs/blob/master/postgres/README.md#pgdata).
 
 ## Essential configuration
 

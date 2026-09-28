@@ -1,13 +1,13 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18
     restart: unless-stopped
     environment:
       POSTGRES_DB: wealthboard
       POSTGRES_USER: wealthboard
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
-      - wealthboard-postgres-data:/var/lib/postgresql/data
+      - wealthboard-postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wealthboard -d wealthboard"]
       interval: 5s

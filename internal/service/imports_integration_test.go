@@ -5,16 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestAccountHistoryImportPostgreSQLReplayRollbackAndOwnership(t *testing.T) {
-	db := openImportTestDatabase(t)
+	db := openServiceTestDatabase(t)
 	ctx := context.Background()
 	now := time.Date(2026, time.September, 20, 12, 0, 0, 0, time.UTC)
 	ownerID, otherID, ownerCategory, otherCategory := uuid.New(), uuid.New(), uuid.New(), uuid.New()
@@ -62,7 +60,7 @@ func TestAccountHistoryImportPostgreSQLReplayRollbackAndOwnership(t *testing.T) 
 }
 
 func TestInvestmentHistoryImportPostgreSQLReplayRollbackAndOwnership(t *testing.T) {
-	db := openImportTestDatabase(t)
+	db := openServiceTestDatabase(t)
 	ctx := context.Background()
 	now := time.Date(2026, time.September, 20, 12, 0, 0, 0, time.UTC)
 	ownerID, otherID, ownerCategory, otherCategory := uuid.New(), uuid.New(), uuid.New(), uuid.New()
@@ -114,19 +112,6 @@ func TestInvestmentHistoryImportPostgreSQLReplayRollbackAndOwnership(t *testing.
 	}
 }
 
-func openImportTestDatabase(t *testing.T) *sql.DB {
-	t.Helper()
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-	db, err := sql.Open("pgx", url)
-	if err != nil {
-		t.Fatalf("open PostgreSQL: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
-}
 func assertImportRowCount(t *testing.T, ctx context.Context, db *sql.DB, query string, userID, accountID uuid.UUID, want int) {
 	t.Helper()
 	var got int

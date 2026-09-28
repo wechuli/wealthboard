@@ -5,12 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestFeatureReadFinancialValuesSerializeAsStrings(t *testing.T) {
@@ -47,15 +45,7 @@ func TestEstateWorkspaceDeclaresCachedValuesIncomplete(t *testing.T) {
 }
 
 func TestFeatureInstrumentReadsAreOwnerScoped(t *testing.T) {
-	databaseURL := os.Getenv("TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-	db, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatalf("open PostgreSQL: %v", err)
-	}
-	defer db.Close()
+	db := openServiceTestDatabase(t)
 
 	ctx := context.Background()
 	ownerID, foreignID := uuid.New(), uuid.New()
