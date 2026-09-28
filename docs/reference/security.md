@@ -92,6 +92,11 @@ encryption key.
 Custom endpoints require an operator allowlist. Users should review provider
 retention, training, and billing terms before sending data.
 
+AI import currently sends selected text with section IDs, types, and location
+labels, not the original file. Its current cancellation UI clears visible state
+but does not reliably abort an already-started provider request. See
+[AI-assisted import](./ai-import) for the actual sharing and cleanup limits.
+
 Remembered provider keys require a dedicated canonical base64 32-byte key and
 are bound to one user with AES-256-GCM associated data. Custom endpoint hosts
 are resolved and rejected when they map to private or local address space;

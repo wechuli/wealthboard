@@ -167,14 +167,17 @@ Node.js is not part of the application container. It remains an intentional
 runtime exception only in the separate extraction worker for PDF, XLSX, and
 DOCX parsing. UTF-8 CSV, TSV, JSON, and TXT are parsed by Go.
 
-Before an update:
+Before an update, export the target deployment's `DATABASE_URL` on the operator
+host, ensure the backup directory exists, and choose a new backup filename:
 
 ```bash
 make backup BACKUP_FILE="$PWD/backups/pre-update.dump"
 docker build -t wealthboard:local .
 ```
 
-Verify readiness after migrations finish.
+Building an image alone does not replace running containers. Roll out the
+chosen release with the deployment's stable configuration, then verify readiness
+after migrations finish.
 
 ## Position-account migration
 

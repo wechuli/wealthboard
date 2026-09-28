@@ -2,8 +2,8 @@
 
 ## Status and terminology
 
-This document defines the product contract for the implemented multi-user
-baseline. [backlog.md](backlog.md) contains only work that is not fully
+This document defines the product contract for the multi-user application.
+[backlog.md](backlog.md) contains work that is not fully
 implemented. The current schema includes balance- and position-tracked
 accounts, institutions, estate planning, configurable local/OIDC
 authentication, appearance themes, and versioned portability. Persisted
@@ -15,6 +15,32 @@ PostgreSQL. PostgreSQL installations start from the reviewed fresh schema;
 SQLite data is intentionally not migrated or dual-written. Legacy Next.js,
 Drizzle, and SQLite runtime source was removed after the Phase 6 gates passed.
 Frozen parity fixtures and archived Drizzle migrations remain as evidence.
+
+### Current implementation limits
+
+The runtime migration is complete, but that does not certify every product
+requirement below as fully implemented. The current guides describe what users
+can actually do. Known Go/Vite gaps include:
+
+- Goal progress uses cached linked-account values; cross-currency links and
+  position-price completeness do not yet meet the full planning contract.
+- Estate reads and snapshots do not yet provide complete, historically replayed
+  indicative valuation. Snapshot completeness is not a substitute for the live
+  review checks; print privacy switches do not redact downloaded snapshot JSON.
+- Exchange-rate corrections in the settings UI use separate delete/create
+  requests, not one atomic replacement, and rate writes do not rebuild cached
+  position balances.
+- Account conversion, reconciliation, and import previews expose less detail
+  than the full product contract, and the manual copyable-prompt workflow is
+  not mounted in the current import page.
+- AI import currently sends selected section location labels and does not
+  guarantee cancellation of in-flight requests when the user cancels or leaves.
+  OpenAI review/conversion requests use prompt-requested JSON with local Go
+  validation, not the native JSON Schema response option described below.
+
+These are implementation limitations, not permission to weaken ownership,
+exact-money, atomicity, or consent requirements. Track remaining parity work in
+[backlog A17](backlog.md#a17-close-remaining-govite-workflow-parity-gaps).
 
 To avoid ambiguity:
 
@@ -410,7 +436,8 @@ count as references. Deletion removes the instrument and its saved prices
 atomically and only for the current user; referenced instruments must be
 retained until the linked activity or accounts are permanently removed.
 
-Position events are immutable source records from which quantity is replayed.
+Position events are source records from which quantity is replayed. Supported
+corrections and deletions validate and replay the affected history atomically.
 Fields should include:
 
 - id
@@ -771,12 +798,13 @@ Example goal:
 - Linked account: KCB Car Fund
 - Planned monthly contribution: KES 120,000
 
-Goal contributions may either:
-
-1. Be recorded directly against the goal, or
-2. Be calculated from deposits into a linked account.
-
-Prefer linked-account tracking so balances are not duplicated.
+Unlinked goals retain a directly entered current amount. Linked goals use the
+linked account's value as the source of truth; deposits are not duplicated in
+separate goal-contribution records. A contribution plan describes expected
+future activity and does not post transactions or change a linked balance.
+Linked accounts must be active, same-owner asset accounts in an active asset
+category and may not already be assigned to another goal. Go enforces these
+checks inside goal mutations, not only in form selectors.
 
 A goal linked to a position-tracked account uses its complete derived account
 value. If a required price or exchange rate is missing, goal progress and
@@ -1828,7 +1856,8 @@ Provide:
   image with compiled Vite assets
 - docker-compose.yml
 - Durable PostgreSQL storage in the Compose example
-- A separate network-disabled extraction-worker image for PDF/XLSX/DOCX
+- A separate extraction-worker image for PDF/XLSX/DOCX, with networking disabled
+  in Compose and bounded pod-local deployment in Kubernetes
 - Health-check endpoint
 - Environment variable example file
 - Production startup instructions

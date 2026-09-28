@@ -602,6 +602,30 @@ financial prompts by default.
   and dark have no serious automated violations and pass documented keyboard and
   screen-reader checks.
 
+### A17. Close Remaining Go/Vite Workflow Parity Gaps
+
+- **Priority:** P0
+- **Estimated effort:** Large
+- **Implemented foundation:** The Go/Vite/PostgreSQL cutover, retained parity
+  fixtures, and core workflows are implemented.
+- **Remaining concern:** Current guide verification exposed gaps between the
+  product contract and the runtime: cached/incomplete linked-goal and estate
+  valuation, unchecked snapshot completeness, non-atomic exchange-rate edits
+  without position-cache rebuilding, reduced conversion/reconciliation
+  and import-preview surfaces, and an unmounted manual import-prompt workflow.
+  AI import also sends section location labels despite contrary UI copy and
+  lacks reliable cancellation/stale-response handling. OpenAI callers do not
+  enable the transport's native response-schema option.
+- **Proposed change:** Close each gap against `SPEC.md` with focused Go,
+  component, and browser regressions. Preserve exact arithmetic, current
+  ownership rules, and explicit import confirmation; keep guides honest about
+  limitations until the corresponding behavior is implemented.
+- **Acceptance criteria:** Goals and estate views propagate conversion and
+  position completeness; FX corrections are atomic; workflow surfaces match
+  their documented capabilities; AI consent accurately describes outbound
+  content and cancellation cannot resurrect a cleared draft. Two-user negative
+  assertions cover affected private boundaries.
+
 ## Technical Debt
 
 ### TD1. Split Large Modules Along Existing Ownership Boundaries
@@ -679,6 +703,7 @@ work. Item-level dependencies take precedence.
 
 ### Phase 1: Critical Correctness and Security
 
+- A17 remaining Go/Vite parity and consent gaps.
 - A1 exchange-rate provenance and freshness.
 - A2 cash-flow-aware return methodology.
 - A3 PostgreSQL restore recovery hardening.
@@ -753,5 +778,5 @@ work. Item-level dependencies take precedence.
    methodology and protect it with independent golden fixtures.
 4. **Complete supply-chain publication controls (A7).** Add final-image scans,
    signatures, and retained SBOM/provenance to the existing validation gates.
-5. **Measure and bound heavy Go workloads (A8).** Establish per-user
-   import/restore/analytics budgets and cancellation/concurrency guarantees.
+5. **Close verified Go/Vite parity gaps (A17).** Prioritize complete planning
+   values, atomic FX corrections, and accurate AI consent/cancellation behavior.

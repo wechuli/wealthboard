@@ -19,6 +19,11 @@ convert or restore a legacy SQLite database into PostgreSQL.
 Install PostgreSQL client tools compatible with the server. Create an
 access-controlled destination directory, then choose a new explicit filename:
 
+First export `DATABASE_URL` for the intended deployment. The Makefile otherwise
+defaults to the local development database on port `5433`. The production
+Compose database is not published to the host by default; use an appropriately
+connected trusted operator host/job rather than exposing it publicly for backup.
+
 ```bash
 mkdir -p backups
 make backup BACKUP_FILE="$PWD/backups/wealthboard-$(date -u +%Y%m%dT%H%M%SZ).dump"

@@ -21,9 +21,10 @@ is evaluated at `/api/health/ready`, not as a pre-listen startup gate.
 
 ## Browser requests
 
-Login and signup require an `Origin` exactly matching `APP_URL`. On successful
-authentication, the server sets an HTTP-only session cookie and returns a
-`csrfToken`. `GET /api/v1/session` also returns that token for browser bootstrap.
+Local login and signup require an `Origin` exactly matching `APP_URL`. On
+success, they set an HTTP-only session cookie and return a `csrfToken`.
+OIDC sets the same session cookie after its callback; `GET /api/v1/session`
+returns the token for browser bootstrap in either mode.
 Authenticated browser mutations send it as `X-CSRF-Token` alongside the trusted
 origin. The Vite API client handles this automatically.
 

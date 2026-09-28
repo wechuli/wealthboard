@@ -1,6 +1,7 @@
 # Wealthboard architecture
 
-> **Status:** This multi-user architecture is implemented. The repository ships
+> **Status:** The Go/Vite/PostgreSQL runtime is implemented, with the limitations
+> called out below and in the user guides. The repository ships
 > append-only Goose migrations for fresh and existing PostgreSQL databases.
 > Sections explicitly marked "Planned" describe future work and are not runtime
 > guarantees.
@@ -88,30 +89,41 @@ fixtures and archived migration history remain as non-executable evidence.
   carries completeness metadata and affected currency codes when conversion is
   unavailable.
 - **Exchange-rate management:** Settings groups observations by unordered
-  currency pair while preserving effective-dated source rows. Updates upsert a
-  directional pair/date; corrections and deletions require an owner-scoped ID
-  and recalculate position account projections in the same transaction. New
-  inverse-only duplicates are rejected; existing bidirectional histories remain
-  reviewable without automatic data conversion. Current missing/stale rate
-  issues are distinct from historical pair/date gaps. Freshness uses the selected
-  rate's effective date and a one-calendar-month threshold; stale rates remain
-  usable and historical conversions never look ahead.
+  currency pair. Creation inserts a directional pair/date and conflicts with an
+  existing same-direction observation on that date; it also rejects an existing
+  reverse-direction pair. UI corrections use separate delete/create requests,
+  so they are not atomic. Rate writes do not rebuild cached position-account
+  balances. Go chart/report calculations select effective-dated direct or
+  inverse rates dynamically and never look ahead. The settings summary instead
+  shows the newest observation, including future dates, and warns when it is
+  more than 30 days old; this display is not proof of historical rate coverage.
 - **Goals:** A linked account is the source of truth for goal progress. Unlinked
-  goals retain a direct current amount. Persisted and API calculations use
-  exact Go arithmetic with a configurable annual return assumption; scenario
-  comparisons are pure client-side projections over immutable inputs.
+  goals retain a direct current amount. The current read path uses the linked
+  account's cached value; cross-currency links are marked incomplete rather
+  than converted, and position-price completeness is not fully propagated.
+  Projections and non-persistent scenario comparisons are calculated in Go via
+  `/api/v1/goals/{id}/scenarios`, not as authoritative browser calculations.
+  Active, same-owner asset-account linking is validated inside goal mutations.
   Milestones are owner-scoped source records with status derived from current
   progress and due date. Behind-plan reminders are computed on authenticated
   reads; owner-scoped dismissals suppress one goal for one user-calendar month.
 - **Estate planning:** `internal/service/estate_mutations.go` owns one private plan
   per user, beneficiaries, account directives, primary/contingent basis-point
-  allocations, residue, converted indicative values, deterministic review
-  items, and immutable SHA-256 snapshots. It never changes account ownership,
+  allocations, residue, and retained SHA-256 snapshots. Live valuation remains
+  incomplete; foreign-currency values are not converted into complete totals.
+  Live review checks are currently derived in the client. Snapshot creation
+  uses cached values, stores empty review items, and marks mathematical
+  completeness without those checks; that flag is not a validation guarantee.
+  It never changes account ownership,
   balances, sessions, or institution-held designations. Liabilities remain a
   separate estimate rather than inheritable allocations.
-- **Estate documents:** The print surface renders a minimized retained snapshot,
-  not live mutable data. Exact values, contacts, references, and notes are
-  independent opt-ins, and the global privacy setting remains authoritative.
+- **Estate documents:** The print surface renders a retained snapshot, not live
+  mutable data. Its as-of date is the generation date in the user's timezone,
+  not an arbitrary historical replay date. Exact values, contacts, references,
+  and notes are print opt-ins, and global privacy masks rendered values. These
+  controls do not redact retained/downloaded JSON. Restore validates the stored
+  content hash; ordinary snapshot reads do not recompute it. The hash proves
+  neither financial completeness nor legal validity.
   The document identifies itself as planning information rather than a legal
   will. No death trigger, executor access, notification, custody, or transfer
   automation exists.
@@ -134,7 +146,9 @@ fixtures and archived migration history remain as non-executable evidence.
 - **AI review:** Optional on-demand reviews use a versioned, owner-scoped,
   read-only snapshot calculated by Wealthboard. The model never receives SQL or
   mutation tools and cannot become authoritative for balances, conversions,
-  performance, or goals. OpenAI uses Responses with strict structured output;
+  performance, or goals. OpenAI uses Responses with `store: false` and a prompt
+  requesting JSON; the current callers do not supply the transport's optional
+  native JSON Schema response contract.
   DeepSeek and operator-approved compatible endpoints use Chat Completions JSON.
   Responses validate against bounded schemas and supplied evidence IDs.
 - **AI credentials and retention:** Session-only keys stay in client component
@@ -153,9 +167,10 @@ server rendering, Server Action, Node.js API handler, or SQLite database.
 
 The one JavaScript runtime exception is document extraction for PDF, XLSX, and
 DOCX. Direct installations may run the bounded Node child configured by
-`AI_EXTRACTION_SCRIPT`. Containers use the separate network-disabled
-`extraction-worker` image over a pod-local Unix socket; Node is absent from the
-distroless application image. UTF-8 CSV, TSV, JSON, and TXT remain parsed in Go.
+`AI_EXTRACTION_SCRIPT`. Containers use the separate `extraction-worker` image
+over a shared Unix socket; Compose disables worker networking, while Kubernetes
+containers share the pod network. Node is absent from the distroless application
+image. UTF-8 CSV, TSV, JSON, and TXT remain parsed in Go.
 
 Phase 6 acceptance and removal evidence is recorded in
 `docs/admin/cutover-evidence.md`.
@@ -185,9 +200,10 @@ and the built asset directory. The container packages both the binary and assets
 
 ## Position-account architecture
 
-Position source records, derived values, conversion, imports, advanced actions,
-portability, and downstream completeness are part of the current runtime
-contract.
+Go owns position source records, valuation, conversion, imports, advanced
+actions, and portability. Downstream goal/estate completeness still has the
+limitations described above; those consumers do not yet satisfy every
+cross-feature requirement in `SPEC.md`.
 
 - Existing accounts retain `balance` tracking, where transactions and absolute
   valuation snapshots replay to one monetary value. An opt-in `positions`
@@ -239,8 +255,9 @@ contract.
   rates make affected current and historical totals incomplete; stale prices
   remain visible with their as-of date and provenance. Stock, ETF, and fund
   freshness thresholds are user-configurable. Detailed issues carry the
-  affected range, instrument, currency, last price, source, and provenance to
-  account, goal, estate, dashboard, report, and import-preview consumers.
+  affected range, instrument, currency, last price, source, and provenance where
+  the account, chart/report, or import read model supplies them. Goal and estate
+  consumers do not yet propagate the same completeness information.
   Snapshot and import-preview price selection share a split-date cutoff:
   quotes before the latest recorded split cannot value split-adjusted holdings.
 - Account History Import v1 remains unchanged. Position accounts receive a
@@ -273,8 +290,9 @@ contract.
 ## LLM-assisted text-file import
 
 The implemented conversion layer sits upstream of existing import services;
-it is not a financial write path. Strict v1 contracts and the browser-only
-manual prompt workflow remain unchanged. OCR/image processing remains backlog AI3.
+it is not a financial write path. Strict v1 contracts remain unchanged. Manual
+copyable-prompt components remain in source but are not mounted in the current
+import page. OCR/image processing remains backlog AI3.
 
 1. The account import UI offers direct structured import or explicit AI
    conversion. Go exposes `/api/v1/ai/import/extract` and
@@ -310,35 +328,46 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    Never execute macros, formulas, embedded scripts, or external references.
    Reject unsupported encryption, corrupt, or over-limit input rather than
    silently truncating.
-3. After explicit per-request consent, `internal/aiworkflow.Service` resolves
+3. After explicit per-request consent, `Service` in `internal/aiworkflow/service.go` resolves
    the current user's provider and credentials. Reuse encrypted-key
    handling, endpoint allowlisting, disabled redirects, cancellation, and safe
    errors. Existing usage reservation/completion functions enforce shared
    review/conversion rate and monthly token budgets. The settings form, Zod
    schema, and service enforce a 10,000 to 100,000,000 monthly token range.
    Both provider transports use a 120-second Go HTTP client timeout without
-   application-level retries;
-   local extraction retains its separate 15-second timeout. Existing saved
-   limits remain unchanged. A configuration fingerprint
-   binds consent to the reviewed provider/model/output limit and account context.
+   application-level retries; local extraction retains its separate 15-second
+   timeout. Existing saved
+   limits remain unchanged. A configuration fingerprint covers the provider,
+   endpoint, model, output limit, settings timestamp, tracking mode, and currency.
+   It does not bind the source text, draft bytes, or selected account ID and is
+   not proof of human review.
    Record only owner-scoped status/model/token/latency metadata; no source names,
    financial values, prompts, output, or credentials. Reserve conservatively
    from prompt bytes plus the output ceiling; retain the reservation on failed
-   conversion when usage is unknown. Requests have bounded streaming body reads
-   and active preparations are limited to one per user/four per module instance.
+   conversion when usage is unknown. Requests have bounded body reads. Review
+   and conversion share a limit of 10 reservations per rolling minute per user
+   plus the UTC calendar-month token budget. There is no Go preparation
+   semaphore per user or process; the socket daemon caps open connections at
+   four, which is a different limit.
 4. The Go AI workflow exposes a separate conversion operation and validates its
    bounded request and response models independently of the portfolio-review
-   snapshot builder. OpenAI uses native structured output through Responses;
+   snapshot builder. OpenAI uses Responses with `store: false` and a JSON
+   instruction, but review and conversion currently omit the transport's
+   optional native response schema.
    DeepSeek/custom models must support text Chat Completions and JSON output.
    The configured model ID is not discovered or probed during settings save;
    incompatible requests fail without model/provider substitution. Both paths
    validate locally and reject refusals, malformed JSON, and incomplete output.
-   Provider response bodies are bounded to 8 MB, extracted JSON to 5 MB, and
-   candidate records to 1,000. No document or vision model capability is needed.
+   Provider response bodies are bounded to 8 MiB, review JSON to 64 KiB, and
+   conversion output to 1,000 candidate records, 1,000 exclusions, and 100
+   issues. A generated import file still must satisfy the canonical 5 MiB
+   import limit. No document or vision model capability is needed.
    The model receives only approved text, minimal account/schema context,
    and no internal owner/account IDs, SQL, tools, URL fetching, or write access.
-   Filenames and source location labels are not sent. Treat source text as
-   untrusted data, including instructions embedded in it.
+   Original files and filenames are not sent, but selected section IDs,
+   types, and location labels accompany the approved text. Review labels for
+   sensitive content; current UI copy understates this sharing. Treat source
+   text as untrusted data, including instructions embedded in it.
 5. Validate a bounded extraction envelope containing candidate v1 records,
    source references, exclusions, and issues, with metadata outside the canonical
    contract. The conversion service maps string-valued fields deterministically
@@ -358,21 +387,29 @@ manual prompt workflow remain unchanged. OCR/image processing remains backlog AI
    draft invalidates its preview/hash. Confirmation sends those same canonical
    bytes and hash to the corresponding existing commit route. Commit rechecks
    ownership, account state, duplicates, and replay in its transaction; it
-   never invokes AI. Preserve balance accepted-subset commits, investment
-   whole-file atomicity, and canonical 5 MB/10,000-record limits.
+   never invokes AI. Both Go commit services verify the submitted bytes against
+   the supplied SHA-256 hash; this is stateless integrity checking, not stored
+   proof that a preview or human confirmation occurred. Balance imports can
+   accept ready rows while skipping invalid rows, but any conflicting existing
+   external ID aborts the commit. The current UI blocks confirmation whenever
+   any row failed. Investment imports remain whole-file atomic, with canonical
+   5 MiB/10,000-record limits.
 
 The implementation is bounded and request-scoped within the Go service, with no
 durable document store or required job queue. Plain text parsing runs in Go;
-PDF/XLSX/DOCX uses a bounded local Node child or the bundled network-disabled
-Unix-socket sidecar. Apply cancellation and time/output limits across parsing and provider
+PDF/XLSX/DOCX uses a bounded local Node child or the bundled Unix-socket sidecar.
+Apply cancellation and time/output limits across parsing and provider
 work; no silent chunking, retries, truncation, or automatic partial acceptance.
 Larger-document/background processing requires a separate durable-job design.
 Content stays in memory; workers are terminated on completion, failure, timeout,
 or cancellation, and no temporary document files are written. All financial
 responses use `Cache-Control: no-store` and remain outside service-worker caches.
-Client drafts are cleared on completion, cancel, navigation, or logout and never
-stored in localStorage/IndexedDB. Disable provider storage where supported and
-disclose that local cleanup cannot control provider retention.
+Client drafts are held in React state rather than localStorage/IndexedDB.
+Cancel clears visible state, but the current client does not abort pending
+extraction/conversion requests or guard every late response; unmounting or
+logging out is not a provider-request cancellation guarantee. Disable provider
+storage where supported and disclose that local cleanup cannot control provider
+retention. These cleanup and consent-copy gaps remain tracked in backlog A17.
 
 Regression coverage includes deterministic parser/identity fixtures, both
 account modes, direct-import/no-provider regressions, two-user account and
@@ -510,8 +547,9 @@ own authorization decisions.
 
 - `Purchase` increases a tracked holding and `Sale` decreases it. Transfer
   amounts are signed internally but entered as positive values in the UI.
-- Account values are stored in their own currencies. Goal targets are compared
-  after currency conversion when a linked account uses another currency.
+- Account values are stored in their own currencies. Cross-currency linked-goal
+  conversion remains incomplete in the current read model; do not treat the
+  cached account value as already converted to the goal currency.
 - “Investible” and “liquid” are category properties so users can reclassify
   custom holdings without changing account history.
 - Application users are independent tenants. There are no administrator roles,

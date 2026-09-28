@@ -121,11 +121,15 @@ Open **Estate → Summary**. Blocking items usually mean:
 - an included asset has no directive;
 - primary allocations and primary residue do not cover 100%;
 - a contingent tier is present but incomplete;
-- an allocated beneficiary or asset was archived.
+- an allocated beneficiary was archived.
 
-Warnings about stale values, liabilities, transfer context, or review date do
-not change percentage arithmetic, but they should be resolved before relying on
-the summary.
+The live workspace also warns about liabilities, unknown transfer context,
+undecided methods, zero values, shared title, and a missing last-reviewed date.
+It does not provide a complete stale-value or overdue-review check. Snapshot
+creation does not rerun those client review checks, and retained completeness
+flags are not a guarantee that every issue was resolved. See
+[Estate planning](../guides/estate-planning) for current valuation and review
+limitations.
 
 ## The browser shows stale navigation or assets
 

@@ -27,7 +27,7 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Non-persistent goal scenario comparisons, milestones, and dismissible
   behind-plan dashboard reminders
 - Private beneficiary and estate-distribution planning with printable,
-  privacy-controlled as-of summaries
+  privacy-controlled retained summaries
 - Per-user JSON portability and account/transaction CSV export
 - Operator-only PostgreSQL custom-format backup and maintenance-mode restore
 - Installable PWA shell with explicit offline safety
@@ -70,14 +70,27 @@ to `docs/public/images/screenshots/`.
 Open `/estate` to maintain private beneficiaries, describe how each active asset
 is held, allocate primary and contingent percentages, cover unallocated property
 through residual beneficiaries, and review recorded liabilities separately.
-Percentages use exact basis points and indicative values follow the same
-effective-dated currency rules as reports.
+Percentages use exact basis points. Current estate valuations are incomplete;
+retained summaries are not a fully replayed historical valuation. Review the
+[estate guide](docs/guides/estate-planning.md) before relying on indicative values.
 
 The Summary view creates immutable, hashed Estate Planning Summary snapshots.
 Its print/Save as PDF controls exclude exact values, contacts, account/document
 references, and notes until you deliberately include them; the global privacy
-toggle can still mask all values. These documents are planning worksheets, not
+toggle can still mask rendered values. These controls do not redact stored or
+downloaded JSON, and a snapshot's completeness flag is not a full
+server-validated financial check. These documents are planning worksheets, not
 legally executed wills, and do not grant beneficiary access or transfer assets.
+
+### Current limitations
+
+The Go/PostgreSQL migration is complete, but some legacy product contracts
+remain incomplete. Linked goals and estate summaries do not yet propagate every
+valuation/completeness case; exchange-rate edits are not atomic in the settings
+UI; some conversion and import surfaces are narrower than the full contract.
+The guides describe those limits, and
+[backlog A17](backlog.md#a17-close-remaining-govite-workflow-parity-gaps) tracks
+the implementation work.
 
 ## Requirements
 
@@ -357,6 +370,10 @@ DEMO_DATA=true ./bin/wealthboard seed-demo --username alice
 restore require compatible PostgreSQL client tools on the operator host; they
 are intentionally absent from the distroless application image.
 
+Export the intended deployment's `DATABASE_URL` before operator commands.
+The Makefile's fallback URL targets the local development database, not a
+Compose or Kubernetes production deployment.
+
 ## Container deployment
 
 The application image is a non-root distroless Go runtime serving the built
@@ -407,9 +424,12 @@ figures are never sent.
 Generated reviews are not stored. The database retains only owner-scoped usage
 metadata such as provider host, model, status, latency, and token counts; users
 can clear that history or disconnect the provider. Prompts, responses, API keys,
-and portfolio values are not written to usage records. A one-minute cooldown,
-UTC calendar-month token limit, response-token bound, redirect blocking, strict response
-validation, and evidence-reference checks apply to every request.
+and portfolio values are not written to usage records. Review and import
+conversion share a limit of 10 reservations per rolling minute per user, a UTC
+calendar-month token budget, response bounds, redirect blocking, and local
+response validation. OpenAI uses Responses with `store: false`; current review
+and conversion requests ask for JSON in the prompt rather than enabling the
+transport's optional native JSON Schema output.
 
 AI reviews and import conversion use a two-minute provider request timeout with
 automatic retries disabled. The monthly token limit accepts 10,000 to
@@ -437,22 +457,22 @@ Settings provides:
 - A validated JSON restore that replaces only the authenticated user's
   portfolio in one transaction
 
-Each active balance-tracked account provides an **Import** action for strict Account History
-Import v1 CSV or JSON files. The import page publishes templates, a JSON Schema,
-field and balance-direction rules, and an optional currency-aware prompt that can
-be copied into an external AI service to transform a provider statement. The
-manual prompt workflow runs entirely in the browser; Wealthboard does not send the prompt,
-statement, or generated file to an AI provider. Use only an AI provider you
-trust, then preview and validate the generated file in Wealthboard before
-confirming the import.
+Each active balance-tracked account provides an **Import** action for strict
+Account History Import v1 CSV or JSON files. The direct workflow accepts a file
+or pasted content and performs no provider request. Templates and format rules
+are available in the guides. The legacy browser-only copyable-prompt component
+is not currently mounted on the import page.
 
 The separate **Convert with AI** mode supports CSV, TSV, JSON, TXT, XLSX,
 text-based PDF, and DOCX. Wealthboard extracts text locally in the self-hosted
 application, lets you select/redact sections, and requests explicit consent
-before sending only approved text to your configured provider/model. It reuses
+before contacting your configured provider/model. Selected text is sent with
+section IDs, types, and location labels; review labels for sensitive content
+despite the current UI's narrower sharing description. It reuses
 your encrypted remembered key or accepts a session-only key. Review and correct
 the generated JSON draft, then use the existing preview and confirmation flow.
-No conversion automatically posts financial records.
+No conversion automatically posts financial records. Cancel clears visible
+draft state but does not reliably abort an in-flight extraction/provider request.
 
 Sources are limited to 5 MB and extracted content to 64 KB/1,000 sections.
 Password-protected PDFs accept an optional one-time password for local extraction;
@@ -463,12 +483,11 @@ provider-side retention policies still apply to approved text. See
 [AI-assisted import](docs/reference/ai-import.md) for limits and provider requirements.
 
 Position-tracked investment accounts instead use strict Investment History v1
-JSON or dedicated holdings, trades, cash, and price CSV templates. Preview
-shows instrument resolution, before/after quantities, projected cash/value,
-date range, net change, duplicate/conflict outcomes, oversells, and detailed
-missing or stale price/rate ranges. Confirmation commits the complete
-interdependent sequence atomically. Optional JSON event groups represent one
-dividend plus its same-date reinvestment buys.
+JSON or dedicated holdings, trades, cash, and price CSV templates. The current
+preview shows row outcomes and a summary, with detailed results in its
+downloadable report; it does not render every API projection as a UI table.
+Confirmation commits the complete interdependent sequence atomically. Optional
+JSON event groups represent one dividend plus its same-date reinvestment buys.
 
 Exports contain no credentials, AI provider settings or usage, login attempts,
 session data, idempotency records, or another user's rows. Restore downloads a pre-restore user export,
@@ -497,7 +516,9 @@ account or user fields. Every row requires a stable, case-sensitive
 selected account currency and date is `YYYY-MM-DD`. Opening balances and
 transfers use their dedicated workflows. Files are previewed without writes;
 identical external IDs are skipped, conflicts are never overwritten, and all
-currently valid rows commit atomically before one balance replay.
+accepted rows commit atomically before one balance replay. Go supports skipping
+invalid rows, but the current browser disables confirmation if any row failed.
+A conflict with an existing external ID aborts the whole commit.
 
 ## Deployment-wide PostgreSQL backup and restore
 
