@@ -82,12 +82,14 @@ describe("mutate", () => {
   });
 
   it("loads paginated account history and individual events without private caching", async () => {
-    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
-      new Response("{}", {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    ));
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response("{}", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     await getAccountActivity("account-1", { limit: 25, offset: 100 });
@@ -96,12 +98,18 @@ describe("mutate", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/api/v1/accounts/account-1/activity?limit=25&offset=100",
-      expect.objectContaining({ credentials: "same-origin", cache: "no-store" }),
+      expect.objectContaining({
+        credentials: "same-origin",
+        cache: "no-store",
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/v1/accounts/account-1/position-events/event-101",
-      expect.objectContaining({ credentials: "same-origin", cache: "no-store" }),
+      expect.objectContaining({
+        credentials: "same-origin",
+        cache: "no-store",
+      }),
     );
   });
 });
