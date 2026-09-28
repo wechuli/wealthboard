@@ -69,7 +69,42 @@ func TestChartAnalyticsQueriesAreOwnerScoped(t *testing.T) {
 	if len(accounts) != 1 || accounts[0].ID != ownerAccount || accounts[0].ConvertedValueMinor == nil || *accounts[0].ConvertedValueMinor != "100" || accounts[0].MonthlyChangeMinor == nil || *accounts[0].MonthlyChangeMinor != "0" {
 		t.Fatalf("owner account-list analytics = %+v", accounts)
 	}
+	account, err := coreReads.Account(ctx, ownerID, ownerAccount)
+	if err != nil || account.ConvertedValueMinor == nil || *account.ConvertedValueMinor != "100" || account.MonthlyChangeMinor == nil || *account.MonthlyChangeMinor != "0" {
+		t.Fatalf("owner account-detail analytics = %+v, err=%v", account, err)
+	}
+	if _, err := coreReads.Account(ctx, ownerID, foreignAccount); !errors.Is(err, ErrCoreReadNotFound) {
+		t.Fatalf("foreign account detail error = %v, want not found", err)
+	}
 	if _, err := service.AccountAnalytics(ctx, ownerID, foreignAccount); !errors.Is(err, ErrGoalsReportsNotFound) {
 		t.Fatalf("foreign account analytics error = %v, want not found", err)
+	}
+
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`UPDATE accounts SET currency='USD' WHERE user_id=$1 AND id=$2`, []any{ownerID, ownerAccount}},
+		{`UPDATE transactions SET currency='USD' WHERE user_id=$1 AND account_id=$2`, []any{ownerID, ownerAccount}},
+		{`INSERT INTO exchange_rates (id,user_id,base_currency,quote_currency,rate,effective_date,source,created_at) VALUES ($1,$2,'USD','KES',9,'2026-01-01','test',now())`, []any{uuid.New(), foreignID}},
+		{`INSERT INTO exchange_rates (id,user_id,base_currency,quote_currency,rate,effective_date,source,created_at) VALUES ($1,$2,'USD','KES',4,'2026-02-02','test',now())`, []any{uuid.New(), ownerID}},
+	} {
+		if _, err := db.ExecContext(ctx, statement.query, statement.args...); err != nil {
+			t.Fatalf("seed account-detail currency coverage: %v", err)
+		}
+	}
+	account, err = coreReads.Account(ctx, ownerID, ownerAccount)
+	if err != nil || account.ConvertedValueMinor != nil || account.MonthlyChangeMinor != nil {
+		t.Fatalf("foreign or future rate valued account detail: account=%+v err=%v", account, err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO exchange_rates (id,user_id,base_currency,quote_currency,rate,effective_date,source,created_at)
+		VALUES ($1,$2,'USD','KES',2,'2026-01-01','test',now())
+	`, uuid.New(), ownerID); err != nil {
+		t.Fatalf("seed applicable owner rate: %v", err)
+	}
+	account, err = coreReads.Account(ctx, ownerID, ownerAccount)
+	if err != nil || account.ConvertedValueMinor == nil || *account.ConvertedValueMinor != "200" || account.MonthlyChangeMinor == nil || *account.MonthlyChangeMinor != "0" {
+		t.Fatalf("dated owner account-detail conversion = %+v, err=%v", account, err)
 	}
 }

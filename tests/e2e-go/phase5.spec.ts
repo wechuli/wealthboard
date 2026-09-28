@@ -539,7 +539,7 @@ test("restores position management, base-currency value, and private account his
   await expect(
     page.getByRole("list", { name: "Investment activity history" }),
   ).not.toContainText("12.345678901");
-  await page.getByRole("button", { name: "Show financial values" }).click();
+  await page.getByRole("button", { name: "Reveal financial values" }).click();
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect

@@ -183,51 +183,58 @@ describe("TransactionForm", () => {
 });
 
 describe("PositionTools", () => {
-  it("honors the opening-position action and selected instrument currency", async () => {
-    const user = userEvent.setup();
-    const selected = {
-      ...instrument,
-      id: "55555555-5555-4555-8555-555555555555",
-      name: "Dollar fund",
-      quoteCurrency: "USD",
-    };
-    const createEvent = vi.fn().mockResolvedValue({ id: positionEvent.id });
-    render(
-      <PositionTools
-        account={positionAccount}
-        instruments={[instrument, selected]}
-        events={[]}
-        reconciliations={[]}
-        session={session}
-        initialType="opening_position"
-        initialInstrumentId={selected.id}
-        onChanged={vi.fn()}
-        operations={{
-          createEvent,
-          updateEvent: vi.fn(),
-          deleteEvent: vi.fn(),
-          createReconciliation: vi.fn(),
-          deleteReconciliation: vi.fn(),
-        }}
-      />,
-    );
-    expect(screen.getByLabelText("Event type")).toHaveValue("opening_position");
-    expect(screen.getByLabelText("Instrument")).toHaveValue(selected.id);
-    expect(screen.getByLabelText("Trade currency")).toHaveValue("USD");
-    await user.type(screen.getByLabelText("Quantity"), "1.125");
-    await user.click(
-      screen.getByRole("button", { name: "Record position event" }),
-    );
-    expect(createEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        instrumentId: selected.id,
-        type: "opening_position",
-        quantity: "1.125",
-        tradeCurrency: "USD",
-      }),
-      session.csrfToken,
-    );
-  });
+  it.each(["opening_position", "quantity_adjustment"] as const)(
+    "submits %s without synthetic trade fees",
+    async (eventType) => {
+      const user = userEvent.setup();
+      const selected = {
+        ...instrument,
+        id: "55555555-5555-4555-8555-555555555555",
+        name: "Dollar fund",
+        quoteCurrency: "USD",
+      };
+      const createEvent = vi.fn().mockResolvedValue({ id: positionEvent.id });
+      render(
+        <PositionTools
+          account={positionAccount}
+          instruments={[instrument, selected]}
+          events={[]}
+          reconciliations={[]}
+          session={session}
+          initialType={eventType}
+          initialInstrumentId={selected.id}
+          onChanged={vi.fn()}
+          operations={{
+            createEvent,
+            updateEvent: vi.fn(),
+            deleteEvent: vi.fn(),
+            createReconciliation: vi.fn(),
+            deleteReconciliation: vi.fn(),
+          }}
+        />,
+      );
+      expect(screen.getByLabelText("Event type")).toHaveValue(eventType);
+      expect(screen.getByLabelText("Instrument")).toHaveValue(selected.id);
+      expect(screen.getByLabelText("Trade currency")).toHaveValue("USD");
+      expect(screen.getByLabelText("Fee amount")).toHaveValue("");
+      await user.type(screen.getByLabelText("Quantity"), "1.125");
+      await user.click(
+        screen.getByRole("button", { name: "Record position event" }),
+      );
+      expect(createEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          instrumentId: selected.id,
+          type: eventType,
+          quantity: "1.125",
+          tradeCurrency: "USD",
+          feeAmount: "",
+          cashEffect: "",
+          appliedExchangeRate: "",
+        }),
+        session.csrfToken,
+      );
+    },
+  );
 
   it("loads a persisted event for editing after reload", async () => {
     const user = userEvent.setup();

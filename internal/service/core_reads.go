@@ -301,17 +301,24 @@ func (service *CoreReadService) Accounts(ctx context.Context, userID uuid.UUID, 
 	for _, row := range rows {
 		items = append(items, accountFromRow(row))
 	}
+	if err := service.addAccountAnalytics(ctx, userID, items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (service *CoreReadService) addAccountAnalytics(ctx context.Context, userID uuid.UUID, items []Account) error {
 	chartRepository, ok := service.repository.(chartAnalyticsRepository)
 	if !ok {
-		return items, nil
+		return nil
 	}
 	settings, err := service.repository.GetSettings(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("load account-list settings: %w", err)
+		return fmt.Errorf("load account analytics settings: %w", err)
 	}
 	data, err := chartRepository.LoadChartData(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("load account-list analytics: %w", err)
+		return fmt.Errorf("load account analytics: %w", err)
 	}
 	chartAccounts := make(map[uuid.UUID]chartAccount, len(data.Accounts))
 	for _, account := range data.Accounts {
@@ -324,12 +331,12 @@ func (service *CoreReadService) Accounts(ctx context.Context, userID uuid.UUID, 
 		}
 		converted, change, valueErr := chartAccountListValues(data, account, settings.BaseCurrency, service.now())
 		if valueErr != nil {
-			return nil, valueErr
+			return valueErr
 		}
 		items[index].ConvertedValueMinor = converted
 		items[index].MonthlyChangeMinor = change
 	}
-	return items, nil
+	return nil
 }
 
 func (service *CoreReadService) Account(ctx context.Context, userID, accountID uuid.UUID) (Account, error) {
@@ -337,7 +344,19 @@ func (service *CoreReadService) Account(ctx context.Context, userID, accountID u
 	if err != nil {
 		return Account{}, mapReadError("load account", err)
 	}
-	return accountFromRow(row), nil
+	items := []Account{accountFromRow(row)}
+	if err := service.addAccountAnalytics(ctx, userID, items); err != nil {
+		return Account{}, err
+	}
+	return items[0], nil
+}
+
+func (service *CoreReadService) requireAccount(ctx context.Context, userID, accountID uuid.UUID) error {
+	_, err := service.repository.GetAccount(ctx, userID, accountID)
+	if err != nil {
+		return mapReadError("load account", err)
+	}
+	return nil
 }
 
 func (service *CoreReadService) Transactions(ctx context.Context, userID uuid.UUID, filter ActivityFilter) (Page[Transaction], error) {
@@ -346,7 +365,7 @@ func (service *CoreReadService) Transactions(ctx context.Context, userID uuid.UU
 		return Page[Transaction]{}, err
 	}
 	if filter.AccountID != nil {
-		if _, err := service.Account(ctx, userID, *filter.AccountID); err != nil {
+		if err := service.requireAccount(ctx, userID, *filter.AccountID); err != nil {
 			return Page[Transaction]{}, err
 		}
 	}
@@ -377,7 +396,7 @@ func (service *CoreReadService) Valuations(ctx context.Context, userID uuid.UUID
 	if filter.AccountID == nil {
 		return Page[Valuation]{}, errors.New("account is required for valuations")
 	}
-	if _, err := service.Account(ctx, userID, *filter.AccountID); err != nil {
+	if err := service.requireAccount(ctx, userID, *filter.AccountID); err != nil {
 		return Page[Valuation]{}, err
 	}
 	rows, err := service.repository.ListValuations(ctx, userID, filter)
@@ -405,7 +424,7 @@ func (service *CoreReadService) Activity(ctx context.Context, userID uuid.UUID, 
 	if filter.AccountID == nil {
 		return Page[ActivityItem]{}, errors.New("account is required for activity")
 	}
-	if _, err := service.Account(ctx, userID, *filter.AccountID); err != nil {
+	if err := service.requireAccount(ctx, userID, *filter.AccountID); err != nil {
 		return Page[ActivityItem]{}, err
 	}
 	rows, err := service.repository.ListActivity(ctx, userID, filter)

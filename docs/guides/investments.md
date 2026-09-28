@@ -40,6 +40,10 @@ units and prices.
    cost basis.
 7. Add an effective-dated unit price.
 
+Leave **Fee amount**, **Cash effect**, and **Applied exchange rate** empty for
+opening positions and quantity adjustments. Those fields describe cash-settled
+buys and sells, not an opening holding; the form starts with no fee.
+
 An instrument has its own identity, symbol, type, quote currency, and optional
 exchange or MIC. A ticker is not globally unique, so include the exchange or a
 stable identifier when the source provides one.
@@ -55,7 +59,8 @@ The current account value is:
 For a foreign-currency account, **Base-currency value** shows that same current
 account total in your configured base currency. **Current value** and **Cash**
 remain in the account currency. A missing exchange rate is shown as incomplete,
-not as zero.
+not as zero. Account lists and detail pages use the same Go calculation and
+owner-scoped, effective-dated rates for base-currency values.
 
 The **Positions** table keeps each security's quantity separate and shows its
 effective unit price, date, source, and account-currency value. Use **Add holding**

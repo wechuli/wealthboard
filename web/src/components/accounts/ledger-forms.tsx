@@ -1367,7 +1367,7 @@ export function PositionTools({
     quantity: "",
     unitPrice: "",
     tradeCurrency: selectedInstrument?.quoteCurrency ?? account.currency,
-    feeAmount: "0",
+    feeAmount: "",
     feeCurrency: account.currency,
     cashEffect: "",
     appliedExchangeRate: "",
