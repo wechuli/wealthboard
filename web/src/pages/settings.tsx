@@ -281,7 +281,7 @@ const apiKeyScopes = [
   readonly [CreateAPIKeyInput["scopes"][number], string]
 >;
 
-function PersonalAPIKeys({
+export function PersonalAPIKeys({
   session,
   operations,
 }: {

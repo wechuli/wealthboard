@@ -8,6 +8,7 @@ applyTo: "web/src/**/*.test.ts, web/src/**/*.test.tsx, tests/e2e-go/**/*.ts, tes
 
 - Put deterministic financial and service rules beside their Go owners as `_test.go` files. Assert exact integer minor-unit results and boundary rounding.
 - Put isolated client interaction and rendering behavior beside Vite source as `*.test.tsx` with Testing Library. Query by role, label, or visible meaning instead of implementation details.
+- Keep page-composition coverage separate from feature lifecycle tests: render the existing feature component for multi-step interactions, and await visible completion and enabled controls between mutations rather than increasing timeouts.
 - Use `tests/e2e-go` for complete authenticated workflows, persistence, route protection, responsive layouts, privacy mode, import/export, backup/restore, and offline behavior.
 - Keep fixtures fictional and deterministic. Fix the relevant date, timezone, and exchange rate in tests instead of relying on the host clock, locale, network, or external services.
 - Authorization tests must create at least two users with visibly different fixtures. Assert both the positive owner path and the negative foreign-user path; a filtered list alone does not prove direct-resource isolation.

@@ -5,14 +5,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AccountHistoryAiPrompt } from "@/components/review/ai-prompts";
 import { PortfolioReviewWorkspace } from "@/pages/review";
-import { SettingsPage } from "@/pages/settings";
+import { PersonalAPIKeys, SettingsPage } from "@/pages/settings";
 import {
   PrivacyProvider,
   PrivacyToggle,
 } from "@/components/providers/privacy-provider";
 import type { AIRead, Session, SettingsRead } from "@/lib/types";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const session: Session = {
   user: { id: "00000000-0000-0000-0000-000000000001", username: "alex" },
@@ -172,7 +175,7 @@ describe("original settings page", () => {
     const endpoint = screen.getByLabelText("API endpoint");
     expect(endpoint).not.toHaveAttribute("readonly");
     await user.clear(endpoint);
-    await user.type(endpoint, "https://models.example.com/v1");
+    await user.paste("https://models.example.com/v1");
     expect(endpoint).toHaveValue("https://models.example.com/v1");
     expect(
       screen.getByText(
@@ -183,7 +186,6 @@ describe("original settings page", () => {
 
   it("creates, copies, dismisses, and revokes personal API keys", async () => {
     const user = userEvent.setup();
-    const noop = vi.fn().mockResolvedValue(undefined);
     const existingKey = {
       id: "00000000-0000-4000-8000-000000000002",
       name: "CLI key",
@@ -203,49 +205,18 @@ describe("original settings page", () => {
     const revokeAPIKey = vi.fn().mockResolvedValue(undefined);
     const revokeAllAPIKeys = vi.fn().mockResolvedValue({ revoked: 1 });
     const operations = {
-      load: vi.fn().mockResolvedValue({
-        settings,
-        ai,
-        authConfig: {
-          localEnabled: true,
-          oidcEnabled: false,
-          providerName: "OIDC provider",
-        },
-      }),
-      updateSettings: noop,
-      createExchangeRate: noop,
-      deleteExchangeRate: noop,
-      saveAISettings: noop,
-      saveAICredential: noop,
-      deleteAICredential: noop,
-      disconnectAI: noop,
-      clearAIUsage: noop,
       getAPIKeys: vi.fn().mockResolvedValue({ keys: [existingKey] }),
       createAPIKey,
       revokeAPIKey,
       revokeAllAPIKeys,
-      downloadExport: noop,
-      restoreUser: noop,
-      authentication: {
-        linkOidc: noop,
-        unlinkOidc: noop,
-        reauthenticateOidc: noop,
-        enableLocalCredential: noop,
-        removeLocalCredential: noop,
-        changePassword: noop,
-      },
     };
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
+    const writeText = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockResolvedValue(undefined);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(
-      <MemoryRouter>
-        <SettingsPage session={session} operations={operations} />
-      </MemoryRouter>,
+      <PersonalAPIKeys session={session} operations={operations} />,
     );
 
     await screen.findByText("CLI key");
@@ -275,10 +246,18 @@ describe("original settings page", () => {
     await waitFor(() =>
       expect(revokeAPIKey).toHaveBeenCalledWith(existingKey.id, "csrf"),
     );
-    await user.click(
-      screen.getByRole("button", { name: "Revoke all active keys" }),
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "API key revoked.",
     );
+    const revokeAll = screen.getByRole("button", {
+      name: "Revoke all active keys",
+    });
+    await waitFor(() => expect(revokeAll).toBeEnabled());
+    await user.click(revokeAll);
     await waitFor(() => expect(revokeAllAPIKeys).toHaveBeenCalledWith("csrf"));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "All active API keys revoked.",
+    );
   });
 });
 
