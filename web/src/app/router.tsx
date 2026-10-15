@@ -13,6 +13,7 @@ import {
 } from "@/api/client";
 import { LoginScreen, SignupScreen } from "@/components/auth/auth";
 import { OfflinePage } from "@/pages/offline";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { AppShell } from "@/components/layout/app-shell";
 import type { AuthConfig, Overview, Session } from "@/lib/types";
 
@@ -200,6 +201,7 @@ function AuthenticatedRoutes({
   session: Session;
   onSignedOut: () => void;
 }) {
+  const { pathname } = useLocation();
   const [overview, setOverview] = useState<Overview>();
   const [error, setError] = useState("");
 
@@ -239,136 +241,138 @@ function AuthenticatedRoutes({
       displayName={overview.settings.displayName}
       onSignOut={signOut}
     >
-      <Suspense fallback={<RouteLoadingScreen />}>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/accounts" element={<AccountsPage />} />
-          <Route
-            path="/accounts/new"
-            element={<NewAccountPage session={session} />}
-          />
-          <Route
-            path="/accounts/archived"
-            element={<ArchivedAccountsPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id"
-            element={<AccountDetailPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/edit"
-            element={<EditAccountPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/valuation"
-            element={<ValuationPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/convert"
-            element={<ConvertAccountPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/import"
-            element={<AccountImportPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/investment-actions"
-            element={<InvestmentActionsPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/instruments/new"
-            element={<NewAccountInstrumentPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/positions/new"
-            element={<NewPositionEventPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/positions/:eventId/edit"
-            element={<EditPositionEventPage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/prices/new"
-            element={<NewSecurityPricePage session={session} />}
-          />
-          <Route
-            path="/accounts/:id/reconcile"
-            element={<ReconcilePage session={session} />}
-          />
-          <Route
-            path="/transactions"
-            element={<TransactionsPage session={session} />}
-          />
-          <Route
-            path="/transactions/new"
-            element={<NewTransactionPage session={session} />}
-          />
-          <Route
-            path="/transactions/:id/edit"
-            element={<EditTransactionPage session={session} />}
-          />
-          <Route path="/goals" element={<GoalsPage session={session} />} />
-          <Route
-            path="/goals/new"
-            element={<NewGoalPage session={session} />}
-          />
-          <Route
-            path="/goals/:id"
-            element={<GoalDetailPage session={session} />}
-          />
-          <Route
-            path="/goals/:id/edit"
-            element={<EditGoalPage session={session} />}
-          />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route
-            path="/categories"
-            element={<CategoriesPage session={session} />}
-          />
-          <Route
-            path="/institutions"
-            element={<InstitutionsPage session={session} />}
-          />
-          <Route
-            path="/instruments"
-            element={<InstrumentsPage session={session} />}
-          />
-          <Route
-            path="/instruments/new"
-            element={<NewInstrumentPage session={session} />}
-          />
-          <Route
-            path="/instruments/:id/edit"
-            element={<EditInstrumentPage session={session} />}
-          />
-          <Route path="/estate" element={<EstateIndexPage />} />
-          <Route
-            path="/estate/beneficiaries"
-            element={<EstateBeneficiariesPage session={session} />}
-          />
-          <Route
-            path="/estate/distribution"
-            element={<EstateDistributionPage session={session} />}
-          />
-          <Route
-            path="/estate/summary"
-            element={<EstateSummaryPage session={session} />}
-          />
-          <Route
-            path="/estate/snapshots/:id"
-            element={<EstateSnapshotPage />}
-          />
-          <Route path="/review" element={<ReviewPage session={session} />} />
-          <Route
-            path="/settings"
-            element={<SettingsPage session={session} />}
-          />
-          <Route path="/login" element={<Navigate to="/" replace />} />
-          <Route path="/signup" element={<Navigate to="/" replace />} />
-          <Route path="/offline" element={<OfflinePage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      <ErrorBoundary resetKey={pathname}>
+        <Suspense fallback={<RouteLoadingScreen />}>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/accounts" element={<AccountsPage />} />
+            <Route
+              path="/accounts/new"
+              element={<NewAccountPage session={session} />}
+            />
+            <Route
+              path="/accounts/archived"
+              element={<ArchivedAccountsPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id"
+              element={<AccountDetailPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/edit"
+              element={<EditAccountPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/valuation"
+              element={<ValuationPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/convert"
+              element={<ConvertAccountPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/import"
+              element={<AccountImportPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/investment-actions"
+              element={<InvestmentActionsPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/instruments/new"
+              element={<NewAccountInstrumentPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/positions/new"
+              element={<NewPositionEventPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/positions/:eventId/edit"
+              element={<EditPositionEventPage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/prices/new"
+              element={<NewSecurityPricePage session={session} />}
+            />
+            <Route
+              path="/accounts/:id/reconcile"
+              element={<ReconcilePage session={session} />}
+            />
+            <Route
+              path="/transactions"
+              element={<TransactionsPage session={session} />}
+            />
+            <Route
+              path="/transactions/new"
+              element={<NewTransactionPage session={session} />}
+            />
+            <Route
+              path="/transactions/:id/edit"
+              element={<EditTransactionPage session={session} />}
+            />
+            <Route path="/goals" element={<GoalsPage session={session} />} />
+            <Route
+              path="/goals/new"
+              element={<NewGoalPage session={session} />}
+            />
+            <Route
+              path="/goals/:id"
+              element={<GoalDetailPage session={session} />}
+            />
+            <Route
+              path="/goals/:id/edit"
+              element={<EditGoalPage session={session} />}
+            />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route
+              path="/categories"
+              element={<CategoriesPage session={session} />}
+            />
+            <Route
+              path="/institutions"
+              element={<InstitutionsPage session={session} />}
+            />
+            <Route
+              path="/instruments"
+              element={<InstrumentsPage session={session} />}
+            />
+            <Route
+              path="/instruments/new"
+              element={<NewInstrumentPage session={session} />}
+            />
+            <Route
+              path="/instruments/:id/edit"
+              element={<EditInstrumentPage session={session} />}
+            />
+            <Route path="/estate" element={<EstateIndexPage />} />
+            <Route
+              path="/estate/beneficiaries"
+              element={<EstateBeneficiariesPage session={session} />}
+            />
+            <Route
+              path="/estate/distribution"
+              element={<EstateDistributionPage session={session} />}
+            />
+            <Route
+              path="/estate/summary"
+              element={<EstateSummaryPage session={session} />}
+            />
+            <Route
+              path="/estate/snapshots/:id"
+              element={<EstateSnapshotPage />}
+            />
+            <Route path="/review" element={<ReviewPage session={session} />} />
+            <Route
+              path="/settings"
+              element={<SettingsPage session={session} />}
+            />
+            <Route path="/login" element={<Navigate to="/" replace />} />
+            <Route path="/signup" element={<Navigate to="/" replace />} />
+            <Route path="/offline" element={<OfflinePage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </AppShell>
   );
 }
