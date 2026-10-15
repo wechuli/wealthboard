@@ -46,10 +46,20 @@ func TestCredentialEncryptionBindsCiphertextToUserAndRejectsTampering(t *testing
 	if _, err := codec.Decrypt(other, encrypted); err == nil {
 		t.Fatal("cross-user decryption succeeded")
 	}
-	parts := strings.Split(encrypted, ".")
-	parts[3] = parts[3][:len(parts[3])-1] + "A"
-	if _, err := codec.Decrypt(owner, strings.Join(parts, ".")); err == nil {
-		t.Fatal("tampered ciphertext decrypted")
+	for _, segment := range []struct {
+		name  string
+		index int
+	}{{"tag", 2}, {"ciphertext", 3}} {
+		parts := strings.Split(encrypted, ".")
+		raw, err := base64.RawURLEncoding.DecodeString(parts[segment.index])
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw[0] ^= 0x01
+		parts[segment.index] = base64.RawURLEncoding.EncodeToString(raw)
+		if _, err := codec.Decrypt(owner, strings.Join(parts, ".")); err == nil {
+			t.Fatalf("tampered %s decrypted", segment.name)
+		}
 	}
 }
 
