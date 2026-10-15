@@ -179,9 +179,7 @@ conflict handling make repeat runs safe for the same target.
 | `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key                     |
 | `TZ`                           | Default timezone for new users; default `Africa/Nairobi`                  |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys           |
-| `AI_ALLOWED_ENDPOINTS`         | Comma-separated exact custom OpenAI-compatible base URLs                  |
-| `AI_EXTRACTION_SOCKET`         | Optional Unix socket for the isolated document parser                     |
-| `AI_EXTRACTION_SCRIPT`         | Local Node parser script; default `scripts/extract-import-source-cli.mjs` |
+| `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
 | `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                                     |
 
 There is no initial-user password or environment-created identity.
@@ -284,11 +282,12 @@ openssl rand -base64 32
 
 Do not reuse `SESSION_SECRET`. The value must be canonical base64 for exactly 32
 bytes. Without it, users can still submit a session-only provider key for one
-request. OpenAI and DeepSeek use fixed built-in endpoints; custom endpoints
-must exactly match a normalized URL in `AI_ALLOWED_ENDPOINTS`. Every provider
-hostname is resolved again before use, and private, loopback, link-local,
-multicast, and other local ranges are rejected even if allowlisted. Redirects
-and environment HTTP proxies are disabled. Keep the encryption key stable;
+request. OpenAI, Anthropic, and DeepSeek use fixed built-in endpoints that
+provider environment variables such as `OPENAI_BASE_URL` cannot redirect. Every
+provider hostname is resolved before use, and private, loopback, link-local,
+multicast, and other local ranges are rejected. Redirects and environment HTTP
+proxies are disabled, and operator provider keys in the environment are never
+sent. Keep the encryption key stable;
 changing it makes remembered keys undecryptable until users replace them.
 
 ## Password changes and operator reset
@@ -342,7 +341,9 @@ the [OpenAPI contract](api/openapi.yaml) for endpoints and request formats.
 The Go service embeds the append-only PostgreSQL migrations under
 `db/postgres/migrations`. `serve` runs pending migrations at startup; operators
 can run or inspect them separately with `make migrate` and
-`make migrate-status`. Never edit an applied migration.
+`make migrate-status`. Migrations hold a PostgreSQL advisory lock, so replicas
+that start together apply each migration once while the others wait up to five
+minutes. Never edit an applied migration.
 
 PostgreSQL is a fresh-start boundary. There is no SQLite-to-PostgreSQL importer,
 dual-write mode, or supported in-place conversion. The legacy Next.js, Drizzle,
@@ -380,8 +381,7 @@ The application image is a non-root distroless Go runtime serving the built
 Vite assets. Compose and Kubernetes enforce a read-only application filesystem.
 The image contains neither PostgreSQL client tools nor Node.js.
 Supply an external `DATABASE_URL` and run operator backups from a trusted host
-or admin job with matching PostgreSQL tools. The Compose stack builds the
-separate, network-disabled `extraction-worker` target for PDF/XLSX/DOCX.
+or admin job with matching PostgreSQL tools.
 
 The Compose examples use `postgres:18` and mount database storage at
 `/var/lib/postgresql`, matching the image's versioned data directory.
@@ -404,9 +404,8 @@ kubectl apply -f deploy/kubernetes.yaml
 ```
 
 Create the separate `wealthboard-database` secret with its `database-url` key.
-The manifest deploys two rolling application replicas with a pod-local
-extraction sidecar, but no PostgreSQL server, database volume, or backup
-controller. Operate PostgreSQL, point the egress policy at its actual
+The manifest deploys two rolling application replicas but no PostgreSQL
+server, database volume, or backup controller. Operate PostgreSQL, point the egress policy at its actual
 namespace/labels, schedule and retain backups outside the application pods, and
 test restores. TLS must terminate at
 the configured `APP_URL`; the ingress must overwrite rather than append
@@ -416,10 +415,17 @@ enabling OIDC or AI; those integrations cannot use the default policy unchanged.
 
 ## AI portfolio review
 
-Portfolio Review is optional, read-only, and generated only on request. Configure
-OpenAI, DeepSeek, or an operator-approved OpenAI-compatible endpoint under
-**Settings → AI portfolio review**, then open **Review**. The integration uses the
-provider's supported HTTP API through the Go AI workflow.
+Portfolio Review is optional, read-only, and generated only on request. Choose
+OpenAI, Anthropic, or DeepSeek and a model under **Settings → AI provider**,
+then open **Review**. The settings form suggests current models for each
+provider and accepts any other model ID the provider serves. Users supply their
+own provider API keys.
+
+All AI calls run through [Genkit for Go](https://genkit.dev/docs/go/get-started/).
+The server calls `genkit.Init` once at startup with the OpenAI, Anthropic, and
+DeepSeek plugins and runs review and import conversion as Genkit flows. Each
+request carries only the requesting user's key, attached per request rather
+than to the shared plugin clients, and fails closed without it.
 
 Wealthboard calculates a bounded, versioned snapshot before contacting a model.
 By default it contains ratios, concentration, goal trajectory, and data-quality
@@ -434,9 +440,12 @@ can clear that history or disconnect the provider. Prompts, responses, API keys,
 and portfolio values are not written to usage records. Review and import
 conversion share a limit of 10 reservations per rolling minute per user, a UTC
 calendar-month token budget, response bounds, redirect blocking, and local
-response validation. OpenAI uses Responses with `store: false`; current review
-and conversion requests ask for JSON in the prompt rather than enabling the
-transport's optional native JSON Schema output.
+response validation. Both flows use Genkit structured output: OpenAI receives a
+strict JSON Schema response format with `store: false`, Anthropic models with
+native structured output receive the schema as an output format, and DeepSeek
+receives JSON mode plus the schema as instructions. Genkit validates every
+response against the schema before Wealthboard checks bounds, evidence IDs, and
+source coverage.
 
 AI reviews and import conversion use a two-minute provider request timeout with
 automatic retries disabled. The monthly token limit accepts 10,000 to
@@ -448,12 +457,12 @@ per-user exports, but deployment-wide PostgreSQL backups contain encrypted
 credential rows and must remain access-restricted. AI output is explanatory and
 is not financial advice.
 
-UTF-8 CSV/TSV/JSON/TXT extraction runs in Go. PDF/XLSX/DOCX extraction uses
-`AI_EXTRACTION_SOCKET` when set. Compose runs the bundled worker without a
-network; Kubernetes runs it as a bounded sidecar sharing only the pod-local
-Unix socket with the application. Without a socket, a direct installation falls
-back to `node` plus `AI_EXTRACTION_SCRIPT`. The distroless application image has
-no Node fallback.
+AI-assisted import reads TXT, CSV, TSV, JSON, PDF, XLSX, and DOCX source files
+entirely in the browser, in a Web Worker that is stopped on completion,
+cancellation, or after 15 seconds. The original file and any PDF password never
+reach Wealthboard or the AI provider; only the text sections the user approves
+are sent for conversion, and the server re-validates their limits. There is no
+server-side extraction endpoint, parser sidecar, or production Node runtime.
 
 ## Per-user import, export, and restore
 

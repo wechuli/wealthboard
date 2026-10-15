@@ -89,8 +89,11 @@ does not provide financial mutation tools. Session-only API keys remain in
 client memory for the request; remembered keys require the deployment
 encryption key.
 
-Custom endpoints require an operator allowlist. Users should review provider
-retention, training, and billing terms before sending data.
+Only the fixed OpenAI, Anthropic, and DeepSeek endpoints are used, through one
+shared Genkit instance. Each request carries only the requesting user's key for
+that provider. Users should review provider retention, training, and billing
+terms before sending data. Leave `GENKIT_ENV` unset in production: `dev` starts
+Genkit's local Developer UI server, which can show prompts and responses.
 
 AI import currently sends selected text with section IDs, types, and location
 labels, not the original file. Its current cancellation UI clears visible state
@@ -98,17 +101,14 @@ but does not reliably abort an already-started provider request. See
 [AI-assisted import](./ai-import) for the actual sharing and cleanup limits.
 
 Remembered provider keys require a dedicated canonical base64 32-byte key and
-are bound to one user with AES-256-GCM associated data. Custom endpoint hosts
-are resolved and rejected when they map to private or local address space;
-redirects and environment proxies are disabled. PDF/XLSX/DOCX extraction may
-cross a pod-local Unix socket, so its bundled sidecar and socket permissions are
-part of the trusted deployment boundary. Compose disables worker networking;
-Kubernetes sidecars share their pod's network namespace. Document passwords
-must never be logged or persisted by custom worker deployments.
+are bound to one user with AES-256-GCM associated data. Provider hosts are
+resolved and rejected when they map to private or local address space;
+redirects and environment proxies are disabled. Source documents are parsed in
+the browser and never uploaded, so the server never parses untrusted document
+formats, and PDF passwords never leave the browser.
 
-The distroless application image contains no Node.js runtime. The extraction
-worker is the sole production JavaScript runtime exception and must remain
-isolated, bounded, non-root, and unable to access PostgreSQL or provider keys.
+The distroless application image contains no Node.js runtime, and production
+runs no JavaScript on the server.
 
 ## Estate-planning boundary
 

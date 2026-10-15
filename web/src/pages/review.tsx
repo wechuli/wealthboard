@@ -300,8 +300,8 @@ export function PortfolioReviewPage({
             Configure an AI provider
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">
-            Choose OpenAI, DeepSeek, or a compatible endpoint configured for
-            this Wealthboard instance before requesting a portfolio review.
+            Choose OpenAI, Anthropic, or DeepSeek and a model before requesting
+            a portfolio review.
           </p>
           <Link className={buttonClasses({ className: "mt-5" })} to="/settings">
             <Settings size={16} /> Open settings

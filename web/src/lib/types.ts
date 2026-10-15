@@ -180,6 +180,7 @@ export type EstateDirectiveInput =
   components["schemas"]["EstateDirectiveInput"];
 export type EstateAllocationInput =
   components["schemas"]["EstateAllocationInput"];
+export type AIProvider = components["schemas"]["AIProvider"];
 export type AISettingsInput = components["schemas"]["AISettingsInput"];
 export type AISource = components["schemas"]["AISource"];
 export type AIConversionDraft = components["schemas"]["AIConversionDraft"];

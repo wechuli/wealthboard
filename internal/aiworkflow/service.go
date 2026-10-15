@@ -17,28 +17,25 @@ import (
 type Service struct {
 	repository  Repository
 	credentials *CredentialCodec
-	endpoints   *EndpointPolicy
-	transport   Transport
+	flows       *Flows
 	now         func() time.Time
 }
 
-func NewService(repository Repository, credentials *CredentialCodec, endpoints *EndpointPolicy, transport Transport) *Service {
-	return &Service{repository: repository, credentials: credentials, endpoints: endpoints, transport: transport, now: time.Now}
+func NewService(repository Repository, credentials *CredentialCodec, flows *Flows) *Service {
+	return &Service{repository: repository, credentials: credentials, flows: flows, now: time.Now}
 }
 
 func (service *Service) SaveSettings(ctx context.Context, userID uuid.UUID, input SettingsInput) (*Settings, error) {
+	if input.Provider.BaseURL() == "" {
+		return nil, fmt.Errorf("%w: choose OpenAI, Anthropic, or DeepSeek", ErrInvalidInput)
+	}
 	input.Model = strings.TrimSpace(input.Model)
-	if input.Model == "" || len(input.Model) > 200 || strings.ContainsAny(input.Model, "\x00\n\r\t") {
+	if len(input.Model) > 200 || !modelPattern.MatchString(input.Model) {
 		return nil, fmt.Errorf("%w: enter a valid provider model identifier", ErrInvalidInput)
 	}
 	if input.MonthlyTokenLimit < 10_000 || input.MonthlyTokenLimit > 100_000_000 || input.MaxOutputTokens < 256 || input.MaxOutputTokens > input.MonthlyTokenLimit {
 		return nil, fmt.Errorf("%w: invalid AI token limits", ErrInvalidInput)
 	}
-	baseURL, err := service.endpoints.Resolve(ctx, input.Provider, input.BaseURL)
-	if err != nil {
-		return nil, err
-	}
-	input.BaseURL = baseURL
 	return service.repository.SaveSettings(ctx, userID, input)
 }
 
@@ -94,19 +91,11 @@ func (service *Service) Review(ctx context.Context, userID uuid.UUID, request Re
 		return nil, err
 	}
 	started := time.Now()
-	result, callErr := service.transport.Call(ctx, ProviderCall{
-		Provider:        settings.Provider,
-		BaseURL:         settings.BaseURL,
-		APIKey:          apiKey,
-		Model:           settings.Model,
-		MaxOutputTokens: settings.MaxOutputTokens,
-		Prompt:          reviewPrompt(request),
-	})
-	var review Review
+	content, usage, callErr := service.flows.Review(ctx, apiKey, selectionFor(*settings), snapshot)
 	if callErr == nil {
-		review, callErr = decodeReview(result.Content, request.Snapshot)
+		callErr = validateReview(content, request.Snapshot)
 	}
-	completion := completionFor(result, callErr, started, false)
+	completion := completionFor(usage, callErr, started, false)
 	if err := service.repository.CompleteUsage(ctx, userID, reservation.ID, completion, service.now().UTC()); err != nil {
 		return nil, err
 	}
@@ -115,10 +104,10 @@ func (service *Service) Review(ctx context.Context, userID uuid.UUID, request Re
 	}
 	parsedURL, _ := url.Parse(settings.BaseURL)
 	return map[string]any{
-		"review":      review,
+		"review":      Review{SchemaVersion: 1, ReviewContent: content},
 		"snapshot":    json.RawMessage(request.Snapshot),
 		"provider":    map[string]string{"name": string(settings.Provider), "host": parsedURL.Host, "model": settings.Model},
-		"usage":       map[string]*int{"inputTokens": result.InputTokens, "outputTokens": result.OutputTokens},
+		"usage":       map[string]*int{"inputTokens": usage.InputTokens, "outputTokens": usage.OutputTokens},
 		"generatedAt": service.now().UTC(),
 	}, nil
 }
@@ -140,23 +129,15 @@ func (service *Service) Convert(ctx context.Context, userID uuid.UUID, request C
 		return ConversionDraft{}, err
 	}
 	started := time.Now()
-	result, callErr := service.transport.Call(ctx, ProviderCall{
-		Provider:        settings.Provider,
-		BaseURL:         settings.BaseURL,
-		APIKey:          apiKey,
-		Model:           settings.Model,
-		MaxOutputTokens: settings.MaxOutputTokens,
-		Prompt:          conversionPrompt(request),
-	})
+	extraction, usage, callErr := service.flows.Convert(ctx, apiKey, selectionFor(*settings), request)
 	var draft ConversionDraft
 	if callErr == nil {
-		var extraction Extraction
-		extraction, callErr = decodeExtraction(result.Content)
+		callErr = validateExtraction(extraction)
 		if callErr == nil {
 			draft, callErr = buildDraft(extraction, request.Source, request.TrackingMode)
 		}
 	}
-	completion := completionFor(result, callErr, started, true)
+	completion := completionFor(usage, callErr, started, true)
 	if err := service.repository.CompleteUsage(ctx, userID, reservation.ID, completion, service.now().UTC()); err != nil {
 		return ConversionDraft{}, err
 	}
@@ -185,11 +166,8 @@ func (service *Service) providerRequest(ctx context.Context, userID uuid.UUID, s
 	if settings == nil {
 		return nil, "", ErrNotConfigured
 	}
-	if service.endpoints != nil {
-		settings.BaseURL, err = service.endpoints.Resolve(ctx, settings.Provider, settings.BaseURL)
-		if err != nil {
-			return nil, "", err
-		}
+	if settings.Provider.BaseURL() == "" {
+		return nil, "", fmt.Errorf("%w: choose OpenAI, Anthropic, or DeepSeek in AI settings", ErrNotConfigured)
 	}
 	key := strings.TrimSpace(sessionKey)
 	if key == "" && settings.EncryptedAPIKey != "" && service.credentials != nil {
@@ -204,19 +182,33 @@ func (service *Service) providerRequest(ctx context.Context, userID uuid.UUID, s
 	return settings, key, nil
 }
 
-func completionFor(result ProviderResult, callErr error, started time.Time, retain bool) CompleteUsage {
+func selectionFor(settings Settings) ModelSelection {
+	return ModelSelection{Provider: settings.Provider, Model: settings.Model, MaxOutputTokens: settings.MaxOutputTokens}
+}
+
+func completionFor(usage Usage, callErr error, started time.Time, retain bool) CompleteUsage {
 	latency := int(time.Since(started).Milliseconds())
 	if callErr == nil {
-		return CompleteUsage{Status: "success", InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, LatencyMS: latency}
+		return CompleteUsage{Status: "success", InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, LatencyMS: latency}
 	}
-	return CompleteUsage{Status: "error", InputTokens: result.InputTokens, OutputTokens: result.OutputTokens, LatencyMS: latency, ErrorCode: providerErrorCode(callErr), RetainReservationOnError: retain}
+	return CompleteUsage{Status: "error", InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, LatencyMS: latency, ErrorCode: providerErrorCode(callErr), RetainReservationOnError: retain}
 }
 
 func providerErrorCode(err error) string {
-	if errors.Is(err, context.DeadlineExceeded) {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
 		return "provider_timeout"
+	case errors.Is(err, ErrProviderCredential):
+		return "provider_credential"
+	case errors.Is(err, ErrProviderModel):
+		return "provider_model"
+	case errors.Is(err, ErrProviderRateLimited):
+		return "provider_rate_limited"
+	case errors.Is(err, ErrInvalidInput):
+		return "invalid_output"
+	default:
+		return "provider_unavailable"
 	}
-	return "provider_unavailable"
 }
 
 func configurationHash(settings Settings, trackingMode, currency string) string {

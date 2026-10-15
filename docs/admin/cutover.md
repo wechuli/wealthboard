@@ -28,9 +28,6 @@ replacement boundary; the repository no longer contains that runtime.
 - [ ] Configure stable `SESSION_SECRET`, exact `APP_URL`, `AUTH_METHODS`, and
       any OIDC or AI secrets outside the image.
 - [ ] Build the Vite client and Go binary or immutable application image.
-- [ ] Configure PDF/XLSX/DOCX extraction either through the isolated socket
-      worker or a bounded direct-install Node fallback. Do not add Node to the
-      distroless application image.
 - [ ] Verify `/api/health/live`, `/api/health/ready`, SPA deep links, login,
       logout, and the configured signup policy.
 - [ ] Complete representative two-user isolation, financial replay, import,
@@ -48,8 +45,8 @@ replacement boundary; the repository no longer contains that runtime.
       the new release.
 - [ ] Verify representative accounts, totals, goals, reports, imports, exports,
       and privacy mode with controlled users.
-- [ ] Monitor request IDs, structured errors, PostgreSQL saturation, and
-      extraction-worker failures without logging private payloads.
+- [ ] Monitor request IDs, structured errors, and PostgreSQL saturation
+      without logging private payloads.
 
 ## Rollback readiness
 

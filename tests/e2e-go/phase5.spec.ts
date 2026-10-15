@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import type { components } from "../../web/src/api/schema";
+import { docxDocument, pdfDocument, xlsxWorkbook } from "./document-fixtures";
 
 const origin = `http://127.0.0.1:${process.env.E2E_GO_PORT || 3200}`;
 const password = "fictional-go-e2e-password";
@@ -631,32 +632,33 @@ test("restores position management, base-currency value, and private account his
   }
 });
 
-test("extracts redacted text and rejects unsafe AI provider endpoints", async ({
+test("rejects unsupported AI providers and server-side source extraction", async ({
   page,
 }) => {
   const session = await signUp(page, "go-ai-owner");
   const settingsInput = {
-    provider: "custom",
-    baseUrl: "http://127.0.0.1:4200/v1",
     model: "fixture-import-model",
     includeExactAmounts: false,
     includeAccountNames: false,
     monthlyTokenLimit: 100000,
     maxOutputTokens: 4000,
   };
-  const settingsResponse = await mutation(
-    page,
-    session,
-    "PUT",
-    "/ai/settings",
-    settingsInput,
-  );
-  expect(settingsResponse.status()).toBe(422);
-  expect(await settingsResponse.json()).toEqual(
+  const custom = await mutation(page, session, "PUT", "/ai/settings", {
+    ...settingsInput,
+    provider: "custom",
+  });
+  expect(custom.status()).toBe(422);
+  expect(await custom.json()).toEqual(
     expect.objectContaining({
-      detail: expect.stringContaining("private or local address"),
+      detail: expect.stringContaining("choose OpenAI, Anthropic, or DeepSeek"),
     }),
   );
+  const endpoint = await mutation(page, session, "PUT", "/ai/settings", {
+    ...settingsInput,
+    provider: "openai",
+    baseUrl: "http://127.0.0.1:4200/v1",
+  });
+  expect(endpoint.status()).toBe(400);
 
   const extracted = await page.request.post("/api/v1/ai/import/extract", {
     headers: { Origin: origin, "X-CSRF-Token": session.csrfToken },
@@ -664,20 +666,117 @@ test("extracts redacted text and rejects unsafe AI provider endpoints", async ({
       file: {
         name: "statement.csv",
         mimeType: "text/csv",
-        buffer: Buffer.from(
-          "id,type,amount,date,currency,reference\nfixture-deposit-1,deposit,24.00,2025-01-02,KES,PRIVATE_REFERENCE",
-        ),
+        buffer: Buffer.from("id,amount\nfixture-1,24.00"),
       },
     },
   });
-  expect(extracted.ok()).toBeTruthy();
-  const source = (await extracted.json()).source;
-  expect(JSON.stringify(source)).toContain("PRIVATE_REFERENCE");
-  source.units = source.units.map((unit: { text: string }) => ({
-    ...unit,
-    text: unit.text.replaceAll("PRIVATE_REFERENCE", ""),
-  }));
-  expect(JSON.stringify(source)).not.toContain("PRIVATE_REFERENCE");
+  expect(extracted.status()).toBe(404);
+});
+
+test("extracts PDF, protected PDF, XLSX, DOCX, and CSV sources in the browser", async ({
+  page,
+}) => {
+  const session = await signUp(page, "go-ai-extract-owner");
+  const accountId = await createAccount(page, session, "Browser extraction");
+  const uploads: string[] = [];
+  page.on("request", (request) => {
+    const body = request.postDataBuffer();
+    if (
+      request.url().includes("/ai/import/extract") ||
+      body?.includes("FIXTURE_SOURCE_TEXT") ||
+      body?.includes("fictional-pdf-unlock")
+    )
+      uploads.push(`${request.method()} ${request.url()}`);
+  });
+  await page.goto(`/accounts/${accountId}/import`);
+  await page.getByLabel("Convert document with AI").check();
+  await expect(
+    page.getByRole("heading", { name: "Source file conversion" }),
+  ).toBeVisible();
+
+  const sourceFile = page.getByLabel("Source file");
+  const extractButton = page.getByRole("button", { name: "Extract source" });
+  const firstUnit = page.getByLabel("Approved text for source-1");
+  const extract = async (
+    file: { name: string; mimeType: string; buffer: Buffer },
+    expected: RegExp,
+    documentPassword?: string,
+  ) => {
+    await sourceFile.setInputFiles(file);
+    if (documentPassword !== undefined)
+      await page
+        .getByLabel("PDF password (if required)")
+        .fill(documentPassword);
+    await extractButton.click();
+    await expect(firstUnit).toHaveValue(expected);
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(firstUnit).toBeHidden();
+  };
+
+  await extract(
+    {
+      name: "statement.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("id,description\nfixture-1,FIXTURE_SOURCE_TEXT csv"),
+    },
+    /\["id","description"\]/,
+  );
+  await extract(
+    {
+      name: "statement.pdf",
+      mimeType: "application/pdf",
+      buffer: pdfDocument(["FIXTURE_SOURCE_TEXT pdf deposit 24.00"]),
+    },
+    /FIXTURE_SOURCE_TEXT pdf deposit 24\.00/,
+  );
+  await extract(
+    {
+      name: "activity.xlsx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: xlsxWorkbook([["FIXTURE_SOURCE_TEXT xlsx", "24.00"]]),
+    },
+    /Excel date system: 1900/,
+  );
+  await expect(page.getByLabel("Approved text for source-2")).toBeHidden();
+  await extract(
+    {
+      name: "statement.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      buffer: docxDocument(["FIXTURE_SOURCE_TEXT docx deposit 24.00"]),
+    },
+    /FIXTURE_SOURCE_TEXT docx deposit 24\.00/,
+  );
+
+  const protectedPdf = {
+    name: "protected.pdf",
+    mimeType: "application/pdf",
+    buffer: pdfDocument(["FIXTURE_SOURCE_TEXT protected deposit 24.00"], {
+      userPassword: "fictional-pdf-unlock",
+      ownerPassword: "fictional-pdf-owner",
+    }),
+  };
+  await sourceFile.setInputFiles(protectedPdf);
+  await extractButton.click();
+  await expect(page.getByRole("alert")).toContainText(
+    "This PDF requires a password",
+  );
+  const passwordField = page.getByLabel("PDF password (if required)");
+  await expect(passwordField).toBeFocused();
+  await passwordField.fill("wrong-fixture-password");
+  await extractButton.click();
+  await expect(page.getByRole("alert")).toContainText(
+    "The PDF password is incorrect",
+  );
+  await expect(passwordField).toHaveValue("");
+  await passwordField.fill("fictional-pdf-unlock");
+  await extractButton.click();
+  await expect(firstUnit).toHaveValue(
+    /FIXTURE_SOURCE_TEXT protected deposit 24\.00/,
+  );
+
+  expect(uploads).toEqual([]);
 });
 
 test("registers the built service worker and blocks offline financial mutations", async ({

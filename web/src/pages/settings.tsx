@@ -58,7 +58,13 @@ import {
   Select,
 } from "@/components/ui/primitives";
 import { PrivateValue } from "@/components/privacy";
+import {
+  aiProviderOption,
+  aiProviders,
+  isAIProvider,
+} from "@/lib/ai-providers";
 import type {
+  AIProvider,
   AIRead,
   APIKeyMetadata,
   CreateAPIKeyInput,
@@ -1101,26 +1107,23 @@ function AiSettingsForm({
   operations: SettingsOperations;
 }) {
   const settings = ai.settings;
-  const [provider, setProvider] = useState(settings?.provider ?? "openai");
-  const [customBaseUrl, setCustomBaseUrl] = useState(
-    settings?.provider === "custom" ? settings.baseUrl : "",
+  const [provider, setProvider] = useState<AIProvider>(
+    settings && isAIProvider(settings.provider) ? settings.provider : "openai",
+  );
+  const [model, setModel] = useState(
+    settings?.model ?? aiProviderOption("openai").suggestedModels[0],
   );
   const [remember, setRemember] = useState(settings?.hasStoredApiKey ?? false);
   const notice = useNotice();
-  const endpoint =
-    provider === "openai"
-      ? "https://api.openai.com/v1"
-      : provider === "deepseek"
-        ? "https://api.deepseek.com"
-        : customBaseUrl;
+  const providerOption = aiProviderOption(provider);
   return (
     <Card>
       <CardHeader>
         <div>
           <CardTitle>AI provider</CardTitle>
           <p className="mt-1 text-xs text-slate-500">
-            Connect OpenAI, DeepSeek, or a compatible endpoint configured for
-            this Wealthboard instance for on-demand reviews and file conversion.
+            Connect OpenAI, Anthropic, or DeepSeek with your own API key for
+            on-demand reviews and file conversion.
           </p>
         </div>
         <span className="flex items-center gap-1.5 text-xs text-emerald-300">
@@ -1134,9 +1137,8 @@ function AiSettingsForm({
             event.preventDefault();
             const form = new FormData(event.currentTarget);
             const input = {
-              provider: provider as "openai" | "deepseek" | "custom",
-              baseUrl: String(form.get("baseUrl")),
-              model: String(form.get("model")),
+              provider,
+              model: model.trim(),
               includeExactAmounts: form.has("includeExactAmounts"),
               includeAccountNames: form.has("includeAccountNames"),
               monthlyTokenLimit: Number(form.get("monthlyTokenLimit")),
@@ -1158,39 +1160,53 @@ function AiSettingsForm({
               id="aiProvider"
               name="provider"
               value={provider}
-              onChange={(event) => setProvider(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (!isAIProvider(next)) return;
+                if (
+                  !model.trim() ||
+                  providerOption.suggestedModels.includes(model.trim())
+                )
+                  setModel(aiProviderOption(next).suggestedModels[0]);
+                setProvider(next);
+              }}
             >
-              <option value="openai">OpenAI</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="custom">OpenAI-compatible endpoint</option>
+              {aiProviders.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="aiModel">Model identifier</Label>
+            <Label htmlFor="aiModel">Model</Label>
             <Input
               id="aiModel"
               name="model"
-              defaultValue={settings?.model ?? ""}
-              placeholder="Provider model name"
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              list="aiModelSuggestions"
+              placeholder={providerOption.suggestedModels[0]}
+              pattern="^[A-Za-z0-9][A-Za-z0-9._:\-]*$"
+              title="Use the provider's model ID, for example gpt-5.5 or claude-sonnet-5."
+              maxLength={200}
               autoComplete="off"
+              aria-describedby="aiModelHint"
               required
             />
+            <datalist id="aiModelSuggestions">
+              {providerOption.suggestedModels.map((suggestion) => (
+                <option key={suggestion} value={suggestion} />
+              ))}
+            </datalist>
+            <p id="aiModelHint" className="mt-1.5 text-xs text-slate-500">
+              Pick a suggestion or enter any model ID {providerOption.label}{" "}
+              serves.
+            </p>
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="aiBaseUrl">API endpoint</Label>
-            <Input
-              id="aiBaseUrl"
-              name="baseUrl"
-              value={endpoint}
-              readOnly={provider !== "custom"}
-              onChange={(event) => setCustomBaseUrl(event.target.value)}
-              placeholder="https://models.example.com/v1"
-            />
-            {provider === "custom" ? (
-              <p className="mt-1.5 text-xs text-slate-500">
-                This endpoint must be enabled for your Wealthboard instance.
-              </p>
-            ) : null}
+            <Input id="aiBaseUrl" value={providerOption.endpoint} readOnly />
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="aiApiKey">API key</Label>

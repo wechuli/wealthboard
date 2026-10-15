@@ -160,3 +160,80 @@ func assertCrossUserCategoryRejected(t *testing.T, ctx context.Context, db *sql.
 		t.Fatal("expected cross-user category reference to fail")
 	}
 }
+
+func TestPostgreSQLMigrationsRunOnceAcrossConcurrentReplicas(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	admin, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatalf("open admin database: %v", err)
+	}
+	defer admin.Close()
+	schema := fmt.Sprintf("wealthboard_concurrent_%d", time.Now().UnixNano())
+	if _, err := admin.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create test schema: %v", err)
+	}
+	defer func() {
+		if _, err := admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("drop test schema: %v", err)
+		}
+	}()
+	schemaURL, err := url.Parse(databaseURL)
+	if err != nil {
+		t.Fatalf("parse TEST_DATABASE_URL: %v", err)
+	}
+	query := schemaURL.Query()
+	query.Set("search_path", schema)
+	schemaURL.RawQuery = query.Encode()
+
+	const replicas = 4
+	databases := make([]*sql.DB, replicas)
+	for index := range databases {
+		databases[index], err = Open(ctx, config.Database{
+			URL:             schemaURL.String(),
+			MaxOpenConns:    2,
+			MaxIdleConns:    1,
+			ConnMaxLifetime: time.Minute,
+			ConnMaxIdleTime: time.Minute,
+			PingTimeout:     5 * time.Second,
+		})
+		if err != nil {
+			t.Fatalf("open replica database: %v", err)
+		}
+		defer databases[index].Close()
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, replicas)
+	for _, db := range databases {
+		go func() {
+			<-start
+			errs <- MigrateUp(ctx, db)
+		}()
+	}
+	close(start)
+	for range replicas {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent migration failed: %v", err)
+		}
+	}
+
+	if err := CheckReady(ctx, databases[0]); err != nil {
+		t.Fatalf("migrated database is not ready: %v", err)
+	}
+	var applied, distinct int
+	if err := databases[0].QueryRowContext(ctx, `
+		SELECT count(*), count(DISTINCT version_id)
+		FROM goose_db_version
+		WHERE version_id > 0 AND is_applied
+	`).Scan(&applied, &distinct); err != nil {
+		t.Fatalf("read migration history: %v", err)
+	}
+	if applied != int(CurrentSchemaVersion) || distinct != int(CurrentSchemaVersion) {
+		t.Fatalf("migration history has %d rows for %d versions, want each of %d versions once", applied, distinct, CurrentSchemaVersion)
+	}
+	assertCompleteSchema(t, ctx, databases[0])
+}

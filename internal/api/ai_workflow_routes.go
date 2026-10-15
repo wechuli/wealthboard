@@ -7,7 +7,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -16,7 +15,7 @@ import (
 	webauth "github.com/wechuli/wealthboard/internal/auth"
 )
 
-const maxAIJSONBytes = aiworkflow.MaxSourceBytes + 128<<10
+const maxAIJSONBytes = aiworkflow.MaxTextBytes + 64<<10
 
 type aiWorkflowAuthorizer interface {
 	AuthorizeScopedMutation(*http.Request, webauth.Scope) (webauth.Principal, error)
@@ -34,13 +33,12 @@ type aiWorkflowService interface {
 }
 
 type AIWorkflowHandler struct {
-	auth      aiWorkflowAuthorizer
-	service   aiWorkflowService
-	extractor aiworkflow.Extractor
+	auth    aiWorkflowAuthorizer
+	service aiWorkflowService
 }
 
-func NewAIWorkflowHandler(auth aiWorkflowAuthorizer, service aiWorkflowService, extractor aiworkflow.Extractor) *AIWorkflowHandler {
-	return &AIWorkflowHandler{auth: auth, service: service, extractor: extractor}
+func NewAIWorkflowHandler(auth aiWorkflowAuthorizer, service aiWorkflowService) *AIWorkflowHandler {
+	return &AIWorkflowHandler{auth: auth, service: service}
 }
 
 func RegisterAIWorkflowRoutes(router chi.Router, handler *AIWorkflowHandler) {
@@ -50,7 +48,6 @@ func RegisterAIWorkflowRoutes(router chi.Router, handler *AIWorkflowHandler) {
 	router.Delete("/ai/settings", handler.Disconnect)
 	router.Post("/ai/usage/clear", handler.ClearUsage)
 	router.Post("/ai/review", handler.Review)
-	router.Post("/ai/import/extract", handler.Extract)
 	router.Post("/ai/import/convert", handler.Convert)
 }
 
@@ -130,52 +127,6 @@ func (handler *AIWorkflowHandler) Review(response http.ResponseWriter, request *
 	writeJSON(response, http.StatusOK, result)
 }
 
-func (handler *AIWorkflowHandler) Extract(response http.ResponseWriter, request *http.Request) {
-	_, ok := handler.authorizeInvoke(response, request)
-	if !ok {
-		return
-	}
-	request.Body = http.MaxBytesReader(response, request.Body, aiworkflow.MaxSourceBytes+64<<10)
-	if err := request.ParseMultipartForm(aiworkflow.MaxSourceBytes + 64<<10); err != nil {
-		writeProblem(response, http.StatusBadRequest, "Invalid source", "Provide a file no larger than 5 MB.")
-		return
-	}
-	if request.MultipartForm != nil {
-		defer request.MultipartForm.RemoveAll()
-	}
-	files := request.MultipartForm.File["file"]
-	passwords := request.MultipartForm.Value["documentPassword"]
-	if len(files) != 1 || len(passwords) > 1 {
-		writeProblem(response, http.StatusBadRequest, "Invalid source", "Provide one source file and at most one document password.")
-		return
-	}
-	file, err := files[0].Open()
-	if err != nil {
-		writeProblem(response, http.StatusBadRequest, "Invalid source", "The source file could not be read.")
-		return
-	}
-	defer file.Close()
-	content, err := io.ReadAll(io.LimitReader(file, aiworkflow.MaxSourceBytes+1))
-	if err != nil || len(content) > aiworkflow.MaxSourceBytes {
-		writeProblem(response, http.StatusBadRequest, "Invalid source", "Provide a file no larger than 5 MB.")
-		return
-	}
-	password := ""
-	if len(passwords) == 1 {
-		password = passwords[0]
-	}
-	source, err := handler.extractor.Extract(request.Context(), files[0].Filename, content, password)
-	password = ""
-	for index := range passwords {
-		passwords[index] = ""
-	}
-	if err != nil {
-		writeAIWorkflowError(response, err)
-		return
-	}
-	writeJSON(response, http.StatusOK, map[string]any{"source": source})
-}
-
 func (handler *AIWorkflowHandler) Convert(response http.ResponseWriter, request *http.Request) {
 	principal, ok := handler.authorizeInvoke(response, request)
 	if !ok {
@@ -250,20 +201,20 @@ func decodeAIJSON(response http.ResponseWriter, request *http.Request, destinati
 }
 
 func writeAIWorkflowError(response http.ResponseWriter, err error) {
-	var sourceError *aiworkflow.SourceError
 	switch {
-	case errors.As(err, &sourceError):
-		response.Header().Set("Content-Type", "application/json")
-		response.Header().Set("Cache-Control", "no-store")
-		response.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(response).Encode(map[string]string{"error": sourceError.Message, "code": sourceError.Code})
 	case errors.Is(err, aiworkflow.ErrInvalidInput), errors.Is(err, aiworkflow.ErrCredential), errors.Is(err, aiworkflow.ErrNotConfigured):
 		writeProblem(response, http.StatusUnprocessableEntity, "Validation failed", err.Error())
 	case errors.Is(err, aiworkflow.ErrRateLimited), errors.Is(err, aiworkflow.ErrBudget):
 		writeProblem(response, http.StatusTooManyRequests, "AI request unavailable", err.Error())
 	case errors.Is(err, context.DeadlineExceeded):
 		writeProblem(response, http.StatusGatewayTimeout, "Provider timeout", "The provider did not finish in time.")
-	case strings.Contains(err.Error(), "provider"):
+	case errors.Is(err, aiworkflow.ErrProviderCredential):
+		writeProblem(response, http.StatusBadGateway, "Provider error", "The AI provider rejected the API key.")
+	case errors.Is(err, aiworkflow.ErrProviderModel):
+		writeProblem(response, http.StatusBadGateway, "Provider error", "The AI provider does not recognize the selected model.")
+	case errors.Is(err, aiworkflow.ErrProviderRateLimited):
+		writeProblem(response, http.StatusBadGateway, "Provider error", "The AI provider rate limited the request. Try again later.")
+	case errors.Is(err, aiworkflow.ErrProvider):
 		writeProblem(response, http.StatusBadGateway, "Provider error", "The AI provider could not complete the request.")
 	default:
 		writeProblem(response, http.StatusServiceUnavailable, "Service unavailable", "The AI workflow could not be completed.")

@@ -447,7 +447,7 @@ financial prompts by default.
   SBOM/provenance policy.
 - **Proposed change:** Add image scanning before release tags/latest and retain
   reviewed SBOM, provenance, signatures, and verification commands for the
-  exact published application and extraction-worker digests.
+  exact published application image digest.
 - **Risks or trade-offs:** CI time and scanner false positives require a bounded
   exception process.
 - **Acceptance criteria:** Any failed gate or unaccepted high/critical finding
@@ -556,8 +556,7 @@ financial prompts by default.
   exist. Readiness checks database/schema/auth state. SIGINT/SIGTERM triggers a
   bounded graceful HTTP shutdown, and Kubernetes probes are supplied.
 - **Remaining concern:** Authentication readiness is not a pre-listen startup
-  gate. Timezone/policy validation, extraction-worker availability, operator
-  storage preflights, and deployment shutdown/recovery drills need consolidation.
+  gate. Timezone/policy validation, operator storage preflights, and deployment shutdown/recovery drills need consolidation.
 - **Proposed change:** Consolidate configuration validation, explicitly define
   startup versus readiness responsibilities, and test graceful termination and
   recovery. Keep liveness independent of transient dependencies and perform

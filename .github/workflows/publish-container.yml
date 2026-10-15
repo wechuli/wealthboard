@@ -29,7 +29,7 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login "${REGISTRY}" --username "${{ github.actor }}" --password-stdin
 
-      - name: Build and push release images
+      - name: Build and push release image
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
@@ -43,11 +43,3 @@ jobs:
             --tag "${image}:latest" \
             --cache-from type=gha,scope=application \
             --cache-to type=gha,mode=max,scope=application
-          docker buildx build . \
-            --file Dockerfile \
-            --target extraction-worker \
-            --push \
-            --tag "${image}:${RELEASE_TAG#v}-extraction-worker" \
-            --tag "${image}:latest-extraction-worker" \
-            --cache-from type=gha,scope=extraction-worker \
-            --cache-to type=gha,mode=max,scope=extraction-worker

@@ -1661,26 +1661,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/ai/import/extract": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Extract bounded text units from one import source file
-         * @description Bearer API keys require `ai:invoke`. Browser sessions require a trusted Origin and `X-CSRF-Token`. Accepts exactly one file up to 5 MiB plus at most one PDF password; multipart overhead is limited to 64 KiB. Supported files are TXT, CSV, TSV, JSON, PDF, XLSX, and DOCX. Extracted text is limited to 64 KiB and 1,000 units. Passwords are cleared after use and never returned, stored, or logged.
-         */
-        post: operations["extractAIImportSource"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/ai/import/convert": {
         parameters: {
             query?: never;
@@ -3480,11 +3460,10 @@ export interface components {
             reviewAvailability: components["schemas"]["ReviewAvailability"];
         };
         /** @enum {string} */
-        AIProvider: "openai" | "deepseek" | "custom";
+        AIProvider: "openai" | "anthropic" | "deepseek";
         AISettingsInput: {
             provider: components["schemas"]["AIProvider"];
-            /** Format: uri */
-            baseUrl: string;
+            /** @description Provider model identifier: a suggested model or any other model the provider serves. */
             model: string;
             /** @description Whether exact financial amounts may be shared with the configured provider. */
             includeExactAmounts: boolean;
@@ -3496,7 +3475,10 @@ export interface components {
         };
         AIWorkflowSettings: {
             provider: components["schemas"]["AIProvider"];
-            /** Format: uri */
+            /**
+             * Format: uri
+             * @description Fixed provider API endpoint derived from `provider`; read-only.
+             */
             baseUrl: string;
             model: string;
             includeExactAmounts: boolean;
@@ -3596,30 +3578,15 @@ export interface components {
             /** Format: date-time */
             generatedAt: string;
         };
-        AISourceUpload: {
-            /**
-             * Format: binary
-             * @description One TXT, CSV, TSV, JSON, PDF, XLSX, or DOCX file, maximum 5 MiB.
-             */
-            file: string;
-            /** @description Optional and accepted for PDF files only. */
-            documentPassword?: string;
-        };
         AISourceUnit: {
             id: string;
             location: string;
             text: string;
         };
+        /** @description Text sections extracted from a source file in the browser. Wealthboard never receives the original file. */
         AISource: {
             units: components["schemas"]["AISourceUnit"][];
             warnings: string[];
-        };
-        AISourceResult: {
-            source: components["schemas"]["AISource"];
-        };
-        AISourceError: {
-            error: string;
-            code: string;
         };
         AIConversionRequest: {
             source: components["schemas"]["AISource"];
@@ -6835,50 +6802,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            422: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
-            502: components["responses"]["Problem"];
-            503: components["responses"]["Problem"];
-            504: components["responses"]["Problem"];
-        };
-    };
-    extractAIImportSource: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
-                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["AISourceUpload"];
-            };
-        };
-        responses: {
-            /** @description Extracted, bounded source units */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AISourceResult"];
-                };
-            };
-            /** @description Invalid multipart source or a structured extraction error */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                    "application/json": components["schemas"]["AISourceError"];
-                };
-            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
