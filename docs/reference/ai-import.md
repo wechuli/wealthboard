@@ -15,6 +15,7 @@ prompts.
 | PDF        | Selectable page text, with an optional document password | No OCR; table order and missing/image content require review                  |
 | DOCX       | Body paragraphs and tables                               | Images, headers, footers, drawings, and text boxes may be excluded            |
 
+Files are read in your browser; Wealthboard never receives the original file.
 Files are limited to **5 MB**. Extracted content is limited to **64 KB and 1,000
 sections**. PDFs are limited to 100 pages, workbooks to 20 sheets, and expanded
 Office archives to 20 MB/2,000 entries. Document extraction times out after
@@ -28,17 +29,13 @@ For a password-protected PDF, select the file and enter **PDF password (if
 required)** before **Extract source**. You can also try extraction first: a
 missing or incorrect password produces a distinct error and focuses the password
 field. Re-enter the password and retry without selecting the file again.
-Passwords are case-sensitive and are passed through without trimming spaces.
-The API accepts up to 1,024 UTF-8 bytes; non-ASCII passwords can reach that limit
-with fewer characters.
+Passwords are case-sensitive, are passed through without trimming spaces, and
+are limited to 1,024 characters.
 
-The password is used only by PDF.js inside the isolated extraction worker. It is
-not an AI API key or application login password. The API accepts it only in the
-multipart extraction request, clears its request copy after extraction, and does
-not include it in the response or provider request. The parser child has an empty
-environment and stderr is discarded. A sidecar operator must preserve the same
-no-log/no-storage boundary. Retries require re-entry; use HTTPS for remote
-deployments.
+The password is used only by PDF.js inside the browser's extraction worker. It
+is not an AI API key or application login password, and it is never sent to
+Wealthboard, stored, or included in a provider request. Retries require
+re-entry.
 Unlocking a PDF does not add OCR support or guarantee correct table extraction.
 
 | Protection                                              | Current behavior                                                                                     |
@@ -46,8 +43,8 @@ Unlocking a PDF does not add OCR support or guarantee correct table extraction.
 | PDF password to open                                    | Supported using the password you provide; missing/wrong passwords allow retry                        |
 | XLSX/DOCX password to open                              | Separate Office encryption, currently unsupported; open in Excel/Word and export an unencrypted copy |
 | Excel sheet/workbook locks or Word editing restrictions | Not file encryption; otherwise supported content can be read without an editing password             |
-| CSV, TSV, JSON, TXT                                     | No native password encryption; decrypt any external wrapper before uploading                         |
-| Password-protected ZIP/other archives                   | Unsupported; unpack locally and upload a supported document, not the archive                         |
+| CSV, TSV, JSON, TXT                                     | No native password encryption; decrypt any external wrapper before selecting it                      |
+| Password-protected ZIP/other archives                   | Unsupported; unpack locally and select a supported document, not the archive                         |
 
 An encrypted Office file can retain its `.xlsx` or `.docx` extension while using
 a compound-file container instead of normal ZIP/XML. Wealthboard recognizes that
@@ -100,35 +97,23 @@ output tokens. A failed call with unknown usage retains that reservation.
 Increase the output-token limit or use a smaller source if the model response
 is incomplete. Retrying is explicit and may incur another provider charge.
 
-## Document extraction deployment
+## Where extraction runs
 
-UTF-8 CSV, TSV, JSON, and TXT are parsed directly by the Go service. PDF, XLSX,
-and DOCX require an isolated Node parser. On a direct installation, Wealthboard
-uses `node` and `AI_EXTRACTION_SCRIPT` (default
-`scripts/extract-import-source-cli.mjs`). The child receives no inherited
-environment, has bounded memory/output, and is killed at the 15-second deadline.
+Every supported format is parsed in the browser, in a dedicated Web Worker that
+loads PDF.js, Mammoth, and an XML parser only when needed. The worker is stopped
+on completion, cancellation, leaving the import page, or after 15 seconds. The
+Wealthboard server has no extraction endpoint, parser sidecar, or Node runtime.
 
-The distroless application image contains neither Node nor parser dependencies.
-Compose runs the repository's separate `extraction-worker` image with no
-network. The Kubernetes example runs the same bounded worker as a sidecar; like
-all containers in a pod, it shares the pod network namespace. Both use a shared
-in-memory Unix socket.
-For each connection, the service writes one JSON
-object containing `extension`, base64 `bytes`, and `documentPassword`, closes
-its write side, and expects the same bounded JSON response produced by the CLI
-script. The daemon caps connections, request/response sizes, parser memory, and
-runtime; clears request buffers and its environment; suppresses worker output;
-and creates its socket with restricted permissions. Custom deployments must
-preserve those controls and keep the socket pod-local.
-Without Node or a reachable sidecar, plain text/table extraction still works,
-but PDF/XLSX/DOCX returns a bounded parser error.
+API clients that convert documents extract text themselves and send the same
+source sections to `POST /api/v1/ai/import/convert`. The server re-validates
+section IDs and the 1,000-section, 100-warning, and 64 KB limits.
 
 ## Workflow
 
 1. Choose **Convert document with AI**, select a source, and select
    **Extract source**. Supply the PDF's document password if required. The file
-   is processed inside your self-hosted Wealthboard instance, not sent to an
-   external provider.
+   is read in your browser; it is not uploaded to Wealthboard or sent to the
+   provider.
 2. Review the extracted sections and warnings. Select relevant activity and
    redact sensitive text. Selected section IDs, location labels, and edited
    text are sent; the original file is not. If a location label is sensitive,

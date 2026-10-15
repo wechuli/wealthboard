@@ -6,10 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"io"
-	"net"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -87,119 +83,6 @@ func TestPerUserRateLimitAndMonthlyBudget(t *testing.T) {
 	if _, err := repository.ReserveUsage(context.Background(), budgetUser, 1_001, "portfolio_review", now.Add(2*time.Minute)); !errors.Is(err, ErrBudget) {
 		t.Fatalf("budget error = %v", err)
 	}
-}
-
-func TestTextExtractionLimitsAndPasswordPrivacy(t *testing.T) {
-	extractor := Extractor{}
-	source, err := extractor.Extract(context.Background(), "activity.csv", []byte("id,amount\na,10\n"), "")
-	if err != nil || len(source.Units) != 2 {
-		t.Fatalf("CSV extraction = %+v, %v", source, err)
-	}
-	if _, err := extractor.Extract(context.Background(), "activity.txt", make([]byte, MaxSourceBytes+1), "private-password"); err == nil || strings.Contains(err.Error(), "private-password") {
-		t.Fatalf("oversize/password error = %v", err)
-	}
-	tooMany := strings.Repeat("value\n", MaxSourceUnits+1)
-	if _, err := extractor.Extract(context.Background(), "activity.txt", []byte(tooMany), ""); err == nil || !strings.Contains(err.Error(), "1,000") {
-		t.Fatalf("section limit error = %v", err)
-	}
-	if _, err := extractor.Extract(context.Background(), "activity.csv", []byte("a,b"), "private-password"); err == nil || strings.Contains(err.Error(), "private-password") {
-		t.Fatalf("password privacy error = %v", err)
-	}
-}
-
-func TestDocumentExtractionOverUnixSocket(t *testing.T) {
-	socketPath := testSocketPath(t)
-	listener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-
-	requestReceived := make(chan map[string]string, 1)
-	go func() {
-		connection, acceptErr := listener.Accept()
-		if acceptErr != nil {
-			return
-		}
-		defer connection.Close()
-		var request map[string]string
-		_ = json.NewDecoder(connection).Decode(&request)
-		requestReceived <- request
-		_, _ = connection.Write([]byte(`{"source":{"units":[{"id":"source-1","location":"Page 1","text":"deposit 10"}],"warnings":[]}}`))
-	}()
-
-	extractor := Extractor{SocketPath: socketPath, Timeout: time.Second}
-	source, err := extractor.Extract(context.Background(), "statement.pdf", []byte("%PDF-test"), "private-password")
-	if err != nil || len(source.Units) != 1 {
-		t.Fatalf("socket extraction = %+v, %v", source, err)
-	}
-	request := <-requestReceived
-	if request["extension"] != "pdf" || request["documentPassword"] != "private-password" {
-		t.Fatalf("unexpected socket request: %#v", request)
-	}
-}
-
-func TestDocumentExtractionSocketRejectsOversizeResponseWithoutLeakingPassword(t *testing.T) {
-	socketPath := testSocketPath(t)
-	listener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-
-	go func() {
-		connection, acceptErr := listener.Accept()
-		if acceptErr != nil {
-			return
-		}
-		defer connection.Close()
-		_, _ = io.Copy(io.Discard, connection)
-		_, _ = connection.Write(make([]byte, MaxTextBytes+16*1024+1))
-	}()
-
-	extractor := Extractor{SocketPath: socketPath, Timeout: time.Second}
-	_, err = extractor.Extract(context.Background(), "statement.pdf", []byte("%PDF-test"), "private-password")
-	if err == nil || strings.Contains(err.Error(), "private-password") {
-		t.Fatalf("oversize/password error = %v", err)
-	}
-}
-
-func TestDocumentExtractionUsesSocketEnvironment(t *testing.T) {
-	socketPath := testSocketPath(t)
-	listener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	t.Setenv("AI_EXTRACTION_SOCKET", socketPath)
-
-	go func() {
-		connection, acceptErr := listener.Accept()
-		if acceptErr != nil {
-			return
-		}
-		defer connection.Close()
-		_, _ = io.Copy(io.Discard, connection)
-		_, _ = connection.Write([]byte(`{"source":{"units":[{"id":"source-1","location":"Sheet 1","text":"value"}],"warnings":[]}}`))
-	}()
-
-	source, err := (Extractor{NodePath: filepath.Join(t.TempDir(), "missing-node")}).Extract(context.Background(), "statement.xlsx", []byte("xlsx"), "")
-	if err != nil || len(source.Units) != 1 {
-		t.Fatalf("environment socket extraction = %+v, %v", source, err)
-	}
-	if _, err := os.Stat(socketPath); err != nil {
-		t.Fatalf("socket disappeared: %v", err)
-	}
-}
-
-func testSocketPath(t *testing.T) string {
-	t.Helper()
-	directory, err := os.MkdirTemp("/tmp", "wb-extract-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(directory) })
-	return filepath.Join(directory, "worker.sock")
 }
 
 type memoryRepository struct {

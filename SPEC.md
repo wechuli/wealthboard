@@ -111,8 +111,8 @@ Use:
 The browser must not access PostgreSQL directly. The Go service owns
 authentication, authorization, business rules, transactions, migrations, and
 operator commands. It serves the compiled Vite assets and SPA fallback from the
-same process. Production requires no Node.js server; Node is used only for
-builds and the isolated PDF/XLSX/DOCX extraction-worker exception.
+same process. Production requires no Node.js runtime; Node is used only for
+builds.
 
 Use durable PostgreSQL storage and tested deployment-wide backups. New
 installations do not import SQLite databases.
@@ -1340,8 +1340,9 @@ before reopening traffic.
 
 An optional source-file conversion step supports both balance- and
 position-tracked accounts without changing Account History Import v1 or
-Investment History Import v1. File extraction runs inside the self-hosted
-application; only approved extracted text goes to the configured model.
+Investment History Import v1. File extraction runs in the user's browser; the
+original file never leaves the device, and only approved extracted text goes to
+the server and the configured model.
 
 - **Two entry paths:** Keep direct import of already compliant CSV/JSON and the
   existing browser-only copyable prompts. Offer a separate "Convert with AI"
@@ -1365,13 +1366,13 @@ application; only approved extracted text goes to the configured model.
   PDFs to 100 pages, and workbooks to 20 sheets. Office archives are limited to
   20 MB expanded and 2,000 entries; document parsing times out after 15 seconds.
 - **Document passwords:** Offer a masked, optional PDF password field when a PDF
-  is selected. Accept one unmodified password of at most 1,024 characters only
-  on the authenticated extraction request; never put it in URLs, source text,
-  conversion requests, provider prompts, logs, usage records, or persistent
-  storage. Missing and incorrect passwords return distinct safe errors and allow
+  is selected. Use one unmodified password of at most 1,024 characters only for
+  extraction in the browser; never send it to the server or put it in URLs,
+  source text, conversion requests, provider prompts, logs, usage records, or
+  persistent storage. Missing and incorrect passwords return distinct safe errors and allow
   retry with the same file. Clear the field after submission, failure, success,
   cancellation, file changes, or leaving the import flow. Pass it only to PDF.js
-  in the local, bounded worker; password support does not add OCR or remove
+  in the browser's bounded extraction worker; password support does not add OCR or remove
   extraction limits. Password-to-open XLSX/DOCX encryption remains unsupported
   with actionable export guidance. Workbook/sheet and Word editing protection
   are not file encryption and do not prevent reading otherwise supported content.
@@ -1857,8 +1858,6 @@ Provide:
   image with compiled Vite assets
 - docker-compose.yml
 - Durable PostgreSQL storage in the Compose example
-- A separate extraction-worker image for PDF/XLSX/DOCX, with networking disabled
-  in Compose and bounded pod-local deployment in Kubernetes
 - Health-check endpoint
 - Environment variable example file
 - Production startup instructions

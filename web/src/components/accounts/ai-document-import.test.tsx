@@ -4,18 +4,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AIDocumentImport } from "@/components/accounts/ai-document-import";
 import { PrivacyProvider } from "@/components/providers/privacy-provider";
+import { SourceExtractionError } from "@/lib/source-extraction/source";
 import type { Account, Session } from "@/lib/types";
 
-const { convertAIDocument, extractAIDocument, getAI } = vi.hoisted(() => ({
+const { convertAIDocument, extractSource, getAI } = vi.hoisted(() => ({
   convertAIDocument: vi.fn(),
-  extractAIDocument: vi.fn(),
+  extractSource: vi.fn(),
   getAI: vi.fn(),
 }));
 
 vi.mock("@/api/client", () => ({
   convertAIDocument,
-  extractAIDocument,
   getAI,
+}));
+
+vi.mock("@/lib/source-extraction", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/source-extraction")>()),
+  extractSource,
 }));
 
 const account = {
@@ -55,17 +60,15 @@ beforeEach(() => {
     value: true,
   });
   getAI.mockResolvedValue({ settings });
-  extractAIDocument.mockResolvedValue({
-    source: {
-      units: [
-        {
-          id: "source-1",
-          location: "Page 1",
-          text: "Private reference; Deposit 12.30",
-        },
-      ],
-      warnings: ["One footer was omitted."],
-    },
+  extractSource.mockResolvedValue({
+    units: [
+      {
+        id: "source-1",
+        location: "Page 1",
+        text: "Private reference; Deposit 12.30",
+      },
+    ],
+    warnings: ["One footer was omitted."],
   });
   convertAIDocument.mockResolvedValue({
     content:
@@ -86,23 +89,22 @@ afterEach(() => {
 describe("AIDocumentImport", () => {
   it("clears PDF passwords and omits them from conversion", async () => {
     const user = userEvent.setup();
-    extractAIDocument
+    extractSource
       .mockRejectedValueOnce(
-        Object.assign(new Error("Enter the PDF password again."), {
-          code: "incorrect_password",
-        }),
+        new SourceExtractionError(
+          "Enter the PDF password again.",
+          "incorrect_password",
+        ),
       )
       .mockResolvedValueOnce({
-        source: {
-          units: [
-            {
-              id: "source-1",
-              location: "Page 1",
-              text: "Private reference; Deposit 12.30",
-            },
-          ],
-          warnings: [],
-        },
+        units: [
+          {
+            id: "source-1",
+            location: "Page 1",
+            text: "Private reference; Deposit 12.30",
+          },
+        ],
+        warnings: [],
       });
     renderImport();
     const file = new File(["encrypted"], "statement.pdf", {
@@ -114,11 +116,9 @@ describe("AIDocumentImport", () => {
       "fictional-password",
     );
     await user.click(screen.getByRole("button", { name: "Extract source" }));
-    expect(extractAIDocument).toHaveBeenCalledWith(
-      file,
-      "fictional-password",
-      "csrf",
-    );
+    expect(extractSource).toHaveBeenCalledWith(file, "fictional-password", {
+      signal: expect.any(AbortSignal),
+    });
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Enter the PDF password again.",
     );
@@ -226,5 +226,33 @@ describe("AIDocumentImport", () => {
     expect(onPrepared).toHaveBeenCalledTimes(1);
     expect(onPrepared.mock.calls[0][0]).toBeInstanceOf(File);
     expect(convertAIDocument).toHaveBeenCalledTimes(2);
+  });
+  it("cancels an in-progress extraction without showing its result", async () => {
+    const user = userEvent.setup();
+    let signal: AbortSignal | undefined;
+    let finish: (source: unknown) => void = () => {};
+    extractSource.mockImplementationOnce(
+      (_file: File, _password: string, options: { signal: AbortSignal }) => {
+        signal = options.signal;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    );
+    renderImport();
+    await user.upload(
+      screen.getByLabelText("Source file"),
+      new File(["%PDF-"], "statement.pdf", { type: "application/pdf" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Extract source" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(signal?.aborted).toBe(true);
+    finish({
+      units: [{ id: "source-1", location: "Page 1", text: "Late result" }],
+      warnings: [],
+    });
+    await Promise.resolve();
+    expect(screen.queryByText(/Late result/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Source file")).toBeEnabled();
   });
 });

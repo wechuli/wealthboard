@@ -9,7 +9,7 @@ import {
   X,
 } from "lucide-react";
 
-import { convertAIDocument, extractAIDocument, getAI } from "@/api/client";
+import { convertAIDocument, getAI } from "@/api/client";
 import { usePrivacy } from "@/components/providers/privacy-provider";
 import {
   Button,
@@ -18,6 +18,11 @@ import {
   Label,
   Textarea,
 } from "@/components/ui/primitives";
+import {
+  extractSource,
+  MAX_PASSWORD_LENGTH,
+  MAX_SOURCE_BYTES,
+} from "@/lib/source-extraction";
 import type {
   Account,
   AIConversionDraft,
@@ -26,8 +31,6 @@ import type {
   Session,
 } from "@/lib/types";
 
-const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
-const MAX_PASSWORD_LENGTH = 1024;
 const PAGE_SIZE = 10;
 
 async function configurationHash(
@@ -76,6 +79,7 @@ export function AIDocumentImport({
   const { hidden } = usePrivacy();
   const fileInput = useRef<HTMLInputElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
+  const extraction = useRef<AbortController | null>(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [file, setFile] = useState<File | null>(null);
   const [documentPassword, setDocumentPassword] = useState("");
@@ -105,6 +109,8 @@ export function AIDocumentImport({
     if (passwordRequired && !busy) passwordInput.current?.focus();
   }, [busy, passwordRequired]);
 
+  useEffect(() => () => extraction.current?.abort(), []);
+
   function resetApproval() {
     setConsent(false);
     setDraft(null);
@@ -112,6 +118,8 @@ export function AIDocumentImport({
   }
 
   function clear() {
+    extraction.current?.abort();
+    extraction.current = null;
     if (fileInput.current) fileInput.current.value = "";
     setFile(null);
     setDocumentPassword("");
@@ -144,18 +152,22 @@ export function AIDocumentImport({
       ? documentPassword
       : "";
     setDocumentPassword("");
+    const controller = new AbortController();
+    extraction.current = controller;
     try {
-      const [result, aiRead] = await Promise.all([
-        extractAIDocument(file, password, session.csrfToken),
+      const [extracted, aiRead] = await Promise.all([
+        extractSource(file, password, { signal: controller.signal }),
         getAI(),
       ]);
-      setSource(result.source);
+      if (controller.signal.aborted) return;
+      setSource(extracted);
       setAI(aiRead);
-      setSelected(new Set(result.source.units.map((unit) => unit.id)));
+      setSelected(new Set(extracted.units.map((unit) => unit.id)));
       setFile(null);
       setPasswordRequired(false);
       resetApproval();
     } catch (caught) {
+      if (controller.signal.aborted) return;
       const code =
         caught instanceof Error && "code" in caught ? caught.code : undefined;
       setPasswordRequired(
@@ -163,7 +175,10 @@ export function AIDocumentImport({
       );
       setError(caught instanceof Error ? caught.message : "Extraction failed.");
     } finally {
-      setBusy(null);
+      if (extraction.current === controller) {
+        extraction.current = null;
+        setBusy(null);
+      }
     }
   }
 
@@ -241,7 +256,8 @@ export function AIDocumentImport({
           </h2>
           <p className="mt-1 text-sm text-slate-400">
             Extract, redact, and approve source text before sending it to your
-            configured AI provider.
+            configured AI provider. Files are read in this browser and never
+            uploaded.
           </p>
         </div>
         {(file || source || busy) && (
@@ -291,8 +307,9 @@ export function AIDocumentImport({
                 onChange={(event) => setDocumentPassword(event.target.value)}
               />
               <p className="mt-1 text-xs text-slate-400">
-                Used only for this extraction attempt. It is cleared after use
-                and is never sent to the AI provider.
+                Used only in this browser for this extraction attempt. It is
+                cleared after use and never sent to Wealthboard or the AI
+                provider.
               </p>
             </div>
           ) : null}

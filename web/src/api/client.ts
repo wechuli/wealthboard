@@ -59,7 +59,6 @@ import type {
   EstateDirectiveInput,
   EstateAllocationInput,
   AISettingsInput,
-  AISource,
   AIConversionDraft,
 } from "@/lib/types";
 
@@ -410,16 +409,6 @@ export const generateAIReview = (input: unknown, csrf: string) =>
     method: "POST",
     body: input,
   });
-export function extractAIDocument(
-  file: File,
-  documentPassword: string,
-  csrf: string,
-) {
-  const body = new FormData();
-  body.append("file", file);
-  if (documentPassword) body.append("documentPassword", documentPassword);
-  return fileRequest<{ source: AISource }>("/ai/import/extract", csrf, body);
-}
 export const convertAIDocument = (input: unknown, csrf: string) =>
   mutate<AIConversionDraft>("/ai/import/convert", csrf, {
     method: "POST",

@@ -34,7 +34,6 @@ func TestRegisterAIWorkflowRoutesNeverReturnsCredentialMaterial(t *testing.T) {
 			EncryptedAPIKey: "v1.private-ciphertext",
 			UpdatedAt:       time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC),
 		}},
-		aiworkflow.Extractor{},
 	)
 	RegisterAIWorkflowRoutes(router, handler)
 
@@ -92,7 +91,7 @@ func TestAIWorkflowAuthorizationContracts(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			router := chi.NewRouter()
-			RegisterAIWorkflowRoutes(router, NewAIWorkflowHandler(fakeAIWorkflowAuthorizer{principal: test.principal}, &fakeAIWorkflowService{settings: &aiworkflow.Settings{}}, aiworkflow.Extractor{}))
+			RegisterAIWorkflowRoutes(router, NewAIWorkflowHandler(fakeAIWorkflowAuthorizer{principal: test.principal}, &fakeAIWorkflowService{settings: &aiworkflow.Settings{}}))
 			request := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(test.body))
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
@@ -104,35 +103,38 @@ func TestAIWorkflowAuthorizationContracts(t *testing.T) {
 	}
 }
 
-func TestAIWorkflowExtractRequiresAIInvokeScope(t *testing.T) {
-	tests := []struct {
-		name      string
-		principal webauth.Principal
-		want      int
-	}{
-		{name: "AI invoke scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusOK},
-		{name: "wrong scope", principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeImportsWrite}}, want: http.StatusForbidden},
+func TestAIWorkflowServerSideExtractionIsRemoved(t *testing.T) {
+	router := chi.NewRouter()
+	principal := webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}
+	RegisterAIWorkflowRoutes(router, NewAIWorkflowHandler(fakeAIWorkflowAuthorizer{principal: principal}, &fakeAIWorkflowService{}))
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	file, err := writer.CreateFormFile("file", "statement.pdf")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			router := chi.NewRouter()
-			RegisterAIWorkflowRoutes(router, NewAIWorkflowHandler(fakeAIWorkflowAuthorizer{principal: test.principal}, &fakeAIWorkflowService{}, aiworkflow.Extractor{}))
-			body := &bytes.Buffer{}
-			writer := multipart.NewWriter(body)
-			file, err := writer.CreateFormFile("file", "activity.csv")
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, _ = file.Write([]byte("id,amount\na,10\n"))
-			_ = writer.Close()
-			request := httptest.NewRequest(http.MethodPost, "/ai/import/extract", body)
-			request.Header.Set("Content-Type", writer.FormDataContentType())
-			response := httptest.NewRecorder()
-			router.ServeHTTP(response, request)
-			if response.Code != test.want {
-				t.Fatalf("status=%d want=%d body=%s", response.Code, test.want, response.Body.String())
-			}
-		})
+	_, _ = file.Write([]byte("%PDF-1.4"))
+	_ = writer.Close()
+	request := httptest.NewRequest(http.MethodPost, "/ai/import/extract", body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("extract status = %d, want 404", response.Code)
+	}
+}
+
+func TestAIWorkflowConversionBodyIsBoundedToTheSourceLimit(t *testing.T) {
+	router := chi.NewRouter()
+	principal := webauth.Principal{UserID: uuid.New(), Method: "session"}
+	RegisterAIWorkflowRoutes(router, NewAIWorkflowHandler(fakeAIWorkflowAuthorizer{principal: principal}, &fakeAIWorkflowService{}))
+	text := strings.Repeat("x", 130<<10)
+	request := httptest.NewRequest(http.MethodPost, "/ai/import/convert", strings.NewReader(`{"source":{"units":[{"id":"source-1","location":"Row 1","text":"`+text+`"}],"warnings":[]},"configurationHash":"hash","consent":true,"trackingMode":"balance","currency":"USD"}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("oversized conversion status = %d, want 400", response.Code)
 	}
 }
 

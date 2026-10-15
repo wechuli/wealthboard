@@ -2440,38 +2440,6 @@ paths:
         "502": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
         "504": { $ref: "#/components/responses/Problem" }
-  /ai/import/extract:
-    post:
-      operationId: extractAIImportSource
-      summary: Extract bounded text units from one import source file
-      description: Bearer API keys require `ai:invoke`. Browser sessions require a trusted Origin and `X-CSRF-Token`. Accepts exactly one file up to 5 MiB plus at most one PDF password; multipart overhead is limited to 64 KiB. Supported files are TXT, CSV, TSV, JSON, PDF, XLSX, and DOCX. Extracted text is limited to 64 KiB and 1,000 units. Passwords are cleared after use and never returned, stored, or logged.
-      security: [{ sessionCookie: [] }, { apiKey: [] }]
-      parameters: [{ $ref: "#/components/parameters/MutationCSRFToken" }]
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema: { $ref: "#/components/schemas/AISourceUpload" }
-      responses:
-        "200":
-          description: Extracted, bounded source units
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AISourceResult" }
-        "400":
-          description: Invalid multipart source or a structured extraction error
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-            application/json:
-              schema: { $ref: "#/components/schemas/AISourceError" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-        "429": { $ref: "#/components/responses/Problem" }
-        "502": { $ref: "#/components/responses/Problem" }
-        "503": { $ref: "#/components/responses/Problem" }
-        "504": { $ref: "#/components/responses/Problem" }
   /ai/import/convert:
     post:
       operationId: convertAIImportSource
@@ -6111,22 +6079,6 @@ components:
             inputTokens: { type: [integer, "null"] }
             outputTokens: { type: [integer, "null"] }
         generatedAt: { type: string, format: date-time }
-    AISourceUpload:
-      type: object
-      additionalProperties: false
-      required: [file]
-      properties:
-        file:
-          type: string
-          format: binary
-          description: One TXT, CSV, TSV, JSON, PDF, XLSX, or DOCX file, maximum 5 MiB.
-        documentPassword:
-          {
-            type: string,
-            maxLength: 1024,
-            writeOnly: true,
-            description: Optional and accepted for PDF files only.,
-          }
     AISourceUnit:
       type: object
       additionalProperties: false
@@ -6137,6 +6089,7 @@ components:
         text: { type: string, minLength: 1, maxLength: 65536 }
     AISource:
       type: object
+      description: Text sections extracted from a source file in the browser. Wealthboard never receives the original file.
       additionalProperties: false
       required: [units, warnings]
       properties:
@@ -6148,19 +6101,6 @@ components:
             items: { $ref: "#/components/schemas/AISourceUnit" },
           }
         warnings: { type: array, maxItems: 100, items: { type: string } }
-    AISourceResult:
-      type: object
-      additionalProperties: false
-      required: [source]
-      properties:
-        source: { $ref: "#/components/schemas/AISource" }
-    AISourceError:
-      type: object
-      additionalProperties: false
-      required: [error, code]
-      properties:
-        error: { type: string }
-        code: { type: string }
     AIConversionRequest:
       type: object
       additionalProperties: false

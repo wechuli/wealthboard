@@ -180,8 +180,6 @@ conflict handling make repeat runs safe for the same target.
 | `TZ`                           | Default timezone for new users; default `Africa/Nairobi`                  |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys           |
 | `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
-| `AI_EXTRACTION_SOCKET`         | Optional Unix socket for the isolated document parser                     |
-| `AI_EXTRACTION_SCRIPT`         | Local Node parser script; default `scripts/extract-import-source-cli.mjs` |
 | `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                                     |
 
 There is no initial-user password or environment-created identity.
@@ -381,8 +379,7 @@ The application image is a non-root distroless Go runtime serving the built
 Vite assets. Compose and Kubernetes enforce a read-only application filesystem.
 The image contains neither PostgreSQL client tools nor Node.js.
 Supply an external `DATABASE_URL` and run operator backups from a trusted host
-or admin job with matching PostgreSQL tools. The Compose stack builds the
-separate, network-disabled `extraction-worker` target for PDF/XLSX/DOCX.
+or admin job with matching PostgreSQL tools.
 
 The Compose examples use `postgres:18` and mount database storage at
 `/var/lib/postgresql`, matching the image's versioned data directory.
@@ -405,9 +402,8 @@ kubectl apply -f deploy/kubernetes.yaml
 ```
 
 Create the separate `wealthboard-database` secret with its `database-url` key.
-The manifest deploys two rolling application replicas with a pod-local
-extraction sidecar, but no PostgreSQL server, database volume, or backup
-controller. Operate PostgreSQL, point the egress policy at its actual
+The manifest deploys two rolling application replicas but no PostgreSQL
+server, database volume, or backup controller. Operate PostgreSQL, point the egress policy at its actual
 namespace/labels, schedule and retain backups outside the application pods, and
 test restores. TLS must terminate at
 the configured `APP_URL`; the ingress must overwrite rather than append
@@ -459,12 +455,12 @@ per-user exports, but deployment-wide PostgreSQL backups contain encrypted
 credential rows and must remain access-restricted. AI output is explanatory and
 is not financial advice.
 
-UTF-8 CSV/TSV/JSON/TXT extraction runs in Go. PDF/XLSX/DOCX extraction uses
-`AI_EXTRACTION_SOCKET` when set. Compose runs the bundled worker without a
-network; Kubernetes runs it as a bounded sidecar sharing only the pod-local
-Unix socket with the application. Without a socket, a direct installation falls
-back to `node` plus `AI_EXTRACTION_SCRIPT`. The distroless application image has
-no Node fallback.
+AI-assisted import reads TXT, CSV, TSV, JSON, PDF, XLSX, and DOCX source files
+entirely in the browser, in a Web Worker that is stopped on completion,
+cancellation, or after 15 seconds. The original file and any PDF password never
+reach Wealthboard or the AI provider; only the text sections the user approves
+are sent for conversion, and the server re-validates their limits. There is no
+server-side extraction endpoint, parser sidecar, or production Node runtime.
 
 ## Per-user import, export, and restore
 

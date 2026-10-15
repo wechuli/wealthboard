@@ -17,12 +17,6 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "node tests/e2e/mock-import-provider.mjs",
-      url: "http://127.0.0.1:4200/health",
-      reuseExistingServer: false,
-      timeout: 30_000,
-    },
-    {
       command: "node tests/e2e/mock-oidc-provider.mjs",
       url: "http://localhost:4100/health",
       reuseExistingServer: false,

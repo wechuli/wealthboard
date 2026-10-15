@@ -139,10 +139,6 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 		credentialCodec,
 		aiworkflow.DefineFlows(aiworkflow.NewGenkit(ctx, aiworkflow.GenkitOptions{})),
 	)
-	extractorScript := os.Getenv("AI_EXTRACTION_SCRIPT")
-	if extractorScript == "" {
-		extractorScript = "scripts/extract-import-source-cli.mjs"
-	}
 	mutations := api.MutationHandlers{
 		Metadata:    api.NewMetadataMutationHandler(authHandler, service.NewMetadataMutations(db)),
 		Ledger:      api.NewLedgerHandler(authHandler, service.NewLedgerService(db), trustedOrigin),
@@ -153,7 +149,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 		Imports:     api.NewImportHandler(authHandler, service.NewAccountHistoryImportService(db), service.NewInvestmentHistoryImportService(db), trustedOrigin),
 		Portability: api.NewPortabilityHandler(authHandler, service.NewPortabilityService(db)),
 		Estate:      api.NewEstateMutationHandler(authHandler, service.NewEstateMutations(db)),
-		AI:          api.NewAIWorkflowHandler(authHandler, aiService, aiworkflow.Extractor{ScriptPath: extractorScript, Timeout: 15 * time.Second}),
+		AI:          api.NewAIWorkflowHandler(authHandler, aiService),
 	}
 	distPath := os.Getenv("WEB_DIST_PATH")
 	if distPath == "" {

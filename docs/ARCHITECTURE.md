@@ -168,12 +168,9 @@ process, then PostgreSQL. Go serves `/api/v1/*`, health probes, compiled Vite
 assets, and the SPA fallback. There is no production Next.js process, React
 server rendering, Server Action, Node.js API handler, or SQLite database.
 
-The one JavaScript runtime exception is document extraction for PDF, XLSX, and
-DOCX. Direct installations may run the bounded Node child configured by
-`AI_EXTRACTION_SCRIPT`. Containers use the separate `extraction-worker` image
-over a shared Unix socket; Compose disables worker networking, while Kubernetes
-containers share the pod network. Node is absent from the distroless application
-image. UTF-8 CSV, TSV, JSON, and TXT remain parsed in Go.
+Production has no JavaScript runtime. Document extraction for AI-assisted
+import runs in the browser, so the server never parses untrusted document
+formats and deployments need no parser sidecar.
 
 Phase 6 acceptance and removal evidence is recorded in
 `docs/admin/cutover-evidence.md`.
@@ -298,48 +295,53 @@ copyable-prompt components remain in source but are not mounted in the current
 import page. OCR/image processing remains backlog AI3.
 
 1. The account import UI offers direct structured import or explicit AI
-   conversion. Go exposes `/api/v1/ai/import/extract` and
-   `/api/v1/ai/import/convert` for bounded extraction and model conversion.
+   conversion. The browser extracts source text locally; Go exposes
+   `/api/v1/ai/import/convert` for model conversion and has no extraction route.
    Browser calls require the verified session, trusted origin, and CSRF token;
    API keys require `ai:invoke`. The later account-scoped preview and commit
    routes resolve the active account by session-derived `userId` and account ID
    before any financial write and return not found for foreign accounts.
-2. Bounded local parsers prepare source text/tables and stable page/sheet/row
-   references for user review, selection, and redaction before external
-   submission. `internal/aiworkflow/extraction.go` handles UTF-8 CSV, TSV, JSON,
-   and TXT; a terminable Node worker or isolated socket daemon handles XLSX,
-   text PDFs, and DOCX using yauzl, fast-xml-parser, PDF.js, and Mammoth.
+2. Bounded parsers in `web/src/lib/source-extraction` prepare source
+   text/tables and stable page/sheet/row references in the browser for user
+   review, selection, and redaction before external submission. `text.ts`
+   handles UTF-8 CSV, TSV, JSON, and TXT with Go `encoding/csv` quoting rules;
+   `zip.ts`, `office.ts`, and `pdf.ts` handle XLSX, DOCX, and text PDFs using the
+   browser's `DecompressionStream`, fast-xml-parser, Mammoth, and PDF.js. All
+   parsing runs in one dedicated module Web Worker that lazily loads those
+   parsers and is terminated on completion, failure, cancellation, unmount, or
+   the 15-second timeout. PDF.js runs on the worker's own thread through its
+   fake-worker handler; because it also attaches to the worker scope and posts
+   its own messages, replies to the page carry a protocol marker.
    XLSX numeric cells remain original strings. Formula caches and excluded
    image/Word/PDF content have review warnings; no OCR is performed. Enforce
    extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
    100 PDF pages, 20 sheets, 20 MB expanded archives/2,000 ZIP entries, and a
-   15-second document timeout. Workers have bounded V8 heap/stack limits and
-   receive no deployment environment or AI credentials. An optional PDF
-   `documentPassword` is accepted only by the authenticated extraction multipart
-   route, validated as a single untrimmed string of at most 1,024 characters,
-   and passed to PDF.js through the worker message. It is never included in
-   extraction responses, source records, configuration, conversion requests,
-   provider prompts, logs, or persistent storage. PDF.js password exceptions
-   map to `password_required` and `incorrect_password` with fixed safe messages;
-   each attempt terminates its worker and retries explicitly resend the file.
-   The masked client field clears at submission, file change, cancellation, or
-   unmount. No server-side document/password retry cache is introduced.
+   15-second document timeout. Section size is measured as Go encodes JSON, so
+   a source accepted in the browser is not rejected by the server's limits. An
+   optional PDF password stays in the browser: it is passed to PDF.js through
+   the worker message and never sent to the server or included in source
+   records, conversion requests, provider prompts, logs, or storage. PDF.js
+   password exceptions map to `password_required` and `incorrect_password` with
+   fixed safe messages; each attempt uses a new worker and retries reuse the
+   selected file locally. The masked client field clears at submission, file
+   change, cancellation, or unmount.
    Compound-file Office headers are rejected as encrypted-or-legacy containers,
    not assumed to prove encryption. Encrypted ZIP entries are also rejected with
    export guidance. Office password-to-open decryption remains unsupported;
    worksheet/workbook and Word editing-protection metadata need no decryption.
    Never execute macros, formulas, embedded scripts, or external references.
    Reject unsupported encryption, corrupt, or over-limit input rather than
-   silently truncating.
+   silently truncating. Because extraction is client-side, the conversion route
+   re-validates section IDs and the 1,000-section, 100-warning, and 64 KB limits
+   and bounds its request body to 128 KiB.
 3. After explicit per-request consent, `Service` in `internal/aiworkflow/service.go` resolves
    the current user's provider and credentials. Reuse encrypted-key
-   handling, endpoint allowlisting, disabled redirects, cancellation, and safe
-   errors. Existing usage reservation/completion functions enforce shared
+   handling, fixed provider endpoints, disabled redirects, cancellation, and
+   safe errors. Existing usage reservation/completion functions enforce shared
    review/conversion rate and monthly token budgets. The settings form, Zod
    schema, and service enforce a 10,000 to 100,000,000 monthly token range.
-   Both provider transports use a 120-second Go HTTP client timeout without
-   application-level retries; local extraction retains its separate 15-second
-   timeout. Existing saved
+   Genkit provider requests use a 120-second timeout with SDK retries disabled;
+   browser extraction keeps its separate 15-second timeout. Existing saved
    limits remain unchanged. A configuration fingerprint covers the provider,
    endpoint, model, output limit, settings timestamp, tracking mode, and currency.
    It does not bind the source text, draft bytes, or selected account ID and is
@@ -350,8 +352,7 @@ import page. OCR/image processing remains backlog AI3.
    conversion when usage is unknown. Requests have bounded body reads. Review
    and conversion share a limit of 10 reservations per rolling minute per user
    plus the UTC calendar-month token budget. There is no Go preparation
-   semaphore per user or process; the socket daemon caps open connections at
-   four, which is a different limit.
+   semaphore per user or process.
 4. The Go AI workflow exposes a separate conversion operation and validates its
    bounded request and response models independently of the portfolio-review
    snapshot builder. Both run as Genkit flows with structured output: a strict
@@ -398,8 +399,8 @@ import page. OCR/image processing remains backlog AI3.
    5 MiB/10,000-record limits.
 
 The implementation is bounded and request-scoped within the Go service, with no
-durable document store or required job queue. Plain text parsing runs in Go;
-PDF/XLSX/DOCX uses a bounded local Node child or the bundled Unix-socket sidecar.
+durable document store or required job queue. Source parsing runs in the
+browser's extraction worker; the server receives only approved text.
 Apply cancellation and time/output limits across parsing and provider
 work; no silent chunking, retries, truncation, or automatic partial acceptance.
 Larger-document/background processing requires a separate durable-job design.

@@ -14,12 +14,6 @@
     "docs:preview": "vitepress preview docs",
     "docs:capture": "playwright test --config=playwright.docs.config.ts"
   },
-  "dependencies": {
-    "fast-xml-parser": "^5.11.1",
-    "mammoth": "^1.12.2",
-    "pdfjs-dist": "^6.3.289",
-    "yauzl": "^3.4.0"
-  },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.2.0",

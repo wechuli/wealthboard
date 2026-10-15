@@ -84,8 +84,6 @@ the [PostgreSQL 18 data-directory change](https://github.com/docker-library/docs
 | `TZ`                           | Default timezone for new users                                            |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Canonical base64 32-byte key for remembered provider credentials          |
 | `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
-| `AI_EXTRACTION_SOCKET`         | Shared Unix socket for a container document-parser sidecar                |
-| `AI_EXTRACTION_SCRIPT`         | Direct-install Node parser path when no socket is configured              |
 | `WEB_DIST_PATH`                | Compiled Vite assets served by Go; default `web/dist`                     |
 
 OIDC and AI variables are described in [Authentication](./authentication) and
@@ -155,14 +153,13 @@ Upgrade direct dependencies to maintained stable releases and resolve
 transitive advisories by upgrading their owning package. Do not use
 `npm audit fix --force` when it proposes a downgrade or unreviewed breaking
 change. Run `make security` against the current dependency set: it checks Go
-vulnerabilities and audits the root, web, and extraction-worker npm packages.
+vulnerabilities and audits the root and web npm packages.
 Install the corresponding dependencies before auditing; a previous clean scan
 is not a guarantee about newly published advisories.
 
 ## Containers
 
-The production-style Compose stack starts PostgreSQL, Wealthboard, and the
-network-disabled extraction worker. Set `POSTGRES_PASSWORD`, a stable
+The production-style Compose stack starts PostgreSQL and Wealthboard. Set `POSTGRES_PASSWORD`, a stable
 `SESSION_SECRET`, and the browser-facing `APP_URL` in an uncommitted `.env` or
 exported environment before starting it:
 
@@ -190,9 +187,8 @@ Run that image with an external `DATABASE_URL` and the required authentication
 environment. The image runs as non-root; the supplied Compose and Kubernetes
 configurations additionally enforce a read-only application filesystem.
 
-Node.js is not part of the application container. It remains an intentional
-runtime exception only in the separate extraction worker for PDF, XLSX, and
-DOCX parsing. UTF-8 CSV, TSV, JSON, and TXT are parsed by Go.
+Node.js is not part of any production container. AI-assisted import parses
+source files in the browser, so there is no parser sidecar to deploy.
 
 Before an update, export the target deployment's `DATABASE_URL` on the operator
 host, ensure the backup directory exists, and choose a new backup filename:
@@ -241,9 +237,7 @@ kubectl get ingress
 ```
 
 The manifest intentionally does not provision PostgreSQL, persistent database
-storage or a backup controller. It does include a bounded document extraction
-sidecar over an in-memory Unix socket; Kubernetes containers share the pod
-network namespace. The operator is
+storage or a backup controller. The operator is
 responsible for PostgreSQL availability, upgrades, point-in-time or scheduled
 backup policy, retention, encryption, and restore drills. The application image
 is distroless and contains no `pg_dump`, `pg_restore`, Node.js, or shell, so run

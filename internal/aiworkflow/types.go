@@ -11,10 +11,8 @@ import (
 )
 
 const (
-	MaxSourceBytes = 5 << 20
 	MaxTextBytes   = 64 << 10
 	MaxSourceUnits = 1000
-	MaxResponse    = 8 << 20
 )
 
 var (

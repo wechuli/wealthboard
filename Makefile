@@ -11,7 +11,6 @@ typecheck: web-typecheck
 
 test: go-test web-test
 	node scripts/validate-pwa-static.mjs
-	node --test tests/node/extraction-worker-protocol.test.mjs
 
 build: web-build
 	mkdir -p bin
@@ -24,7 +23,6 @@ security:
 	go run golang.org/x/vuln/cmd/govulncheck@latest $(GO_PACKAGES)
 	npm audit --audit-level=high
 	npm --prefix web audit --audit-level=high
-	npm --prefix extraction-worker audit --audit-level=high
 
 test-e2e: test-e2e-go
 

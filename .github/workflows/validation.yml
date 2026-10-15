@@ -85,7 +85,7 @@ jobs:
             - name: Typecheck
               run: make typecheck
 
-            - name: Run Go, Vite, PWA, and extraction tests
+            - name: Run Go, Vite, and PWA tests
               run: make test
 
             - name: Verify PostgreSQL migrations

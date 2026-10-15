@@ -103,15 +103,12 @@ but does not reliably abort an already-started provider request. See
 Remembered provider keys require a dedicated canonical base64 32-byte key and
 are bound to one user with AES-256-GCM associated data. Provider hosts are
 resolved and rejected when they map to private or local address space;
-redirects and environment proxies are disabled. PDF/XLSX/DOCX extraction may
-cross a pod-local Unix socket, so its bundled sidecar and socket permissions are
-part of the trusted deployment boundary. Compose disables worker networking;
-Kubernetes sidecars share their pod's network namespace. Document passwords
-must never be logged or persisted by custom worker deployments.
+redirects and environment proxies are disabled. Source documents are parsed in
+the browser and never uploaded, so the server never parses untrusted document
+formats, and PDF passwords never leave the browser.
 
-The distroless application image contains no Node.js runtime. The extraction
-worker is the sole production JavaScript runtime exception and must remain
-isolated, bounded, non-root, and unable to access PostgreSQL or provider keys.
+The distroless application image contains no Node.js runtime, and production
+runs no JavaScript on the server.
 
 ## Estate-planning boundary
 
