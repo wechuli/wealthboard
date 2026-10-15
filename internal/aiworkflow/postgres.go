@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,7 +43,7 @@ ON CONFLICT (user_id) DO UPDATE SET
     monthly_token_limit = EXCLUDED.monthly_token_limit,
     max_output_tokens = EXCLUDED.max_output_tokens,
     updated_at = EXCLUDED.updated_at`,
-		uuid.New(), userID, input.Provider, input.BaseURL, input.Model,
+		uuid.New(), userID, input.Provider, input.Provider.BaseURL(), input.Model,
 		input.IncludeExactAmounts, input.IncludeAccountNames, input.MonthlyTokenLimit,
 		input.MaxOutputTokens, now)
 	if err != nil {
@@ -225,14 +224,6 @@ func requireChanged(result sql.Result, err error, operation string) error {
 		return ErrNotConfigured
 	}
 	return nil
-}
-
-func endpointHost(value string) string {
-	parsed, err := url.Parse(value)
-	if err != nil {
-		return "invalid"
-	}
-	return parsed.Host
 }
 
 func stringPointer(value string) *string { return &value }

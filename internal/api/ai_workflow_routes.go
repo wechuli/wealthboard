@@ -7,7 +7,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -263,7 +262,13 @@ func writeAIWorkflowError(response http.ResponseWriter, err error) {
 		writeProblem(response, http.StatusTooManyRequests, "AI request unavailable", err.Error())
 	case errors.Is(err, context.DeadlineExceeded):
 		writeProblem(response, http.StatusGatewayTimeout, "Provider timeout", "The provider did not finish in time.")
-	case strings.Contains(err.Error(), "provider"):
+	case errors.Is(err, aiworkflow.ErrProviderCredential):
+		writeProblem(response, http.StatusBadGateway, "Provider error", "The AI provider rejected the API key.")
+	case errors.Is(err, aiworkflow.ErrProviderModel):
+		writeProblem(response, http.StatusBadGateway, "Provider error", "The AI provider does not recognize the selected model.")
+	case errors.Is(err, aiworkflow.ErrProviderRateLimited):
+		writeProblem(response, http.StatusBadGateway, "Provider error", "The AI provider rate limited the request. Try again later.")
+	case errors.Is(err, aiworkflow.ErrProvider):
 		writeProblem(response, http.StatusBadGateway, "Provider error", "The AI provider could not complete the request.")
 	default:
 		writeProblem(response, http.StatusServiceUnavailable, "Service unavailable", "The AI workflow could not be completed.")

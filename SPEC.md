@@ -1403,10 +1403,10 @@ application; only approved extracted text goes to the configured model.
   ambiguous identity and show conflicts. Repeated conversion must not mint new
   identities for unchanged source activity. Cash records reuse the established
   date/type/amount identity rule when no source ID exists. Extraction responses
-  are limited to 1,000 candidate records. OpenAI uses native structured output;
-  DeepSeek/compatible endpoints must support text Chat Completions with JSON
-  output, validated locally. Model IDs remain user-configured rather than
-  discovered automatically; unsupported requests fail without switching models.
+  are limited to 1,000 candidate records. Conversion uses Genkit structured
+  output for every provider and validates the result locally. Users choose a
+  suggested model or enter any model ID the provider serves; unsupported
+  requests fail without switching models.
 - **Source review:** Show candidate records alongside page/sheet/row references,
   source coverage, and unresolved or excluded activity. Let users correct,
   explicitly exclude with acknowledgment, or cancel; model confidence alone
@@ -1436,8 +1436,9 @@ application; only approved extracted text goes to the configured model.
 
 ## AI portfolio review
 
-Support an optional, on-demand portfolio review through OpenAI, DeepSeek, or an
-operator-approved OpenAI-compatible Chat Completions endpoint.
+Support an optional, on-demand portfolio review through OpenAI, Anthropic, or
+DeepSeek using each user's own API key. All model calls go through one
+process-wide Genkit instance and its provider plugins.
 
 - Wealthboard must first create a bounded, versioned snapshot from deterministic
   calculations. Models must not independently calculate authoritative balances,
@@ -1464,9 +1465,9 @@ operator-approved OpenAI-compatible Chat Completions endpoint.
 - Reviews and import conversion share a configurable monthly token limit of
   10,000 to 100,000,000 and a two-minute provider request timeout with automatic
   retries disabled. Existing saved budgets and defaults are unchanged.
-- Fixed OpenAI and DeepSeek endpoints are allowed. Custom endpoint URLs must
-  exactly match an operator allowlist, cannot contain credentials, queries, or
-  fragments, and must not follow redirects.
+- Only the fixed OpenAI, Anthropic, and DeepSeek endpoints are allowed. Custom
+  endpoints are not supported, requests must not follow redirects, and a user's
+  key is attached per request and never sent to another provider.
 - Do not retain reviews. Store only privacy-safe owner-scoped usage metadata;
   users must be able to delete this metadata, delete a stored credential, and
   disconnect the provider. Per-user exports exclude all AI credentials and usage.

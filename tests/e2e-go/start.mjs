@@ -77,7 +77,6 @@ server = spawn(binaryPath, ["serve"], {
     OIDC_CLIENT_SECRET: "wealthboard-go-e2e-client-secret",
     OIDC_PROVIDER_NAME: "E2E Keycloak",
     OIDC_TRANSACTION_SECRET: Buffer.alloc(32, 23).toString("base64"),
-    AI_ALLOWED_ENDPOINTS: "http://127.0.0.1:4200/v1",
     AI_CREDENTIAL_ENCRYPTION_KEY: Buffer.alloc(32, 29).toString("base64"),
     TZ: "Africa/Nairobi",
   },

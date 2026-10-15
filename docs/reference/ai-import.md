@@ -61,8 +61,9 @@ and [Office cryptography specification](https://learn.microsoft.com/en-us/opensp
 
 ## Provider configuration
 
-Use **Settings > AI provider** to select the provider, endpoint, and model
-identifier. Remembered keys require the deployment's
+Use **Settings > AI provider** to choose OpenAI, Anthropic, or DeepSeek and a
+model. The form suggests current models for the selected provider and accepts
+any other model ID that provider serves. Remembered keys require the deployment's
 `AI_CREDENTIAL_ENCRYPTION_KEY`; otherwise enter a session-only key on the import
 page. Keys are never part of the model prompt.
 
@@ -72,21 +73,21 @@ OIDC secret. Keep it stable: changing it makes existing remembered credentials
 undecryptable. Remembered keys use AES-256-GCM with the user's immutable ID as
 associated data and are excluded from user exports.
 
-OpenAI always resolves to `https://api.openai.com/v1`; DeepSeek resolves to
-`https://api.deepseek.com`. A custom endpoint must exactly match a normalized
-HTTP(S) base URL in the comma-separated `AI_ALLOWED_ENDPOINTS` environment
-variable. URLs with credentials, query parameters, or fragments are rejected.
-The host is DNS-resolved when settings are saved and before requests; private,
-loopback, link-local, multicast, carrier-grade NAT, and other local ranges are
-blocked. Provider redirects and environment proxy variables are not used.
+OpenAI always uses `https://api.openai.com/v1`, Anthropic
+`https://api.anthropic.com`, and DeepSeek `https://api.deepseek.com`; custom
+endpoints are not supported. The host is DNS-resolved before each request, and
+private, loopback, link-local, multicast, carrier-grade NAT, and other local
+ranges are blocked. Provider redirects and environment proxy variables are not
+used.
 
-OpenAI uses the Responses API with `store: false`; the current conversion call
-requests JSON through its prompt rather than supplying a native structured-output
-schema. DeepSeek and operator-approved compatible endpoints must support text
-Chat Completions with JSON output. Go validates responses before creating a
-draft. PDF, spreadsheet, or Word support is not required of the model:
-Wealthboard extracts text before submission. Model names are entered manually;
-access and compatibility errors surface when conversion runs. Wealthboard never
+Conversion runs as a Genkit flow with structured output. OpenAI receives a
+strict JSON Schema response format with `store: false`, Anthropic models with
+native structured output receive the schema as an output format, and DeepSeek
+receives JSON mode with the schema as instructions. Genkit validates the
+response against the schema, and Go checks record bounds and source coverage
+before creating a draft. PDF, spreadsheet, or Word support is not required of the model:
+Wealthboard extracts text before submission. Access and compatibility errors
+for the chosen model surface when conversion runs. Wealthboard never
 silently substitutes a model or provider.
 
 Review and conversion share the same monthly token budget and rate limits.

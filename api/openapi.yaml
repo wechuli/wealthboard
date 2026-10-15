@@ -5866,14 +5866,13 @@ components:
           $ref: "#/components/schemas/ReviewAvailability"
     AIProvider:
       type: string
-      enum: [openai, deepseek, custom]
+      enum: [openai, anthropic, deepseek]
     AISettingsInput:
       type: object
       additionalProperties: false
       required:
         [
           provider,
-          baseUrl,
           model,
           includeExactAmounts,
           includeAccountNames,
@@ -5882,8 +5881,14 @@ components:
         ]
       properties:
         provider: { $ref: "#/components/schemas/AIProvider" }
-        baseUrl: { type: string, format: uri }
-        model: { type: string, minLength: 1, maxLength: 200 }
+        model:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 200,
+            pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            description: "Provider model identifier: a suggested model or any other model the provider serves.",
+          }
         includeExactAmounts:
           {
             type: boolean,
@@ -5919,7 +5924,12 @@ components:
         ]
       properties:
         provider: { $ref: "#/components/schemas/AIProvider" }
-        baseUrl: { type: string, format: uri }
+        baseUrl:
+          {
+            type: string,
+            format: uri,
+            description: Fixed provider API endpoint derived from `provider`; read-only.,
+          }
         model: { type: string }
         includeExactAmounts: { type: boolean }
         includeAccountNames: { type: boolean }

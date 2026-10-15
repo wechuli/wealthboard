@@ -83,7 +83,7 @@ the [PostgreSQL 18 data-directory change](https://github.com/docker-library/docs
 | `TRUST_PROXY_HEADERS`          | Legacy no-op; Go rate limits use the socket peer IP                       |
 | `TZ`                           | Default timezone for new users                                            |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Canonical base64 32-byte key for remembered provider credentials          |
-| `AI_ALLOWED_ENDPOINTS`         | Exact comma-separated custom provider base URLs                           |
+| `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
 | `AI_EXTRACTION_SOCKET`         | Shared Unix socket for a container document-parser sidecar                |
 | `AI_EXTRACTION_SCRIPT`         | Direct-install Node parser path when no socket is configured              |
 | `WEB_DIST_PATH`                | Compiled Vite assets served by Go; default `web/dist`                     |

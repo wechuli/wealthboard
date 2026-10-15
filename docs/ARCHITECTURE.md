@@ -146,17 +146,20 @@ fixtures and archived migration history remain as non-executable evidence.
 - **AI review:** Optional on-demand reviews use a versioned, owner-scoped,
   read-only snapshot calculated by Wealthboard. The model never receives SQL or
   mutation tools and cannot become authoritative for balances, conversions,
-  performance, or goals. OpenAI uses Responses with `store: false` and a prompt
-  requesting JSON; the current callers do not supply the transport's optional
-  native JSON Schema response contract.
-  DeepSeek and operator-approved compatible endpoints use Chat Completions JSON.
-  Responses validate against bounded schemas and supplied evidence IDs.
+  performance, or goals. `cmd/wealthboard` calls `genkit.Init` once with the
+  OpenAI, Anthropic, and DeepSeek plugins; `internal/aiworkflow` defines the
+  `portfolioReview` and `importConversion` flows and requests typed structured
+  output with `genkit.GenerateData`. Genkit validates responses against the
+  output schema, then Go checks bounds and supplied evidence IDs.
 - **AI credentials and retention:** Session-only keys stay in client component
   memory for one request. Remembered keys use AES-256-GCM with a dedicated
   deployment key and immutable `userId` associated data. Usage rows contain
   metadata only and are user-deletable; prompts, responses, portfolio values,
-  and provider keys are not retained. Custom endpoints require an exact
-  operator allowlist and redirects are disabled.
+  and provider keys are not retained. The user's key travels in the request
+  context and an SDK middleware on each plugin client attaches it only for the
+  matching provider; requests without it fail before leaving the process.
+  Provider endpoints are fixed, redirects are disabled, and private or local
+  addresses are rejected.
 
 ## Runtime and cutover boundary
 
@@ -351,10 +354,9 @@ import page. OCR/image processing remains backlog AI3.
    four, which is a different limit.
 4. The Go AI workflow exposes a separate conversion operation and validates its
    bounded request and response models independently of the portfolio-review
-   snapshot builder. OpenAI uses Responses with `store: false` and a JSON
-   instruction, but review and conversion currently omit the transport's
-   optional native response schema.
-   DeepSeek/custom models must support text Chat Completions and JSON output.
+   snapshot builder. Both run as Genkit flows with structured output: a strict
+   JSON Schema for OpenAI, a native output format for Anthropic models that
+   support it, and JSON mode with schema instructions for DeepSeek.
    The configured model ID is not discovered or probed during settings save;
    incompatible requests fail without model/provider substitution. Both paths
    validate locally and reject refusals, malformed JSON, and incomplete output.

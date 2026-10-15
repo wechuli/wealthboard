@@ -179,7 +179,7 @@ conflict handling make repeat runs safe for the same target.
 | `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key                     |
 | `TZ`                           | Default timezone for new users; default `Africa/Nairobi`                  |
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys           |
-| `AI_ALLOWED_ENDPOINTS`         | Comma-separated exact custom OpenAI-compatible base URLs                  |
+| `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
 | `AI_EXTRACTION_SOCKET`         | Optional Unix socket for the isolated document parser                     |
 | `AI_EXTRACTION_SCRIPT`         | Local Node parser script; default `scripts/extract-import-source-cli.mjs` |
 | `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                                     |
@@ -284,11 +284,12 @@ openssl rand -base64 32
 
 Do not reuse `SESSION_SECRET`. The value must be canonical base64 for exactly 32
 bytes. Without it, users can still submit a session-only provider key for one
-request. OpenAI and DeepSeek use fixed built-in endpoints; custom endpoints
-must exactly match a normalized URL in `AI_ALLOWED_ENDPOINTS`. Every provider
-hostname is resolved again before use, and private, loopback, link-local,
-multicast, and other local ranges are rejected even if allowlisted. Redirects
-and environment HTTP proxies are disabled. Keep the encryption key stable;
+request. OpenAI, Anthropic, and DeepSeek use fixed built-in endpoints that
+provider environment variables such as `OPENAI_BASE_URL` cannot redirect. Every
+provider hostname is resolved before use, and private, loopback, link-local,
+multicast, and other local ranges are rejected. Redirects and environment HTTP
+proxies are disabled, and operator provider keys in the environment are never
+sent. Keep the encryption key stable;
 changing it makes remembered keys undecryptable until users replace them.
 
 ## Password changes and operator reset
@@ -416,10 +417,17 @@ enabling OIDC or AI; those integrations cannot use the default policy unchanged.
 
 ## AI portfolio review
 
-Portfolio Review is optional, read-only, and generated only on request. Configure
-OpenAI, DeepSeek, or an operator-approved OpenAI-compatible endpoint under
-**Settings → AI portfolio review**, then open **Review**. The integration uses the
-provider's supported HTTP API through the Go AI workflow.
+Portfolio Review is optional, read-only, and generated only on request. Choose
+OpenAI, Anthropic, or DeepSeek and a model under **Settings → AI provider**,
+then open **Review**. The settings form suggests current models for each
+provider and accepts any other model ID the provider serves. Users supply their
+own provider API keys.
+
+All AI calls run through [Genkit for Go](https://genkit.dev/docs/go/get-started/).
+The server calls `genkit.Init` once at startup with the OpenAI, Anthropic, and
+DeepSeek plugins and runs review and import conversion as Genkit flows. Each
+request carries only the requesting user's key, attached per request rather
+than to the shared plugin clients, and fails closed without it.
 
 Wealthboard calculates a bounded, versioned snapshot before contacting a model.
 By default it contains ratios, concentration, goal trajectory, and data-quality
@@ -434,9 +442,12 @@ can clear that history or disconnect the provider. Prompts, responses, API keys,
 and portfolio values are not written to usage records. Review and import
 conversion share a limit of 10 reservations per rolling minute per user, a UTC
 calendar-month token budget, response bounds, redirect blocking, and local
-response validation. OpenAI uses Responses with `store: false`; current review
-and conversion requests ask for JSON in the prompt rather than enabling the
-transport's optional native JSON Schema output.
+response validation. Both flows use Genkit structured output: OpenAI receives a
+strict JSON Schema response format with `store: false`, Anthropic models with
+native structured output receive the schema as an output format, and DeepSeek
+receives JSON mode plus the schema as instructions. Genkit validates every
+response against the schema before Wealthboard checks bounds, evidence IDs, and
+source coverage.
 
 AI reviews and import conversion use a two-minute provider request timeout with
 automatic retries disabled. The monthly token limit accepts 10,000 to

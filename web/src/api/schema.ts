@@ -3480,11 +3480,10 @@ export interface components {
             reviewAvailability: components["schemas"]["ReviewAvailability"];
         };
         /** @enum {string} */
-        AIProvider: "openai" | "deepseek" | "custom";
+        AIProvider: "openai" | "anthropic" | "deepseek";
         AISettingsInput: {
             provider: components["schemas"]["AIProvider"];
-            /** Format: uri */
-            baseUrl: string;
+            /** @description Provider model identifier: a suggested model or any other model the provider serves. */
             model: string;
             /** @description Whether exact financial amounts may be shared with the configured provider. */
             includeExactAmounts: boolean;
@@ -3496,7 +3495,10 @@ export interface components {
         };
         AIWorkflowSettings: {
             provider: components["schemas"]["AIProvider"];
-            /** Format: uri */
+            /**
+             * Format: uri
+             * @description Fixed provider API endpoint derived from `provider`; read-only.
+             */
             baseUrl: string;
             model: string;
             includeExactAmounts: boolean;

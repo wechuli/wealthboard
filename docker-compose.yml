@@ -36,7 +36,6 @@ services:
       OIDC_TRANSACTION_SECRET: ${OIDC_TRANSACTION_SECRET:-}
       TZ: ${TZ:-Africa/Nairobi}
       AI_CREDENTIAL_ENCRYPTION_KEY: ${AI_CREDENTIAL_ENCRYPTION_KEY:-}
-      AI_ALLOWED_ENDPOINTS: ${AI_ALLOWED_ENDPOINTS:-}
       AI_EXTRACTION_SOCKET: /run/wealthboard/extraction.sock
     volumes:
       - wealthboard-extraction-socket:/run/wealthboard

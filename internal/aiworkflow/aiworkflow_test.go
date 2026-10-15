@@ -6,11 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,113 +60,6 @@ func TestCredentialEncryptionBindsCiphertextToUserAndRejectsTampering(t *testing
 	}
 }
 
-func TestEndpointPolicyRequiresAllowlistAndRejectsPrivateAddresses(t *testing.T) {
-	resolver := staticResolver{addresses: map[string][]net.IPAddr{
-		"allowed.example": {{IP: net.ParseIP("93.184.216.34")}},
-		"private.example": {{IP: net.ParseIP("10.0.0.4")}},
-		"link.example":    {{IP: net.ParseIP("169.254.169.254")}},
-	}}
-	policy, err := NewEndpointPolicy([]string{"https://allowed.example/v1", "https://private.example/v1", "https://link.example/v1"}, resolver)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := policy.Resolve(context.Background(), ProviderCustom, "https://not-allowed.example/v1"); err == nil {
-		t.Fatal("unapproved endpoint was allowed")
-	}
-	if _, err := policy.Resolve(context.Background(), ProviderCustom, "https://private.example/v1"); err == nil {
-		t.Fatal("private endpoint was allowed")
-	}
-	if _, err := policy.Resolve(context.Background(), ProviderCustom, "https://link.example/v1"); err == nil {
-		t.Fatal("link-local endpoint was allowed")
-	}
-	if resolved, err := policy.Resolve(context.Background(), ProviderCustom, "https://allowed.example/v1/"); err != nil || resolved != "https://allowed.example/v1" {
-		t.Fatalf("approved endpoint = %q, %v", resolved, err)
-	}
-}
-
-func TestHTTPTransportUsesMockProviderAndRejectsRedirect(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/chat/completions" {
-			t.Fatalf("path = %s", request.URL.Path)
-		}
-		response.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(response, `{"choices":[{"finish_reason":"stop","message":{"content":%q}}],"usage":{"prompt_tokens":12,"completion_tokens":8}}`, validReviewJSON())
-	}))
-	defer server.Close()
-
-	result, err := NewHTTPTransport(server.Client().Transport, time.Second).Call(context.Background(), ProviderCall{
-		Provider: ProviderCustom, BaseURL: server.URL, APIKey: "secret-key", Model: "model", MaxOutputTokens: 256, Prompt: "review",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.InputTokens == nil || *result.InputTokens != 12 || result.OutputTokens == nil || *result.OutputTokens != 8 {
-		t.Fatalf("unexpected usage: %+v", result)
-	}
-
-	redirectTarget := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("redirect target must not be reached")
-	}))
-	defer redirectTarget.Close()
-	redirector := httptest.NewServer(http.RedirectHandler(redirectTarget.URL, http.StatusFound))
-	defer redirector.Close()
-	_, err = NewHTTPTransport(redirector.Client().Transport, time.Second).Call(context.Background(), ProviderCall{
-		Provider: ProviderCustom, BaseURL: redirector.URL, APIKey: "secret-key", Model: "model", MaxOutputTokens: 256, Prompt: "review",
-	})
-	if err == nil || !strings.Contains(err.Error(), "redirect") {
-		t.Fatalf("redirect error = %v", err)
-	}
-}
-
-func TestHTTPTransportParsesOpenAIResponsesOutput(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/responses" {
-			t.Fatalf("path = %s", request.URL.Path)
-		}
-		response.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(response, `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":%q}]}],"usage":{"input_tokens":7,"output_tokens":5}}`, validReviewJSON())
-	}))
-	defer server.Close()
-
-	result, err := NewHTTPTransport(server.Client().Transport, time.Second).Call(context.Background(), ProviderCall{
-		Provider: ProviderOpenAI, BaseURL: server.URL, APIKey: "secret-key", Model: "model", MaxOutputTokens: 256, Prompt: "review",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.InputTokens == nil || *result.InputTokens != 7 || !strings.Contains(string(result.Content), `"headline":"Review"`) {
-		t.Fatalf("unexpected Responses result: %+v", result)
-	}
-}
-
-func TestHTTPTransportTimeoutIsBounded(t *testing.T) {
-	release := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		<-release
-	}))
-	defer server.Close()
-	_, err := NewHTTPTransport(server.Client().Transport, 20*time.Millisecond).Call(context.Background(), ProviderCall{
-		Provider: ProviderCustom, BaseURL: server.URL, APIKey: "secret-key", Model: "model", MaxOutputTokens: 256, Prompt: "review",
-	})
-	close(release)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("timeout error = %v", err)
-	}
-}
-
-func TestHTTPTransportDefaultBlocksPrivateAddress(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("private provider endpoint must not be reached")
-	}))
-	defer server.Close()
-	_, err := NewHTTPTransport(nil, time.Second).Call(context.Background(), ProviderCall{
-		Provider: ProviderCustom, BaseURL: server.URL, APIKey: "secret-key", Model: "model", MaxOutputTokens: 256, Prompt: "review",
-	})
-	if err == nil || !strings.Contains(err.Error(), "private or local") {
-		t.Fatalf("private dial error = %v", err)
-	}
-}
-
 func TestPerUserRateLimitAndMonthlyBudget(t *testing.T) {
 	repository := newMemoryRepository()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
@@ -196,59 +86,6 @@ func TestPerUserRateLimitAndMonthlyBudget(t *testing.T) {
 	}
 	if _, err := repository.ReserveUsage(context.Background(), budgetUser, 1_001, "portfolio_review", now.Add(2*time.Minute)); !errors.Is(err, ErrBudget) {
 		t.Fatalf("budget error = %v", err)
-	}
-}
-
-func TestReviewStrictSchemaAndUsageFinalization(t *testing.T) {
-	repository := newMemoryRepository()
-	user := uuid.New()
-	settings := testSettings(100_000)
-	settings.EncryptedAPIKey = ""
-	repository.settings[user] = settings
-	transport := &staticTransport{result: ProviderResult{Content: json.RawMessage(validReviewJSON()), InputTokens: intPointer(20), OutputTokens: intPointer(10)}}
-	service := NewService(repository, nil, nil, transport)
-	service.now = func() time.Time { return time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC) }
-	result, err := service.Review(context.Background(), user, validReviewRequest("session-secret"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result["review"].(Review).Headline != "Review" {
-		t.Fatalf("unexpected review: %#v", result["review"])
-	}
-	if len(repository.events[user]) != 1 || repository.events[user][0].Status != "success" || repository.events[user][0].ChargedTokens != 30 {
-		t.Fatalf("usage not finalized: %+v", repository.events[user])
-	}
-
-	bad := validReviewRequest("session-secret")
-	bad.Snapshot = append(bad.Snapshot[:len(bad.Snapshot)-1], []byte(`,"unexpected":true}`)...)
-	if _, err := service.Review(context.Background(), user, bad); !errors.Is(err, ErrInvalidInput) {
-		t.Fatalf("unknown request field was accepted: %v", err)
-	}
-
-	transport.result.Content = json.RawMessage(strings.Replace(validReviewJSON(), `"headline":"Review"`, `"headline":"Review","secret":"leak"`, 1))
-	if _, err := service.Review(context.Background(), user, validReviewRequest("session-secret")); !errors.Is(err, ErrInvalidInput) {
-		t.Fatalf("unknown result field was accepted: %v", err)
-	}
-}
-
-func TestConversionReturnsDraftWithoutCommitSurface(t *testing.T) {
-	repository := newMemoryRepository()
-	user := uuid.New()
-	settings := testSettings(100_000)
-	repository.settings[user] = settings
-	service := NewService(repository, nil, nil, &staticTransport{result: ProviderResult{Content: json.RawMessage(`{
-		"schemaVersion":1,"sourceCurrency":"USD","records":[{"collection":"transactions","sourceIds":["source-1"],"fields":[{"name":"external_id","value":"txn-1"},{"name":"type","value":"deposit"},{"name":"amount","value":"10.00"},{"name":"date","value":"2026-09-01"}]}],"exclusions":[],"issues":[]
-	}`)}})
-	service.now = func() time.Time { return settings.UpdatedAt }
-	draft, err := service.Convert(context.Background(), user, ConversionRequest{
-		Source:            Source{Units: []SourceUnit{{ID: "source-1", Location: "Row 1", Text: "txn-1,deposit,10.00,2026-09-01"}}, Warnings: []string{}},
-		ConfigurationHash: configurationHash(*settings, "balance", "USD"), Consent: true, APIKey: "session-secret", TrackingMode: "balance", Currency: "USD",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(draft.Content, "wealthboard-account-history") || !strings.Contains(draft.Content, "txn-1") {
-		t.Fatalf("unexpected draft: %s", draft.Content)
 	}
 }
 
@@ -363,27 +200,6 @@ func testSocketPath(t *testing.T) string {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(directory) })
 	return filepath.Join(directory, "worker.sock")
-}
-
-type staticResolver struct {
-	addresses map[string][]net.IPAddr
-}
-
-func (resolver staticResolver) LookupIPAddr(_ context.Context, host string) ([]net.IPAddr, error) {
-	addresses := resolver.addresses[host]
-	if len(addresses) == 0 {
-		return nil, errors.New("not found")
-	}
-	return addresses, nil
-}
-
-type staticTransport struct {
-	result ProviderResult
-	err    error
-}
-
-func (transport *staticTransport) Call(context.Context, ProviderCall) (ProviderResult, error) {
-	return transport.result, transport.err
 }
 
 type memoryRepository struct {
@@ -506,7 +322,7 @@ func (repository *memoryRepository) CompleteUsage(_ context.Context, userID, eve
 }
 
 func testSettings(monthlyLimit int) *Settings {
-	return &Settings{SettingsInput: SettingsInput{Provider: ProviderCustom, BaseURL: "https://provider.example/v1", Model: "test-model", MonthlyTokenLimit: monthlyLimit, MaxOutputTokens: 256}, UpdatedAt: time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)}
+	return &Settings{SettingsInput: SettingsInput{Provider: ProviderAnthropic, Model: "test-model", MonthlyTokenLimit: monthlyLimit, MaxOutputTokens: 256}, BaseURL: ProviderAnthropic.BaseURL(), UpdatedAt: time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)}
 }
 
 func validReviewRequest(apiKey string) ReviewRequest {
@@ -517,5 +333,5 @@ func validReviewRequest(apiKey string) ReviewRequest {
 }
 
 func validReviewJSON() string {
-	return `{"schemaVersion":1,"headline":"Review","executiveSummary":"Summary","dataQuality":[],"strengths":[],"attentionItems":[{"id":"finding-1","category":"general","severity":"info","confidence":"high","title":"Title","explanation":"Explanation","evidenceRefs":["portfolio.totals"]}],"goalObservations":[],"questions":[],"possibleNextChecks":[],"limitations":["Explanatory analysis, not financial advice."]}`
+	return `{"headline":"Review","executiveSummary":"Summary","dataQuality":[],"strengths":[],"attentionItems":[{"id":"finding-1","category":"general","severity":"info","confidence":"high","title":"Title","explanation":"Explanation","evidenceRefs":["portfolio.totals"]}],"goalObservations":[],"questions":[],"possibleNextChecks":[],"limitations":["Explanatory analysis, not financial advice."]}`
 }

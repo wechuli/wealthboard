@@ -11,7 +11,7 @@ import (
 )
 
 const migrationsDirectory = "migrations"
-const CurrentSchemaVersion int64 = 3
+const CurrentSchemaVersion int64 = 4
 
 func CheckReady(ctx context.Context, db *sql.DB) error {
 	if err := db.PingContext(ctx); err != nil {

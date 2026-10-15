@@ -25,11 +25,11 @@ func TestRegisterAIWorkflowRoutesNeverReturnsCredentialMaterial(t *testing.T) {
 		&fakeAIWorkflowService{settings: &aiworkflow.Settings{
 			SettingsInput: aiworkflow.SettingsInput{
 				Provider:          aiworkflow.ProviderOpenAI,
-				BaseURL:           "https://api.openai.com/v1",
 				Model:             "gpt-test",
 				MonthlyTokenLimit: 100_000,
 				MaxOutputTokens:   1200,
 			},
+			BaseURL:         "https://api.openai.com/v1",
 			HasStoredAPIKey: true,
 			EncryptedAPIKey: "v1.private-ciphertext",
 			UpdatedAt:       time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC),

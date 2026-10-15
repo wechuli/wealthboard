@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,19 +23,39 @@ var (
 	ErrRateLimited   = errors.New("AI request rate limit reached")
 	ErrBudget        = errors.New("monthly AI token limit reached")
 	ErrInvalidInput  = errors.New("invalid AI workflow input")
+
+	ErrProvider            = errors.New("the AI provider could not complete the request")
+	ErrProviderCredential  = fmt.Errorf("%w: the provider rejected the API key", ErrProvider)
+	ErrProviderModel       = fmt.Errorf("%w: the provider does not recognize the selected model", ErrProvider)
+	ErrProviderRateLimited = fmt.Errorf("%w: the provider rate limited the request", ErrProvider)
+	ErrProviderOutput      = fmt.Errorf("%w: provider returned a result that does not match the required structure", ErrInvalidInput)
 )
 
 type Provider string
 
 const (
-	ProviderOpenAI   Provider = "openai"
-	ProviderDeepSeek Provider = "deepseek"
-	ProviderCustom   Provider = "custom"
+	ProviderOpenAI    Provider = "openai"
+	ProviderDeepSeek  Provider = "deepseek"
+	ProviderAnthropic Provider = "anthropic"
 )
+
+// BaseURL is the fixed API endpoint for a supported provider, or "" for an
+// unsupported one.
+func (provider Provider) BaseURL() string {
+	switch provider {
+	case ProviderOpenAI:
+		return "https://api.openai.com/v1"
+	case ProviderDeepSeek:
+		return "https://api.deepseek.com"
+	case ProviderAnthropic:
+		return "https://api.anthropic.com"
+	default:
+		return ""
+	}
+}
 
 type SettingsInput struct {
 	Provider            Provider `json:"provider"`
-	BaseURL             string   `json:"baseUrl"`
 	Model               string   `json:"model"`
 	IncludeExactAmounts bool     `json:"includeExactAmounts"`
 	IncludeAccountNames bool     `json:"includeAccountNames"`
@@ -44,6 +65,7 @@ type SettingsInput struct {
 
 type Settings struct {
 	SettingsInput
+	BaseURL         string    `json:"baseUrl"`
 	HasStoredAPIKey bool      `json:"hasStoredApiKey"`
 	APIKeyHint      *string   `json:"apiKeyHint"`
 	UpdatedAt       time.Time `json:"updatedAt"`
@@ -103,17 +125,18 @@ type ReviewRequest struct {
 }
 
 type ReviewFinding struct {
-	ID           string   `json:"id"`
-	Category     string   `json:"category"`
-	Severity     string   `json:"severity"`
-	Confidence   string   `json:"confidence"`
+	ID           string   `json:"id" jsonschema_description:"Short stable identifier for the finding."`
+	Category     string   `json:"category" jsonschema:"enum=data-quality,enum=allocation,enum=liquidity,enum=cash-flow,enum=goals,enum=general"`
+	Severity     string   `json:"severity" jsonschema:"enum=info,enum=attention,enum=high"`
+	Confidence   string   `json:"confidence" jsonschema:"enum=low,enum=medium,enum=high"`
 	Title        string   `json:"title"`
 	Explanation  string   `json:"explanation"`
-	EvidenceRefs []string `json:"evidenceRefs"`
+	EvidenceRefs []string `json:"evidenceRefs" jsonschema_description:"One to six exact evidenceId values copied from the snapshot."`
 }
 
-type Review struct {
-	SchemaVersion      int             `json:"schemaVersion"`
+// ReviewContent is the structured output the portfolio review flow asks the
+// model for.
+type ReviewContent struct {
 	Headline           string          `json:"headline"`
 	ExecutiveSummary   string          `json:"executiveSummary"`
 	DataQuality        []ReviewFinding `json:"dataQuality"`
@@ -121,29 +144,18 @@ type Review struct {
 	AttentionItems     []ReviewFinding `json:"attentionItems"`
 	GoalObservations   []ReviewFinding `json:"goalObservations"`
 	Questions          []string        `json:"questions"`
-	PossibleNextChecks []string        `json:"possibleNextChecks"`
-	Limitations        []string        `json:"limitations"`
+	PossibleNextChecks []string        `json:"possibleNextChecks" jsonschema_description:"Questions to investigate, never financial instructions."`
+	Limitations        []string        `json:"limitations" jsonschema_description:"At least one limitation of this analysis."`
 }
 
-type ProviderCall struct {
-	Provider        Provider
-	BaseURL         string
-	APIKey          string
-	Model           string
-	MaxOutputTokens int
-	Prompt          string
-	ResponseSchema  json.RawMessage
+type Review struct {
+	SchemaVersion int `json:"schemaVersion"`
+	ReviewContent
 }
 
-type ProviderResult struct {
-	Content      json.RawMessage
+type Usage struct {
 	InputTokens  *int
 	OutputTokens *int
-	RequestID    string
-}
-
-type Transport interface {
-	Call(context.Context, ProviderCall) (ProviderResult, error)
 }
 
 type SourceUnit struct {
@@ -158,13 +170,13 @@ type Source struct {
 }
 
 type ExtractionField struct {
-	Name  string  `json:"name"`
-	Value *string `json:"value"`
+	Name  string `json:"name" jsonschema:"enum=external_id,enum=type,enum=amount,enum=date,enum=description,enum=notes,enum=name,enum=symbol,enum=identifier_type,enum=identifier,enum=exchange_mic,enum=asset_type,enum=quote_currency,enum=instrument_external_id,enum=quantity,enum=unit_price,enum=trade_currency,enum=fee_amount,enum=fee_currency,enum=cash_effect,enum=applied_exchange_rate,enum=opening_cost_basis,enum=event_group_id,enum=trade_date,enum=settlement_date,enum=price,enum=effective_date,enum=source,enum=provenance"`
+	Value string `json:"value" jsonschema_description:"Value copied from the source, or an empty string when the source has none."`
 }
 
 type ExtractionRecord struct {
-	Collection string            `json:"collection"`
-	SourceIDs  []string          `json:"sourceIds"`
+	Collection string            `json:"collection" jsonschema:"enum=transactions,enum=instruments,enum=position_events,enum=cash_transactions,enum=prices"`
+	SourceIDs  []string          `json:"sourceIds" jsonschema_description:"Source section IDs this record was derived from."`
 	Fields     []ExtractionField `json:"fields"`
 }
 
@@ -173,12 +185,12 @@ type Exclusion struct {
 	Reason   string `json:"reason"`
 }
 
+// Extraction is the structured output the import conversion flow asks the
+// model for.
 type Extraction struct {
-	SchemaVersion  int                `json:"schemaVersion"`
-	SourceCurrency *string            `json:"sourceCurrency"`
-	Records        []ExtractionRecord `json:"records"`
-	Exclusions     []Exclusion        `json:"exclusions"`
-	Issues         []string           `json:"issues"`
+	Records    []ExtractionRecord `json:"records"`
+	Exclusions []Exclusion        `json:"exclusions"`
+	Issues     []string           `json:"issues"`
 }
 
 type ConversionRequest struct {

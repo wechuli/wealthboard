@@ -109,6 +109,7 @@ describe("original settings page", () => {
     });
     const revokeAPIKey = vi.fn().mockResolvedValue(undefined);
     const revokeAllAPIKeys = vi.fn().mockResolvedValue({ revoked: 1 });
+    const saveAISettings = vi.fn().mockResolvedValue(undefined);
     const operations = {
       load: vi.fn().mockResolvedValue({
         settings,
@@ -122,7 +123,7 @@ describe("original settings page", () => {
       updateSettings: noop,
       createExchangeRate: noop,
       deleteExchangeRate: noop,
-      saveAISettings: noop,
+      saveAISettings,
       saveAICredential: noop,
       deleteAICredential: noop,
       disconnectAI: noop,
@@ -171,17 +172,45 @@ describe("original settings page", () => {
       screen.queryByText(/deployment|operator|AI_ALLOWED_ENDPOINTS/i),
     ).not.toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Provider"), "custom");
-    const endpoint = screen.getByLabelText("API endpoint");
-    expect(endpoint).not.toHaveAttribute("readonly");
-    await user.clear(endpoint);
-    await user.paste("https://models.example.com/v1");
-    expect(endpoint).toHaveValue("https://models.example.com/v1");
+    const provider = screen.getByLabelText("Provider");
     expect(
-      screen.getByText(
-        "This endpoint must be enabled for your Wealthboard instance.",
+      Array.from(provider.querySelectorAll("option")).map(
+        (option) => option.textContent,
       ),
-    ).toBeInTheDocument();
+    ).toEqual(["OpenAI", "Anthropic", "DeepSeek"]);
+    const endpoint = screen.getByLabelText("API endpoint");
+    const model = screen.getByLabelText("Model");
+    expect(endpoint).toHaveAttribute("readonly");
+    expect(endpoint).toHaveValue("https://api.openai.com/v1");
+    expect(model).toHaveValue("test-model");
+
+    await user.selectOptions(provider, "anthropic");
+    expect(endpoint).toHaveValue("https://api.anthropic.com");
+    expect(model).toHaveValue("test-model");
+    const suggestions = Array.from(
+      document.querySelectorAll("#aiModelSuggestions option"),
+    ).map((option) => option.getAttribute("value"));
+    expect(suggestions).toContain("claude-sonnet-5");
+    expect(suggestions).not.toContain("gpt-5.5");
+
+    await user.clear(model);
+    await user.selectOptions(provider, "deepseek");
+    expect(model).toHaveValue("deepseek-v4-flash");
+    await user.selectOptions(provider, "anthropic");
+    expect(model).toHaveValue("claude-sonnet-5");
+
+    await user.clear(model);
+    await user.type(model, "claude-custom-preview");
+    await user.click(screen.getByRole("button", { name: "Save AI settings" }));
+    await waitFor(() => expect(saveAISettings).toHaveBeenCalledTimes(1));
+    expect(saveAISettings.mock.calls[0][0]).toEqual({
+      provider: "anthropic",
+      model: "claude-custom-preview",
+      includeExactAmounts: false,
+      includeAccountNames: false,
+      monthlyTokenLimit: 100000,
+      maxOutputTokens: 1200,
+    });
   });
 
   it("creates, copies, dismisses, and revokes personal API keys", async () => {
@@ -215,9 +244,7 @@ describe("original settings page", () => {
       .mockResolvedValue(undefined);
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    render(
-      <PersonalAPIKeys session={session} operations={operations} />,
-    );
+    render(<PersonalAPIKeys session={session} operations={operations} />);
 
     await screen.findByText("CLI key");
     await user.type(
