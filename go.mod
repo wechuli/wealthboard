@@ -5,7 +5,7 @@ go 1.27
 require (
 	github.com/anthropics/anthropic-sdk-go v1.23.0
 	github.com/firebase/genkit/go v1.13.1
-	github.com/go-chi/chi/v5 v5.2.3
+	github.com/go-chi/chi/v5 v5.2.4
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
