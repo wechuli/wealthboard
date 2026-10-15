@@ -187,6 +187,7 @@ func scanSettings(row rowScanner) (*Settings, error) {
 		}
 		return nil, fmt.Errorf("load AI settings: %w", err)
 	}
+	settings.UpdatedAt = settings.UpdatedAt.UTC()
 	settings.EncryptedAPIKey = encrypted.String
 	settings.HasStoredAPIKey = encrypted.Valid
 	if hint.Valid {

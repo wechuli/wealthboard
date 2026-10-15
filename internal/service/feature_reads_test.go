@@ -2,13 +2,17 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/wechuli/wealthboard/internal/aiworkflow"
 )
 
 func TestFeatureReadFinancialValuesSerializeAsStrings(t *testing.T) {
@@ -83,5 +87,65 @@ func TestFeatureInstrumentReadsAreOwnerScoped(t *testing.T) {
 	_, err = reads.Instrument(ctx, foreignID, instrumentID)
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("foreign read error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestAIConversionFingerprintMatchesClientOutsideUTC(t *testing.T) {
+	db := openServiceTestDatabase(t)
+	previous := time.Local
+	time.Local = time.FixedZone("UTC+3", 3*60*60)
+	t.Cleanup(func() { time.Local = previous })
+
+	ctx := context.Background()
+	userID := uuid.New()
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO users (id, username, created_at, updated_at) VALUES ($1, $2, now(), now())`, []any{userID, "ai-fingerprint-" + userID.String()}},
+		{`INSERT INTO ai_provider_settings (
+			id, user_id, provider, base_url, model, max_output_tokens, created_at, updated_at
+		) VALUES ($1, $2, 'anthropic', 'https://api.anthropic.com', 'claude-sonnet-5', 1200, now(), TIMESTAMPTZ '2026-10-15 14:00:19.099969+00')`, []any{uuid.New(), userID}},
+	} {
+		if _, err := db.ExecContext(ctx, statement.query, statement.args...); err != nil {
+			t.Fatalf("seed AI settings: %v", err)
+		}
+	}
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM users WHERE id = $1`, userID)
+	})
+
+	read, err := NewFeatureReads(db).AI(ctx, userID)
+	if err != nil {
+		t.Fatalf("read AI settings: %v", err)
+	}
+	payload, err := json.Marshal(read.Settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var client struct {
+		Provider        string `json:"provider"`
+		BaseURL         string `json:"baseUrl"`
+		Model           string `json:"model"`
+		MaxOutputTokens int    `json:"maxOutputTokens"`
+		UpdatedAt       string `json:"updatedAt"`
+	}
+	if err := json.Unmarshal(payload, &client); err != nil {
+		t.Fatal(err)
+	}
+	// Mirrors configurationHash in web/src/components/accounts/ai-document-import.tsx.
+	fingerprint, _ := json.Marshal([]any{client.Provider, client.BaseURL, client.Model, client.MaxOutputTokens, client.UpdatedAt, "balance", "KES"})
+	digest := sha256.Sum256(fingerprint)
+	clientHash := hex.EncodeToString(digest[:])
+
+	serverHash, err := aiworkflow.NewService(aiworkflow.NewPostgresRepository(db), nil, nil).ConfigurationHash(ctx, userID, "balance", "KES")
+	if err != nil {
+		t.Fatalf("server fingerprint: %v", err)
+	}
+	if clientHash != serverHash {
+		t.Fatalf("client fingerprint of updatedAt %q does not match the server", client.UpdatedAt)
+	}
+	if client.UpdatedAt != "2026-10-15T14:00:19.099969Z" {
+		t.Fatalf("updatedAt = %q, want UTC", client.UpdatedAt)
 	}
 }

@@ -445,3 +445,68 @@ func (server *fakeProviderServer) handle(response http.ResponseWriter, request *
 	}
 	fmt.Fprintf(response, `{"id":"chat_1","object":"chat.completion","created":1,"model":"chosen-model","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":%q}}],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20}}`, validReviewJSON())
 }
+
+func TestConversionDraftAlwaysHasArraysAndOnlyImportableFields(t *testing.T) {
+	source := Source{Units: []SourceUnit{{ID: "source-1", Location: "Page 1", Text: "Deposit 10.00"}}, Warnings: []string{}}
+	clean, err := buildDraft(Extraction{Records: []ExtractionRecord{{
+		Collection: "transactions",
+		SourceIDs:  []string{"source-1"},
+		Fields:     []ExtractionField{{Name: "amount", Value: "10.00"}},
+	}}}, source, "balance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanJSON, err := json.Marshal(clean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cleanJSON), `"exclusions":[],"issues":[]`) {
+		t.Fatalf("draft without issues or exclusions must return empty arrays: %s", cleanJSON)
+	}
+
+	draft, err := buildDraft(Extraction{Records: []ExtractionRecord{{
+		Collection: "transactions",
+		SourceIDs:  []string{"source-1"},
+		Fields: []ExtractionField{
+			{Name: "type", Value: "deposit"},
+			{Name: "amount", Value: "10.00"},
+			{Name: "date", Value: "2026-10-01"},
+			{Name: "source", Value: "statement"},
+		},
+	}}}, source, "balance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "null") {
+		t.Fatalf("draft response contains null: %s", encoded)
+	}
+	if strings.Contains(draft.Content, `"source"`) {
+		t.Fatalf("draft kept a field the import rejects: %s", draft.Content)
+	}
+	if len(draft.Issues) != 1 || !strings.Contains(draft.Issues[0], `Removed field "source" from 1 transactions record(s)`) {
+		t.Fatalf("issues = %q", draft.Issues)
+	}
+	var envelope struct {
+		Transactions []map[string]any `json:"transactions"`
+	}
+	if err := json.Unmarshal([]byte(draft.Content), &envelope); err != nil || len(envelope.Transactions) != 1 || envelope.Transactions[0]["amount"] != "10.00" {
+		t.Fatalf("draft content = %s, %v", draft.Content, err)
+	}
+}
+
+func TestConversionPromptListsTheFieldsEachCollectionAccepts(t *testing.T) {
+	balance := conversionPrompt("balance", "KES", nil)
+	if !strings.Contains(balance, "- transactions: external_id, type, amount, date, description, notes") || strings.Contains(balance, "position_events") {
+		t.Fatalf("balance prompt = %s", balance)
+	}
+	positions := conversionPrompt("positions", "USD", nil)
+	for _, collection := range []string{"instruments", "position_events", "cash_transactions", "prices"} {
+		if !strings.Contains(positions, "- "+collection+": external_id") {
+			t.Fatalf("positions prompt omits %s: %s", collection, positions)
+		}
+	}
+}

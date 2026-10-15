@@ -660,6 +660,9 @@ WHERE user_id = $1`, userID).Scan(
 	}
 	if err == nil {
 		settings.APIKeyHint = stringPointer(hint)
+		// The client fingerprints updatedAt for import conversion, and the
+		// server fingerprints it in UTC, so it must not carry the process zone.
+		settings.CreatedAt, settings.UpdatedAt = settings.CreatedAt.UTC(), settings.UpdatedAt.UTC()
 		result.Settings = &settings
 	}
 

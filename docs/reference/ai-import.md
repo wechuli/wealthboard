@@ -126,6 +126,9 @@ section IDs and the 1,000-section, 100-warning, and 64 KB limits.
 4. Inspect the JSON draft, source references, exclusions, and validation issues.
    Correct ambiguous dates/currencies/identifiers or missing fields and
    acknowledge excluded activity. A source reference is not proof of accuracy.
+   The model is told which fields each import collection accepts; any other
+   field it returns is removed from the draft and listed as an issue, because
+   the import preview rejects unknown fields.
 5. Select **Use draft for preview**, then **Preview**. Select **Commit import**
    only after reviewing the existing balance or investment preview.
    **Edit draft** discards that preview and requires another review/preview

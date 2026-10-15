@@ -4,8 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/wechuli/wealthboard/internal/aiworkflow"
 )
 
 func TestParseAccountHistoryCSVAndJSON(t *testing.T) {
@@ -58,5 +63,35 @@ func TestVerifyImportHashRequiresExactContent(t *testing.T) {
 	}
 	if err := verifyImportHash(append(content, '\n'), importHash(content)); !errors.Is(err, ErrImportConflict) {
 		t.Fatalf("changed content error = %v, want conflict", err)
+	}
+}
+
+func TestAIDraftFieldsMatchTheStrictImportEnvelopes(t *testing.T) {
+	jsonFields := func(value any) []string {
+		kind := reflect.TypeOf(value)
+		names := make([]string, 0, kind.NumField())
+		for index := range kind.NumField() {
+			names = append(names, strings.Split(kind.Field(index).Tag.Get("json"), ",")[0])
+		}
+		slices.Sort(names)
+		return names
+	}
+	want := map[string][]string{
+		"transactions":      jsonFields(accountHistorySourceRow{}),
+		"instruments":       jsonFields(investmentSourceInstrument{}),
+		"position_events":   jsonFields(investmentSourceEvent{}),
+		"cash_transactions": jsonFields(investmentSourceCash{}),
+		"prices":            jsonFields(investmentSourcePrice{}),
+	}
+	got := aiworkflow.DraftCollectionFields()
+	if len(got) != len(want) {
+		t.Fatalf("AI draft collections = %v, want %v", slices.Collect(maps.Keys(got)), slices.Collect(maps.Keys(want)))
+	}
+	for collection, fields := range want {
+		names := slices.Clone(got[collection])
+		slices.Sort(names)
+		if !slices.Equal(names, fields) {
+			t.Errorf("%s: AI draft fields %v, import accepts %v", collection, names, fields)
+		}
 	}
 }

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -21,9 +23,41 @@ var (
 	currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
 	modelPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]*$`)
 
-	allowedCollections = map[string]bool{"transactions": true, "instruments": true, "position_events": true, "cash_transactions": true, "prices": true}
-	allowedFields      = map[string]bool{"external_id": true, "type": true, "amount": true, "date": true, "description": true, "notes": true, "name": true, "symbol": true, "identifier_type": true, "identifier": true, "exchange_mic": true, "asset_type": true, "quote_currency": true, "instrument_external_id": true, "quantity": true, "unit_price": true, "trade_currency": true, "fee_amount": true, "fee_currency": true, "cash_effect": true, "applied_exchange_rate": true, "opening_cost_basis": true, "event_group_id": true, "trade_date": true, "settlement_date": true, "price": true, "effective_date": true, "source": true, "provenance": true}
+	// draftCollectionFields lists the fields each import collection accepts. The
+	// account and investment history imports decode drafts strictly, so these
+	// must match their JSON envelopes in internal/service.
+	draftCollectionFields = map[string][]string{
+		"transactions":      {"external_id", "type", "amount", "date", "description", "notes"},
+		"instruments":       {"external_id", "name", "symbol", "identifier_type", "identifier", "exchange_mic", "asset_type", "quote_currency"},
+		"position_events":   {"external_id", "instrument_external_id", "type", "quantity", "unit_price", "trade_currency", "fee_amount", "fee_currency", "cash_effect", "applied_exchange_rate", "opening_cost_basis", "event_group_id", "trade_date", "settlement_date", "description", "notes"},
+		"cash_transactions": {"external_id", "type", "amount", "date", "event_group_id", "description", "notes"},
+		"prices":            {"external_id", "instrument_external_id", "price", "effective_date", "source", "provenance"},
+	}
+	trackingModeCollections = map[string][]string{
+		"balance":   {"transactions"},
+		"positions": {"instruments", "position_events", "cash_transactions", "prices"},
+	}
+	allowedCollections = map[string]bool{}
+	allowedFields      = map[string]bool{}
 )
+
+func init() {
+	for collection, fields := range draftCollectionFields {
+		allowedCollections[collection] = true
+		for _, field := range fields {
+			allowedFields[field] = true
+		}
+	}
+}
+
+// DraftCollectionFields returns the fields each import collection accepts.
+func DraftCollectionFields() map[string][]string {
+	fields := make(map[string][]string, len(draftCollectionFields))
+	for collection, names := range draftCollectionFields {
+		fields[collection] = slices.Clone(names)
+	}
+	return fields
+}
 
 func validateReviewRequest(request ReviewRequest) error {
 	if !periods[request.Period] || !focuses[request.Focus] || len(request.Snapshot) == 0 || len(request.Snapshot) > 25_000 {
@@ -133,12 +167,13 @@ func buildDraft(extraction Extraction, source Source, trackingMode string) (Conv
 	for _, unit := range source.Units {
 		units[unit.ID] = unit
 	}
-	collections := map[string][]map[string]*string{"transactions": {}}
-	if trackingMode == "positions" {
-		collections = map[string][]map[string]*string{"instruments": {}, "position_events": {}, "cash_transactions": {}, "prices": {}}
+	collections := map[string][]map[string]*string{}
+	for _, collection := range trackingModeCollections[trackingMode] {
+		collections[collection] = []map[string]*string{}
 	}
 	covered := map[string]bool{}
 	references := []DraftReference{}
+	dropped := map[[2]string]int{}
 	for _, record := range extraction.Records {
 		if _, ok := collections[record.Collection]; !ok {
 			return ConversionDraft{}, fmt.Errorf("%w: conversion used the wrong account format", ErrInvalidInput)
@@ -151,6 +186,10 @@ func buildDraft(extraction Extraction, source Source, trackingMode string) (Conv
 		}
 		fields := make(map[string]*string, len(record.Fields))
 		for _, field := range record.Fields {
+			if !slices.Contains(draftCollectionFields[record.Collection], field.Name) {
+				dropped[[2]string{record.Collection, field.Name}]++
+				continue
+			}
 			if field.Value == "" {
 				fields[field.Name] = nil
 				continue
@@ -161,13 +200,24 @@ func buildDraft(extraction Extraction, source Source, trackingMode string) (Conv
 		collections[record.Collection] = append(collections[record.Collection], fields)
 		references = append(references, DraftReference{Collection: record.Collection, Row: len(collections[record.Collection]), SourceIDs: record.SourceIDs})
 	}
-	for _, exclusion := range extraction.Exclusions {
+	exclusions := extraction.Exclusions
+	if exclusions == nil {
+		exclusions = []Exclusion{}
+	}
+	for _, exclusion := range exclusions {
 		if _, ok := units[exclusion.SourceID]; !ok || !bounded(exclusion.Reason, 1, 500) {
 			return ConversionDraft{}, fmt.Errorf("%w: conversion excluded an unknown source section", ErrInvalidInput)
 		}
 		covered[exclusion.SourceID] = true
 	}
-	issues := append([]string(nil), extraction.Issues...)
+	issues := append([]string{}, extraction.Issues...)
+	droppedKeys := slices.Collect(maps.Keys(dropped))
+	slices.SortFunc(droppedKeys, func(a, b [2]string) int {
+		return strings.Compare(a[0]+"\x00"+a[1], b[0]+"\x00"+b[1])
+	})
+	for _, key := range droppedKeys {
+		issues = append(issues, fmt.Sprintf("Removed field %q from %d %s record(s) because that import collection does not accept it. Check the source for any value it carried.", key[1], dropped[key], key[0]))
+	}
 	for _, unit := range source.Units {
 		if !covered[unit.ID] {
 			issues = append(issues, "Source section "+unit.ID+" was not accounted for. Resolve it before preview.")
@@ -185,7 +235,7 @@ func buildDraft(extraction Extraction, source Source, trackingMode string) (Conv
 		payload[key] = records
 	}
 	content, _ := json.MarshalIndent(payload, "", "  ")
-	return ConversionDraft{Content: string(content), References: references, Exclusions: extraction.Exclusions, Issues: issues}, nil
+	return ConversionDraft{Content: string(content), References: references, Exclusions: exclusions, Issues: issues}, nil
 }
 
 func reviewPrompt(snapshot string) string {
@@ -199,11 +249,11 @@ func reviewPrompt(snapshot string) string {
 
 func conversionPrompt(trackingMode, currency string, units []SourceUnit) string {
 	encoded, _ := json.Marshal(units)
-	collections := "transactions"
-	if trackingMode == "positions" {
-		collections = "instruments, position_events, cash_transactions, and prices"
+	fields := []string{}
+	for _, collection := range trackingModeCollections[trackingMode] {
+		fields = append(fields, "- "+collection+": "+strings.Join(draftCollectionFields[collection], ", "))
 	}
-	return fmt.Sprintf("Convert only supplied source activity to a Wealthboard %s import draft in %s using only the %s collections. Do not invent values. Account for every source ID with a record or an exclusion.\n\nSource sections:\n\n%s", trackingMode, currency, collections, encoded)
+	return fmt.Sprintf("Convert only supplied source activity to a Wealthboard %s import draft in %s. Do not invent values. Account for every source ID with a record or an exclusion. Use only these collections, and only the listed fields for each:\n%s\n\nSource sections:\n\n%s", trackingMode, currency, strings.Join(fields, "\n"), encoded)
 }
 
 func strictDecode(data []byte, destination any) error {
