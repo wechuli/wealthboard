@@ -31,7 +31,11 @@ Create the database and login role before starting Wealthboard. The application
 applies its schema migrations but does not provision a PostgreSQL server or
 create the target database. Its configured role must be able to apply DDL in the
 application schema and read/write its tables; no application user needs a
-PostgreSQL login.
+PostgreSQL login. Replicas may start together: each migration run takes a
+PostgreSQL advisory lock, so one replica migrates while the others wait up to
+five minutes. During a rolling update, older replicas fail readiness once the
+schema version advances, so each migration must remain safe for the previous
+release while the rollout completes.
 
 The current migrations require no extra PostgreSQL extensions. The Go connection
 pool defaults to 10 open and 5 idle connections per application process. Budget

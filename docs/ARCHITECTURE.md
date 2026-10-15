@@ -541,7 +541,8 @@ own authorization decisions.
 - `db/postgres/migrations` contains the embedded append-only migration history for fresh
   databases and upgrades of existing databases.
 - Startup applies pending migrations before serving requests; readiness checks
-  the expected schema version.
+  the expected schema version. A session-level PostgreSQL advisory lock
+  serializes migrations across replicas and operator `migrate` commands.
 - Disposable pre-release databases may be deleted and recreated, but persisted
   databases must be upgraded without replacing or modifying applied migrations.
 - No ownership-claim or account-bootstrap path is supported.

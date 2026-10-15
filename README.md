@@ -341,7 +341,9 @@ the [OpenAPI contract](api/openapi.yaml) for endpoints and request formats.
 The Go service embeds the append-only PostgreSQL migrations under
 `db/postgres/migrations`. `serve` runs pending migrations at startup; operators
 can run or inspect them separately with `make migrate` and
-`make migrate-status`. Never edit an applied migration.
+`make migrate-status`. Migrations hold a PostgreSQL advisory lock, so replicas
+that start together apply each migration once while the others wait up to five
+minutes. Never edit an applied migration.
 
 PostgreSQL is a fresh-start boundary. There is no SQLite-to-PostgreSQL importer,
 dual-write mode, or supported in-place conversion. The legacy Next.js, Drizzle,

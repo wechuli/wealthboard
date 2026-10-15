@@ -24,6 +24,8 @@ function rc4(key: Buffer, data: Buffer) {
   return output;
 }
 
+// MD5 and RC4 are mandated by the PDF standard security handler that this
+// fixture must reproduce; nothing here stores or verifies a real password.
 const md5 = (...parts: Buffer[]) =>
   createHash("md5").update(Buffer.concat(parts)).digest();
 const padPassword = (value: string) =>
