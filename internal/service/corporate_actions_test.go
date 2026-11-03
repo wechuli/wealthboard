@@ -190,8 +190,15 @@ func TestCorporateActionsPostgreSQLParity(t *testing.T) {
 			t.Fatalf("delete dividend reinvestment group: %v", err)
 		}
 		assertCorporateGroupCount(t, db, dividendGroupID, 0, 0)
-		if err := actions.DeleteGroup(ctx, ownerID, corporateGroupEventID(t, db, spinoffGroupID, "spinoff")); err != nil {
-			t.Fatalf("delete spinoff group: %v", err)
+		if err := actions.DeleteGroup(ctx, foreignID, spinoffGroupID); !errors.Is(err, ErrInvestmentMutationNotFound) {
+			t.Fatalf("foreign group-id delete error = %v, want not found", err)
+		}
+		if err := actions.DeleteGroup(ctx, ownerID, spinoffGroupID); err != nil {
+			t.Fatalf("delete spinoff group by group id: %v", err)
+		}
+		assertCorporateGroupCount(t, db, spinoffGroupID, 0, 0)
+		if err := actions.DeleteGroup(ctx, ownerID, spinoffGroupID); !errors.Is(err, ErrInvestmentMutationNotFound) {
+			t.Fatalf("repeat group-id delete error = %v, want not found", err)
 		}
 		if err := actions.DeleteGroup(ctx, ownerID, corporateGroupEventID(t, db, splitGroupID, "split")); err != nil {
 			t.Fatalf("delete split group: %v", err)

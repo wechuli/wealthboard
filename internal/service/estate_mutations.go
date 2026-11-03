@@ -266,19 +266,24 @@ func (service *EstateMutations) upsertAllocation(ctx context.Context, userID, di
 	if err != nil {
 		return EstateMutationResult{}, err
 	}
-	var beneficiaryExists bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM beneficiaries WHERE user_id=$1 AND id=$2 AND archived_at IS NULL)`, userID, input.BeneficiaryID).Scan(&beneficiaryExists); err != nil {
+	// Owner-scoped lookup: another user's beneficiary is indistinguishable from a missing one.
+	var beneficiaryArchived sql.NullTime
+	if err := tx.QueryRowContext(ctx, `SELECT archived_at FROM beneficiaries WHERE user_id=$1 AND id=$2`, userID, input.BeneficiaryID).Scan(&beneficiaryArchived); errors.Is(err, sql.ErrNoRows) {
+		return EstateMutationResult{}, ErrEstateNotFound
+	} else if err != nil {
 		return EstateMutationResult{}, fmt.Errorf("load estate beneficiary: %w", err)
 	}
-	if !beneficiaryExists {
-		return EstateMutationResult{}, ErrEstateNotFound
+	if beneficiaryArchived.Valid {
+		return EstateMutationResult{}, estateValidation("restore this beneficiary before assigning a share")
 	}
 	if !residuary {
 		var included bool
-		if err := tx.QueryRowContext(ctx, `SELECT is_included FROM estate_account_directives WHERE user_id=$1 AND estate_plan_id=$2 AND id=$3`, userID, plan.ID, directiveID).Scan(&included); errors.Is(err, sql.ErrNoRows) || !included {
+		if err := tx.QueryRowContext(ctx, `SELECT is_included FROM estate_account_directives WHERE user_id=$1 AND estate_plan_id=$2 AND id=$3`, userID, plan.ID, directiveID).Scan(&included); errors.Is(err, sql.ErrNoRows) {
 			return EstateMutationResult{}, ErrEstateNotFound
 		} else if err != nil {
 			return EstateMutationResult{}, fmt.Errorf("load estate directive: %w", err)
+		} else if !included {
+			return EstateMutationResult{}, estateValidation("include this asset in the plan before assigning shares")
 		}
 	}
 	table, parentColumn, parentID := "estate_allocations", "directive_id", directiveID
@@ -296,7 +301,7 @@ func (service *EstateMutations) upsertAllocation(ctx context.Context, userID, di
 		return EstateMutationResult{}, fmt.Errorf("total estate allocations: %w", err)
 	}
 	if otherTotal+input.AllocationBPS > fullEstateAllocationBPS {
-		return EstateMutationResult{}, estateValidation("allocations cannot exceed 100%")
+		return EstateMutationResult{}, estateValidation(fmt.Sprintf("allocations cannot exceed 100%%; %s remains in the %s tier", formatEstateBPS(fullEstateAllocationBPS-otherTotal), input.Tier))
 	}
 	now := service.now().UTC()
 	if !existing {
@@ -342,6 +347,14 @@ func (service *EstateMutations) CreateSnapshot(ctx context.Context, userID uuid.
 	if err != nil {
 		return EstateSnapshotResult{}, err
 	}
+	// Lock the plan so concurrent summaries receive distinct, consecutive versions.
+	if _, err := tx.ExecContext(ctx, `SELECT 1 FROM estate_plans WHERE user_id=$1 AND id=$2 FOR UPDATE`, userID, plan.ID); err != nil {
+		return EstateSnapshotResult{}, fmt.Errorf("lock estate plan: %w", err)
+	}
+	var version int32
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(max(version),0)+1 FROM estate_plan_snapshots WHERE user_id=$1 AND estate_plan_id=$2`, userID, plan.ID).Scan(&version); err != nil {
+		return EstateSnapshotResult{}, fmt.Errorf("next estate snapshot version: %w", err)
+	}
 	var displayName, baseCurrency, timezone string
 	if err := tx.QueryRowContext(ctx, `SELECT display_name,base_currency,timezone FROM user_settings WHERE user_id=$1`, userID).Scan(&displayName, &baseCurrency, &timezone); errors.Is(err, sql.ErrNoRows) {
 		return EstateSnapshotResult{}, ErrEstateNotFound
@@ -361,14 +374,14 @@ func (service *EstateMutations) CreateSnapshot(ctx context.Context, userID uuid.
 	hashBytes := sha256.Sum256(content)
 	hash := hex.EncodeToString(hashBytes[:])
 	result := EstateSnapshotResult{EstateSnapshot: EstateSnapshot{
-		EstateSnapshotMeta: EstateSnapshotMeta{ID: uuid.New(), EstatePlanID: plan.ID, Version: 1,
+		EstateSnapshotMeta: EstateSnapshotMeta{ID: uuid.New(), EstatePlanID: plan.ID, Version: version,
 			Title: plan.Title, BaseCurrency: baseCurrency, ContentHash: hash, GeneratedAt: generatedAt},
 		Content: json.RawMessage(content),
 	}}
 	result.ValueAsOfDate, _ = time.Parse(time.DateOnly, valueAsOfDate)
 	_, err = tx.ExecContext(ctx, `INSERT INTO estate_plan_snapshots
 (id,user_id,estate_plan_id,version,title,value_as_of_date,base_currency,content,content_hash,generated_at)
-VALUES ($1,$2,$3,1,$4,$5,$6,$7,$8,$9)`, result.ID, userID, plan.ID, plan.Title, valueAsOfDate, baseCurrency, string(content), hash, generatedAt)
+VALUES ($1,$2,$3,$10,$4,$5,$6,$7,$8,$9)`, result.ID, userID, plan.ID, plan.Title, valueAsOfDate, baseCurrency, string(content), hash, generatedAt, version)
 	if err != nil {
 		return EstateSnapshotResult{}, fmt.Errorf("create estate snapshot: %w", err)
 	}
@@ -555,5 +568,14 @@ func estateMutationResult(result sql.Result, err error, operation string) error 
 }
 
 func estateValidation(detail string) error {
-	return fmt.Errorf("%w: %s", ErrEstateValidation, detail)
+	return publicError(ErrEstateValidation, detail)
+}
+
+// formatEstateBPS renders basis points as an exact percentage ("12.5%").
+func formatEstateBPS(value int32) string {
+	whole, fraction := value/100, value%100
+	if fraction == 0 {
+		return fmt.Sprintf("%d%%", whole)
+	}
+	return strings.TrimRight(fmt.Sprintf("%d.%02d", whole, fraction), "0") + "%"
 }

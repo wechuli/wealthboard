@@ -155,8 +155,7 @@ const COLLECTIONS: { key: Exclude<keyof UserArchive, 'format' | 'version' | 'exp
 
 /** The server rejects archives above 25 MB. */
 const MAX_BYTES = 25 * 1024 * 1024
-/** Exports from the server say "wealthboard-user-json"; the API contract (and the mock) say "wealthboard-user-export". */
-const ARCHIVE_FORMATS = new Set(['wealthboard-user-json', 'wealthboard-user-export'])
+const ARCHIVE_FORMAT = 'wealthboard-user-json'
 
 interface LoadedFile {
   file: File
@@ -178,7 +177,7 @@ function parseArchive(text: string): UserArchive {
   }
   if (!data || typeof data !== 'object') throw new Error('This file doesn’t look like a portfolio export.')
   const d = data as Record<string, unknown>
-  if (typeof d.format !== 'string' || !ARCHIVE_FORMATS.has(d.format)) throw new Error('This file isn’t a Wealthboard portfolio export. Choose a file created with “Export JSON”.')
+  if (typeof d.format !== 'string' || d.format !== ARCHIVE_FORMAT) throw new Error('This file isn’t a Wealthboard portfolio export. Choose a file created with “Export JSON”.')
   if (typeof d.version !== 'number' || !Number.isInteger(d.version) || d.version < 2) throw new Error('This export’s format version isn’t supported. Export again from the Wealthboard that created it.')
   if (typeof d.settings !== 'object' || d.settings === null) throw new Error('This export is missing its settings.')
   const wrong = COLLECTIONS.filter((c) => d[c.key] !== undefined && !Array.isArray(d[c.key])).map((c) => c.label.toLowerCase())

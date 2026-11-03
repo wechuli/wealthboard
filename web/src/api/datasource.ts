@@ -209,8 +209,8 @@ export interface DataSource {
 
   corporateActions: {
     create(kind: CorporateActionKind, body: CorporateActionRequest, options: MutationOptions): Promise<{ eventGroupId: string }>
-    /** Undoes a whole corporate action. The API identifies it by any one of its member event IDs. */
-    remove(memberEventId: string): Promise<void>
+    /** Undoes a whole corporate action, identified by its event group ID or any member event ID. */
+    remove(id: string): Promise<void>
   }
 
   estate: {

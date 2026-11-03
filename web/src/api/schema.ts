@@ -1337,7 +1337,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a corporate-action event group
-         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Only an event group owned by the current user can be deleted.
+         * @description Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The path ID may be the event group ID or the ID of any event in the group; either deletes the whole group. Only an event group owned by the current user can be deleted.
          */
         delete: operations["deleteCorporateActionGroup"];
         options?: never;
@@ -2478,9 +2478,9 @@ export interface components {
         };
         UserArchive: {
             /** @constant */
-            format: "wealthboard-user-export";
-            /** @constant */
-            version: 8;
+            format: "wealthboard-user-json";
+            /** @description Exports always write version 8. Restore also accepts versions 2 through 7 and upgrades them before import. */
+            version: number;
             /** Format: date-time */
             exportedAt: string;
             /** @description Owner settings without credentials or session data. */
@@ -4107,6 +4107,10 @@ export interface components {
         };
         PasswordConfirmationRequest: {
             currentPassword: string;
+        };
+        OidcRedirectResponse: {
+            /** @description Absolute URL the browser should navigate to next */
+            redirectUrl: string;
         };
         OidcLinkRequest: {
             currentPassword: string;
@@ -7749,7 +7753,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Redirect to the configured OIDC provider */
+            /** @description Provider authorization URL, or the settings page carrying a start failure, returned when the request accepts application/json */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcRedirectResponse"];
+                };
+            };
+            /** @description Redirect to the configured OIDC provider when the request does not accept application/json */
             303: {
                 headers: {
                     [name: string]: unknown;
@@ -7801,7 +7814,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to the configured OIDC provider */
+            /** @description Provider authorization URL, or the settings page carrying a start failure, returned when the request accepts application/json */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcRedirectResponse"];
+                };
+            };
+            /** @description Redirect to the configured OIDC provider when the request does not accept application/json */
             303: {
                 headers: {
                     [name: string]: unknown;

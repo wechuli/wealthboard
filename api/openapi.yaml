@@ -2006,7 +2006,7 @@ paths:
     delete:
       operationId: deleteCorporateActionGroup
       summary: Delete a corporate-action event group
-      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. Only an event group owned by the current user can be deleted.
+      description: Requires `portfolio:write`. Browser sessions also require a trusted Origin and `X-CSRF-Token`. The path ID may be the event group ID or the ID of any event in the group; either deletes the whole group. Only an event group owned by the current user can be deleted.
       security: [{ sessionCookie: [] }, { apiKey: [] }]
       parameters:
         - $ref: "#/components/parameters/ResourceID"
@@ -2888,8 +2888,14 @@ paths:
             schema:
               $ref: "#/components/schemas/OidcLinkRequest"
       responses:
+        "200":
+          description: Provider authorization URL, or the settings page carrying a start failure, returned when the request accepts application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OidcRedirectResponse"
         "303":
-          description: Redirect to the configured OIDC provider
+          description: Redirect to the configured OIDC provider when the request does not accept application/json
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -2932,8 +2938,14 @@ paths:
             type: string
             default: /settings
       responses:
+        "200":
+          description: Provider authorization URL, or the settings page carrying a start failure, returned when the request accepts application/json
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OidcRedirectResponse"
         "303":
-          description: Redirect to the configured OIDC provider
+          description: Redirect to the configured OIDC provider when the request does not accept application/json
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -3932,8 +3944,12 @@ components:
           accountConversions,
         ]
       properties:
-        format: { type: string, const: wealthboard-user-export }
-        version: { type: integer, const: 8 }
+        format: { type: string, const: wealthboard-user-json }
+        version:
+          type: integer
+          minimum: 2
+          maximum: 8
+          description: Exports always write version 8. Restore also accepts versions 2 through 7 and upgrades them before import.
         exportedAt: { type: string, format: date-time }
         settings:
           {
@@ -6884,6 +6900,14 @@ components:
           type: string
           minLength: 1
           maxLength: 256
+    OidcRedirectResponse:
+      type: object
+      additionalProperties: false
+      required: [redirectUrl]
+      properties:
+        redirectUrl:
+          type: string
+          description: Absolute URL the browser should navigate to next
     OidcLinkRequest:
       type: object
       additionalProperties: false

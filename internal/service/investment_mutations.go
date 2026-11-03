@@ -1313,11 +1313,11 @@ func valueOrZero(value *int64) int64 {
 }
 
 func investmentValidationError(detail string) error {
-	return fmt.Errorf("%w: %s", ErrInvestmentMutationValidation, detail)
+	return publicError(ErrInvestmentMutationValidation, detail)
 }
 
 func investmentConflictError(detail string) error {
-	return fmt.Errorf("%w: %s", ErrInvestmentMutationConflict, detail)
+	return publicError(ErrInvestmentMutationConflict, detail)
 }
 
 func mutationNotFound(err error) error {

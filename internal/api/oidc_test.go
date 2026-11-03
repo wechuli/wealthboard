@@ -160,3 +160,73 @@ func TestOIDCRoutesAreHiddenWhenDisabled(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotFound)
 	}
 }
+
+func TestOIDCLinkAndReauthStartReturnRedirectJSONWhenRequested(t *testing.T) {
+	var provider *httptest.Server
+	provider = httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(response).Encode(map[string]any{
+			"issuer": provider.URL, "authorization_endpoint": provider.URL + "/authorize", "token_endpoint": provider.URL + "/token", "jwks_uri": provider.URL + "/jwks", "id_token_signing_alg_values_supported": []string{"RS256"},
+		})
+	}))
+	defer provider.Close()
+
+	newHandler := func(limit webauth.LoginRateLimit) *AuthHandler {
+		handler, _ := testAuthHandler(t, &fakeAuthenticationService{}, &fakeLoginRateLimiter{decision: limit})
+		handler.policy = webauth.Policy{OIDCEnabled: true}
+		handler.EnableOIDC(webauth.NewOIDCClient(webauth.OIDCConfig{
+			Issuer: provider.URL, ClientID: "wealthboard", ClientSecret: "secret", ProviderName: "Test", CallbackURL: "https://wealthboard.example/api/v1/auth/oidc/callback", TransactionSecret: make([]byte, 32),
+		}, true), &fakeOIDCIdentityService{})
+		return handler
+	}
+	principal := &webauth.Principal{UserID: uuid.New(), Version: 3}
+
+	for _, intent := range []webauth.OIDCIntent{webauth.OIDCIntentLink, webauth.OIDCIntentReauthLocal} {
+		t.Run(string(intent), func(t *testing.T) {
+			handler := newHandler(webauth.LoginRateLimit{Allowed: true})
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oidc/reauth", nil)
+			request.Header.Set("Accept", "text/plain;q=0.5, application/json")
+			response := httptest.NewRecorder()
+			handler.startOIDC(response, request, intent, principal, "/settings/security")
+
+			if response.Code != http.StatusOK || response.Header().Get("Location") != "" || response.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("status = %d, location = %q, cache = %q", response.Code, response.Header().Get("Location"), response.Header().Get("Cache-Control"))
+			}
+			var body struct {
+				RedirectURL string `json:"redirectUrl"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode body %q: %v", response.Body.String(), err)
+			}
+			location, err := url.Parse(body.RedirectURL)
+			if err != nil || location.Path != "/authorize" || location.Query().Get("code_challenge_method") != "S256" {
+				t.Fatalf("redirectUrl = %q", body.RedirectURL)
+			}
+			cookies := response.Result().Cookies()
+			if len(cookies) != 1 || cookies[0].Name != webauth.OIDCTransactionCookieName {
+				t.Fatalf("transaction cookies = %+v", cookies)
+			}
+		})
+	}
+
+	t.Run("start failure", func(t *testing.T) {
+		handler := newHandler(webauth.LoginRateLimit{Allowed: false})
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oidc/link", nil)
+		request.Header.Set("Accept", "application/json")
+		response := httptest.NewRecorder()
+		handler.startOIDC(response, request, webauth.OIDCIntentLink, principal, "/settings/security")
+		if response.Code != http.StatusOK || response.Body.String() != "{\"redirectUrl\":\"https://wealthboard.example/settings?auth=rate_limited\"}\n" {
+			t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+		}
+	})
+
+	t.Run("redirect without JSON accept", func(t *testing.T) {
+		handler := newHandler(webauth.LoginRateLimit{Allowed: true})
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oidc/link", nil)
+		response := httptest.NewRecorder()
+		handler.startOIDC(response, request, webauth.OIDCIntentLink, principal, "/settings/security")
+		if response.Code != http.StatusSeeOther || response.Header().Get("Location") == "" {
+			t.Fatalf("status = %d, location = %q", response.Code, response.Header().Get("Location"))
+		}
+	})
+}

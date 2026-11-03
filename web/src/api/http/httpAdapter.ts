@@ -113,14 +113,21 @@ async function redirectingPost(path: string, body?: unknown): Promise<void> {
   } catch {
     throw networkProblem()
   }
-  if (response.redirected) {
-    window.location.assign(response.url)
-    return
-  }
   if (!response.ok) {
     const problem = await response.json().catch(() => null)
     throw await toProblem(response, problem)
   }
+  // The server answers JSON clients with the provider URL instead of a cross-site 303 that fetch cannot follow.
+  const payload: unknown = await response.json().catch(() => null)
+  if (payload && typeof payload === 'object' && 'redirectUrl' in payload && typeof payload.redirectUrl === 'string') {
+    window.location.assign(payload.redirectUrl)
+    return
+  }
+  if (response.redirected) {
+    window.location.assign(response.url)
+    return
+  }
+  throw new ApiProblem({ type: 'about:blank', title: 'Sign-in provider unavailable', status: response.status, detail: 'The sign-in provider could not be reached. Try again in a moment.' })
 }
 
 function importBody(file: ImportFile): { body: string; contentType: string } {

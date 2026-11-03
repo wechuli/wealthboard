@@ -96,7 +96,32 @@ func (handler *AuthHandler) startOIDC(response http.ResponseWriter, request *htt
 		return
 	}
 	http.SetCookie(response, handler.oidc.TransactionCookie(sealed))
+	if wantsOIDCRedirectJSON(request, intent) {
+		writeJSON(response, http.StatusOK, oidcRedirectResponse{RedirectURL: authorizationURL.String()})
+		return
+	}
 	http.Redirect(response, request, authorizationURL.String(), http.StatusSeeOther)
+}
+
+type oidcRedirectResponse struct {
+	RedirectURL string `json:"redirectUrl"`
+}
+
+// Script clients cannot read a cross-origin 303 from fetch, so link and
+// reauthentication starts return the destination as JSON when asked to.
+func wantsOIDCRedirectJSON(request *http.Request, intent webauth.OIDCIntent) bool {
+	if intent == webauth.OIDCIntentLogin || request.Method != http.MethodPost {
+		return false
+	}
+	for _, value := range request.Header.Values("Accept") {
+		for _, part := range strings.Split(value, ",") {
+			mediaType, _, _ := strings.Cut(strings.TrimSpace(part), ";")
+			if strings.EqualFold(strings.TrimSpace(mediaType), "application/json") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (handler *AuthHandler) OIDCCallback(response http.ResponseWriter, request *http.Request) {
@@ -311,6 +336,10 @@ func (handler *AuthHandler) oidcError(response http.ResponseWriter, request *htt
 	destination := handler.appOrigin() + path + "?" + parameter + "=" + url.QueryEscape(code)
 	if intent == webauth.OIDCIntentLogin {
 		http.Redirect(response, request, destination, http.StatusSeeOther)
+		return
+	}
+	if wantsOIDCRedirectJSON(request, intent) {
+		writeJSON(response, http.StatusOK, oidcRedirectResponse{RedirectURL: destination})
 		return
 	}
 	handler.sessionHandoff(response, destination)

@@ -1160,7 +1160,7 @@ export function createMockDataSource(): DataSource {
         }),
       restore: (archive) =>
         write(() => {
-          if (archive.format !== 'wealthboard-user-export') throw invalid('This file is not a Wealthboard portfolio export.')
+          if (archive.format !== 'wealthboard-user-json') throw invalid('This file is not a Wealthboard portfolio export.')
           return {
             institutions: archive.institutions.length,
             accounts: archive.accounts.length,
@@ -1216,7 +1216,7 @@ function buildImportResult(e: Engine, accountId: string, file: Parameters<typeof
 function buildArchive(e: Engine, w: World): UserArchive {
   const rec = <T extends object>(o: T) => JSON.parse(JSON.stringify(o, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))) as Record<string, unknown>
   return {
-    format: 'wealthboard-user-export',
+    format: 'wealthboard-user-json',
     version: 8,
     exportedAt: new Date().toISOString(),
     settings: rec(w.settings),

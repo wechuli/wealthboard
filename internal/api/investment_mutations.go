@@ -425,10 +425,19 @@ func writeInvestmentMutationError(response http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrInvestmentMutationNotFound):
 		writeProblem(response, http.StatusNotFound, "Not Found", "The requested resource does not exist.")
 	case errors.Is(err, service.ErrInvestmentMutationConflict):
-		writeProblem(response, http.StatusConflict, "Conflict", "The mutation conflicts with existing investment activity.")
+		writeProblem(response, http.StatusConflict, "Conflict", publicDetailOr(err, "The mutation conflicts with existing investment activity."))
 	case errors.Is(err, service.ErrInvestmentMutationValidation):
-		writeProblem(response, http.StatusUnprocessableEntity, "Validation failed", "The investment mutation is invalid.")
+		writeProblem(response, http.StatusUnprocessableEntity, "Validation failed", publicDetailOr(err, "The investment mutation is invalid."))
 	default:
 		writeProblem(response, http.StatusServiceUnavailable, "Service unavailable", "The investment mutation could not be completed.")
 	}
+}
+
+// publicDetailOr returns the user-safe explanation carried by a service error, or fallback.
+// Only service.PublicError details are exposed; database and internal errors keep the fallback.
+func publicDetailOr(err error, fallback string) string {
+	if detail, ok := service.PublicDetail(err); ok {
+		return detail
+	}
+	return fallback
 }
