@@ -1,401 +1,147 @@
-import { CircleDollarSign } from "lucide-react";
-import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 'react'
+import { createBrowserRouter, Navigate, Outlet, ScrollRestoration, useParams, useSearchParams } from 'react-router'
+import { PageSkeleton, Skeleton } from '@/components/ui/Skeleton'
+import { AppShell } from '@/features/shell/AppShell'
+import { RouteError } from '@/features/system/RouteError'
+import { PublicOnly, RequireSession } from './guards'
 
-import {
-  ApiError,
-  getAuthConfig,
-  getOverview,
-  getSession,
-  login,
-  logout,
-  signup,
-} from "@/api/client";
-import { LoginScreen, SignupScreen } from "@/components/auth/auth";
-import { OfflinePage } from "@/pages/offline";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { AppShell } from "@/components/layout/app-shell";
-import type { AuthConfig, Overview, Session } from "@/lib/types";
-
-type SessionPageProps = { session: Session };
-
-function lazyNamed<Props>(loader: () => Promise<unknown>, name: string) {
-  return lazy(async () => {
-    const loaded = (await loader()) as Record<string, ComponentType<Props>>;
-    return { default: loaded[name] };
-  });
-}
-
-const loadCore = () => import("@/pages/core");
-const DashboardPage = lazyNamed<Record<string, never>>(
-  loadCore,
-  "DashboardPage",
-);
-const AccountsPage = lazyNamed<Record<string, never>>(loadCore, "AccountsPage");
-const AccountDetailPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "AccountDetailPage",
-);
-const NewAccountPage = lazyNamed<SessionPageProps>(loadCore, "NewAccountPage");
-const ArchivedAccountsPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "ArchivedAccountsPage",
-);
-const EditAccountPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "EditAccountPage",
-);
-const ValuationPage = lazyNamed<SessionPageProps>(loadCore, "ValuationPage");
-const ConvertAccountPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "ConvertAccountPage",
-);
-const AccountImportPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "AccountHistoryImportPage",
-);
-const InvestmentActionsPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "InvestmentActionsPage",
-);
-const NewAccountInstrumentPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "NewAccountInstrumentPage",
-);
-const NewPositionEventPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "NewPositionEventPage",
-);
-const EditPositionEventPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "EditPositionEventPage",
-);
-const NewSecurityPricePage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "NewSecurityPricePage",
-);
-const ReconcilePage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "ReconcilePositionAccountPage",
-);
-const TransactionsPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "TransactionsPage",
-);
-const NewTransactionPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "NewTransactionPage",
-);
-const EditTransactionPage = lazyNamed<SessionPageProps>(
-  loadCore,
-  "EditTransactionPage",
-);
-
-const loadPlanning = () => import("@/pages/planning");
-const GoalsPage = lazyNamed<SessionPageProps>(loadPlanning, "GoalsPage");
-const NewGoalPage = lazyNamed<SessionPageProps>(loadPlanning, "NewGoalPage");
-const GoalDetailPage = lazyNamed<SessionPageProps>(
-  loadPlanning,
-  "GoalDetailPage",
-);
-const EditGoalPage = lazyNamed<SessionPageProps>(loadPlanning, "EditGoalPage");
-const ReportsPage = lazyNamed<Record<string, never>>(
-  loadPlanning,
-  "ReportsPage",
-);
-const CategoriesPage = lazyNamed<SessionPageProps>(
-  loadPlanning,
-  "CategoriesPage",
-);
-const InstitutionsPage = lazyNamed<SessionPageProps>(
-  loadPlanning,
-  "InstitutionsPage",
-);
-const InstrumentsPage = lazyNamed<SessionPageProps>(
-  loadPlanning,
-  "InstrumentsPage",
-);
-const NewInstrumentPage = lazyNamed<SessionPageProps>(
-  loadPlanning,
-  "NewInstrumentPage",
-);
-const EditInstrumentPage = lazyNamed<SessionPageProps>(
-  loadPlanning,
-  "EditInstrumentPage",
-);
-
-const loadEstate = () => import("@/pages/estate");
-const EstateIndexPage = lazyNamed<Record<string, never>>(
-  loadEstate,
-  "EstateIndexPage",
-);
-const EstateBeneficiariesPage = lazyNamed<SessionPageProps>(
-  loadEstate,
-  "EstateBeneficiariesPage",
-);
-const EstateDistributionPage = lazyNamed<SessionPageProps>(
-  loadEstate,
-  "EstateDistributionPage",
-);
-const EstateSummaryPage = lazyNamed<SessionPageProps>(
-  loadEstate,
-  "EstateSummaryPage",
-);
-const EstateSnapshotPage = lazyNamed<Record<string, never>>(
-  loadEstate,
-  "EstateSnapshotPage",
-);
-const ReviewPage = lazyNamed<SessionPageProps>(
-  () => import("@/pages/review"),
-  "PortfolioReviewPage",
-);
-const SettingsPage = lazyNamed<SessionPageProps>(
-  () => import("@/pages/settings"),
-  "SettingsPage",
-);
-
-export function App() {
-  const { pathname } = useLocation();
-  const [session, setSession] = useState<Session | null | undefined>();
-  const [authConfig, setAuthConfig] = useState<AuthConfig>();
-
-  useEffect(() => {
-    void getAuthConfig().then(setAuthConfig);
-    void getSession()
-      .then(setSession)
-      .catch((error: unknown) => {
-        setSession(
-          error instanceof ApiError && error.status === 401 ? null : undefined,
-        );
-      });
-  }, []);
-
-  if (session === undefined || !authConfig) return <LoadingScreen />;
-  if (session === null) {
-    if (pathname === "/signup" && authConfig.localEnabled) {
-      return (
-        <SignupScreen authenticate={signup} onAuthenticated={setSession} />
-      );
-    }
-    return (
-      <LoginScreen
-        config={authConfig}
-        authenticate={login}
-        onAuthenticated={setSession}
-      />
-    );
-  }
-
+function page(loader: () => Promise<{ default: ComponentType }>, nested = false) {
+  const Component: LazyExoticComponent<ComponentType> = lazy(loader)
   return (
-    <AuthenticatedRoutes
-      session={session}
-      onSignedOut={() => setSession(null)}
-    />
-  );
+    <Suspense fallback={nested ? <Skeleton className="h-96" label="Loading" /> : <PageSkeleton />}>
+      <Component />
+    </Suspense>
+  )
 }
 
-function AuthenticatedRoutes({
-  session,
-  onSignedOut,
-}: {
-  session: Session;
-  onSignedOut: () => void;
-}) {
-  const { pathname } = useLocation();
-  const [overview, setOverview] = useState<Overview>();
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    void getOverview()
-      .then(setOverview)
-      .catch((caught: unknown) =>
-        setError(
-          caught instanceof Error ? caught.message : "Overview unavailable.",
-        ),
-      );
-  }, []);
-
-  if (error) {
-    return (
-      <main className="financial-grid flex min-h-screen items-center justify-center px-5">
-        <div
-          className="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200"
-          role="alert"
-        >
-          {error}
-        </div>
-      </main>
-    );
-  }
-  if (!overview) return <LoadingScreen />;
-
-  const signOut = async () => {
-    await logout(session.csrfToken);
-    onSignedOut();
-  };
-
+function Root() {
   return (
-    <AppShell
-      session={session}
-      appName={overview.settings.appName}
-      displayName={overview.settings.displayName}
-      onSignOut={signOut}
-    >
-      <ErrorBoundary resetKey={pathname}>
-        <Suspense fallback={<RouteLoadingScreen />}>
-          <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/accounts" element={<AccountsPage />} />
-            <Route
-              path="/accounts/new"
-              element={<NewAccountPage session={session} />}
-            />
-            <Route
-              path="/accounts/archived"
-              element={<ArchivedAccountsPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id"
-              element={<AccountDetailPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/edit"
-              element={<EditAccountPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/valuation"
-              element={<ValuationPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/convert"
-              element={<ConvertAccountPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/import"
-              element={<AccountImportPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/investment-actions"
-              element={<InvestmentActionsPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/instruments/new"
-              element={<NewAccountInstrumentPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/positions/new"
-              element={<NewPositionEventPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/positions/:eventId/edit"
-              element={<EditPositionEventPage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/prices/new"
-              element={<NewSecurityPricePage session={session} />}
-            />
-            <Route
-              path="/accounts/:id/reconcile"
-              element={<ReconcilePage session={session} />}
-            />
-            <Route
-              path="/transactions"
-              element={<TransactionsPage session={session} />}
-            />
-            <Route
-              path="/transactions/new"
-              element={<NewTransactionPage session={session} />}
-            />
-            <Route
-              path="/transactions/:id/edit"
-              element={<EditTransactionPage session={session} />}
-            />
-            <Route path="/goals" element={<GoalsPage session={session} />} />
-            <Route
-              path="/goals/new"
-              element={<NewGoalPage session={session} />}
-            />
-            <Route
-              path="/goals/:id"
-              element={<GoalDetailPage session={session} />}
-            />
-            <Route
-              path="/goals/:id/edit"
-              element={<EditGoalPage session={session} />}
-            />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route
-              path="/categories"
-              element={<CategoriesPage session={session} />}
-            />
-            <Route
-              path="/institutions"
-              element={<InstitutionsPage session={session} />}
-            />
-            <Route
-              path="/instruments"
-              element={<InstrumentsPage session={session} />}
-            />
-            <Route
-              path="/instruments/new"
-              element={<NewInstrumentPage session={session} />}
-            />
-            <Route
-              path="/instruments/:id/edit"
-              element={<EditInstrumentPage session={session} />}
-            />
-            <Route path="/estate" element={<EstateIndexPage />} />
-            <Route
-              path="/estate/beneficiaries"
-              element={<EstateBeneficiariesPage session={session} />}
-            />
-            <Route
-              path="/estate/distribution"
-              element={<EstateDistributionPage session={session} />}
-            />
-            <Route
-              path="/estate/summary"
-              element={<EstateSummaryPage session={session} />}
-            />
-            <Route
-              path="/estate/snapshots/:id"
-              element={<EstateSnapshotPage />}
-            />
-            <Route path="/review" element={<ReviewPage session={session} />} />
-            <Route
-              path="/settings"
-              element={<SettingsPage session={session} />}
-            />
-            <Route path="/login" element={<Navigate to="/" replace />} />
-            <Route path="/signup" element={<Navigate to="/" replace />} />
-            <Route path="/offline" element={<OfflinePage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
-    </AppShell>
-  );
+    <>
+      <ScrollRestoration />
+      <Outlet />
+    </>
+  )
 }
 
-function LoadingScreen() {
-  return (
-    <main className="financial-grid flex min-h-screen items-center justify-center">
-      <div className="flex items-center gap-3 text-slate-400" role="status">
-        <CircleDollarSign className="text-emerald-300" />
-        <span>Loading Wealthboard</span>
-      </div>
-    </main>
-  );
+/** Paths used by the previous client, the manifest, docs, and server redirects keep working. */
+function Redirect({ to }: { to: (params: Record<string, string | undefined>, search: URLSearchParams) => string }) {
+  const params = useParams()
+  const [search] = useSearchParams()
+  return <Navigate to={to(params, search)} replace />
 }
+const withSearch = (path: string, search: URLSearchParams, extra: Record<string, string> = {}) => {
+  const next = new URLSearchParams(search)
+  for (const [k, v] of Object.entries(extra)) next.set(k, v)
+  const qs = next.toString()
+  return qs ? `${path}?${qs}` : path
+}
+const legacyRedirects = [
+  { path: 'transactions', element: <Redirect to={(_p, q) => withSearch('/activity', q)} /> },
+  { path: 'transactions/new', element: <Redirect to={(_p, q) => `/?record=${q.get('type') ?? 'deposit'}${q.get('accountId') ? `&accountId=${q.get('accountId')}` : ''}`} /> },
+  { path: 'transactions/:id/edit', element: <Navigate to="/activity" replace /> },
+  { path: 'reports', element: <Navigate to="/insights" replace /> },
+  { path: 'categories', element: <Navigate to="/settings/categories" replace /> },
+  { path: 'institutions', element: <Navigate to="/settings/institutions" replace /> },
+  { path: 'instruments', element: <Navigate to="/settings/instruments" replace /> },
+  { path: 'instruments/new', element: <Navigate to="/settings/instruments?new=1" replace /> },
+  { path: 'instruments/:id/edit', element: <Redirect to={(p) => `/settings/instruments?edit=${p.id}`} /> },
+  { path: 'accounts/archived', element: <Navigate to="/accounts?show=archived" replace /> },
+  { path: 'accounts/:id/edit', element: <Redirect to={(p) => `/accounts/${p.id}?edit=1`} /> },
+  { path: 'accounts/:id/valuation', element: <Redirect to={(p) => `/accounts/${p.id}?record=valuation`} /> },
+  { path: 'accounts/:id/convert', element: <Redirect to={(p) => `/accounts/${p.id}?action=convert`} /> },
+  { path: 'accounts/:id/reconcile', element: <Redirect to={(p) => `/accounts/${p.id}?action=reconcile`} /> },
+  { path: 'accounts/:id/investment-actions', element: <Redirect to={(p) => `/accounts/${p.id}?action=corporate`} /> },
+  { path: 'accounts/:id/instruments/new', element: <Navigate to="/settings/instruments?new=1" replace /> },
+  { path: 'accounts/:id/positions/new', element: <Redirect to={(p, q) => `/accounts/${p.id}?action=trade&trade=${q.get('type') ?? 'buy'}${q.get('instrumentId') ? `&instrument=${q.get('instrumentId')}` : ''}`} /> },
+  { path: 'accounts/:id/positions/:eventId/edit', element: <Redirect to={(p) => `/accounts/${p.id}?editTrade=${p.eventId}`} /> },
+  { path: 'accounts/:id/prices/new', element: <Redirect to={(p, q) => `/accounts/${p.id}?record=price${q.get('instrumentId') ? `&instrumentId=${q.get('instrumentId')}` : ''}`} /> },
+  { path: 'goals/new', element: <Navigate to="/goals?record=goal" replace /> },
+  { path: 'goals/:id/edit', element: <Redirect to={(p) => `/goals/${p.id}?edit=1`} /> },
+  { path: 'labs/estate', element: <Navigate to="/estate" replace /> },
+  { path: 'labs/ai-review', element: <Navigate to="/review" replace /> },
+  { path: 'offline', element: <Navigate to="/" replace /> },
+]
 
-function RouteLoadingScreen() {
-  return (
-    <div
-      className="flex min-h-56 items-center justify-center gap-3 text-slate-400"
-      role="status"
-    >
-      <CircleDollarSign className="text-emerald-300" />
-      <span>Loading view</span>
-    </div>
-  );
-}
+const devRoutes = import.meta.env.DEV ? [{ path: 'dev/style-guide', element: page(() => import('@/features/styleguide/StyleGuidePage')) }] : []
+
+export const router = createBrowserRouter([
+  {
+    element: <Root />,
+    errorElement: <RouteError />,
+    children: [
+      {
+        element: <PublicOnly />,
+        children: [
+          { path: 'sign-in', element: page(() => import('@/features/auth/SignInPage')) },
+          { path: 'sign-up', element: page(() => import('@/features/auth/SignUpPage')) },
+          { path: 'login', element: <Redirect to={(_p, q) => withSearch('/sign-in', q)} /> },
+          { path: 'signup', element: <Navigate to="/sign-up" replace /> },
+        ],
+      },
+      {
+        element: <RequireSession />,
+        children: [
+          {
+            element: <AppShell />,
+            errorElement: <RouteError />,
+            children: [
+              { index: true, element: page(() => import('@/features/home/HomePage')) },
+              { path: 'accounts', element: page(() => import('@/features/accounts/AccountsPage')) },
+              { path: 'accounts/new', element: page(() => import('@/features/recording/NewAccountPage')) },
+              { path: 'accounts/:accountId', element: page(() => import('@/features/account-detail/AccountDetailPage')) },
+              { path: 'accounts/:accountId/import', element: page(() => import('@/features/imports/ImportPage')) },
+              { path: 'instruments/:instrumentId', element: page(() => import('@/features/instruments/InstrumentPage')) },
+              { path: 'activity', element: page(() => import('@/features/activity/ActivityPage')) },
+              { path: 'goals', element: page(() => import('@/features/goals/GoalsPage')) },
+              { path: 'goals/:goalId', element: page(() => import('@/features/goals/GoalDetailPage')) },
+              {
+                path: 'insights',
+                element: page(() => import('@/features/insights/InsightsLayout')),
+                children: [
+                  { index: true, element: <Navigate to="net-worth" replace /> },
+                  { path: 'net-worth', element: page(() => import('@/features/insights/NetWorthPage'), true) },
+                  { path: 'allocation', element: page(() => import('@/features/insights/AllocationPage'), true) },
+                  { path: 'income', element: page(() => import('@/features/insights/IncomePage'), true) },
+                  { path: 'compare', element: page(() => import('@/features/insights/ComparePage'), true) },
+                ],
+              },
+              {
+                path: 'settings',
+                element: page(() => import('@/features/settings/SettingsLayout')),
+                children: [
+                  // The server returns OIDC link/re-auth results to /settings?auth=…; send them to Security.
+                  { index: true, element: <Redirect to={(_p, q) => (q.has('auth') || q.has('reauthenticated') ? withSearch('/settings/security', q) : '/settings/profile')} /> },
+                  { path: 'profile', element: page(() => import('@/features/settings/ProfileSettings'), true) },
+                  { path: 'currencies', element: page(() => import('@/features/settings/CurrencySettings'), true) },
+                  { path: 'preferences', element: page(() => import('@/features/settings/PreferenceSettings'), true) },
+                  { path: 'categories', element: page(() => import('@/features/settings/CategorySettings'), true) },
+                  { path: 'institutions', element: page(() => import('@/features/settings/InstitutionSettings'), true) },
+                  { path: 'instruments', element: page(() => import('@/features/settings/InstrumentSettings'), true) },
+                  { path: 'security', element: page(() => import('@/features/settings/SecuritySettings'), true) },
+                  { path: 'ai', element: page(() => import('@/features/settings/AiSettings'), true) },
+                  { path: 'api-keys', element: page(() => import('@/features/settings/ApiKeysSettings'), true) },
+                  { path: 'data', element: page(() => import('@/features/settings/DataSettings'), true) },
+                ],
+              },
+              {
+                path: 'estate',
+                element: page(() => import('@/features/estate/EstateLayout')),
+                children: [
+                  { index: true, element: page(() => import('@/features/estate/EstateOverviewPage'), true) },
+                  { path: 'beneficiaries', element: page(() => import('@/features/estate/BeneficiariesPage'), true) },
+                  { path: 'distribution', element: page(() => import('@/features/estate/DistributionPage'), true) },
+                  { path: 'summary', element: page(() => import('@/features/estate/SummaryPage'), true) },
+                ],
+              },
+              { path: 'estate/snapshots/:snapshotId', element: page(() => import('@/features/estate/SnapshotPage')) },
+              { path: 'review', element: page(() => import('@/features/review/ReviewPage')) },
+              ...legacyRedirects,
+              ...devRoutes,
+              { path: '*', element: page(() => import('@/features/system/NotFoundPage')) },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+])

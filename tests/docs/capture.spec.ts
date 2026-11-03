@@ -1,9 +1,11 @@
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const projectRoot = process.cwd();
+const origin = "http://127.0.0.1:3300";
 const screenshotDirectory = path.join(
   projectRoot,
   "docs/public/images/screenshots",
@@ -29,48 +31,54 @@ async function capturePage(page: Page, name: string) {
 
 async function captureLocator(locator: Locator, name: string) {
   await expect(locator).toBeVisible();
+  await settle(locator.page());
   await locator.screenshot({
     path: path.join(screenshotDirectory, name),
     animations: "disabled",
   });
 }
 
-function cardForHeading(page: Page, name: string) {
-  return page
-    .getByRole("heading", { name, exact: true })
-    .locator(
-      'xpath=ancestor::*[contains(@class, "read-card") or contains(@class, "rounded-2xl")][1]',
-    );
+async function api(
+  page: Page,
+  method: string,
+  route: string,
+  data?: unknown,
+): Promise<unknown> {
+  const session = (await (
+    await page.request.get("/api/v1/session")
+  ).json()) as {
+    csrfToken: string;
+  };
+  const response = await page.request.fetch(`/api/v1${route}`, {
+    method,
+    data,
+    headers: {
+      Origin: origin,
+      "X-CSRF-Token": session.csrfToken,
+      ...(data === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+  });
+  expect(response.ok(), `${method} ${route}: ${await response.text()}`).toBe(
+    true,
+  );
+  return response.status() === 204 ? undefined : response.json();
 }
 
-async function addBeneficiary(
-  page: Page,
-  input: {
-    name: string;
-    kind: "person" | "organization" | "trust";
-    relationship?: string;
-    contact?: string;
-  },
-) {
-  const card = cardForHeading(page, "Add beneficiary");
-  await card.getByLabel("Name").fill(input.name);
-  await card.getByLabel("Type").selectOption(input.kind);
-  if (input.relationship) {
-    await card.getByLabel("Relationship").fill(input.relationship);
-  }
-  if (input.contact) {
-    await card.getByLabel("Contact summary").fill(input.contact);
-  }
-  await card.getByRole("button", { name: "Add beneficiary" }).click();
-  await expect(
-    page.getByRole("heading", { name: input.name, exact: true }),
-  ).toBeVisible();
+async function accountByName(page: Page, name: string) {
+  const { items } = (await (
+    await page.request.get("/api/v1/accounts")
+  ).json()) as {
+    items: Array<{ id: string; name: string }>;
+  };
+  const account = items.find((candidate) => candidate.name === name);
+  expect(account, name).toBeTruthy();
+  return account!.id;
 }
 
 test("capture the Wealthboard product guide", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-  await page.goto("/signup");
-  await page.getByLabel("Username").fill("guide-user");
+  await page.goto("/sign-up");
+  await page.getByRole("textbox", { name: "Username" }).fill("guide-user");
   await page.getByLabel("Display name").fill("Jordan Mwangi");
   await page
     .getByLabel("Password", { exact: true })
@@ -78,8 +86,10 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   await page
     .getByLabel("Confirm password")
     .fill("fictional-guide-password-123");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await page.getByRole("button", { name: "Create profile" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Welcome, Jordan Mwangi" }),
+  ).toBeVisible();
 
   const seed = spawnSync(
     "make",
@@ -96,163 +106,191 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   );
   expect(seed.status, seed.stderr || seed.stdout).toBe(0);
 
-  await page.goto("/accounts/new");
-  await page.getByLabel("Account or asset name").fill("Home renovation loan");
-  await page.getByLabel("Category").selectOption({ label: "Liability" });
-  await page.getByLabel("Opening value").fill("650000");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByLabel("Account or asset name")).toHaveValue("");
+  const categories = (await (
+    await page.request.get("/api/v1/categories")
+  ).json()) as { items: Array<{ id: string; name: string }> };
+  const liabilityCategory = categories.items.find(
+    (category) => category.name === "Liability",
+  );
+  expect(liabilityCategory).toBeTruthy();
+  await api(page, "POST", "/accounts", {
+    idempotencyKey: randomUUID(),
+    name: "Home renovation loan",
+    categoryId: liabilityCategory!.id,
+    currency: "KES",
+    trackingMode: "balance",
+    openingValueMinor: "65000000",
+    isIncludedInNetWorth: true,
+    openedAt: "2026-08-01",
+  });
 
   await page.goto("/");
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Jordan Mwangi$/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Net worth" })).toBeVisible();
   await capturePage(page, "dashboard-overview.png");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
+  await expect(page.getByRole("region", { name: "Net worth" })).toBeVisible();
   await capturePage(page, "dashboard-mobile.png");
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.goto("/accounts");
   await expect(
-    page.getByText("Home renovation loan", { exact: true }),
+    page.getByText("Home renovation loan", { exact: true }).first(),
   ).toBeVisible();
   await capturePage(page, "accounts-workspace.png");
 
-  await page.getByText("Southern Bypass Land", { exact: true }).first().click();
+  await page
+    .getByRole("link", { name: /Southern Bypass Land/ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Southern Bypass Land" }),
+  ).toBeVisible();
   await capturePage(page, "account-detail.png");
 
-  await page.goto("/transactions");
+  await page.goto("/activity");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Activity" }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Ledger" })).toBeVisible();
   await capturePage(page, "transaction-workbench.png");
 
   await page.goto("/goals");
-  await page.getByText("2028 Family Car", { exact: true }).click();
+  await page
+    .getByRole("link", { name: /2028 Family Car/ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "2028 Family Car" }),
+  ).toBeVisible();
   await capturePage(page, "goal-planning.png");
 
-  const portfolioBeforeConversion = (await (
-    await page.request.get("/api/v1/exports/user")
-  ).json()) as {
-    accounts: Array<{ id: string; name: string }>;
-  };
-  const brokerage = portfolioBeforeConversion.accounts.find(
-    (account) => account.name === "Interactive Brokers VWRA",
-  );
-  expect(brokerage).toBeTruthy();
+  const brokerageId = await accountByName(page, "Interactive Brokers VWRA");
+  const vwra = (await api(page, "POST", "/instruments", {
+    name: "Vanguard FTSE All-World UCITS ETF",
+    symbol: "VWRA",
+    identifierType: "ticker_exchange",
+    identifier: "VWRA",
+    exchangeMic: "XLON",
+    assetType: "etf",
+    quoteCurrency: "USD",
+  })) as { id: string };
 
-  await page.goto("/instruments/new");
-  await page.getByLabel("Name").fill("Vanguard FTSE All-World UCITS ETF");
-  await page.getByLabel("Symbol").fill("VWRA");
-  await page.getByLabel("Identifier", { exact: true }).fill("VWRA");
-  await page.getByLabel("Exchange MIC").fill("XLON");
-  await page.getByLabel("Quote currency").fill("USD");
-  await page.getByRole("button", { name: "Create instrument" }).click();
-  await expect(page).toHaveURL(/\/instruments$/);
-  await expect(
-    page.getByText("Vanguard FTSE All-World UCITS ETF", { exact: true }),
-  ).toBeVisible();
-  await page.goto(`/accounts/${brokerage!.id}/convert`);
-  await page
-    .getByLabel("Replacement account name")
+  await page.goto(`/accounts/${brokerageId}?action=convert`);
+  const convert = page.getByRole("dialog", {
+    name: "Convert to position tracking",
+  });
+  await convert
+    .getByLabel("Account name")
     .fill("Interactive Brokers Positions");
-  await page.getByLabel("Conversion date").fill("2026-08-12");
-  await page.getByLabel(/Opening cash/).fill("1111");
-  await page.getByLabel("Quantity").fill("15");
-  await page.getByLabel("Unit price").fill("200");
-  await page.getByLabel("Opening cost basis").fill("2800");
-  await page.getByRole("button", { name: "Preview conversion" }).click();
-  const conversionPreview = page.getByRole("status");
-  await expect(conversionPreview).toContainText("projected");
-  const differenceConfirmation = page.getByRole("checkbox", {
-    name: /accept this conversion difference/,
+  await convert.getByLabel("Conversion date").fill("2026-08-12");
+  await convert.getByLabel("Opening cash").fill("1111");
+  await convert.getByLabel("Instrument", { exact: true }).selectOption(vwra.id);
+  await convert.getByLabel("Quantity", { exact: true }).fill("15");
+  await convert.getByLabel("Unit price", { exact: true }).fill("200");
+  await convert.getByLabel("Opening cost basis").fill("2800");
+  await convert.getByRole("button", { name: "Preview conversion" }).click();
+  const conversionPreview = convert.getByRole("region", { name: "Preview" });
+  await expect(conversionPreview).toBeVisible();
+  const differenceConfirmation = convert.getByRole("checkbox", {
+    name: /convert anyway/,
   });
   if (await differenceConfirmation.isVisible()) {
     await differenceConfirmation.check();
   }
   await conversionPreview.scrollIntoViewIfNeeded();
   await capturePage(page, "account-conversion-preview.png");
-  await page.getByRole("button", { name: "Convert account" }).click();
+  await convert.getByRole("button", { name: "Convert account" }).click();
   await expect(
-    page.getByRole("heading", { name: "Interactive Brokers Positions" }),
+    page.getByRole("heading", {
+      level: 1,
+      name: "Interactive Brokers Positions",
+    }),
   ).toBeVisible();
   const positionAccountId = new URL(page.url()).pathname.split("/").at(-1)!;
 
-  await page.getByRole("link", { name: "Buy", exact: true }).click();
-  await page.getByLabel("Quantity").fill("1");
-  await page.getByLabel("Unit price").fill("205");
-  await page.getByLabel("Fee amount").fill("1");
-  await page.getByLabel("Trade date").fill("2026-08-13");
-  await page.getByLabel("Settlement date").fill("2026-08-14");
-  await page.getByLabel("Description").fill("Fictional recurring investment");
-  await captureLocator(
-    cardForHeading(page, "Position event"),
-    "position-trade-entry.png",
+  await page.goto(
+    `/accounts/${positionAccountId}?action=trade&trade=buy&instrument=${vwra.id}`,
   );
-  await page.getByRole("button", { name: "Record position event" }).click();
-  await expect(page.getByText(/Buy.*VWRA/)).toBeVisible();
-
-  await page.goto(`/accounts/${positionAccountId}`);
+  const trade = page.getByRole("dialog", { name: "Record position activity" });
   await expect(
-    page.getByRole("heading", { name: "Interactive Brokers Positions" }),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Price", exact: true }).click();
-  await page.getByLabel(/^Price \(/).fill("212");
-  await page.getByLabel("Effective date").fill("2026-08-14");
-  await page.getByLabel("Source").fill("broker statement");
-  await page
-    .getByLabel("Provenance")
-    .fill("Fictional 14 August 2026 statement");
-  await capturePage(page, "security-price-entry.png");
-  await page.getByRole("button", { name: "Save price" }).click();
+    trade.getByRole("radio", { name: "Buy", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
+  await trade.getByLabel("Quantity", { exact: true }).fill("1");
+  await trade.getByLabel("Unit price", { exact: true }).fill("205");
+  await trade.getByLabel("Fee", { exact: true }).fill("1");
+  await trade.getByLabel("Trade date").fill("2026-08-13");
+  await trade.getByLabel("Settlement date").fill("2026-08-14");
+  await trade.getByLabel("Description").fill("Fictional recurring investment");
+  await captureLocator(trade, "position-trade-entry.png");
+  await trade.getByRole("button", { name: "Record", exact: true }).click();
+  await expect(trade).toBeHidden();
 
-  await page.goto(`/accounts/${positionAccountId}`);
-  await page.getByRole("link", { name: "Reinvest" }).click();
-  await page.getByLabel(/^Dividend \(/).fill("106");
-  await page.getByLabel("Unit price").fill("212");
-  await page.getByLabel("Quantity").fill("0.5");
-  await page.getByLabel("Effective date").fill("2026-08-14");
-  await page.getByLabel("Notes").fill("Fictional reinvestment");
-  await captureLocator(
-    cardForHeading(page, "Corporate actions"),
-    "investment-actions.png",
+  await page.goto(
+    `/accounts/${positionAccountId}?record=price&instrumentId=${vwra.id}`,
   );
-  await page.getByRole("button", { name: /Record Dividend/ }).click();
+  const price = page.getByRole("dialog", { name: /Update a price/ });
+  await price.getByLabel("Unit price").fill("212");
+  await price.getByLabel("Price date").fill("2026-08-14");
+  await price.getByLabel("Source").fill("Fictional 14 August 2026 statement");
+  await capturePage(page, "security-price-entry.png");
+  await price.getByRole("button", { name: "Save price" }).click();
+  await expect(price).toBeHidden();
 
-  await page.goto(`/accounts/${positionAccountId}`);
-  await page.getByRole("link", { name: "Reconcile" }).click();
-  const reconciliation = page
-    .getByLabel("Observation date")
-    .locator("xpath=ancestor::form");
-  await reconciliation.getByLabel("Observation date").fill("2026-08-14");
-  await reconciliation.getByLabel(/Reported cash/).fill("905");
-  await reconciliation.getByLabel(/Reported total/).fill("4405");
-  await reconciliation
+  await page.goto(`/accounts/${positionAccountId}?action=drip`);
+  const reinvest = page.getByRole("dialog", { name: "Dividend reinvestment" });
+  await reinvest
+    .getByLabel("Instrument", { exact: true })
+    .selectOption(vwra.id);
+  await reinvest.getByLabel("Dividend amount").fill("106");
+  await reinvest.getByLabel("Unit price", { exact: true }).fill("212");
+  await reinvest.getByLabel("Quantity", { exact: true }).fill("0.5");
+  await reinvest.getByLabel("Effective date").fill("2026-08-14");
+  await reinvest.getByLabel("Notes").fill("Fictional reinvestment");
+  await captureLocator(reinvest, "investment-actions.png");
+  await reinvest
+    .getByRole("button", { name: "Record dividend reinvestment" })
+    .click();
+  await expect(reinvest).toBeHidden();
+
+  await page.goto(`/accounts/${positionAccountId}?action=reconcile`);
+  const reconcile = page.getByRole("dialog", {
+    name: "Reconcile to statement",
+  });
+  await reconcile.getByLabel("Statement date").fill("2026-08-14");
+  await reconcile.getByLabel("Reported cash").fill("905");
+  await reconcile.getByLabel("Reported total").fill("4405");
+  await reconcile
     .getByLabel("Notes")
     .fill("Fictional broker statement comparison");
-  await reconciliation
-    .getByRole("button", { name: "Save reconciliation" })
-    .click();
+  await reconcile.getByRole("button", { name: "Save reconciliation" }).click();
   await expect(
-    page.getByText("Fictional broker statement comparison", { exact: true }),
+    reconcile.getByText("Fictional broker statement comparison"),
   ).toBeVisible();
-  await page.goto(`/accounts/${positionAccountId}`);
-  await capturePage(page, "position-account-detail.png");
-  await captureLocator(
-    cardForHeading(page, "Movement attribution"),
-    "position-movement-attribution.png",
-  );
 
-  await page.goto(`/accounts/${positionAccountId}/import`);
-  await page.getByLabel("Convert document with AI").check();
+  await page.goto(`/accounts/${positionAccountId}`);
   await expect(
-    page.getByRole("heading", { name: "Source file conversion" }),
+    page.getByRole("table", {
+      name: /^Holdings in Interactive Brokers Positions/,
+    }),
   ).toBeVisible();
-  await captureLocator(
-    cardForHeading(page, "Source file conversion"),
-    "investment-ai-prompt.png",
+  await capturePage(page, "position-account-detail.png");
+
+  await page.goto(`/accounts/${positionAccountId}/import?tab=ai`);
+  const aiConvert = page.getByRole("region", {
+    name: "Convert a statement with AI",
+  });
+  await captureLocator(aiConvert, "investment-ai-prompt.png");
+
+  await page.getByRole("tab", { name: "Direct import" }).click();
+  const previewResponse = page.waitForResponse((response) =>
+    response.url().includes("/investment-import/preview"),
   );
-  await page.getByLabel("Formatted CSV / JSON").check();
-  const investmentImport = page
-    .getByRole("heading", { name: "Investment history import" })
-    .locator('xpath=ancestor::section[contains(@class, "read-card")][1]');
-  await investmentImport.getByLabel("Import file").setInputFiles({
+  await page.getByLabel(/Drop an investment history file here/).setInputFiles({
     name: "fictional-investment-history.json",
     mimeType: "application/json",
     buffer: Buffer.from(
@@ -305,129 +343,94 @@ test("capture the Wealthboard product guide", async ({ page }) => {
       }),
     ),
   });
-  await investmentImport.getByRole("button", { name: "Preview" }).click();
-  await expect(investmentImport.getByText("Records")).toBeVisible();
+  expect((await previewResponse).ok()).toBe(true);
+  const investmentPreview = page.getByRole("region", {
+    name: "Review before importing",
+  });
   await expect(
-    investmentImport.getByText("3", { exact: true }).first(),
+    investmentPreview.getByText("Fictional Emerging Markets ETF").first(),
   ).toBeVisible();
-  await captureLocator(investmentImport, "investment-import-preview.png");
+  await captureLocator(investmentPreview, "investment-import-preview.png");
 
   await page.goto("/reports");
+  await expect(page).toHaveURL(/\/insights\/net-worth$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Insights" }),
+  ).toBeVisible();
   await capturePage(page, "reports-overview.png");
 
+  const beneficiaries: Record<string, string> = {};
+  for (const beneficiary of [
+    {
+      kind: "person",
+      name: "Amina Mwangi",
+      relationship: "Child",
+      contactSummary: "amina@example.test",
+    },
+    { kind: "person", name: "Nia Mwangi", relationship: "Child" },
+    { kind: "trust", name: "Mwangi Education Trust" },
+  ]) {
+    const created = (await api(
+      page,
+      "POST",
+      "/estate/beneficiaries",
+      beneficiary,
+    )) as { id: string };
+    beneficiaries[beneficiary.name] = created.id;
+  }
   await page.goto("/estate/beneficiaries");
-  await addBeneficiary(page, {
-    name: "Amina Mwangi",
-    kind: "person",
-    relationship: "Child",
-    contact: "amina@example.test",
-  });
-  await addBeneficiary(page, {
-    name: "Nia Mwangi",
-    kind: "person",
-    relationship: "Child",
-  });
-  await addBeneficiary(page, {
-    name: "Mwangi Education Trust",
-    kind: "trust",
-  });
-  await page.goto("/estate/beneficiaries");
+  await expect(page.getByText("Mwangi Education Trust").first()).toBeVisible();
   await capturePage(page, "estate-beneficiaries.png");
 
-  const archive = (await (
-    await page.request.get("/api/v1/exports/user")
-  ).json()) as {
-    accounts: Array<{
-      id: string;
-      name: string;
-      isLiability: boolean;
-      archivedAt: string | null;
-    }>;
-  };
-  const land = archive.accounts.find(
-    (account) => account.name === "Southern Bypass Land",
-  );
-  expect(land).toBeTruthy();
+  const landId = await accountByName(page, "Southern Bypass Land");
+  const directive = (await api(page, "PUT", `/estate/directives/${landId}`, {
+    isIncluded: true,
+    ownershipShareBps: 10000,
+    transferContext: "estate",
+    distributionMethod: "sell_and_divide",
+    documentReference: "Title deed in the family document safe",
+    notes: "Confirm title details with the estate adviser.",
+    reviewedAt: "2026-08-12",
+  })) as { id: string };
+  for (const [name, tier, allocationBps] of [
+    ["Amina Mwangi", "primary", 6000],
+    ["Mwangi Education Trust", "primary", 4000],
+    ["Nia Mwangi", "contingent", 10000],
+  ] as const) {
+    await api(page, "PUT", `/estate/allocations/${directive.id}`, {
+      beneficiaryId: beneficiaries[name],
+      tier,
+      allocationBps,
+    });
+  }
+  await page.goto(`/estate/distribution?account=${landId}`);
+  const landSheet = page.getByRole("dialog", { name: "Southern Bypass Land" });
+  await expect(landSheet.getByText("Amina Mwangi").first()).toBeVisible();
+  await captureLocator(landSheet, "estate-asset-allocation.png");
+  await landSheet.press("Escape");
+  await expect(landSheet).toBeHidden();
 
-  await page.goto(`/estate/distribution?account=${land!.id}#asset-${land!.id}`);
-  let landCard = page.locator(`#asset-${land!.id}`);
-  await landCard.getByLabel("Estate ownership share").fill("100");
-  await landCard.getByLabel("Last checked").fill("2026-08-12");
-  await landCard.getByLabel("How it passes").selectOption("estate");
-  await landCard
-    .getByLabel("Distribution method")
-    .selectOption("sell_and_divide");
-  await landCard
-    .getByLabel("Document or location reference")
-    .fill("Title deed in the family document safe");
-  await landCard
-    .getByLabel("Planning notes")
-    .fill("Confirm title details with the estate adviser.");
-  const [landResponse] = await Promise.all([
-    page.waitForResponse(
-      (candidate) =>
-        candidate.url().includes(`/api/v1/estate/directives/${land!.id}`) &&
-        candidate.request().method() === "PUT",
-    ),
-    landCard.getByRole("button", { name: "Save asset directive" }).click(),
-  ]);
-  expect(landResponse.ok(), await landResponse.text()).toBeTruthy();
-  landCard = page.locator(`#asset-${land!.id}`);
-
-  landCard = page.locator(`#asset-${land!.id}`);
-  await landCard
-    .getByLabel("Beneficiary")
-    .selectOption({ label: "Amina Mwangi" });
-  await landCard.getByLabel("Priority").selectOption("primary");
-  await landCard.getByLabel("Percentage").fill("60");
-  await landCard
-    .getByRole("button", { name: "Add allocation to Southern Bypass Land" })
-    .click();
-  await expect(
-    landCard.locator("p").filter({ hasText: /^Amina Mwangi$/ }),
-  ).toBeVisible();
-
-  landCard = page.locator(`#asset-${land!.id}`);
-  await landCard
-    .getByLabel("Beneficiary")
-    .selectOption({ label: "Mwangi Education Trust" });
-  await landCard.getByLabel("Priority").selectOption("primary");
-  await landCard.getByLabel("Percentage").fill("40");
-  await landCard
-    .getByRole("button", { name: "Add allocation to Southern Bypass Land" })
-    .click();
-  await expect(
-    landCard.locator("p").filter({ hasText: /^Mwangi Education Trust$/ }),
-  ).toBeVisible();
-
-  landCard = page.locator(`#asset-${land!.id}`);
-  await landCard
-    .getByLabel("Beneficiary")
-    .selectOption({ label: "Nia Mwangi" });
-  await landCard.getByLabel("Priority").selectOption("contingent");
-  await landCard.getByLabel("Percentage").fill("100");
-  await landCard
-    .getByRole("button", { name: "Add allocation to Southern Bypass Land" })
-    .click();
-  await expect(
-    landCard.locator("p").filter({ hasText: /^Nia Mwangi$/ }),
-  ).toBeVisible();
-
-  await page.goto(`/estate/distribution?account=${land!.id}#asset-${land!.id}`);
-  landCard = page.locator(`#asset-${land!.id}`);
-  await captureLocator(landCard, "estate-asset-allocation.png");
-
-  await page.getByRole("link", { name: "Summary" }).click();
+  await page.goto("/estate/summary");
   await page.getByLabel("Plan title").fill("Mwangi family continuity plan");
   await page.getByLabel("Jurisdiction or residence").fill("Nairobi, Kenya");
   await page.getByLabel("Last reviewed").fill("2026-08-12");
   await page.getByLabel("Review again on").fill("2027-08-12");
+  const planSaved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/estate/plan") &&
+      response.request().method() === "PUT",
+  );
   await page.getByRole("button", { name: "Save plan details" }).click();
-  await expect(page.getByRole("status")).toHaveText("Plan details saved.");
-  await expect(page.getByText("Decisions needed")).toBeVisible();
+  expect((await planSaved).ok()).toBe(true);
+  await expect(
+    page.getByRole("region", { name: "Completion review" }),
+  ).toBeVisible();
   await capturePage(page, "estate-summary.png");
 
-  await page.getByRole("button", { name: "Create summary" }).click();
+  await page.getByRole("button", { name: "Create summary" }).first().click();
   await expect(page).toHaveURL(/\/estate\/snapshots\/[a-f0-9-]+$/);
+  await expect(
+    page.getByRole("article", { name: "Estate Planning Summary" }),
+  ).toBeVisible();
   await capturePage(page, "estate-print-preview.png");
 });

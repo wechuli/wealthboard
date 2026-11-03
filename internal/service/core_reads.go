@@ -43,6 +43,9 @@ type ActivityFilter struct {
 	Type      string
 	From      *time.Time
 	To        *time.Time
+	// Kind and Query are only honoured by the cross-account activity feed.
+	Kind  string
+	Query string
 }
 
 type SettingsRow struct {
@@ -100,6 +103,7 @@ type ValuationRow struct {
 
 type ActivityRow struct {
 	Kind, AccountName, Type, Currency              string
+	TrackingMode                                   string
 	ID, AccountID                                  uuid.UUID
 	AmountMinor                                    int64
 	ActivityDate                                   time.Time
@@ -117,6 +121,7 @@ type CoreReadRepository interface {
 	ListTransactions(context.Context, uuid.UUID, ActivityFilter) ([]TransactionRow, error)
 	ListValuations(context.Context, uuid.UUID, ActivityFilter) ([]ValuationRow, error)
 	ListActivity(context.Context, uuid.UUID, ActivityFilter) ([]ActivityRow, error)
+	ListActivityFeed(context.Context, uuid.UUID, ActivityFilter) ([]ActivityRow, error)
 }
 
 type CoreReadService struct {
@@ -232,6 +237,9 @@ type ActivityItem struct {
 	Quantity         string    `json:"quantity,omitempty"`
 	UnitPrice        string    `json:"unitPrice,omitempty"`
 	EventGroupID     string    `json:"eventGroupId,omitempty"`
+	// EffectMinor is the signed effect on the account balance (transactions) or on position-account cash
+	// (position events). It is omitted for valuations and prices, which are observations rather than flows.
+	EffectMinor *string `json:"effectMinor,omitempty"`
 }
 
 type Page[T any] struct {
@@ -352,11 +360,16 @@ func (service *CoreReadService) Account(ctx context.Context, userID, accountID u
 }
 
 func (service *CoreReadService) requireAccount(ctx context.Context, userID, accountID uuid.UUID) error {
-	_, err := service.repository.GetAccount(ctx, userID, accountID)
+	_, err := service.requireAccountRow(ctx, userID, accountID)
+	return err
+}
+
+func (service *CoreReadService) requireAccountRow(ctx context.Context, userID, accountID uuid.UUID) (AccountRow, error) {
+	row, err := service.repository.GetAccount(ctx, userID, accountID)
 	if err != nil {
-		return mapReadError("load account", err)
+		return AccountRow{}, mapReadError("load account", err)
 	}
-	return nil
+	return row, nil
 }
 
 func (service *CoreReadService) Transactions(ctx context.Context, userID uuid.UUID, filter ActivityFilter) (Page[Transaction], error) {
@@ -424,16 +437,43 @@ func (service *CoreReadService) Activity(ctx context.Context, userID uuid.UUID, 
 	if filter.AccountID == nil {
 		return Page[ActivityItem]{}, errors.New("account is required for activity")
 	}
-	if err := service.requireAccount(ctx, userID, *filter.AccountID); err != nil {
+	account, err := service.requireAccountRow(ctx, userID, *filter.AccountID)
+	if err != nil {
 		return Page[ActivityItem]{}, err
 	}
 	rows, err := service.repository.ListActivity(ctx, userID, filter)
 	if err != nil {
 		return Page[ActivityItem]{}, fmt.Errorf("list activity: %w", err)
 	}
-	hasMore := len(rows) > filter.Page.Limit
+	for index := range rows {
+		rows[index].TrackingMode = account.TrackingMode
+	}
+	return activityPage(rows, filter.Page), nil
+}
+
+// ActivityFeed lists activity across all of the owner's accounts. A supplied account filter must belong to the
+// owner; a foreign or unknown account is reported as not found rather than as an empty page.
+func (service *CoreReadService) ActivityFeed(ctx context.Context, userID uuid.UUID, filter ActivityFilter) (Page[ActivityItem], error) {
+	filter, err := normalizeFilter(filter)
+	if err != nil {
+		return Page[ActivityItem]{}, err
+	}
+	if filter.AccountID != nil {
+		if err := service.requireAccount(ctx, userID, *filter.AccountID); err != nil {
+			return Page[ActivityItem]{}, err
+		}
+	}
+	rows, err := service.repository.ListActivityFeed(ctx, userID, filter)
+	if err != nil {
+		return Page[ActivityItem]{}, fmt.Errorf("list activity feed: %w", err)
+	}
+	return activityPage(rows, filter.Page), nil
+}
+
+func activityPage(rows []ActivityRow, page ReadPage) Page[ActivityItem] {
+	hasMore := len(rows) > page.Limit
 	if hasMore {
-		rows = rows[:filter.Page.Limit]
+		rows = rows[:page.Limit]
 	}
 	items := make([]ActivityItem, 0, len(rows))
 	for _, row := range rows {
@@ -442,9 +482,34 @@ func (service *CoreReadService) Activity(ctx context.Context, userID uuid.UUID, 
 			Currency: row.Currency, Date: row.ActivityDate.Format(time.DateOnly),
 			Description: row.Description.String, Notes: row.Notes.String,
 			InstrumentID: row.InstrumentID, InstrumentName: row.InstrumentName, InstrumentSymbol: row.InstrumentSymbol,
-			Quantity: row.Quantity, UnitPrice: row.UnitPrice, EventGroupID: row.EventGroupID})
+			Quantity: row.Quantity, UnitPrice: row.UnitPrice, EventGroupID: row.EventGroupID,
+			EffectMinor: activityEffectMinor(row)})
 	}
-	return Page[ActivityItem]{Items: items, Limit: filter.Page.Limit, Offset: filter.Page.Offset, HasMore: hasMore}, nil
+	return Page[ActivityItem]{Items: items, Limit: page.Limit, Offset: page.Offset, HasMore: hasMore}
+}
+
+// activityEffectMinor returns the signed effect of an activity row using the same rules as balance replay:
+// transactionEffect for balance accounts, investmentTransactionEffect for position-account cash, and the stored
+// cash effect for position events. Valuations and prices have no effect value.
+func activityEffectMinor(row ActivityRow) *string {
+	var value string
+	switch row.Kind {
+	case "transaction":
+		if row.TrackingMode == "positions" {
+			value = investmentTransactionEffect(row.Type, row.AmountMinor).String()
+		} else {
+			effect, err := transactionEffect(row.Type, row.AmountMinor)
+			if err != nil {
+				return nil
+			}
+			value = strconv.FormatInt(effect, 10)
+		}
+	case "position":
+		value = strconv.FormatInt(row.AmountMinor, 10)
+	default:
+		return nil
+	}
+	return &value
 }
 
 func normalizeFilter(filter ActivityFilter) (ActivityFilter, error) {
@@ -647,6 +712,45 @@ func (repository *SQLCoreReadRepository) ListActivity(ctx context.Context, userI
 	for _, row := range rows {
 		result = append(result, ActivityRow{
 			Kind: row.Kind, ID: row.ID, AccountID: row.AccountID, AccountName: row.AccountName,
+			Type: row.Type, AmountMinor: row.AmountMinor, Currency: row.Currency, ActivityDate: row.ActivityDate,
+			Description: row.Description, Notes: row.Notes,
+			InstrumentID: row.InstrumentID, InstrumentName: row.InstrumentName, InstrumentSymbol: row.InstrumentSymbol,
+			Quantity: row.Quantity, UnitPrice: row.UnitPrice, EventGroupID: row.EventGroupID,
+		})
+	}
+	return result, nil
+}
+
+func (repository *SQLCoreReadRepository) ListActivityFeed(ctx context.Context, userID uuid.UUID, filter ActivityFilter) ([]ActivityRow, error) {
+	params := generated.ListCoreActivityParams{
+		UserID: userID, PageLimit: int32(filter.Page.Limit + 1), PageOffset: int32(filter.Page.Offset),
+	}
+	if filter.AccountID != nil {
+		params.AccountID = uuid.NullUUID{UUID: *filter.AccountID, Valid: true}
+	}
+	if filter.Kind != "" {
+		params.Kind = sql.NullString{String: filter.Kind, Valid: true}
+	}
+	if filter.Type != "" {
+		params.ActivityType = sql.NullString{String: filter.Type, Valid: true}
+	}
+	if filter.From != nil {
+		params.FromDate = sql.NullTime{Time: *filter.From, Valid: true}
+	}
+	if filter.To != nil {
+		params.ToDate = sql.NullTime{Time: *filter.To, Valid: true}
+	}
+	if filter.Query != "" {
+		params.Search = sql.NullString{String: filter.Query, Valid: true}
+	}
+	rows, err := generated.New(repository.db).ListCoreActivity(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ActivityRow, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, ActivityRow{
+			Kind: row.Kind, ID: row.ID, AccountID: row.AccountID, AccountName: row.AccountName, TrackingMode: row.TrackingMode,
 			Type: row.Type, AmountMinor: row.AmountMinor, Currency: row.Currency, ActivityDate: row.ActivityDate,
 			Description: row.Description, Notes: row.Notes,
 			InstrumentID: row.InstrumentID, InstrumentName: row.InstrumentName, InstrumentSymbol: row.InstrumentSymbol,

@@ -1,0 +1,130 @@
+/* Wealthboard design tokens ("Quiet Ledger"). See docs/design-direction.md. */
+
+:root {
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-base: 0.9375rem;
+  --fs-md: 1.0625rem;
+  --fs-lg: 1.25rem;
+  --fs-xl: 1.625rem;
+  --fs-2xl: 2.125rem;
+  --fs-3xl: 2.75rem;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 280ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --sidebar-w: 248px;
+  --rail-w: 76px;
+  --topbar-h: 60px;
+  --bottombar-h: 68px;
+  --content-max: 1240px;
+}
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f5f3ee;
+  --surface: #fffefb;
+  --surface-sunken: #eeebe4;
+  --surface-raised: #ffffff;
+  --border: #e1dcd2;
+  --border-strong: #9e9586;
+  --text: #1b201d;
+  --text-muted: #545b56;
+  --text-subtle: #656b66;
+  --accent: #1d5a46;
+  --accent-strong: #154536;
+  --accent-soft: #e2ece6;
+  --on-accent: #ffffff;
+  --positive: #1c6b43;
+  --positive-soft: #e1efe6;
+  --negative: #a63a2c;
+  --negative-soft: #f6e4df;
+  --warning: #835500;
+  --warning-soft: #f8eed6;
+  --info: #2b5a88;
+  --info-soft: #e2ebf4;
+  --focus-ring: #1d5a46;
+  --scrim: rgb(27 32 29 / 0.38);
+  --shadow-1: 0 1px 2px rgb(60 50 30 / 0.06), 0 1px 1px rgb(60 50 30 / 0.04);
+  --shadow-2: 0 4px 14px -4px rgb(60 50 30 / 0.12), 0 2px 4px rgb(60 50 30 / 0.05);
+  --shadow-3: 0 18px 48px -12px rgb(40 34 20 / 0.24), 0 4px 10px rgb(40 34 20 / 0.06);
+  --gold: #8f6a1c;
+
+  --chart-1: #2e6a9e;
+  --chart-2: #c9822b;
+  --chart-3: #2f8c6e;
+  --chart-4: #b8573a;
+  --chart-5: #8c6a9e;
+  --chart-6: #6fa8cf;
+  --chart-7: #a8913a;
+  --chart-8: #7b807c;
+  --chart-grid: #e6e1d8;
+  --chart-axis: #656b66;
+  --chart-area-top: rgb(29 90 70 / 0.18);
+  --chart-area-bottom: rgb(29 90 70 / 0);
+  --chart-crosshair: #9e9586;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e1311;
+  --surface: #151b18;
+  --surface-sunken: #111714;
+  --surface-raised: #1c2420;
+  --border: #26302b;
+  --border-strong: #56635c;
+  --text: #e8ece7;
+  --text-muted: #a9b2ac;
+  --text-subtle: #8a948e;
+  --accent: #86c9ab;
+  --accent-strong: #a6dcc3;
+  --accent-soft: #1d2d26;
+  --on-accent: #0e1311;
+  --positive: #6fcf97;
+  --positive-soft: #17281f;
+  --negative: #f0907f;
+  --negative-soft: #2e1a17;
+  --warning: #e3b456;
+  --warning-soft: #2b2416;
+  --info: #8db8e8;
+  --info-soft: #172331;
+  --focus-ring: #86c9ab;
+  --scrim: rgb(0 0 0 / 0.55);
+  --shadow-1: 0 0 0 1px rgb(255 255 255 / 0.02);
+  --shadow-2: 0 6px 18px -6px rgb(0 0 0 / 0.5);
+  --shadow-3: 0 24px 60px -12px rgb(0 0 0 / 0.65);
+  --gold: #e3c27a;
+
+  --chart-1: #7fb2e5;
+  --chart-2: #e9a85a;
+  --chart-3: #5dc2a0;
+  --chart-4: #ee8c6a;
+  --chart-5: #c3a3d6;
+  --chart-6: #a9d2ee;
+  --chart-7: #d8c46e;
+  --chart-8: #9aa19c;
+  --chart-grid: #222b27;
+  --chart-axis: #8a948e;
+  --chart-area-top: rgb(134 201 171 / 0.2);
+  --chart-area-bottom: rgb(134 201 171 / 0);
+  --chart-crosshair: #56635c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-3: 0ms;
+  }
+}

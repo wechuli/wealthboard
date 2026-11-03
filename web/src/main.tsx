@@ -1,17 +1,12 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import '@fontsource-variable/inter/wght.css'
+import '@fontsource-variable/fraunces/opsz.css'
+import './styles/index.css'
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { App } from './app/App'
 
-import { App } from "@/app/router";
-import { ErrorBoundary } from "@/components/error-boundary";
-import "./original-styles.css";
-
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <ErrorBoundary fullScreen>
-        <App />
-      </ErrorBoundary>
-    </BrowserRouter>
+    <App />
   </StrictMode>,
-);
+)

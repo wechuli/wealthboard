@@ -1,4 +1,4 @@
-import type { AISource } from "@/lib/types";
+import type { AISource } from "@/api/types";
 import { extractSourceFromBytes } from "@/lib/source-extraction/extract";
 import { SourceExtractionError } from "@/lib/source-extraction/source";
 

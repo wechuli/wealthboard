@@ -1232,6 +1232,221 @@ paths:
           $ref: "#/components/responses/Problem"
         "403":
           $ref: "#/components/responses/Problem"
+  /accounts/summaries:
+    get:
+      operationId: listAccountSummaries
+      summary: Return list decorations for every owned account
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Covers active and archived accounts. Sparkline values are native-currency account values at the end of the
+        same day of month for up to twelve previous months (from the account's first activity) plus today.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped account summaries, ordered by account name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AccountSummary" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /accounts/{accountID}/extras:
+    get:
+      operationId: getAccountExtras
+      summary: Return holding weights and price history for one owned account
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Balance-tracked accounts return empty weights and price history. Unknown, unparseable, and other users'
+        account IDs return 404.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/AccountID"
+      responses:
+        "200":
+          description: Owner-scoped account extras
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountExtras"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /activity:
+    get:
+      operationId: listActivity
+      summary: List activity across all owned accounts
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Combines transactions, valuations, position events, and security prices (one price row per position account
+        that holds or held the instrument), newest first. `q` matches description, notes, account name, and
+        instrument name or symbol case-insensitively. A foreign or unknown `accountId` returns 404.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ActivityKindFilter"
+        - $ref: "#/components/parameters/AccountIDFilter"
+        - $ref: "#/components/parameters/ActivityTypeFilter"
+        - $ref: "#/components/parameters/FromDate"
+        - $ref: "#/components/parameters/ToDate"
+        - $ref: "#/components/parameters/ActivitySearch"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Page of owner-scoped activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPage"
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /attention:
+    get:
+      operationId: getAttention
+      summary: Return data issues and goal alerts that need attention
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Lists missing or stale exchange rates and prices and goals behind plan, each with a stable ID and a fix link.
+        `totalsComplete` matches the dashboard's current completeness.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped attention summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttentionSummary"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /reports/flows:
+    get:
+      operationId: getFlowsReport
+      summary: Return the contributions-versus-growth bridge in the base currency
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Start value is net worth at the end of the day before `from`; end value is net worth today. Flows dated
+        within the range are converted at each record's effective-dated rate, and growth is the residual, so
+        start + contributions + income + growth − withdrawals − fees = end.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ReportRange"
+      responses:
+        "200":
+          description: Owner-scoped flows report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlowsReport"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /reports/income:
+    get:
+      operationId: getIncomeReport
+      summary: Return income, dividends, and fees for a range
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Lists are sorted by base-currency value descending with unconvertible lines last.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ReportRange"
+      responses:
+        "200":
+          description: Owner-scoped income report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeReport"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /reports/net-worth-stats:
+    get:
+      operationId: getNetWorthStats
+      summary: Return monthly net-worth statistics
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Points are the first source date, the first of each later month, and today.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        "200":
+          description: Owner-scoped net-worth statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetWorthStats"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /reports/account-comparison:
+    get:
+      operationId: getAccountComparison
+      summary: Compare active accounts over a range
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Values are in each account's native currency. The simple annualized return is Modified-Dietz-style and
+        computed exactly; see `AccountComparisonRow.returnStatus` for when it is withheld.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ReportRange"
+      responses:
+        "200":
+          description: Owner-scoped account comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountComparison"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /instruments/{id}/holdings:
+    get:
+      operationId: getInstrumentHoldings
+      summary: Return active accounts currently holding an instrument
+      description: >-
+        Authenticate with a browser session or a Bearer API key that grants `portfolio:read`.
+        Unknown, unparseable, and other users' instrument IDs return 404.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Owner-scoped instrument holdings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstrumentHoldings"
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /settings:
     get:
       operationId: getSettings
@@ -2964,6 +3179,33 @@ components:
         minimum: 0
         maximum: 10000
         default: 0
+    ReportRange:
+      name: range
+      in: query
+      description: Report range; starts 30, 90, 183, or 365 days before today, or at the earliest source date for `all`, never before the earliest source date.
+      schema:
+        type: string
+        enum: [1m, 3m, 6m, 1y, all]
+        default: 1y
+    ActivityKindFilter:
+      name: kind
+      in: query
+      schema:
+        type: string
+        enum: [transaction, valuation, position, price]
+    ActivityTypeFilter:
+      name: type
+      in: query
+      description: A transaction type, a position event type, `valuation`, or `security_price`.
+      schema:
+        type: string
+    ActivitySearch:
+      name: q
+      in: query
+      description: Case-insensitive substring search; surrounding whitespace is ignored.
+      schema:
+        type: string
+        maxLength: 200
   headers:
     NoStore:
       description: Prevents storage of private financial or credential metadata.
@@ -4520,6 +4762,10 @@ components:
         quantity: { $ref: "#/components/schemas/DecimalString" }
         unitPrice: { $ref: "#/components/schemas/DecimalString" }
         eventGroupId: { type: string, format: uuid }
+        effectMinor:
+          description: Signed effect on the account balance (transactions) or on position-account cash (position events). Omitted for valuations and prices.
+          allOf:
+            - $ref: "#/components/schemas/MinorUnits"
     TransactionPage:
       type: object
       additionalProperties: false
@@ -5230,6 +5476,349 @@ components:
         methodology: { type: string, const: position_bridge_v1 }
         returnStatus: { type: string, const: unavailable }
         returnMessage: { type: string }
+    FreshnessStatus:
+      type: string
+      description: Price or valuation freshness backing an account value. `not_applicable` means no price or valuation is involved.
+      enum: [fresh, stale, missing, not_applicable]
+    AccountSummary:
+      type: object
+      additionalProperties: false
+      required: [accountId, sparkline, positionCount, lastUpdatedAt, asOfDate, freshness, valueComplete, missingPrices, missingCurrencies, linkedGoals]
+      properties:
+        accountId: { type: string, format: uuid }
+        sparkline:
+          type: array
+          items: { $ref: "#/components/schemas/AccountHistoryPoint" }
+        positionCount:
+          description: Instruments with a non-zero quantity today; null for balance-tracked accounts.
+          type: [integer, "null"]
+          minimum: 0
+        lastUpdatedAt:
+          description: Latest create or update time across the account's transactions, valuations, and position events, else the account's creation time.
+          type: string
+          format: date-time
+        asOfDate:
+          description: Oldest latest-price date among held positions, else the latest valuation date for balance accounts, else the latest transaction date, else the opened date.
+          type: string
+          format: date
+        freshness: { $ref: "#/components/schemas/FreshnessStatus" }
+        valueComplete: { type: boolean }
+        missingPrices:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [instrumentId, name]
+            properties:
+              instrumentId: { type: string, format: uuid }
+              name: { type: string }
+        missingCurrencies:
+          type: array
+          items: { type: string }
+        linkedGoals:
+          type: array
+          items: { $ref: "#/components/schemas/GoalReference" }
+    GoalReference:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    DateRange:
+      type: object
+      additionalProperties: false
+      required: [from, to]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+    AttentionItem:
+      type: object
+      additionalProperties: false
+      required: [id, kind, severity, title, detail, accountIds, fix]
+      properties:
+        id:
+          description: Stable identifier such as `missing_rate:USD` or `stale_price:<instrumentId>`.
+          type: string
+        kind: { type: string, enum: [missing_rate, stale_rate, missing_price, stale_price, goal_behind] }
+        severity: { type: string, enum: [warning, info] }
+        title: { type: string }
+        detail: { type: string }
+        pair:
+          type: object
+          additionalProperties: false
+          required: [base, quote]
+          properties:
+            base: { type: string }
+            quote: { type: string }
+        instrumentId: { type: string, format: uuid }
+        goalId: { type: string, format: uuid }
+        accountIds:
+          type: array
+          items: { type: string, format: uuid }
+        since:
+          description: First affected date for missing data, or the as-of date for stale data.
+          type: string
+          format: date
+        until: { type: string, format: date }
+        fix:
+          type: object
+          additionalProperties: false
+          required: [label, href]
+          properties:
+            label: { type: string }
+            href: { type: string }
+    AttentionSummary:
+      type: object
+      additionalProperties: false
+      required: [totalsComplete, items]
+      properties:
+        totalsComplete: { type: boolean }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AttentionItem" }
+    MonthlyFlowPoint:
+      type: object
+      additionalProperties: false
+      required: [month, contributionsMinor, withdrawalsMinor, incomeMinor, feesMinor, growthMinor, netChangeMinor, complete]
+      properties:
+        month:
+          description: First day of the month, or the range start for a partial first month.
+          type: string
+          format: date
+        contributionsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        withdrawalsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        incomeMinor: { $ref: "#/components/schemas/MinorUnits" }
+        feesMinor: { $ref: "#/components/schemas/MinorUnits" }
+        growthMinor: { $ref: "#/components/schemas/MinorUnits" }
+        netChangeMinor: { $ref: "#/components/schemas/MinorUnits" }
+        complete: { type: boolean }
+    FlowsReport:
+      type: object
+      additionalProperties: false
+      required: [baseCurrency, range, from, to, startValueMinor, endValueMinor, contributionsMinor, incomeMinor, growthMinor, withdrawalsMinor, feesMinor, complete, months]
+      properties:
+        baseCurrency: { type: string }
+        range: { type: string, enum: [1m, 3m, 6m, 1y, all] }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        startValueMinor: { $ref: "#/components/schemas/MinorUnits" }
+        endValueMinor: { $ref: "#/components/schemas/MinorUnits" }
+        contributionsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        incomeMinor: { $ref: "#/components/schemas/MinorUnits" }
+        growthMinor: { $ref: "#/components/schemas/MinorUnits" }
+        withdrawalsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        feesMinor: { $ref: "#/components/schemas/MinorUnits" }
+        complete: { type: boolean }
+        months:
+          type: array
+          items: { $ref: "#/components/schemas/MonthlyFlowPoint" }
+    IncomeAccountLine:
+      type: object
+      additionalProperties: false
+      required: [accountId, name, currency, nativeMinor, baseMinor]
+      properties:
+        accountId: { type: string, format: uuid }
+        name: { type: string }
+        currency: { type: string }
+        nativeMinor: { $ref: "#/components/schemas/MinorUnits" }
+        baseMinor: { oneOf: [{ $ref: "#/components/schemas/MinorUnits" }, { type: "null" }] }
+    IncomeReport:
+      type: object
+      additionalProperties: false
+      required: [baseCurrency, from, to, complete, totals, interestByAccount, dividends, feesByAccount, months]
+      properties:
+        baseCurrency: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        complete: { type: boolean }
+        totals:
+          type: object
+          additionalProperties: false
+          required: [interestMinor, dividendsMinor, capitalGrowthMinor, feesMinor, contributionsMinor]
+          properties:
+            interestMinor: { $ref: "#/components/schemas/MinorUnits" }
+            dividendsMinor: { $ref: "#/components/schemas/MinorUnits" }
+            capitalGrowthMinor: { $ref: "#/components/schemas/MinorUnits" }
+            feesMinor: { $ref: "#/components/schemas/MinorUnits" }
+            contributionsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        interestByAccount:
+          type: array
+          items: { $ref: "#/components/schemas/IncomeAccountLine" }
+        dividends:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [accountId, accountName, instrumentId, name, currency, nativeMinor, baseMinor]
+            properties:
+              accountId: { type: string, format: uuid }
+              accountName: { type: string }
+              instrumentId:
+                description: Set when the dividend shares an event group with a position event.
+                oneOf: [{ type: string, format: uuid }, { type: "null" }]
+              name: { type: string }
+              currency: { type: string }
+              nativeMinor: { $ref: "#/components/schemas/MinorUnits" }
+              baseMinor: { oneOf: [{ $ref: "#/components/schemas/MinorUnits" }, { type: "null" }] }
+        feesByAccount:
+          type: array
+          items: { $ref: "#/components/schemas/IncomeAccountLine" }
+        months:
+          type: array
+          items: { $ref: "#/components/schemas/MonthlyFlowPoint" }
+    NetWorthStats:
+      type: object
+      additionalProperties: false
+      required: [baseCurrency, complete, months, yearOverYear, highest, sinceStart]
+      properties:
+        baseCurrency: { type: string }
+        complete: { type: boolean }
+        months:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [month, netWorthMinor, assetsMinor, liabilitiesMinor, changeMinor, complete]
+            properties:
+              month: { type: string, format: date }
+              netWorthMinor: { $ref: "#/components/schemas/MinorUnits" }
+              assetsMinor: { $ref: "#/components/schemas/MinorUnits" }
+              liabilitiesMinor: { $ref: "#/components/schemas/MinorUnits" }
+              changeMinor:
+                description: Change from the previous point; null for the first point or when either point is incomplete.
+                oneOf: [{ $ref: "#/components/schemas/MinorUnits" }, { type: "null" }]
+              complete: { type: boolean }
+        yearOverYear:
+          type: object
+          additionalProperties: false
+          required: [fromDate, toDate, changeMinor, changePercent]
+          properties:
+            fromDate: { type: string, format: date }
+            toDate: { type: string, format: date }
+            changeMinor: { oneOf: [{ $ref: "#/components/schemas/MinorUnits" }, { type: "null" }] }
+            changePercent: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        highest:
+          type: object
+          additionalProperties: false
+          required: [date, netWorthMinor]
+          properties:
+            date: { type: string, format: date }
+            netWorthMinor: { $ref: "#/components/schemas/MinorUnits" }
+        sinceStart:
+          type: object
+          additionalProperties: false
+          required: [startDate, startMinor, changeMinor, changePercent]
+          properties:
+            startDate: { type: string, format: date }
+            startMinor: { $ref: "#/components/schemas/MinorUnits" }
+            changeMinor: { $ref: "#/components/schemas/MinorUnits" }
+            changePercent: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+    AccountComparisonRow:
+      type: object
+      additionalProperties: false
+      required: [accountId, name, currency, trackingMode, isLiability, periodDays, startMinor, endMinor, depositsMinor, withdrawalsMinor, netIncomeMinor, annualizedReturnBps, returnStatus]
+      properties:
+        accountId: { type: string, format: uuid }
+        name: { type: string }
+        currency: { type: string }
+        trackingMode: { type: string, enum: [balance, positions] }
+        isLiability: { type: boolean }
+        periodDays: { type: integer, minimum: 0 }
+        startMinor: { oneOf: [{ $ref: "#/components/schemas/MinorUnits" }, { type: "null" }] }
+        endMinor: { oneOf: [{ $ref: "#/components/schemas/MinorUnits" }, { type: "null" }] }
+        depositsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        withdrawalsMinor: { $ref: "#/components/schemas/MinorUnits" }
+        netIncomeMinor: { $ref: "#/components/schemas/MinorUnits" }
+        annualizedReturnBps: { type: [integer, "null"] }
+        returnStatus:
+          description: >-
+            `methodology_unavailable` for position accounts, `not_applicable` for liabilities, `incomplete` when a
+            start or end value is incomplete, `short_period` when the period is under 90 days (number still
+            returned) or the average capital is not positive (number null), otherwise `ok`.
+          type: string
+          enum: [ok, short_period, methodology_unavailable, incomplete, not_applicable]
+    AccountComparison:
+      type: object
+      additionalProperties: false
+      required: [from, to, rows]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/AccountComparisonRow" }
+    AccountExtras:
+      type: object
+      additionalProperties: false
+      required: [accountId, weights, cashWeightPercent, priceHistory, linkedGoals]
+      properties:
+        accountId: { type: string, format: uuid }
+        weights:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [instrumentId, name, symbol, weightPercent]
+            properties:
+              instrumentId: { type: string, format: uuid }
+              name: { type: string }
+              symbol: { type: string }
+              weightPercent:
+                description: Share of cash plus positions with one decimal; null when any holding in the account is unvalued.
+                oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        cashWeightPercent: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        priceHistory:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [instrumentId, name, symbol, currency, staleThresholdDays, points, staleRanges]
+            properties:
+              instrumentId: { type: string, format: uuid }
+              name: { type: string }
+              symbol: { type: string }
+              currency: { type: string }
+              staleThresholdDays: { type: integer, minimum: 1 }
+              points:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [date, price]
+                  properties:
+                    date: { type: string, format: date }
+                    price: { $ref: "#/components/schemas/DecimalString" }
+              staleRanges:
+                type: array
+                items: { $ref: "#/components/schemas/DateRange" }
+        linkedGoals:
+          type: array
+          items: { $ref: "#/components/schemas/GoalReference" }
+    InstrumentHoldings:
+      type: object
+      additionalProperties: false
+      required: [instrumentId, staleThresholdDays, staleRanges, holdings]
+      properties:
+        instrumentId: { type: string, format: uuid }
+        staleThresholdDays: { type: integer, minimum: 1 }
+        staleRanges:
+          type: array
+          items: { $ref: "#/components/schemas/DateRange" }
+        holdings:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [accountId, accountName, quantity, valueMinor, currency]
+            properties:
+              accountId: { type: string, format: uuid }
+              accountName: { type: string }
+              quantity: { $ref: "#/components/schemas/DecimalString" }
+              valueMinor:
+                description: Quantity times the latest price in the instrument's quote currency; null without a price.
+                oneOf: [{ $ref: "#/components/schemas/MinorUnits" }, { type: "null" }]
+              currency: { type: string }
     SettingsRead:
       type: object
       additionalProperties: false

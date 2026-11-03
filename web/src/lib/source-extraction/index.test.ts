@@ -49,7 +49,7 @@ afterEach(() => {
 describe("extractSource", () => {
   it("ignores messages pdf.js posts to the page and resolves on its own reply", async () => {
     const pending = extractSource(file(), "");
-    const worker = await started();
+    const worker = (await started())!;
     expect(worker.posted).toEqual([
       expect.objectContaining({ name: "statement.csv", password: "" }),
     ]);
@@ -67,7 +67,7 @@ describe("extractSource", () => {
 
   it("rejects with the worker's error and code", async () => {
     const pending = extractSource(file(), "");
-    (await started()).reply({
+    (await started())!.reply({
       kind: "wealthboard-source-extraction",
       error: "This PDF requires a password.",
       code: "password_required",
@@ -83,7 +83,7 @@ describe("extractSource", () => {
   it("terminates the worker after 15 seconds", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const pending = extractSource(file(), "");
-    const worker = await started();
+    const worker = (await started())!;
     vi.advanceTimersByTime(15_000);
     await expect(pending).rejects.toThrow(
       "Document extraction exceeded 15 seconds",
@@ -94,7 +94,7 @@ describe("extractSource", () => {
   it("terminates the worker when aborted", async () => {
     const controller = new AbortController();
     const pending = extractSource(file(), "", { signal: controller.signal });
-    const worker = await started();
+    const worker = (await started())!;
     controller.abort(new Error("cancelled"));
     await expect(pending).rejects.toThrow("cancelled");
     expect(worker.terminated).toBe(true);
@@ -102,7 +102,7 @@ describe("extractSource", () => {
 
   it("reports worker crashes without exposing details", async () => {
     const pending = extractSource(file(), "");
-    const worker = await started();
+    const worker = (await started())!;
     worker.onerror?.(new Event("error"));
     await expect(pending).rejects.toThrow(
       "The document parser could not complete within its resource limits.",

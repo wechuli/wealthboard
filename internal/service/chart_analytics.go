@@ -28,18 +28,26 @@ type chartAccount struct {
 	IsLiquid             bool
 	IsInvestible         bool
 	InstitutionName      string
+	OpenedAt             *time.Time
+	ArchivedAt           *time.Time
+	CreatedAt            time.Time
 }
 
 type chartTransaction struct {
-	AccountID uuid.UUID
-	Type      string
-	Amount    int64
-	Currency  string
-	Date      time.Time
-	CreatedAt time.Time
+	ID           uuid.UUID
+	AccountID    uuid.UUID
+	Type         string
+	Amount       int64
+	Currency     string
+	Date         time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Description  string
+	EventGroupID *uuid.UUID
 }
 
 type chartValuation struct {
+	ID        uuid.UUID
 	AccountID uuid.UUID
 	Value     int64
 	Date      time.Time
@@ -54,7 +62,13 @@ type chartRate struct {
 
 type chartPositionEvent struct {
 	positionEventRow
-	CashEffect int64
+	CashEffect    int64
+	UpdatedAt     time.Time
+	FeeMinor      *int64
+	FeeCurrency   string
+	TradeCurrency string
+	AppliedRate   string
+	EventGroupID  *uuid.UUID
 }
 
 type chartPrice struct {
@@ -105,29 +119,43 @@ type chartAnalyticsRepository interface {
 	LoadChartData(context.Context, uuid.UUID) (chartData, error)
 }
 
+// LoadChartData loads the owner's active accounts and their replay sources. Archived accounts and their
+// position events are excluded so dashboard and report totals keep their established semantics.
 func (repository *SQLGoalsReportsRepository) LoadChartData(ctx context.Context, userID uuid.UUID) (chartData, error) {
+	return repository.loadChartData(ctx, userID, false)
+}
+
+// LoadChartDataIncludingArchived loads the same owner-scoped sources as LoadChartData plus archived accounts
+// and their position events, for per-account reads that must also describe archived accounts.
+func (repository *SQLGoalsReportsRepository) LoadChartDataIncludingArchived(ctx context.Context, userID uuid.UUID) (chartData, error) {
+	return repository.loadChartData(ctx, userID, true)
+}
+
+func (repository *SQLGoalsReportsRepository) loadChartData(ctx context.Context, userID uuid.UUID, includeArchived bool) (chartData, error) {
 	data := chartData{}
 	rows, err := repository.db.QueryContext(ctx, `
 SELECT accounts.id, accounts.name, accounts.currency, accounts.tracking_mode,
 	accounts.current_value_minor, accounts.cost_basis_minor, accounts.is_liability, accounts.is_included_in_net_worth,
        categories.name, categories.is_liquid, categories.is_investible,
-       COALESCE(institutions.name, 'Unspecified')
+       COALESCE(institutions.name, 'Unspecified'), accounts.opened_at, accounts.archived_at, accounts.created_at
 FROM accounts
 JOIN categories ON categories.user_id=accounts.user_id AND categories.id=accounts.category_id
 LEFT JOIN institutions ON institutions.user_id=accounts.user_id AND institutions.id=accounts.institution_id
-WHERE accounts.user_id=$1 AND accounts.archived_at IS NULL
-ORDER BY accounts.name,accounts.id`, userID)
+WHERE accounts.user_id=$1 AND ($2::boolean OR accounts.archived_at IS NULL)
+ORDER BY accounts.name,accounts.id`, userID, includeArchived)
 	if err != nil {
 		return data, fmt.Errorf("load chart accounts: %w", err)
 	}
 	for rows.Next() {
 		var item chartAccount
+		var openedAt, archivedAt sql.NullTime
 		if err := rows.Scan(&item.ID, &item.Name, &item.Currency, &item.TrackingMode, &item.CurrentValueMinor, &item.CostBasisMinor,
 			&item.IsLiability, &item.IsIncludedInNetWorth, &item.CategoryName, &item.IsLiquid,
-			&item.IsInvestible, &item.InstitutionName); err != nil {
+			&item.IsInvestible, &item.InstitutionName, &openedAt, &archivedAt, &item.CreatedAt); err != nil {
 			rows.Close()
 			return data, fmt.Errorf("scan chart account: %w", err)
 		}
+		item.OpenedAt, item.ArchivedAt = nullTime(openedAt), nullTime(archivedAt)
 		data.Accounts = append(data.Accounts, item)
 	}
 	if err := closeChartRows(rows); err != nil {
@@ -135,7 +163,8 @@ ORDER BY accounts.name,accounts.id`, userID)
 	}
 
 	rows, err = repository.db.QueryContext(ctx, `
-SELECT account_id,type,amount_minor,currency,transaction_date,created_at
+SELECT id,account_id,type,amount_minor,currency,transaction_date,created_at,updated_at,
+       COALESCE(description,''),event_group_id
 FROM transactions WHERE user_id=$1
 ORDER BY transaction_date,created_at,id`, userID)
 	if err != nil {
@@ -143,10 +172,13 @@ ORDER BY transaction_date,created_at,id`, userID)
 	}
 	for rows.Next() {
 		var item chartTransaction
-		if err := rows.Scan(&item.AccountID, &item.Type, &item.Amount, &item.Currency, &item.Date, &item.CreatedAt); err != nil {
+		var eventGroupID uuid.NullUUID
+		if err := rows.Scan(&item.ID, &item.AccountID, &item.Type, &item.Amount, &item.Currency, &item.Date, &item.CreatedAt,
+			&item.UpdatedAt, &item.Description, &eventGroupID); err != nil {
 			rows.Close()
 			return data, fmt.Errorf("scan chart transaction: %w", err)
 		}
+		item.EventGroupID = uuidPointer(eventGroupID)
 		data.Transactions = append(data.Transactions, item)
 	}
 	if err := closeChartRows(rows); err != nil {
@@ -154,7 +186,7 @@ ORDER BY transaction_date,created_at,id`, userID)
 	}
 
 	rows, err = repository.db.QueryContext(ctx, `
-SELECT account_id,value_minor,valuation_date,created_at
+SELECT id,account_id,value_minor,valuation_date,created_at
 FROM valuation_snapshots WHERE user_id=$1
 ORDER BY valuation_date,created_at,id`, userID)
 	if err != nil {
@@ -162,7 +194,7 @@ ORDER BY valuation_date,created_at,id`, userID)
 	}
 	for rows.Next() {
 		var item chartValuation
-		if err := rows.Scan(&item.AccountID, &item.Value, &item.Date, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.AccountID, &item.Value, &item.Date, &item.CreatedAt); err != nil {
 			rows.Close()
 			return data, fmt.Errorf("scan chart valuation: %w", err)
 		}
@@ -194,23 +226,29 @@ ORDER BY effective_date,created_at,id`, userID)
 	rows, err = repository.db.QueryContext(ctx, `
 SELECT event.id,event.account_id,event.instrument_id,event.related_instrument_id,event.type,event.quantity::text,
        event.trade_date,event.event_sequence,COALESCE(event.action_ratio_numerator::text,''),
-       COALESCE(event.action_ratio_denominator::text,''),event.created_at,event.cash_effect_minor
+       COALESCE(event.action_ratio_denominator::text,''),event.created_at,event.cash_effect_minor,
+       event.updated_at,event.fee_amount_minor,COALESCE(event.fee_currency,''),event.trade_currency,
+       COALESCE(event.applied_exchange_rate::text,''),event.event_group_id
 FROM position_events event
 JOIN accounts ON accounts.user_id=event.user_id AND accounts.id=event.account_id
-WHERE event.user_id=$1 AND accounts.archived_at IS NULL
-ORDER BY event.account_id,event.trade_date,event.event_sequence,event.created_at,event.id`, userID)
+WHERE event.user_id=$1 AND ($2::boolean OR accounts.archived_at IS NULL)
+ORDER BY event.account_id,event.trade_date,event.event_sequence,event.created_at,event.id`, userID, includeArchived)
 	if err != nil {
 		return data, fmt.Errorf("load chart position events: %w", err)
 	}
 	for rows.Next() {
 		var item chartPositionEvent
 		var related sql.NullString
+		var feeMinor sql.NullInt64
+		var eventGroupID uuid.NullUUID
 		if err := rows.Scan(&item.id, &item.accountID, &item.instrumentID, &related, &item.eventType,
 			&item.quantity, &item.tradeDate, &item.eventSequence, &item.actionRatioNumerator,
-			&item.actionRatioDenominator, &item.createdAt, &item.CashEffect); err != nil {
+			&item.actionRatioDenominator, &item.createdAt, &item.CashEffect, &item.UpdatedAt, &feeMinor,
+			&item.FeeCurrency, &item.TradeCurrency, &item.AppliedRate, &eventGroupID); err != nil {
 			rows.Close()
 			return data, fmt.Errorf("scan chart position event: %w", err)
 		}
+		item.FeeMinor, item.EventGroupID = nullInt64(feeMinor), uuidPointer(eventGroupID)
 		if related.Valid {
 			parsed, parseErr := uuid.Parse(related.String)
 			if parseErr != nil {

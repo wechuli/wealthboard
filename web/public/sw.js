@@ -1,10 +1,13 @@
-const CACHE_NAME = "wealthboard-vite-shell-v1";
+const CACHE_NAME = "wealthboard-vite-shell-v2";
 const STATIC_ASSETS = [
   "/offline.html",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
+  "/icons/apple-touch-icon.png",
+  "/favicon.svg",
+  "/logo.svg",
 ];
 
 self.addEventListener("install", (event) => {

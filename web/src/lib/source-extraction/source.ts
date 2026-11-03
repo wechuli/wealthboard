@@ -1,4 +1,4 @@
-import type { AISource } from "@/lib/types";
+import type { AISource } from "@/api/types";
 
 export type Bytes = Uint8Array<ArrayBuffer>;
 

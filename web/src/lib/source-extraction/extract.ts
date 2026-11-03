@@ -1,4 +1,4 @@
-import type { AISource } from "@/lib/types";
+import type { AISource } from "@/api/types";
 import { extractOffice } from "@/lib/source-extraction/office";
 import { extractPdf } from "@/lib/source-extraction/pdf";
 import {

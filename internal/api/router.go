@@ -18,6 +18,7 @@ type readinessCheck func(context.Context) error
 type ReadHandlers struct {
 	Core         *CoreReadHandler
 	GoalsReports *GoalsReportsHandler
+	Insights     *InsightsHandler
 	Features     *FeatureReadHandler
 	Static       http.Handler
 	Mutations    MutationHandlers
@@ -77,9 +78,13 @@ func NewRouterWithReads(logger *slog.Logger, ready readinessCheck, auth *AuthHan
 					router.Get("/accounts/{accountID}/valuations", reads.Core.AccountValuations)
 					router.Get("/accounts/{accountID}/activity", reads.Core.AccountActivity)
 					router.Get("/transactions", reads.Core.Transactions)
+					router.Get("/activity", reads.Core.ActivityFeed)
 				}
 				if reads.GoalsReports != nil {
 					RegisterGoalsReportsRoutes(router, reads.GoalsReports)
+				}
+				if reads.Insights != nil {
+					RegisterInsightsRoutes(router, reads.Insights)
 				}
 				if reads.Features != nil {
 					RegisterFeatureReadRoutes(router, reads.Features)

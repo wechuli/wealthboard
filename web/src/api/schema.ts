@@ -785,6 +785,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return list decorations for every owned account
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Covers active and archived accounts. Sparkline values are native-currency account values at the end of the same day of month for up to twelve previous months (from the account's first activity) plus today.
+         */
+        get: operations["listAccountSummaries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{accountID}/extras": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return holding weights and price history for one owned account
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Balance-tracked accounts return empty weights and price history. Unknown, unparseable, and other users' account IDs return 404.
+         */
+        get: operations["getAccountExtras"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List activity across all owned accounts
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Combines transactions, valuations, position events, and security prices (one price row per position account that holds or held the instrument), newest first. `q` matches description, notes, account name, and instrument name or symbol case-insensitively. A foreign or unknown `accountId` returns 404.
+         */
+        get: operations["listActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return data issues and goal alerts that need attention
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Lists missing or stale exchange rates and prices and goals behind plan, each with a stable ID and a fix link. `totalsComplete` matches the dashboard's current completeness.
+         */
+        get: operations["getAttention"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/flows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return the contributions-versus-growth bridge in the base currency
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Start value is net worth at the end of the day before `from`; end value is net worth today. Flows dated within the range are converted at each record's effective-dated rate, and growth is the residual, so start + contributions + income + growth − withdrawals − fees = end.
+         */
+        get: operations["getFlowsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/income": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return income, dividends, and fees for a range
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Lists are sorted by base-currency value descending with unconvertible lines last.
+         */
+        get: operations["getIncomeReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/net-worth-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return monthly net-worth statistics
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Points are the first source date, the first of each later month, and today.
+         */
+        get: operations["getNetWorthStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/account-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare active accounts over a range
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Values are in each account's native currency. The simple annualized return is Modified-Dietz-style and computed exactly; see `AccountComparisonRow.returnStatus` for when it is withheld.
+         */
+        get: operations["getAccountComparison"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instruments/{id}/holdings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Return active accounts currently holding an instrument
+         * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Unknown, unparseable, and other users' instrument IDs return 404.
+         */
+        get: operations["getInstrumentHoldings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings": {
         parameters: {
             query?: never;
@@ -2786,6 +2966,8 @@ export interface components {
             unitPrice?: components["schemas"]["DecimalString"];
             /** Format: uuid */
             eventGroupId?: string;
+            /** @description Signed effect on the account balance (transactions) or on position-account cash (position events). Omitted for valuations and prices. */
+            effectMinor?: components["schemas"]["MinorUnits"];
         };
         TransactionPage: {
             items: components["schemas"]["Transaction"][];
@@ -3115,6 +3297,256 @@ export interface components {
             /** @constant */
             returnStatus: "unavailable";
             returnMessage: string;
+        };
+        /**
+         * @description Price or valuation freshness backing an account value. `not_applicable` means no price or valuation is involved.
+         * @enum {string}
+         */
+        FreshnessStatus: "fresh" | "stale" | "missing" | "not_applicable";
+        AccountSummary: {
+            /** Format: uuid */
+            accountId: string;
+            sparkline: components["schemas"]["AccountHistoryPoint"][];
+            /** @description Instruments with a non-zero quantity today; null for balance-tracked accounts. */
+            positionCount: number | null;
+            /**
+             * Format: date-time
+             * @description Latest create or update time across the account's transactions, valuations, and position events, else the account's creation time.
+             */
+            lastUpdatedAt: string;
+            /**
+             * Format: date
+             * @description Oldest latest-price date among held positions, else the latest valuation date for balance accounts, else the latest transaction date, else the opened date.
+             */
+            asOfDate: string;
+            freshness: components["schemas"]["FreshnessStatus"];
+            valueComplete: boolean;
+            missingPrices: {
+                /** Format: uuid */
+                instrumentId: string;
+                name: string;
+            }[];
+            missingCurrencies: string[];
+            linkedGoals: components["schemas"]["GoalReference"][];
+        };
+        GoalReference: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        DateRange: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+        };
+        AttentionItem: {
+            /** @description Stable identifier such as `missing_rate:USD` or `stale_price:<instrumentId>`. */
+            id: string;
+            /** @enum {string} */
+            kind: "missing_rate" | "stale_rate" | "missing_price" | "stale_price" | "goal_behind";
+            /** @enum {string} */
+            severity: "warning" | "info";
+            title: string;
+            detail: string;
+            pair?: {
+                base: string;
+                quote: string;
+            };
+            /** Format: uuid */
+            instrumentId?: string;
+            /** Format: uuid */
+            goalId?: string;
+            accountIds: string[];
+            /**
+             * Format: date
+             * @description First affected date for missing data, or the as-of date for stale data.
+             */
+            since?: string;
+            /** Format: date */
+            until?: string;
+            fix: {
+                label: string;
+                href: string;
+            };
+        };
+        AttentionSummary: {
+            totalsComplete: boolean;
+            items: components["schemas"]["AttentionItem"][];
+        };
+        MonthlyFlowPoint: {
+            /**
+             * Format: date
+             * @description First day of the month, or the range start for a partial first month.
+             */
+            month: string;
+            contributionsMinor: components["schemas"]["MinorUnits"];
+            withdrawalsMinor: components["schemas"]["MinorUnits"];
+            incomeMinor: components["schemas"]["MinorUnits"];
+            feesMinor: components["schemas"]["MinorUnits"];
+            growthMinor: components["schemas"]["MinorUnits"];
+            netChangeMinor: components["schemas"]["MinorUnits"];
+            complete: boolean;
+        };
+        FlowsReport: {
+            baseCurrency: string;
+            /** @enum {string} */
+            range: "1m" | "3m" | "6m" | "1y" | "all";
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            startValueMinor: components["schemas"]["MinorUnits"];
+            endValueMinor: components["schemas"]["MinorUnits"];
+            contributionsMinor: components["schemas"]["MinorUnits"];
+            incomeMinor: components["schemas"]["MinorUnits"];
+            growthMinor: components["schemas"]["MinorUnits"];
+            withdrawalsMinor: components["schemas"]["MinorUnits"];
+            feesMinor: components["schemas"]["MinorUnits"];
+            complete: boolean;
+            months: components["schemas"]["MonthlyFlowPoint"][];
+        };
+        IncomeAccountLine: {
+            /** Format: uuid */
+            accountId: string;
+            name: string;
+            currency: string;
+            nativeMinor: components["schemas"]["MinorUnits"];
+            baseMinor: components["schemas"]["MinorUnits"] | null;
+        };
+        IncomeReport: {
+            baseCurrency: string;
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            complete: boolean;
+            totals: {
+                interestMinor: components["schemas"]["MinorUnits"];
+                dividendsMinor: components["schemas"]["MinorUnits"];
+                capitalGrowthMinor: components["schemas"]["MinorUnits"];
+                feesMinor: components["schemas"]["MinorUnits"];
+                contributionsMinor: components["schemas"]["MinorUnits"];
+            };
+            interestByAccount: components["schemas"]["IncomeAccountLine"][];
+            dividends: {
+                /** Format: uuid */
+                accountId: string;
+                accountName: string;
+                /** @description Set when the dividend shares an event group with a position event. */
+                instrumentId: string | null;
+                name: string;
+                currency: string;
+                nativeMinor: components["schemas"]["MinorUnits"];
+                baseMinor: components["schemas"]["MinorUnits"] | null;
+            }[];
+            feesByAccount: components["schemas"]["IncomeAccountLine"][];
+            months: components["schemas"]["MonthlyFlowPoint"][];
+        };
+        NetWorthStats: {
+            baseCurrency: string;
+            complete: boolean;
+            months: {
+                /** Format: date */
+                month: string;
+                netWorthMinor: components["schemas"]["MinorUnits"];
+                assetsMinor: components["schemas"]["MinorUnits"];
+                liabilitiesMinor: components["schemas"]["MinorUnits"];
+                /** @description Change from the previous point; null for the first point or when either point is incomplete. */
+                changeMinor: components["schemas"]["MinorUnits"] | null;
+                complete: boolean;
+            }[];
+            yearOverYear: {
+                /** Format: date */
+                fromDate: string;
+                /** Format: date */
+                toDate: string;
+                changeMinor: components["schemas"]["MinorUnits"] | null;
+                changePercent: components["schemas"]["DecimalString"] | null;
+            };
+            highest: {
+                /** Format: date */
+                date: string;
+                netWorthMinor: components["schemas"]["MinorUnits"];
+            };
+            sinceStart: {
+                /** Format: date */
+                startDate: string;
+                startMinor: components["schemas"]["MinorUnits"];
+                changeMinor: components["schemas"]["MinorUnits"];
+                changePercent: components["schemas"]["DecimalString"] | null;
+            };
+        };
+        AccountComparisonRow: {
+            /** Format: uuid */
+            accountId: string;
+            name: string;
+            currency: string;
+            /** @enum {string} */
+            trackingMode: "balance" | "positions";
+            isLiability: boolean;
+            periodDays: number;
+            startMinor: components["schemas"]["MinorUnits"] | null;
+            endMinor: components["schemas"]["MinorUnits"] | null;
+            depositsMinor: components["schemas"]["MinorUnits"];
+            withdrawalsMinor: components["schemas"]["MinorUnits"];
+            netIncomeMinor: components["schemas"]["MinorUnits"];
+            annualizedReturnBps: number | null;
+            /**
+             * @description `methodology_unavailable` for position accounts, `not_applicable` for liabilities, `incomplete` when a start or end value is incomplete, `short_period` when the period is under 90 days (number still returned) or the average capital is not positive (number null), otherwise `ok`.
+             * @enum {string}
+             */
+            returnStatus: "ok" | "short_period" | "methodology_unavailable" | "incomplete" | "not_applicable";
+        };
+        AccountComparison: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            rows: components["schemas"]["AccountComparisonRow"][];
+        };
+        AccountExtras: {
+            /** Format: uuid */
+            accountId: string;
+            weights: {
+                /** Format: uuid */
+                instrumentId: string;
+                name: string;
+                symbol: string;
+                /** @description Share of cash plus positions with one decimal; null when any holding in the account is unvalued. */
+                weightPercent: components["schemas"]["DecimalString"] | null;
+            }[];
+            cashWeightPercent: components["schemas"]["DecimalString"] | null;
+            priceHistory: {
+                /** Format: uuid */
+                instrumentId: string;
+                name: string;
+                symbol: string;
+                currency: string;
+                staleThresholdDays: number;
+                points: {
+                    /** Format: date */
+                    date: string;
+                    price: components["schemas"]["DecimalString"];
+                }[];
+                staleRanges: components["schemas"]["DateRange"][];
+            }[];
+            linkedGoals: components["schemas"]["GoalReference"][];
+        };
+        InstrumentHoldings: {
+            /** Format: uuid */
+            instrumentId: string;
+            staleThresholdDays: number;
+            staleRanges: components["schemas"]["DateRange"][];
+            holdings: {
+                /** Format: uuid */
+                accountId: string;
+                accountName: string;
+                quantity: components["schemas"]["DecimalString"];
+                /** @description Quantity times the latest price in the instrument's quote currency; null without a price. */
+                valueMinor: components["schemas"]["MinorUnits"] | null;
+                currency: string;
+            }[];
         };
         SettingsRead: {
             settings: components["schemas"]["UserSettings"];
@@ -3727,6 +4159,13 @@ export interface components {
         ToDate: string;
         Limit: number;
         Offset: number;
+        /** @description Report range; starts 30, 90, 183, or 365 days before today, or at the earliest source date for `all`, never before the earliest source date. */
+        ReportRange: "1m" | "3m" | "6m" | "1y" | "all";
+        ActivityKindFilter: "transaction" | "valuation" | "position" | "price";
+        /** @description A transaction type, a position event type, `valuation`, or `security_price`. */
+        ActivityTypeFilter: string;
+        /** @description Case-insensitive substring search; surrounding whitespace is ignored. */
+        ActivitySearch: string;
     };
     requestBodies: {
         /** @description A raw JSON/CSV body up to 5 MiB, or multipart data containing one file up to 5 MiB and at most 1 MiB additional request overhead. Multipart `format` is needed only when the filename has no `.csv` or `.json` extension. */
@@ -5226,6 +5665,246 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    listAccountSummaries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped account summaries, ordered by account name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountSummary"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getAccountExtras: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountID: components["parameters"]["AccountID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped account extras */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountExtras"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listActivity: {
+        parameters: {
+            query?: {
+                kind?: components["parameters"]["ActivityKindFilter"];
+                accountId?: components["parameters"]["AccountIDFilter"];
+                /** @description A transaction type, a position event type, `valuation`, or `security_price`. */
+                type?: components["parameters"]["ActivityTypeFilter"];
+                /** @description Inclusive start date. */
+                from?: components["parameters"]["FromDate"];
+                /** @description Inclusive end date; must not precede `from`. */
+                to?: components["parameters"]["ToDate"];
+                /** @description Case-insensitive substring search; surrounding whitespace is ignored. */
+                q?: components["parameters"]["ActivitySearch"];
+                limit?: components["parameters"]["Limit"];
+                offset?: components["parameters"]["Offset"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of owner-scoped activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped attention summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttentionSummary"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getFlowsReport: {
+        parameters: {
+            query?: {
+                /** @description Report range; starts 30, 90, 183, or 365 days before today, or at the earliest source date for `all`, never before the earliest source date. */
+                range?: components["parameters"]["ReportRange"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped flows report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlowsReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getIncomeReport: {
+        parameters: {
+            query?: {
+                /** @description Report range; starts 30, 90, 183, or 365 days before today, or at the earliest source date for `all`, never before the earliest source date. */
+                range?: components["parameters"]["ReportRange"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped income report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncomeReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getNetWorthStats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped net-worth statistics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetWorthStats"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getAccountComparison: {
+        parameters: {
+            query?: {
+                /** @description Report range; starts 30, 90, 183, or 365 days before today, or at the earliest source date for `all`, never before the earliest source date. */
+                range?: components["parameters"]["ReportRange"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped account comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountComparison"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getInstrumentHoldings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ResourceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped instrument holdings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentHoldings"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     getSettings: {
