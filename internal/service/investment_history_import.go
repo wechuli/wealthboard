@@ -1042,10 +1042,10 @@ func validateSourceInstrument(source investmentSourceInstrument) string {
 	if source.ExternalID == "" || len(source.ExternalID) > 200 || source.Name == "" || len(source.Name) > 100 || source.Symbol != nil && len(*source.Symbol) > 30 || source.Identifier != nil && len(*source.Identifier) > 100 || source.ExchangeMIC != nil && len(*source.ExchangeMIC) > 20 {
 		return "Instrument fields are invalid."
 	}
-	if source.IdentifierType != "isin" && source.IdentifierType != "ticker_exchange" && source.IdentifierType != "custom" {
+	if !instrumentIdentifierTypes[source.IdentifierType] {
 		return "Instrument identifier type is invalid."
 	}
-	if source.AssetType != "stock" && source.AssetType != "etf" && source.AssetType != "fund" {
+	if !instrumentAssetTypes[source.AssetType] {
 		return "Instrument asset type is invalid."
 	}
 	return ""

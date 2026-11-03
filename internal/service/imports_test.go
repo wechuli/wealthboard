@@ -95,3 +95,28 @@ func TestAIDraftFieldsMatchTheStrictImportEnvelopes(t *testing.T) {
 		}
 	}
 }
+
+func TestAIDraftValuesMatchTheStrictImportRules(t *testing.T) {
+	keys := func(set map[string]bool) []string { return slices.Sorted(maps.Keys(set)) }
+	want := map[string]map[string][]string{
+		"transactions":      {"type": keys(accountHistoryTypes)},
+		"instruments":       {"identifier_type": keys(instrumentIdentifierTypes), "asset_type": keys(instrumentAssetTypes)},
+		"position_events":   {"type": keys(ordinaryPositionEventTypes)},
+		"cash_transactions": {"type": keys(positionCashTypes)},
+	}
+	got := aiworkflow.DraftFieldValues()
+	if len(got) != len(want) {
+		t.Fatalf("AI draft enumerates %v, want %v", slices.Sorted(maps.Keys(got)), slices.Sorted(maps.Keys(want)))
+	}
+	for collection, fields := range want {
+		if len(got[collection]) != len(fields) {
+			t.Errorf("%s: AI draft enumerates %v, import validates %v", collection, slices.Sorted(maps.Keys(got[collection])), slices.Sorted(maps.Keys(fields)))
+			continue
+		}
+		for field, values := range fields {
+			if allowed := slices.Sorted(slices.Values(got[collection][field])); !slices.Equal(allowed, values) {
+				t.Errorf("%s.%s: AI draft allows %v, import accepts %v", collection, field, allowed, values)
+			}
+		}
+	}
+}

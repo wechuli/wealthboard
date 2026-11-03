@@ -42,7 +42,9 @@ VALUES ($1, $2, 'anthropic', 'https://api.anthropic.com', 'test-model', 1200, no
 			Message: ai.NewModelTextMessage(`{"records":[{"collection":"transactions","sourceIds":["source-1"],"fields":[
 				{"name":"external_id","value":"stmt-1"},{"name":"type","value":"deposit"},{"name":"amount","value":"24.00"},
 				{"name":"date","value":"2026-09-15"},{"name":"description","value":"Salary"},{"name":"notes","value":""},
-				{"name":"source","value":"bank statement"}]}],"exclusions":[],"issues":[]}`),
+				{"name":"source","value":"bank statement"}]},{"collection":"transactions","sourceIds":["source-2"],"fields":[
+				{"name":"external_id","value":"5417461"},{"name":"type","value":"INTEREST"},{"name":"amount","value":"42542.01"},
+				{"name":"date","value":"2026-09-30"},{"name":"description","value":"INTEREST"},{"name":"notes","value":""}]}],"exclusions":[],"issues":[]}`),
 			Usage: &ai.GenerationUsage{InputTokens: 40, OutputTokens: 20},
 		}, nil
 	})
@@ -53,7 +55,10 @@ VALUES ($1, $2, 'anthropic', 'https://api.anthropic.com', 'test-model', 1200, no
 	}
 	draft, err := conversions.Convert(ctx, ownerID, aiworkflow.ConversionRequest{
 		Source: aiworkflow.Source{
-			Units:    []aiworkflow.SourceUnit{{ID: "source-1", Location: "Page 1", Text: "15 Sep 2026 Salary 24.00"}},
+			Units: []aiworkflow.SourceUnit{
+				{ID: "source-1", Location: "Page 1", Text: "15 Sep 2026 Salary 24.00"},
+				{ID: "source-2", Location: "Page 1", Text: "30 Sep 2026 INTEREST KES42,542.01 5417461"},
+			},
 			Warnings: []string{},
 		},
 		ConfigurationHash: hash,
@@ -81,12 +86,15 @@ VALUES ($1, $2, 'anthropic', 'https://api.anthropic.com', 'test-model', 1200, no
 	if !strings.Contains(string(shape["issues"]), `Removed field \"source\"`) {
 		t.Fatalf("issues = %s", shape["issues"])
 	}
+	if !strings.Contains(draft.Content, `"type": "interest"`) || strings.Contains(draft.Content, `"type": "INTEREST"`) {
+		t.Fatalf("draft kept the source label instead of the import type:\n%s", draft.Content)
+	}
 
 	preview, err := NewAccountHistoryImportService(db).Preview(ctx, ownerID, accountID, []byte(draft.Content), ImportFormatJSON)
 	if err != nil {
 		t.Fatalf("preview AI draft: %v\n%s", err, draft.Content)
 	}
-	if preview.Summary.Ready != 1 || preview.Summary.Failed != 0 || preview.ProjectedBalanceMinor != 2400 {
-		t.Fatalf("preview = %+v", preview.Summary)
+	if preview.Summary.Ready != 2 || preview.Summary.Failed != 0 || preview.ProjectedBalanceMinor != 2400+4254201 {
+		t.Fatalf("preview = %+v, rows = %+v", preview.Summary, preview.Rows)
 	}
 }

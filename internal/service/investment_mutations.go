@@ -33,6 +33,10 @@ var ordinaryPositionEventTypes = map[string]bool{
 	"quantity_adjustment": true,
 }
 
+var instrumentIdentifierTypes = map[string]bool{"isin": true, "ticker_exchange": true, "custom": true}
+
+var instrumentAssetTypes = map[string]bool{"stock": true, "etf": true, "fund": true}
+
 type InvestmentMutations struct {
 	db  *sql.DB
 	now func() time.Time
@@ -739,10 +743,10 @@ func (service *InvestmentMutations) validateInstrument(ctx context.Context, quer
 	if input.Name == "" || len(input.Name) > 100 || len(input.ExternalID) > 200 || len(input.Symbol) > 30 || len(input.Identifier) > 100 || len(input.ExchangeMIC) > 20 {
 		return InstrumentMutationInput{}, investmentValidationError("instrument fields are invalid")
 	}
-	if input.IdentifierType != "isin" && input.IdentifierType != "ticker_exchange" && input.IdentifierType != "custom" {
+	if !instrumentIdentifierTypes[input.IdentifierType] {
 		return InstrumentMutationInput{}, investmentValidationError("identifier type is invalid")
 	}
-	if input.AssetType != "stock" && input.AssetType != "etf" && input.AssetType != "fund" {
+	if !instrumentAssetTypes[input.AssetType] {
 		return InstrumentMutationInput{}, investmentValidationError("asset type is invalid")
 	}
 	if err := requireEnabledCurrency(ctx, queryer, userID, input.QuoteCurrency); err != nil {

@@ -498,15 +498,74 @@ func TestConversionDraftAlwaysHasArraysAndOnlyImportableFields(t *testing.T) {
 	}
 }
 
+func TestConversionDraftUsesTheExactImportValuesForEnumeratedFields(t *testing.T) {
+	source := Source{Units: []SourceUnit{{ID: "source-1", Location: "Page 1", Text: "Statement"}}, Warnings: []string{}}
+	record := func(collection string, fields ...ExtractionField) ExtractionRecord {
+		return ExtractionRecord{Collection: collection, SourceIDs: []string{"source-1"}, Fields: fields}
+	}
+	draft, err := buildDraft(Extraction{Records: []ExtractionRecord{
+		record("transactions", ExtractionField{Name: "type", Value: "INTEREST"}, ExtractionField{Name: "description", Value: "INTEREST"}),
+		record("transactions", ExtractionField{Name: "type", Value: " Capital  gain "}),
+		record("transactions", ExtractionField{Name: "type", Value: "liability-payment"}),
+		record("transactions", ExtractionField{Name: "type", Value: "CREDIT"}),
+		record("transactions", ExtractionField{Name: "type", Value: "CREDIT"}),
+	}}, source, "balance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var balance struct {
+		Transactions []map[string]*string `json:"transactions"`
+	}
+	if err := json.Unmarshal([]byte(draft.Content), &balance); err != nil {
+		t.Fatal(err)
+	}
+	for index, want := range []string{"interest", "capital_gain", "liability_payment", "CREDIT", "CREDIT"} {
+		if got := balance.Transactions[index]["type"]; got == nil || *got != want {
+			t.Errorf("transaction %d type = %v, want %q", index+1, got, want)
+		}
+	}
+	if description := balance.Transactions[0]["description"]; description == nil || *description != "INTEREST" {
+		t.Errorf("description = %v, want the source wording", description)
+	}
+	if len(draft.Issues) != 1 || !strings.Contains(draft.Issues[0], `Field "type" has value "CREDIT" in 2 transactions record(s)`) || !strings.Contains(draft.Issues[0], "deposit, withdrawal, interest") {
+		t.Fatalf("issues = %q", draft.Issues)
+	}
+
+	positions, err := buildDraft(Extraction{Records: []ExtractionRecord{
+		record("instruments", ExtractionField{Name: "identifier_type", Value: "ISIN"}, ExtractionField{Name: "asset_type", Value: "ETF"}),
+		record("position_events", ExtractionField{Name: "type", Value: "Quantity adjustment"}),
+		record("cash_transactions", ExtractionField{Name: "type", Value: "DIVIDEND"}),
+	}}, source, "positions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"identifier_type": "isin"`, `"asset_type": "etf"`, `"type": "quantity_adjustment"`, `"type": "dividend"`} {
+		if !strings.Contains(positions.Content, want) {
+			t.Errorf("positions draft omits %s: %s", want, positions.Content)
+		}
+	}
+	if len(positions.Issues) != 0 {
+		t.Fatalf("positions issues = %q", positions.Issues)
+	}
+}
+
 func TestConversionPromptListsTheFieldsEachCollectionAccepts(t *testing.T) {
 	balance := conversionPrompt("balance", "KES", nil)
 	if !strings.Contains(balance, "- transactions: external_id, type, amount, date, description, notes") || strings.Contains(balance, "position_events") {
 		t.Fatalf("balance prompt = %s", balance)
 	}
+	if !strings.Contains(balance, "- transactions.type: deposit, withdrawal, interest, dividend, capital_gain, capital_loss, fee, purchase, sale, manual_adjustment, liability_payment, liability_increase") {
+		t.Fatalf("balance prompt omits the transaction types: %s", balance)
+	}
 	positions := conversionPrompt("positions", "USD", nil)
 	for _, collection := range []string{"instruments", "position_events", "cash_transactions", "prices"} {
 		if !strings.Contains(positions, "- "+collection+": external_id") {
 			t.Fatalf("positions prompt omits %s: %s", collection, positions)
+		}
+		for field, values := range draftFieldValues[collection] {
+			if !strings.Contains(positions, "- "+collection+"."+field+": "+strings.Join(values, ", ")) {
+				t.Fatalf("positions prompt omits %s.%s values: %s", collection, field, positions)
+			}
 		}
 	}
 }
