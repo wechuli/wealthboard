@@ -548,8 +548,8 @@ test("restores position management, base-currency value, and private account his
   await expect(
     priceSheet.getByLabel("Instrument", { exact: true }),
   ).toHaveValue(instrumentIds[1]);
-  await priceSheet.getByLabel("Unit price").fill("12.345678");
-  await expect(priceSheet.getByLabel("Unit price")).toHaveValue("12.345678");
+  await priceSheet.getByLabel("Unit price").fill("12.345678901");
+  await expect(priceSheet.getByLabel("Unit price")).toHaveValue("12.345678901");
   await priceSheet.getByLabel("Price date").fill("2026-09-20");
   const priceResponse = page.waitForResponse(
     (response) =>
@@ -563,7 +563,7 @@ test("restores position management, base-currency value, and private account his
   await expectMoney(
     holdings.getByRole("row", { name: /Second Income Fund/ }),
     "USD",
-    "12.345678",
+    "12.345678901",
   );
   await expectMoney(
     holdings.getByRole("row", { name: /Second Income Fund/ }),
@@ -607,11 +607,11 @@ test("restores position management, base-currency value, and private account his
   await expect(
     page.getByRole("button", { name: "Show values" }),
   ).toHaveAttribute("aria-pressed", "true");
-  for (const exact of ["20.12345", "12.345678", "30.19", "24.69"])
+  for (const exact of ["20.12345", "12.345678901", "30.19", "24.69"])
     await expect(holdings).not.toContainText(exact);
   for (const exact of ["154.88", "309.76", "54.88"])
     await expect(valueHero).not.toContainText(exact);
-  await expect(activityFeed).not.toContainText("12.345678");
+  await expect(activityFeed).not.toContainText("12.345678901");
   await expect(activityFeed).not.toContainText("20.12345");
   await expect(activityFeed).not.toContainText("100.00");
   await expect(holdings.getByLabel("Hidden value").first()).toBeVisible();
@@ -619,7 +619,6 @@ test("restores position management, base-currency value, and private account his
   await expectMoney(holdings, "USD", "30.19");
   for (const width of [360, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.addStyleTag({ content: ".scroll-x{position:relative}" }); // TEMPDEV
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
       .toBeLessThanOrEqual(width);
@@ -927,7 +926,7 @@ test("registers the built service worker and blocks offline financial mutations"
     name: "offline.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(
-      "external_id,type,amount,date\noffline-1,deposit,10.00,2026-04-01",
+      "external_id,type,amount,date,description,notes\noffline-1,deposit,10.00,2026-04-01,,",
     ),
   });
   await expect(page.getByRole("alert")).toContainText(
@@ -946,10 +945,11 @@ test("registers the built service worker and blocks offline financial mutations"
     name: "online.csv",
     mimeType: "text/csv",
     buffer: Buffer.from(
-      "external_id,type,amount,date\nonline-1,deposit,10.00,2026-04-01",
+      "external_id,type,amount,date,description,notes\nonline-1,deposit,10.00,2026-04-01,,",
     ),
   });
-  expect((await preview).ok()).toBeTruthy();
+  const previewResponse = await preview;
+  expect(previewResponse.ok(), `${previewResponse.status()} ${await previewResponse.text()}`).toBeTruthy();
   // The offline attempt must not be queued and replayed after reconnecting.
   expect(requests).toBe(1);
 });

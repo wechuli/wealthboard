@@ -17,7 +17,9 @@ export function createQueryClient(): QueryClient {
         refetchOnWindowFocus: false,
         retry: (count, error) => !(ApiProblem.is(error) && error.status >= 400 && error.status < 500) && count < 1,
       },
-      mutations: { retry: false },
+      // 'always' lets the offline guard in useApiMutation reject immediately instead of pausing and
+      // replaying the request when the connection returns.
+      mutations: { retry: false, networkMode: 'always' },
     },
   })
 }

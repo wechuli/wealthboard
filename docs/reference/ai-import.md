@@ -1,9 +1,7 @@
 # AI-assisted text-file import
 
-An account's **Import** page offers **Formatted CSV / JSON** and **Convert
-document with AI**. Direct structured import works without an AI provider.
-The current Vite import page does not expose the older browser-only copyable
-prompts.
+An account's **Import history** page offers two tabs: **Direct import** and
+**Convert with AI**. Direct structured import works without an AI provider.
 
 ## Supported sources
 
@@ -26,7 +24,7 @@ truncated to fit these limits.
 ## Password-protected files
 
 For a password-protected PDF, select the file and enter **PDF password (if
-required)** before **Extract source**. You can also try extraction first: a
+required)** before **Read file**. You can also try extraction first: a
 missing or incorrect password produces a distinct error and focuses the password
 field. Re-enter the password and retry without selecting the file again.
 Passwords are case-sensitive, are passed through without trimming spaces, and
@@ -58,7 +56,7 @@ and [Office cryptography specification](https://learn.microsoft.com/en-us/opensp
 
 ## Provider configuration
 
-Use **Settings > AI provider** to choose OpenAI, Anthropic, or DeepSeek and a
+Use **Settings → AI provider** to choose OpenAI, Anthropic, or DeepSeek and a
 model. The form suggests current models for the selected provider and accepts
 any other model ID that provider serves. Remembered keys require the deployment's
 `AI_CREDENTIAL_ENCRYPTION_KEY`; otherwise enter a session-only key on the import
@@ -110,10 +108,11 @@ section IDs and the 1,000-section, 100-warning, and 64 KB limits.
 
 ## Workflow
 
-1. Choose **Convert document with AI**, select a source, and select
-   **Extract source**. Supply the PDF's document password if required. The file
-   is read in your browser; it is not uploaded to Wealthboard or sent to the
-   provider.
+1. Choose the **Convert with AI** tab, select a **Source file**, and select
+   **Read file**. Supply the PDF's document password if required. The file is
+   read in your browser; it is not uploaded to Wealthboard or sent to the
+   provider. **Cancel** stops a read in progress, and **Choose another file**
+   discards the extracted text.
 2. Review the extracted sections and warnings. Select relevant activity and
    redact sensitive text. Selected section IDs, location labels, and edited
    text are sent; the original file is not. If a location label is sensitive,
@@ -129,15 +128,14 @@ section IDs and the 1,000-section, 100-warning, and 64 KB limits.
    The model is told which fields each import collection accepts; any other
    field it returns is removed from the draft and listed as an issue, because
    the import preview rejects unknown fields.
-5. Select **Use draft for preview**, then **Preview**. Select **Commit import**
-   only after reviewing the existing balance or investment preview.
-   **Edit draft** discards that preview and requires another review/preview
-   before confirmation.
+5. Select **Download and open Direct import**, then choose the downloaded
+   draft on the **Direct import** tab to preview it. Import only after
+   reviewing the existing balance or investment preview.
 
-The generated draft can also be downloaded for manual editing. Financial
-records are changed only by the normal commit operation. The balance-import API
-can commit an accepted subset, but the current web form disables commit until
-failed rows are resolved. Investment imports retain all-or-nothing atomicity.
+The generated draft can also be downloaded or copied for manual editing, or
+discarded with **Discard draft**. Financial records are changed only by the
+normal import commit. Balance imports skip duplicates and rows with errors;
+investment imports retain all-or-nothing atomicity.
 The existing canonical file limits remain 5 MB/10,000 records; an AI extraction
 response is limited to 1,000 candidate records.
 

@@ -526,6 +526,14 @@ export function createMockDataSource(): DataSource {
           if (!inst) throw notFound('instrument')
           inst.archivedAt = archived ? nowStamp() : null
         }),
+      remove: (id) =>
+        write((w) => {
+          if (!w.instruments.some((i) => i.id === id)) throw notFound('instrument')
+          if (w.positionEvents.some((e) => e.instrumentId === id) || w.prices.some((p) => p.instrumentId === id)) {
+            throw problem(409, 'Instrument in use', 'Trades or prices still reference this instrument. Archive it instead, or remove them first.', 'https://wealthboard.dev/problems/conflict')
+          }
+          w.instruments = w.instruments.filter((i) => i.id !== id)
+        }),
     },
 
     prices: {

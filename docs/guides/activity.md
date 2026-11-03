@@ -62,9 +62,10 @@ reconciliation, conversion, and price behavior.
 
 ## Record a transaction
 
-1. Open an account and select a quick action, or open **Transactions** and select
-   **Add transaction**.
-2. Choose the account and type.
+1. Press **N** (or select **Add** in the sidebar) to open quick add, open
+   **Activity** and select **Record activity**, or open an account and use its
+   **Record** menu.
+2. Choose the type and the account.
 3. Enter a positive amount except for a signed manual adjustment.
 4. Choose the financial date.
 5. Add a description, optional stable external ID, and private notes.
@@ -72,17 +73,20 @@ reconciliation, conversion, and price behavior.
 
 ## Search and audit history
 
-The transaction workbench combines literal text search with account, type,
-date, direction, and sort filters. Filters work together and remain in the URL,
-so a filtered view can be bookmarked or refreshed.
+**Activity** is one ledger for every account: transactions, valuations, trades,
+and price updates, newest first. It combines literal text search with kind,
+account, type, and date filters. Filters work together and remain in the URL,
+so a filtered view can be bookmarked or refreshed. Select **Load 50 more** to
+reach older entries.
 
-![Transaction workbench with owner-scoped search and filters](/images/screenshots/transaction-workbench.png)
+![Activity ledger with owner-scoped search and filters](/images/screenshots/transaction-workbench.png)
 
-The CSV download uses the same filters as the current view.
+For a spreadsheet copy, open **Settings → Export and restore** and download
+**Transactions (CSV)**.
 
 ## Update an asset value
 
-Use **Value** for a point-in-time observation such as:
+Use **Update value** for a point-in-time observation such as:
 
 - current property appraisal;
 - vehicle market value;
@@ -108,21 +112,21 @@ sides together and replays both balances.
 
 ## Import detailed account history
 
-Start from the target account and select **Import**. Wealthboard accepts:
+Start from the target account and select **More → Import history**, or select
+**Import history** on **Accounts** and choose the account. Wealthboard accepts:
 
 - CSV columns exactly `external_id,type,amount,date,description,notes`;
 - JSON using the Account History Import v1 envelope;
 - up to 5 MB and 10,000 rows.
 
-Select **Preview** before committing. Preview does not write anything. The page
-shows outcome counts and the first 50 row results; download **Report** for all
-rows, the selected account, date range, and current/projected balances.
+Choosing a file previews it immediately. Preview does not write anything. The
+page shows outcome counts and every row's result, which **Show rows** filters
+to new rows, duplicates, or errors.
 
-**Commit import** resends the file and its SHA-256 hash. The Go service reparses
-it and commits accepted rows plus balance replay atomically. The API supports
-an accepted subset, but the current web form requires resolving failed rows
-before enabling commit. A conflicting stored external ID blocks the entire
-commit.
+**Import _n_ transactions** resends the file and its SHA-256 hash. The Go
+service reparses it and commits accepted rows plus balance replay atomically.
+Duplicates and rows with errors are skipped. A conflicting stored external ID
+blocks the entire commit.
 
 ::: warning Stable external IDs matter
 Reimporting an identical external ID is safely skipped. Reusing an existing ID

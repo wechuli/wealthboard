@@ -9,6 +9,7 @@ import { Notice } from '@/components/ui/Notice'
 import { cn } from '@/lib/cn'
 import { LAST_RECORDING_KEY } from '@/config'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
+import { UNIT_DECIMALS } from '@/lib/money'
 import type { RecordAction } from './recorder'
 
 /** Maps server field names (problem.fieldErrors keys) to form field names. */
@@ -95,7 +96,7 @@ export function DecimalField({
   onChange,
   error,
   hint,
-  decimals = 8,
+  decimals = UNIT_DECIMALS,
   suffix,
   prefix,
   name,

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '@/api'
 import type { SessionResponse, SessionUser } from '@/api/types'
 
@@ -7,6 +7,8 @@ interface SessionContextValue {
   status: 'loading' | 'signed-in' | 'signed-out' | 'error'
   user: SessionUser | null
   error: Error | null
+  /** True after the person signed out here (not an expired session), so no `next` page is kept. */
+  signedOutByUser: boolean
   /** Replaces the session after sign-in or sign-up, clearing any other user's cached data. */
   setSession(session: SessionResponse): void
   signOut(): Promise<void>
@@ -22,6 +24,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const query = useQuery({ queryKey: SESSION_KEY, queryFn: () => api.auth.session(), staleTime: Infinity, retry: 1 })
   const user = query.data?.user ?? null
   const previous = useRef<string | null>(null)
+  const [signedOutByUser, setSignedOutByUser] = useState(false)
 
   // On any user switch, drop every cached query that belongs to someone else.
   useEffect(() => {
@@ -35,6 +38,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const setSession = useCallback(
     (session: SessionResponse) => {
       qc.removeQueries({ predicate: (q) => q.queryKey[0] === 'u' })
+      setSignedOutByUser(false)
       qc.setQueryData(SESSION_KEY, session)
     },
     [qc],
@@ -44,6 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       await api.auth.logout()
     } finally {
+      setSignedOutByUser(true)
       // Notify the session observer first, then drop every other cached query (all user data).
       qc.setQueryData(SESSION_KEY, null)
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== SESSION_KEY[0] })
@@ -55,11 +60,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       status: query.isPending ? 'loading' : query.isError ? 'error' : user ? 'signed-in' : 'signed-out',
       user,
       error: query.error,
+      signedOutByUser,
       setSession,
       signOut,
       retry: () => void query.refetch(),
     }),
-    [query, user, setSession, signOut],
+    [query, user, setSession, signOut, signedOutByUser],
   )
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

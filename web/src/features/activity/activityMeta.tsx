@@ -27,7 +27,7 @@ import type { ActivityItem, MutableTransactionType } from '@/api/types'
 import { Quantity, UnitPrice } from '@/components/format'
 import { cn } from '@/lib/cn'
 import { activityEffect } from '@/lib/activity'
-import { formatDecimal } from '@/lib/money'
+import { UNIT_DECIMALS, formatDecimal } from '@/lib/money'
 
 export type ActivityKind = ActivityItem['kind']
 
@@ -217,7 +217,7 @@ export function describeActivity(item: ActivityItem): {
     const verb = TRADE_VERBS[item.type]
     if (verb && item.quantity) {
       const qty = absDecimal(item.quantity)
-      const plainQty = formatDecimal(qty, { maxFraction: 6 })
+      const plainQty = formatDecimal(qty, { maxFraction: UNIT_DECIMALS })
       const hasPrice = !!item.unitPrice && item.type !== 'quantity_adjustment'
       return {
         title: (

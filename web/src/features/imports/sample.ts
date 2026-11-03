@@ -4,7 +4,8 @@ import type { Account } from '@/api/types'
 import { parseDateOnly } from '@/lib/dates'
 import { decimalToMinor, minorToDecimal } from '@/lib/money'
 
-export const CSV_HEADER = 'type,amount,date,description,external_id'
+/** The exact header the server requires, in this order (see internal/service/account_history_import.go). */
+export const CSV_HEADER = 'external_id,type,amount,date,description,notes'
 
 interface SampleRow {
   type: string
@@ -12,6 +13,7 @@ interface SampleRow {
   date: string
   description: string
   external_id: string
+  notes: string
 }
 
 function rows(account: Account, today: string): SampleRow[] {
@@ -32,17 +34,17 @@ function rows(account: Account, today: string): SampleRow[] {
         ['withdrawal', '12000', 45, 'School shoes'],
         ['fee', '150', 31, 'Account fee'],
       ]
-  return plan.map(([type, major, days, description], i) => ({ type, amount: amt(major), date: d(days), description, external_id: `SAMPLE-${String(i + 1).padStart(3, '0')}` }))
+  return plan.map(([type, major, days, description], i) => ({ type, amount: amt(major), date: d(days), description, external_id: `SAMPLE-${String(i + 1).padStart(3, '0')}`, notes: '' }))
 }
 
 const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
 
 export function sampleCsv(account: Account, today: string): string {
-  return [CSV_HEADER, ...rows(account, today).map((r) => [r.type, r.amount, r.date, r.description, r.external_id].map(csvCell).join(','))].join('\n') + '\n'
+  return [CSV_HEADER, ...rows(account, today).map((r) => [r.external_id, r.type, r.amount, r.date, r.description, r.notes].map(csvCell).join(','))].join('\n') + '\n'
 }
 
 export function sampleJson(account: Account, today: string): string {
-  return JSON.stringify({ transactions: rows(account, today) }, null, 2) + '\n'
+  return JSON.stringify({ format: 'wealthboard-account-history', version: 1, transactions: rows(account, today).map(({ notes, ...r }) => (notes ? { ...r, notes } : r)) }, null, 2) + '\n'
 }
 
 export function downloadText(filename: string, content: string, type: string): void {

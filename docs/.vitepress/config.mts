@@ -49,7 +49,7 @@ export default defineConfig({
           },
           { text: "Transactions and values", link: "/guides/activity" },
           { text: "Goals", link: "/guides/goals" },
-          { text: "Reports and privacy", link: "/guides/reports" },
+          { text: "Insights and privacy", link: "/guides/reports" },
           { text: "Estate planning", link: "/guides/estate-planning" },
           {
             text: "Import, export, and restore",

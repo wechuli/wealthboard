@@ -5,48 +5,55 @@ description: Organize holdings, liabilities, institutions, categories, and accou
 
 # Accounts and assets
 
-Open **Accounts** to search, filter, sort, and switch between card and table
-views.
+Open **Accounts** to group, sort, and switch between card and compact table
+views. Use **Show** to switch between active and **Archived** accounts. To find
+one account quickly, press **⌘ K** (or **Ctrl K**) and type part of its name.
 
-![Account workspace with search, filters, cards, multiple currencies, and a liability](/images/screenshots/accounts-workspace.png)
+![Account workspace with grouping, cards, multiple currencies, and a liability](/images/screenshots/accounts-workspace.png)
 
 ## Find the right account
 
-The account workspace can filter by:
+**Group** the workspace by:
 
 - category;
-- currency;
 - institution;
-- asset or liability;
-- tracking method and price state.
+- currency;
+- own or owe (asset or liability);
+- tracking mode; or
+- data state, which gathers accounts with missing or stale prices and rates.
 
-Sort by value, name, category, recent change, or last update. Table view is
-useful for comparison; card view gives each account more context.
+**Sort** by value, name, category, or change this month. The compact table view
+is useful for comparison; card view gives each account more context.
 
 ## Read account detail
 
-Select an account to see its current value, classification, chart, transactions,
-valuations, linked goals, and quick actions.
+Select an account to see its current value, classification, chart, activity,
+valuations, linked goals, notes, and actions. On a phone, the same sections sit
+behind tabs at the top of the page.
 
-Balance-account detail shows up to eight recent transactions. Use **View all**
-to open the account-filtered transaction workbench with search, date/type
-filters, sorting, and CSV export. Position accounts have a separate paginated
-Investment activity timeline.
+The **Activity** card lists the account's entries newest first, grouped by
+month. Select **Load more** for older entries. **Activity** in the sidebar
+shows the same records across every account with search, date, type, and
+account filters.
 
-![Fictional land account detail with value history and quick actions](/images/screenshots/account-detail.png)
+![Fictional land account detail with value history and actions](/images/screenshots/account-detail.png)
 
-Common actions include:
+The buttons beside the account name depend on the account. Common actions
+include:
 
-- **Deposit / Withdrawal:** ordinary cash movement.
-- **Interest:** income credited to the account.
-- **Value:** an absolute valuation snapshot.
-- **Transfer:** move value to another owned account.
-- **Import:** load prepared history into this account.
-- **Estate plan:** define inheritance intent for an asset.
+- **Update value:** an absolute valuation snapshot.
+- **Record:** **Deposit**, **Withdrawal**, **Interest**, **Fee**, and
+  **Transfer** to another owned account. Position-tracked accounts use **Buy**,
+  **Sell**, **Update price**, and a **Cash** menu instead.
+- **More → Import history:** load prepared history into this account.
+- **More → Edit details**, **Archive**, and **Delete**.
+
+Press **N** on an account page to open quick add for that account. Plan an
+asset's inheritance intent under **Estate planning → Distribution**.
 
 ## Track investment positions
 
-Choose **Units and prices** when creating an active investment account that
+Choose **Position-tracked** when creating an active investment account that
 contains brokerage cash plus long-only stocks, ETFs, or directly priced funds.
 Position accounts derive value from:
 
@@ -55,23 +62,25 @@ Position accounts derive value from:
 - the latest price effective on or before the value date; and
 - effective-dated exchange rates when quote and account currencies differ.
 
-Use **Buy** and **Sell** for trades, **Price** for effective unit prices, and
-**Reconcile** to retain reported statement cash and totals. Compare those
+Use **Buy** and **Sell** for trades, **Update price** for effective unit
+prices, and **More → Reconcile to statement** to retain reported statement cash
+and totals. Compare those
 observations with the account history yourself; the current reconciliation
 screen does not calculate a dated difference. Observations never overwrite
 quantities, prices, or values.
 
-The **Reinvest**, **Move units**, and **Corp action** quick actions record
-grouped dividend reinvestments, paired in-kind transfers, and explicit stock
-splits, spin-offs, or mergers. Grouped records save, delete, and replay
+The **More** menu's corporate actions (**Dividend reinvestment**, **In-kind
+transfer**, **Stock split**, **Spin-off**, and **Merger**) record grouped
+dividend reinvestments, paired in-kind transfers, and explicit stock splits,
+spin-offs, or mergers. Grouped records save, delete, and replay
 atomically. Corporate-action quantities are planning records, not tax-lot or
 tax-basis calculations.
 
 Missing prices or rates make totals incomplete rather than treating exposure as
-zero in account analytics and reports. Price records retain their date, source,
+zero in account analytics and Insights. Price records retain their date, source,
 and provenance. Configure separate stock, ETF, and fund freshness thresholds
-under **Settings**; the account's Positions table shows effective dates, sources,
-and stale flags. See the valuation limitations for
+under **Settings → Preferences → Price freshness**; the account's **Holdings**
+table shows effective dates, sources, and stale flags. See the valuation limitations for
 [goals](./goals#create-a-goal) and
 [estate planning](./estate-planning#step-1-make-the-asset-list-trustworthy).
 
@@ -83,12 +92,13 @@ conversion, privacy, and supported instrument boundaries.
 
 ## Convert an existing investment account
 
-For an active balance-tracked investment account, choose **Convert**. Select an
-as-of date at or after its latest activity, enter explicit opening cash and a
-holding with its quantity, unit price, and optional reference cost basis, then
-preview the source balance against the replacement total. The current web form
-accepts one holding; the Go API supports multiple holdings. A non-zero
-difference requires explicit confirmation.
+For an active value-tracked investment account, choose **More → Convert to
+position tracking**. Select an as-of date at or after its latest activity,
+enter explicit opening cash and each holding with its quantity, unit price, and
+optional reference cost basis (**Add holding** adds another), then select
+**Preview conversion** to compare the source balance with the replacement
+total. A non-zero difference requires explicit confirmation before **Convert
+account** is available.
 
 Confirmation archives the source effective on the conversion date and creates
 a linked position replacement. Earlier balance history remains unchanged;
@@ -102,10 +112,10 @@ Import v1. JSON supports bounded instruments, position events, cash activity,
 prices, and optional grouped dividend reinvestments. Separate CSV templates are
 available for opening holdings, trades, cash, and prices.
 
-The preview **Report** contains existing/new instrument resolution,
-before/after quantities, date range, net change, missing prices or rates,
-duplicates, conflicts, and oversells. The page itself shows counts and the first
-50 row outcomes. Confirmation reparses the SHA-256-confirmed file and commits
+The **Review before importing** preview contains existing/new instrument
+resolution, before/after quantities, date range, net change, missing prices or
+rates, duplicates, conflicts, and oversells, with every record listed under
+**Every record**. Confirmation reparses the SHA-256-confirmed file and commits
 the complete valid sequence in one transaction; one invalid dependent record
 blocks the whole investment import.
 
@@ -114,8 +124,8 @@ for JSON fields, CSV headers, grouped reinvestments, and rejection guidance.
 
 ## Edit account metadata
 
-Select **Edit** to change the name, description, category, institution, masked
-reference, cost basis, net-worth inclusion, or notes.
+Select **More → Edit details** to change the name, description, category,
+institution, reference, net-worth inclusion, or notes.
 
 You cannot change account currency after creation. An included estate asset must
 first be excluded from the estate plan before it can be reclassified as a
@@ -123,19 +133,20 @@ liability.
 
 ## Archive an account
 
-Choose **Archive account** from account detail. Archived accounts disappear
-from the accounts list, transactions, selectors, dashboard, reports, and live
-estate views. Their balances no longer contribute to goals, current totals,
+Choose **More → Archive** from account detail. Archived accounts disappear
+from the accounts list, activity, selectors, Home, Insights, and live estate
+views. Their balances no longer contribute to goals, current totals,
 or historical totals. Price and rate changes do not update archived values.
 
-Records remain in full JSON backups. Open **Settings > Archived accounts** to
-restore an account and rebuild its value from retained history. Converted
+Records remain in full JSON backups. Open **Accounts**, switch **Show** to
+**Archived**, and restore an account to rebuild its value from retained
+history. An archived account's page also offers **Restore**. Converted
 source accounts cannot be restored while their replacement exists.
 
 ## Permanently delete an account
 
-Archive the account, then open **Settings > Archived accounts** and select its
-delete control. Enter the account name exactly and confirm permanent deletion.
+Archive the account, open it from the **Archived** view, and choose **More →
+Delete**. Enter the account name exactly and confirm permanent deletion.
 This removes its transactions, valuations, positions, reconciliations, and
 estate allocations. Goals remain but lose their account link; shared
 instruments and prices remain available.
@@ -151,16 +162,16 @@ deleting an account does not rewrite them.
 ## Categories
 
 Categories classify holdings as assets or liabilities and also describe
-liquidity and investibility. Manage them under **Categories**. Existing history
+liquidity and investibility. Manage them under **Settings → Categories**. Existing history
 keeps its account relationship when a category is renamed.
 
 By default, **Money Market Fund**, **Fixed Income**, **Savings**, and **Cash**
-are liquid. The dashboard's **Liquid assets** total includes active,
+are liquid. The **Liquid** total in the Home allocation panel includes active,
 net-worth-included asset accounts whose current category has the **Liquid** flag.
 You can change that flag for any owned category when your classification differs.
 
 Avoid creating categories for temporary statuses such as “needs review.” Use
-names that remain useful in long-term allocation reports.
+names that remain useful in long-term allocation insights.
 
 ## Institutions
 

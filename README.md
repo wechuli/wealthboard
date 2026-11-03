@@ -1,7 +1,7 @@
 # Wealthboard
 
 Wealthboard is a self-hosted, multi-user wealth and goals tracker. Each user has
-an independent portfolio, settings, categories, exchange rates, reports, and
+an independent portfolio, settings, categories, exchange rates, insights, and
 portable exports. The current application is a Go HTTP service backed by
 PostgreSQL and serves a Vite/React web client. Authentication can remain fully
 local or use one operator-configured OpenID Connect provider.
@@ -25,13 +25,15 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
   paired transfers
 - Net-worth history, portfolio analytics, and linked-goal forecasting
 - Non-persistent goal scenario comparisons, milestones, and dismissible
-  behind-plan dashboard reminders
+  behind-plan reminders on Home
 - Private beneficiary and estate-distribution planning with printable,
   privacy-controlled retained summaries
 - Per-user JSON portability and account/transaction CSV export
 - Operator-only PostgreSQL custom-format backup and maintenance-mode restore
 - Installable PWA shell with explicit offline safety
-- Browser-local System, Light, and Dark appearance themes
+- Browser-local System, Light, and Dark appearance themes in the profile menu
+- Quick add (`N`), a ⌘K / Ctrl K command palette, and a `Shift H` privacy
+  toggle
 - Optional on-demand, evidence-linked AI portfolio review with private BYOK
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
@@ -43,7 +45,7 @@ and authoritative server calculations use checked integers and exact
 ## Product guide
 
 The user and operator guide is published at https://wechuliprojects.github.io/wealthboard/. It covers first setup,
-accounts, position-tracked investments, activity, goals, reports, estate
+accounts, position-tracked investments, activity, goals, insights, estate
 planning, portability, deployment, authentication, backups, and troubleshooting
 with fictional product screenshots.
 
@@ -67,7 +69,7 @@ to `docs/public/images/screenshots/`.
 
 ### Estate planning
 
-Open `/estate` to maintain private beneficiaries, describe how each active asset
+Open **Estate planning** (`/estate`) to maintain private beneficiaries, describe how each active asset
 is held, allocate primary and contingent percentages, cover unallocated property
 through residual beneficiaries, and review recorded liabilities separately.
 Percentages use exact basis points. Current estate valuations are incomplete;
@@ -86,8 +88,9 @@ legally executed wills, and do not grant beneficiary access or transfer assets.
 
 The Go/PostgreSQL migration is complete, but some legacy product contracts
 remain incomplete. Linked goals and estate summaries do not yet propagate every
-valuation/completeness case; exchange-rate edits are not atomic in the settings
-UI; some conversion and import surfaces are narrower than the full contract.
+valuation/completeness case; the settings UI corrects an exchange rate only by
+deleting and re-adding it; some conversion and import surfaces are narrower than
+the full contract.
 The guides describe those limits, and
 [backlog A17](backlog.md#a17-close-remaining-govite-workflow-parity-gaps) tracks
 the implementation work.
@@ -252,8 +255,8 @@ Existing installations start in `local`. To adopt OIDC without duplicate
 portfolios:
 
 1. Configure `local,oidc`, restart, and verify readiness.
-2. Existing local users link the provider explicitly under **Settings >
-   Authentication methods** after confirming their password.
+2. Existing local users link the provider explicitly under **Settings →
+   Security → Sign-in methods** after confirming their password.
 3. Confirm every active user has a link, then change to `oidc` and restart.
 
 Readiness refuses OIDC-only mode while any active user lacks a link for
@@ -292,9 +295,10 @@ changing it makes remembered keys undecryptable until users replace them.
 
 ## Password changes and operator reset
 
-Users with a local credential change it under **Settings > Password** when local
-authentication is enabled. Hybrid users explicitly link/unlink OIDC or enable
-and remove local login under **Settings > Authentication methods**. Every method
+Users with a local credential change it under **Settings → Security → Change
+password** when local authentication is enabled. Hybrid users explicitly
+link/unlink OIDC or enable and remove local login under **Settings → Security →
+Sign-in methods**. Every method
 change increments that user's session version and invalidates other sessions.
 
 There is no email reset flow. An operator can reset one user by normalized
@@ -417,7 +421,7 @@ enabling OIDC or AI; those integrations cannot use the default policy unchanged.
 
 Portfolio Review is optional, read-only, and generated only on request. Choose
 OpenAI, Anthropic, or DeepSeek and a model under **Settings → AI provider**,
-then open **Review**. The settings form suggests current models for each
+then open **Portfolio review** under **Planning** in the sidebar. The settings form suggests current models for each
 provider and accepts any other model ID the provider serves. Users supply their
 own provider API keys.
 
@@ -473,11 +477,10 @@ Settings provides:
 - A validated JSON restore that replaces only the authenticated user's
   portfolio in one transaction
 
-Each active balance-tracked account provides an **Import** action for strict
-Account History Import v1 CSV or JSON files. The direct workflow accepts a file
-or pasted content and performs no provider request. Templates and format rules
-are available in the guides. The legacy browser-only copyable-prompt component
-is not currently mounted on the import page.
+Each active balance-tracked account provides a **More → Import history** action
+for strict Account History Import v1 CSV or JSON files. The **Direct import**
+tab accepts a chosen or dropped file and performs no provider request. Templates
+and format rules are available on the page and in the guides.
 
 The separate **Convert with AI** mode supports CSV, TSV, JSON, TXT, XLSX,
 text-based PDF, and DOCX. Wealthboard extracts text locally in the self-hosted

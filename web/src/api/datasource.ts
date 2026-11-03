@@ -180,6 +180,8 @@ export interface DataSource {
     create(body: InstrumentMutationRequest): Promise<ResourceIDResponse>
     update(id: string, body: InstrumentMutationRequest): Promise<void>
     setArchived(id: string, archived: boolean): Promise<void>
+    /** Permanently deletes an instrument that no trade, price, or import references (409 otherwise). */
+    remove(id: string): Promise<void>
   }
 
   prices: {

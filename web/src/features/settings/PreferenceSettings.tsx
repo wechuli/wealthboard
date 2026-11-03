@@ -115,8 +115,8 @@ function AppearancePanel() {
         columns={3}
         options={[
           { value: 'system', title: 'System', description: 'Follow this device', icon: <Monitor size={18} aria-hidden /> },
-          { value: 'light', title: 'Paper', description: 'Light, warm paper', icon: <Sun size={18} aria-hidden /> },
-          { value: 'dark', title: 'Night ledger', description: 'Dark, low glare', icon: <Moon size={18} aria-hidden /> },
+          { value: 'light', title: 'Light', description: 'Warm paper', icon: <Sun size={18} aria-hidden /> },
+          { value: 'dark', title: 'Dark', description: 'Night ledger, low glare', icon: <Moon size={18} aria-hidden /> },
         ]}
       />
     </SettingsPanel>

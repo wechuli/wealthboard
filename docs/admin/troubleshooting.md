@@ -62,8 +62,9 @@ for that in the ingress topology and ingress-side rate limiting.
 
 ## Totals are incomplete
 
-Open **Settings → Exchange rates** and add the missing currency pair with an
-effective date on or before the affected report date. Confirm base currency and
+Open **Settings → Currencies and rates** and add the missing currency pair with
+an effective date on or before the affected date. **Needs attention** (the bell
+in the header) links directly to each missing rate. Confirm base currency and
 account currency are correct.
 
 Wealthboard intentionally does not substitute a current rate for a missing
@@ -116,7 +117,8 @@ same investment.
 
 ## An estate plan is not complete
 
-Open **Estate → Summary**. Blocking items usually mean:
+Open **Estate planning → Summary**. Items under **Needs a decision** usually
+mean:
 
 - an included asset has no directive;
 - primary allocations and primary residue do not cover 100%;

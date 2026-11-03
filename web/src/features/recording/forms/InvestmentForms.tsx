@@ -7,7 +7,7 @@ import type { Account, Instrument } from '@/api/types'
 import { AmountField, DateField, SelectField, TextareaField, TextField } from '@/components/ui/Field'
 import { Segmented } from '@/components/ui/Segmented'
 import { DateText, Quantity, UnitPrice } from '@/components/format'
-import { decimalToMinor, minorToDecimal, minorExponent } from '@/lib/money'
+import { UNIT_DECIMALS, decimalToMinor, minorToDecimal, minorExponent } from '@/lib/money'
 import { usePrefs } from '@/lib/prefs'
 import { newIdempotencyKey, useAccountAnalytics, useApiMutation, useInstruments } from '@/lib/queries'
 import { accountAllows } from '../actions'
@@ -138,7 +138,7 @@ export function TradeForm({
           control={form.control}
           name="unitPrice"
           render={({ field, fieldState }) => (
-            <AmountField label="Unit price" currency={instrument?.quoteCurrency ?? account?.currency ?? 'KES'} decimals={6} value={field.value} onChange={field.onChange} error={fieldState.error?.message} />
+            <AmountField label="Unit price" currency={instrument?.quoteCurrency ?? account?.currency ?? 'KES'} decimals={UNIT_DECIMALS} value={field.value} onChange={field.onChange} error={fieldState.error?.message} />
           )}
         />
       </div>
@@ -206,7 +206,7 @@ export function PriceForm({ formId, initialInstrumentId, onDone, onPendingChange
       <Controller
         control={form.control}
         name="price"
-        render={({ field, fieldState }) => <AmountField label="Unit price" currency={instrument?.quoteCurrency ?? 'KES'} decimals={6} value={field.value} onChange={field.onChange} error={fieldState.error?.message} autoFocus />}
+        render={({ field, fieldState }) => <AmountField label="Unit price" currency={instrument?.quoteCurrency ?? 'KES'} decimals={UNIT_DECIMALS} value={field.value} onChange={field.onChange} error={fieldState.error?.message} autoFocus />}
       />
       <DateField label="Price date" max={today} {...form.register('date')} error={form.formState.errors.date?.message} hint="The day this price applies from." />
       <TextField label="Source" optional placeholder="For example: broker statement, exchange close" {...form.register('provenance')} />

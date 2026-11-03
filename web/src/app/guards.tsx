@@ -18,7 +18,7 @@ function Booting() {
 
 /** Renders protected routes only after the session bootstraps. */
 export function RequireSession() {
-  const { status, error, retry } = useSession()
+  const { status, error, retry, signedOutByUser } = useSession()
   const location = useLocation()
   if (status === 'loading') return <Booting />
   if (status === 'error')
@@ -28,6 +28,7 @@ export function RequireSession() {
       </div>
     )
   if (status === 'signed-out') {
+    if (signedOutByUser) return <Navigate to="/sign-in" replace />
     const next = location.pathname + location.search
     return <Navigate to={next && next !== '/' ? `/sign-in?next=${encodeURIComponent(next)}` : '/sign-in'} replace />
   }

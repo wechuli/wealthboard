@@ -14,7 +14,7 @@ import { CategoryIcon } from '@/components/CategoryIcon'
 import { Money, Quantity, UnitPrice } from '@/components/format'
 import { cn } from '@/lib/cn'
 import { currencyName } from '@/lib/currency'
-import { decimalToMinor, PrecisionError } from '@/lib/money'
+import { UNIT_DECIMALS, decimalToMinor, PrecisionError } from '@/lib/money'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
 import { usePrefs } from '@/lib/prefs'
 import { newIdempotencyKey, useApiMutation, useCategories, useInstitutions, useInstruments } from '@/lib/queries'
@@ -299,7 +299,7 @@ export default function NewAccountPage() {
                         <div key={h.key} className="grid items-end gap-3 rounded-md border border-line p-3 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
                           <SelectField label={`Instrument ${i + 1}`} value={h.instrumentId} onChange={(e) => update({ instrumentId: e.target.value })} options={instrumentList.map((x) => ({ value: x.id, label: `${x.symbol ?? ''} ${x.name}`.trim() }))} />
                           <DecimalField label="Quantity" value={h.quantity} onChange={(v) => update({ quantity: v })} suffix={inst?.symbol ?? 'units'} />
-                          <AmountField label="Unit price" currency={inst?.quoteCurrency ?? draft.currency} decimals={6} value={h.price} onChange={(v) => update({ price: v })} />
+                          <AmountField label="Unit price" currency={inst?.quoteCurrency ?? draft.currency} decimals={UNIT_DECIMALS} value={h.price} onChange={(v) => update({ price: v })} />
                           <IconButton label={`Remove instrument ${i + 1}`} icon={<Trash2 size={17} aria-hidden />} onClick={() => set('holdings', draft.holdings.filter((x) => x.key !== h.key))} />
                         </div>
                       )

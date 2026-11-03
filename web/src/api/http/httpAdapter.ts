@@ -251,6 +251,7 @@ export function createHttpDataSource(baseUrl = API_BASE): DataSource {
       setArchived: async (id, archived) => {
         await unwrap(client.PATCH('/instruments/{id}/archive', { params: { path: { id } }, body: { archived } } as never))
       },
+      remove: (id) => sendJson(`/instruments/${id}`, 'DELETE'),
     },
 
     prices: {

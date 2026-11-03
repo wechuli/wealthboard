@@ -51,8 +51,10 @@ function splitCsvLine(line: string): string[] {
 
 export function parseImport(file: ImportFile): ParsedRow[] {
   if (file.format === 'json') {
-    const doc = JSON.parse(file.content) as { transactions?: Record<string, unknown>[] }
-    if (!doc || !Array.isArray(doc.transactions)) throw new Error('The JSON file needs a "transactions" array.')
+    const doc = JSON.parse(file.content) as { format?: string; version?: number; transactions?: Record<string, unknown>[] }
+    if (!doc || doc.format !== 'wealthboard-account-history' || doc.version !== 1 || !Array.isArray(doc.transactions)) {
+      throw new Error('JSON must use wealthboard-account-history format version 1.')
+    }
     return doc.transactions.map((t, i) => ({
       row: i + 1,
       externalId: (t.external_id as string | null | undefined) ?? null,
@@ -66,9 +68,8 @@ export function parseImport(file: ImportFile): ParsedRow[] {
   if (lines.length < 2) throw new Error('The CSV file needs a header row and at least one transaction.')
   const header = splitCsvLine(lines[0]!).map((h) => h.toLowerCase())
   const col = (name: string) => header.indexOf(name)
-  for (const required of ['type', 'amount', 'date']) {
-    if (col(required) === -1) throw new Error(`The CSV header is missing a "${required}" column.`)
-  }
+  // Mirrors the server: the header must match the template exactly, in order.
+  if (header.join(',') !== 'external_id,type,amount,date,description,notes') throw new Error('the CSV headers do not match the required template')
   return lines.slice(1).map((line, i) => {
     const cells = splitCsvLine(line)
     const get = (name: string) => (col(name) >= 0 ? (cells[col(name)] ?? '') : '')

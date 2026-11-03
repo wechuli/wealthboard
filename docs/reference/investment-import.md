@@ -21,8 +21,8 @@ Files are limited to 5 MB and 10,000 combined source records. Dates are
 non-future `YYYY-MM-DD` values. Quantities, prices, rates, and money are decimal
 strings, not JSON numbers.
 
-The position import page also offers optional **Convert document with AI**.
-Extraction happens within your self-hosted instance; selected source sections
+The position import page also offers an optional **Convert with AI** tab.
+Extraction happens in your browser; selected source sections
 are sent to the configured provider only after approval. The resulting JSON
 draft must pass the normal import preview. See [AI-assisted import](./ai-import).
 
@@ -120,7 +120,7 @@ imported sequence must stay long-only at every date and explicit same-date order
 One reinvestment group contains one dividend cash row and one or more same-date
 buy events. The group is remapped to one internal UUID and commits, restores,
 or deletes atomically. Separate CSV uploads cannot form a grouped reinvestment;
-use JSON or the **Reinvest** workflow.
+use JSON or the **Dividend reinvestment** workflow.
 
 ### Prices
 

@@ -15,7 +15,7 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { AmountField, DateField, SelectField, TextareaField } from '@/components/ui/Field'
 import { Notice } from '@/components/ui/Notice'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { minorExponent } from '@/lib/money'
+import { UNIT_DECIMALS, minorExponent } from '@/lib/money'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
 import { usePrefs } from '@/lib/prefs'
 import { useAccounts, useApiMutation, useInstruments, usePositionEvents } from '@/lib/queries'
@@ -617,7 +617,7 @@ function CorporateActionForm({
                     <DecimalInput
                       label={`Applied rate (${tradeCurrency} → ${c})`}
                       optional
-                      decimals={10}
+                      decimals={UNIT_DECIMALS}
                       value={field.value}
                       onChange={field.onChange}
                       onBlur={field.onBlur}

@@ -191,8 +191,13 @@ Phase 6 acceptance and removal evidence is recorded in
 - `internal/operator` invokes PostgreSQL backup/restore tools, and
   `internal/static` serves the built client from `WEB_DIST_PATH`.
 - `api/openapi.yaml` defines the HTTP contract and generates
-  `web/src/api/schema.ts`. `web/src/api` handles browser requests; React routes,
-  components, and presentation helpers live under `web/src`.
+  `web/src/api/schema.ts`. `web/src/api` handles browser requests through
+  `openapi-fetch`; React routes, components, and presentation helpers live
+  under `web/src`. The client uses React Router 8 (`react-router`), TanStack
+  Query for user-scoped server state, `radix-ui` primitives, `cmdk` for the
+  command palette, and d3-based chart components in
+  `web/src/components/charts`. Its "Quiet Ledger" design system is described in
+  `web/docs/design-direction.md`, with tokens in `web/src/styles/tokens.css`.
 
 The Go binary does not load `.env` files or embed the Vite assets into the
 executable. Direct installations must provide process environment variables
@@ -408,9 +413,9 @@ Content stays in memory; workers are terminated on completion, failure, timeout,
 or cancellation, and no temporary document files are written. All financial
 responses use `Cache-Control: no-store` and remain outside service-worker caches.
 Client drafts are held in React state rather than localStorage/IndexedDB.
-Cancel clears visible state, but the current client does not abort pending
-extraction/conversion requests or guard every late response; unmounting or
-logging out is not a provider-request cancellation guarantee. Disable provider
+Cancel aborts a running extraction and discards a late conversion response,
+but does not abort the pending provider request; unmounting or logging out is
+not a provider-request cancellation guarantee. Disable provider
 storage where supported and disclose that local cleanup cannot control provider
 retention. These cleanup and consent-copy gaps remain tracked in backlog A17.
 
@@ -508,28 +513,37 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 
 ## Routes and components
 
-- `/login` — renders only deployment-enabled login methods
-- `/signup` — public local registration only when local authentication is enabled
+- `/sign-in` — renders only deployment-enabled login methods
+- `/sign-up` — public local registration only when local authentication is enabled
 - `/api/v1/auth/oidc/{start,callback}` — public only when OIDC is enabled
 - `/api/v1/auth/config` — public deployment-enabled authentication methods
 - `/api/v1/session`, `/api/v1/auth/principal`, `/api/v1/api-keys`
-- `/` — net-worth dashboard
-- `/accounts`, `/accounts/new`, `/accounts/[id]`, `/accounts/[id]/edit`,
-  `/accounts/[id]/import`
-- `/accounts/archived` - explicit recovery and permanent deletion management
-- `/transactions`, `/transactions/new`, `/transactions/[id]/edit`
-- `/goals`, `/goals/new`, `/goals/[id]`, `/goals/[id]/edit`
-- `/estate/{beneficiaries,distribution,summary}` and
+- `/` — Home: net worth, allocation, flows, recent activity, goals, and
+  attention items
+- `/accounts` (`?show=archived` for archived-account recovery), `/accounts/new`,
+  `/accounts/[id]`, `/accounts/[id]/import`; account detail opens its edit,
+  trade, conversion, reconciliation, and corporate-action sheets from query
+  parameters
+- `/instruments/[id]` — one instrument's prices and holdings across accounts
+- `/activity` — the cross-account ledger
+- `/goals`, `/goals/[id]`
+- `/insights/{net-worth,allocation,income,compare}`
+- `/settings/{profile,currencies,preferences,categories,institutions,instruments,security,ai,api-keys,data}`
+- `/estate`, `/estate/{beneficiaries,distribution,summary}`, and
   `/estate/snapshots/[id]` — private estate planning and retained print views
-- `/reports`, `/categories`, `/institutions`, `/settings`
 - `/api/v1/exports/*`, `/api/v1/accounts/[id]/history-import/{preview,commit}`, `/api/v1/restore/user`,
   `/api/v1/accounts/[id]/investment-import/{preview,commit}`,
   `/api/v1/estate/snapshots/[id]`, `/api/v1/ai/review`, `/api/health/{live,ready}`
-- `/review` — on-demand, evidence-linked AI portfolio critique
+- `/review` — on-demand, evidence-linked AI portfolio review
+- Earlier client paths such as `/login`, `/signup`, `/transactions`, `/reports`,
+  `/categories`, `/institutions`, `/instruments`, `/accounts/archived`,
+  `/accounts/[id]/edit`, `/goals/new`, and `/labs/*` redirect to their new
+  locations.
 - `/offline.html`, `/manifest.webmanifest`, `/sw.js`
 
 The protected layout owns the responsive sidebar, header, mobile bottom
-navigation, privacy-value toggle, quick-add flow, PWA status, and toast region.
+navigation, command palette, privacy-value toggle, quick-add flow, PWA status,
+and toast region.
 Reusable form controls, cards, and visualizations live in `web/src/components`;
 authoritative validation and financial operations live in Go's `internal/api`,
 `internal/service`, and `internal/domain`, not browser helpers.

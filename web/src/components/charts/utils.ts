@@ -43,12 +43,32 @@ export function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | n
   return [ref, width]
 }
 
-const compactFmt = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
+const compactFormats = [1, 2, 3, 4].map((digits) => new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: digits }))
 
 /** Compact axis tick ("12.4M"). Ticks are generated geometry, not data, so formatting a number is fine. */
 export function axisNumber(value: number, hidden: boolean): string {
   if (hidden) return MASK.slice(0, 3)
-  return compactFmt.format(value)
+  return compactFormats[0]!.format(value)
+}
+
+/** Labels for a set of y ticks, adding decimals until neighbouring labels differ ("4.1K", "4.12K"). */
+export function axisLabels(values: number[], hidden: boolean): string[] {
+  if (hidden) return values.map(() => MASK.slice(0, 3))
+  for (const fmt of compactFormats) {
+    const labels = values.map((v) => fmt.format(v))
+    if (new Set(labels).size === labels.length) return labels
+  }
+  return values.map((v) => compactFormats.at(-1)!.format(v))
+}
+
+/** Drops x ticks whose label repeats the previous one (short ranges produce several ticks per day). */
+export function distinctTicks<T>(ticks: T[], label: (t: T) => string): { tick: T; label: string }[] {
+  const out: { tick: T; label: string }[] = []
+  for (const tick of ticks) {
+    const text = label(tick)
+    if (out.at(-1)?.label !== text) out.push({ tick, label: text })
+  }
+  return out
 }
 
 export function toDate(value: string): Date {

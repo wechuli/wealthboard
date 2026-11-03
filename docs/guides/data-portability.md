@@ -24,7 +24,7 @@ replay commit in one serializable transaction.
 
 ## Investment history import
 
-Use an active position account's **Import** action for instruments, opening
+Use an active position account's **More → Import history** action for instruments, opening
 holdings, trades, broker cash, and effective-dated prices. This is a strict,
 all-or-nothing workflow because one trade can depend on earlier quantities and
 cash. JSON uses `wealthboard-investment-history` version 1. CSV accepts one of
@@ -37,9 +37,9 @@ reinvestment rules.
 
 ## AI-assisted source conversion
 
-Both account modes offer **Convert document with AI** for CSV, TSV, JSON, TXT,
-XLSX, text-based PDF, and DOCX sources. Wealthboard extracts text within your
-self-hosted instance, then asks for approval before sending selected section
+Both account modes offer a **Convert with AI** tab on the import page for CSV,
+TSV, JSON, TXT, XLSX, text-based PDF, and DOCX sources. Wealthboard reads the
+file in your browser, then asks for approval before sending selected section
 IDs, location labels, and edited text to your configured provider using a
 remembered or session-only key. Review the generated draft before the normal
 import preview and confirmation; conversion itself never posts records.
@@ -50,16 +50,18 @@ provider compatibility, source review, and privacy controls.
 
 ## CSV downloads
 
-- **Accounts CSV:** a spreadsheet-friendly account inventory.
-- **Transactions CSV:** transaction records using the filters currently applied
-  in the transaction workbench.
+Open **Settings → Export and restore**:
+
+- **Accounts (CSV):** a spreadsheet-friendly account inventory.
+- **Transactions (CSV):** every transaction record.
 
 CSV is useful for analysis and interoperability, but it is not a complete
 Wealthboard backup.
 
 ## Complete user export
 
-Open **Settings → Import, restore & export → Export JSON**. Version 8
+Open **Settings → Export and restore** and download **Full portfolio
+(JSON)**. Version 8
 contains the current user's settings and source records, including:
 
 - categories, institutions, accounts, transactions, and valuations;
@@ -82,10 +84,11 @@ access-controlled location.
 Restore replaces only the signed-in user's portfolio in one database
 transaction. Archives larger than 25 MB are rejected.
 
-1. Select the JSON file under **Restore your JSON export**.
-2. Select **Replace my portfolio** and read the replacement warning.
-3. Confirm replacement. The browser downloads a pre-restore export before
-   sending the restore request.
+1. Choose the JSON file under **Restore from a backup**, then select **Restore
+   this backup**.
+2. Read the **This replaces your entire portfolio** warning and select **Export
+   current portfolio first** to download a pre-restore copy.
+3. Type `REPLACE` and select **Replace portfolio**.
 4. Keep that pre-restore copy until you have checked the restored portfolio.
 5. Verify settings, accounts, balances, goals, exchange rates, and estate plan.
 

@@ -7,7 +7,7 @@ import type { ThemePreference } from '@/lib/theme'
 import { BrandMark } from '@/features/shell/Brand'
 
 const NEXT_THEME: Record<ThemePreference, ThemePreference> = { system: 'light', light: 'dark', dark: 'system' }
-const THEME_LABEL: Record<ThemePreference, string> = { system: 'System', light: 'Paper (light)', dark: 'Night ledger (dark)' }
+const THEME_LABEL: Record<ThemePreference, string> = { system: 'System', light: 'Light', dark: 'Dark' }
 
 function ThemeToggle() {
   const { preference, setPreference } = useTheme()

@@ -170,7 +170,7 @@ describe('history import', () => {
     const user = userEvent.setup()
     await renderRoute(`/accounts/${IDS.zimele}/import`)
     expect(await screen.findByText('Drop a CSV or JSON file here')).toBeInTheDocument()
-    const csv = 'type,amount,date,description,external_id\ndeposit,1500.00,2025-01-05,Top-up,T-1\nbogus,10,2025-01-06,Bad,T-2\n'
+    const csv = 'external_id,type,amount,date,description,notes\nT-1,deposit,1500.00,2025-01-05,Top-up,\nT-2,bogus,10,2025-01-06,Bad,\n'
     const input = document.querySelector('input[type=file]') as HTMLInputElement
     await user.upload(input, new File([csv], 'history.csv', { type: 'text/csv' }))
     expect(await screen.findByText('Review before importing')).toBeInTheDocument()

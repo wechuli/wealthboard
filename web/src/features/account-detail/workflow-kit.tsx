@@ -6,7 +6,7 @@ import type { AccountPosition, Instrument } from '@/api/types'
 import { FieldShell, inputClass } from '@/components/ui/Field'
 import { Notice } from '@/components/ui/Notice'
 import { cn } from '@/lib/cn'
-import { decimalToMinor, minorToDecimal } from '@/lib/money'
+import { UNIT_DECIMALS, decimalToMinor, minorToDecimal } from '@/lib/money'
 import { newIdempotencyKey } from '@/lib/queries'
 
 // ---- exact decimal validation (strings only, never floats) --------------------
@@ -73,7 +73,7 @@ export function DecimalInput({
   error,
   hint,
   optional: isOptional,
-  decimals = 8,
+  decimals = UNIT_DECIMALS,
   allowNegative,
   prefix,
   suffix,

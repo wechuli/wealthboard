@@ -1,6 +1,6 @@
 import { ChevronLeft, Clock, PackageSearch, Pencil, Plus, Tag, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api } from '@/api'
 import { ApiProblem } from '@/api/problem'
 import type { SecurityPrice } from '@/api/types'
@@ -64,6 +64,16 @@ export default function InstrumentPage() {
     mutationFn: (p: SecurityPrice) => api.prices.remove(p.id),
     success: 'Price deleted',
     onSuccess: () => setToDelete(null),
+  })
+  const navigate = useNavigate()
+  const [confirmDeleteInstrument, setConfirmDeleteInstrument] = useState(false)
+  const removeInstrument = useApiMutation({
+    mutationFn: (id: string) => api.instruments.remove(id),
+    success: 'Instrument deleted',
+    onSuccess: () => {
+      setConfirmDeleteInstrument(false)
+      navigate('/settings/instruments', { replace: true })
+    },
   })
 
   if (detail.isPending) return <InstrumentSkeleton />
@@ -137,6 +147,7 @@ export default function InstrumentPage() {
               Edit details
             </Link>
             {addButton}
+            <IconButton label="Delete instrument" variant="ghost" icon={<Trash2 size={17} aria-hidden />} onClick={() => setConfirmDeleteInstrument(true)} />
           </>
         }
       />
@@ -334,6 +345,17 @@ export default function InstrumentPage() {
           </Card>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteInstrument}
+        onOpenChange={setConfirmDeleteInstrument}
+        title={`Delete ${instrument.symbol ?? instrument.name}?`}
+        description="This can't be undone. The server only allows it when no trade, price, or import refers to the instrument; otherwise archive it instead."
+        confirmLabel="Delete instrument"
+        pending={removeInstrument.isPending}
+        confirmDisabled={!online}
+        onConfirm={() => removeInstrument.mutate(instrument.id)}
+      />
 
       <ConfirmDialog
         open={toDelete !== null}

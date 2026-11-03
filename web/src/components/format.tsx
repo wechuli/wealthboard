@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import type { Freshness } from '@/api/extensions'
 import { cn } from '@/lib/cn'
 import { formatDate, formatDateTime, relativeDays } from '@/lib/dates'
-import { formatDecimal, formatMoneyParts, formatPercent, formatBps, MASK, minorSign } from '@/lib/money'
+import { UNIT_DECIMALS, formatDecimal, formatMoneyParts, formatPercent, formatBps, MASK, minorSign } from '@/lib/money'
 import { usePrefs } from '@/lib/prefs'
 import { usePrivacy } from '@/lib/privacy'
 import { Badge } from './ui/Badge'
@@ -109,7 +109,7 @@ export function Delta({
   )
 }
 
-export function Quantity({ value, className, maxFraction = 6 }: { value: string | null | undefined; className?: string; maxFraction?: number }) {
+export function Quantity({ value, className, maxFraction = UNIT_DECIMALS }: { value: string | null | undefined; className?: string; maxFraction?: number }) {
   const { hidden } = usePrivacy()
   if (value === null || value === undefined) return <span className="text-subtle">—</span>
   if (hidden) return <Masked className={className} />
@@ -123,7 +123,7 @@ export function UnitPrice({ value, currency, className }: { value: string | null
   return (
     <span className={cn('num whitespace-nowrap', className)}>
       <span className="ccy mr-[0.3em]">{currency}</span>
-      {formatDecimal(value, { minFraction: 2, maxFraction: 6 })}
+      {formatDecimal(value, { minFraction: 2, maxFraction: UNIT_DECIMALS })}
     </span>
   )
 }

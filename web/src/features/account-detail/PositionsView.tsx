@@ -22,6 +22,7 @@ import { useAdvancedParams } from './advanced'
 import { HoldingMenu, usePositionRowActions } from './row-menus'
 import { ActivityFeed, CompletenessNotice, FlowLedger, LinkedGoalsCard, NotesCard, TabSection, ValueHero } from './sections'
 import { ValueHistoryChart } from './ValueHistoryChart'
+import { MovementAttributionCard } from './MovementAttributionCard'
 import type { ViewProps } from './view-props'
 
 const sourceLabel = (s: string) => (s === 'none' ? '—' : s === 'manual' ? 'Manual' : s === 'import' ? 'Imported' : s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()))
@@ -323,6 +324,7 @@ export function PositionsView({ account, summary, analytics, extras, tab, onEdit
           <PriceHistoryCard extras={extras} />
         </TabSection>
         <TabSection tab="overview" current={tab} className="space-y-5">
+          {a?.movementAttribution ? <MovementAttributionCard account={account} attribution={a.movementAttribution} /> : null}
           <Card aria-labelledby="returns-heading">
             <CardHeader id="returns-heading" title="Returns" />
             <CardBody className="pt-2">

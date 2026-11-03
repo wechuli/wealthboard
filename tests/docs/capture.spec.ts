@@ -222,7 +222,7 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   ).toHaveAttribute("aria-checked", "true");
   await trade.getByLabel("Quantity", { exact: true }).fill("1");
   await trade.getByLabel("Unit price", { exact: true }).fill("205");
-  await trade.getByLabel("Fee", { exact: true }).fill("1");
+  await trade.getByRole("textbox", { name: /^Fee/ }).fill("1");
   await trade.getByLabel("Trade date").fill("2026-08-13");
   await trade.getByLabel("Settlement date").fill("2026-08-14");
   await trade.getByLabel("Description").fill("Fictional recurring investment");
@@ -405,25 +405,51 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   }
   await page.goto(`/estate/distribution?account=${landId}`);
   const landSheet = page.getByRole("dialog", { name: "Southern Bypass Land" });
-  await expect(landSheet.getByText("Amina Mwangi").first()).toBeVisible();
+  const primaryShares = landSheet.getByRole("heading", {
+    name: "Primary beneficiaries",
+  });
+  await expect(primaryShares).toBeVisible();
+  await expect(
+    landSheet.getByLabel("Primary beneficiaries allocations"),
+  ).toContainText("Mwangi Education Trust");
+  await expect(
+    landSheet.getByLabel("Contingent beneficiaries allocations"),
+  ).toContainText("Nia Mwangi");
+  await primaryShares.evaluate((heading) =>
+    heading.scrollIntoView({ block: "start" }),
+  );
   await captureLocator(landSheet, "estate-asset-allocation.png");
   await landSheet.press("Escape");
   await expect(landSheet).toBeHidden();
 
-  await page.goto("/estate/summary");
-  await page.getByLabel("Plan title").fill("Mwangi family continuity plan");
-  await page.getByLabel("Jurisdiction or residence").fill("Nairobi, Kenya");
-  await page.getByLabel("Last reviewed").fill("2026-08-12");
-  await page.getByLabel("Review again on").fill("2027-08-12");
+  await page.goto("/estate");
+  await page.getByRole("button", { name: "Edit details" }).click();
+  const planDetails = page.getByRole("form", { name: "Plan details" });
+  await planDetails
+    .getByLabel("Plan title")
+    .fill("Mwangi family continuity plan");
+  await planDetails
+    .getByLabel("Jurisdiction or residence")
+    .fill("Nairobi, Kenya");
+  await planDetails.getByLabel("Last reviewed").fill("2026-08-12");
+  await planDetails.getByLabel("Review again on").fill("2027-08-12");
   const planSaved = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/v1/estate/plan") &&
       response.request().method() === "PUT",
   );
-  await page.getByRole("button", { name: "Save plan details" }).click();
+  await planDetails.getByRole("button", { name: "Save plan details" }).click();
   expect((await planSaved).ok()).toBe(true);
+
+  await page
+    .getByRole("navigation", { name: "Estate planning sections" })
+    .getByRole("link", { name: "Summary" })
+    .click();
   await expect(
-    page.getByRole("region", { name: "Completion review" }),
+    page.getByRole("heading", { level: 2, name: "Completion review" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Beneficiary overview" }),
   ).toBeVisible();
   await capturePage(page, "estate-summary.png");
 

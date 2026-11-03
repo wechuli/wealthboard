@@ -1,7 +1,7 @@
 import { scaleBand, scaleLinear } from 'd3-scale'
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { usePrivacy } from '@/lib/privacy'
-import { axisNumber, TOKENS, useElementWidth } from './utils'
+import { axisLabels, TOKENS, useElementWidth } from './utils'
 
 export interface BarDatum {
   key: string
@@ -96,14 +96,18 @@ export function BarChart({
       {geo ? (
         <svg width={width} height={height} aria-hidden className="block">
           <g transform={`translate(${left},${M.top})`}>
-            {geo.y.ticks(4).map((t) => (
-              <g key={t} transform={`translate(0,${geo.y(t)})`}>
-                <line x2={geo.innerW} style={{ stroke: t === 0 ? TOKENS.axis : TOKENS.grid }} strokeWidth={t === 0 ? 1.25 : 1} />
-                <text x={-8} dy="0.32em" textAnchor="end" className="num" style={{ fill: TOKENS.axis, fontSize: 11 }}>
-                  {axisNumber(t, hidden)}
-                </text>
-              </g>
-            ))}
+            {(() => {
+              const ticks = geo.y.ticks(4)
+              const labels = axisLabels(ticks, hidden)
+              return ticks.map((t, i) => (
+                <g key={t} transform={`translate(0,${geo.y(t)})`}>
+                  <line x2={geo.innerW} style={{ stroke: t === 0 ? TOKENS.axis : TOKENS.grid }} strokeWidth={t === 0 ? 1.25 : 1} />
+                  <text x={-8} dy="0.32em" textAnchor="end" className="num" style={{ fill: TOKENS.axis, fontSize: 11 }}>
+                    {labels[i]}
+                  </text>
+                </g>
+              ))
+            })()}
             {data.map((d, i) => {
               const bx = geo.x(d.key) ?? 0
               const bw = geo.x.bandwidth()

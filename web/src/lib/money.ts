@@ -8,6 +8,8 @@
 
 export const LOCALE = 'en-US'
 export const MASK = '••••••'
+/** Precision for unit prices, quantities, and ratios. The API stores these as exact unbounded decimals. */
+export const UNIT_DECIMALS = 12
 const MINUS = '\u2212'
 
 const EXPONENT_ZERO = new Set(['BIF', 'JPY', 'RWF', 'UGX'])
@@ -164,7 +166,7 @@ export interface DecimalFormatOptions {
 /** Formats an exact decimal string (quantity, unit price, rate) with grouping. */
 export function formatDecimal(decimal: string, options: DecimalFormatOptions = {}): string {
   if (!DECIMAL_RE.test(decimal)) throw new TypeError(`Not a decimal string: ${decimal}`)
-  const { minFraction = 0, maxFraction = 8, sign = 'auto' } = options
+  const { minFraction = 0, maxFraction = UNIT_DECIMALS, sign = 'auto' } = options
   const negative = decimal.startsWith('-')
   const abs = negative ? decimal.slice(1) : decimal
   const isZero = !/[1-9]/.test(abs)

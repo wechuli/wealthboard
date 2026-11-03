@@ -16,7 +16,10 @@ It does not change who owns an account today.
   valid legal documents and institution-held designations.
 </div>
 
-## The three estate views
+## The estate views
+
+Open **Estate planning** under **Planning** in the sidebar. **Overview** holds
+the plan details and shows where the plan stands. Then:
 
 1. **Beneficiaries:** maintain people, organizations, and trusts.
 2. **Distribution:** decide which assets are included and assign percentages.
@@ -48,8 +51,8 @@ estate completion badges or gift estimates as a complete, reconciled valuation.
 
 ## Step 2: Add beneficiaries
 
-Open **Estate → Beneficiaries**. A beneficiary can be a person, organization, or
-trust. Record only enough information to identify the intended recipient.
+Open **Estate planning → Beneficiaries** and select **Add beneficiary**. A
+beneficiary can be a person, organization, or trust. Record only enough information to identify the intended recipient.
 
 ![Beneficiary directory with fictional people and a trust](/images/screenshots/estate-beneficiaries.png)
 
@@ -62,11 +65,12 @@ allocations and creates a review item until affected instructions are updated.
 
 ## Step 3: Configure one asset
 
-Open **Distribution** and find the asset.
+Open **Distribution**, find the asset, and select **Plan** (or **Edit** once it
+has a directive). The asset's directive and shares open in a side sheet.
 
 ### Include this asset
 
-Turn off **Include this asset in the estate distribution plan** when the item is
+Turn off **Include this asset in the distribution plan** when the item is
 informational or deliberately outside the plan. The account remains recorded,
 but is not intended for estate distribution.
 
@@ -149,16 +153,18 @@ an asset to pass outside an estate or require special handling.
 
 ## Step 7: Read the completion review
 
-Open **Summary**. Wealthboard separates:
+Open **Summary**. Its **Completion review** separates:
 
-- **blocking mathematical items:** unconfigured assets, incomplete allocations,
-  missing active beneficiary coverage, or archived recipients;
-- **planning warnings:** zero values, unknown transfer context, undecided
-  methods, shared-title arrangements, liabilities, and an unrecorded plan review.
+- **Needs a decision** (blocking mathematical items): unconfigured assets,
+  incomplete allocations, missing active beneficiary coverage, or archived
+  recipients;
+- **Worth reviewing** (planning warnings): zero values, unknown transfer
+  context, undecided methods, shared-title arrangements, liabilities, and an
+  unrecorded plan review.
 
 Archived accounts are omitted from live estate views. Review their instructions
 before archiving, and check price freshness and FX separately in the financial
-account and report screens.
+account and Insights screens.
 
 ![Estate summary with a mathematically complete allocation and recorded liability](/images/screenshots/estate-summary.png)
 

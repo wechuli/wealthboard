@@ -20,7 +20,7 @@ import { Notice } from '@/components/ui/Notice'
 import { Segmented } from '@/components/ui/Segmented'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { activityLabel } from '@/features/accounts/model'
-import { absMinor, minorExponent, minorSign, minorToDecimal } from '@/lib/money'
+import { UNIT_DECIMALS, absMinor, minorExponent, minorSign, minorToDecimal } from '@/lib/money'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
 import { usePrefs } from '@/lib/prefs'
 import { useApiMutation, useInstruments, usePositionEvent } from '@/lib/queries'
@@ -558,7 +558,7 @@ function TradeForm({
                   <DecimalInput
                     label={`Applied rate (${tradeCurrency} → ${c})`}
                     optional
-                    decimals={10}
+                    decimals={UNIT_DECIMALS}
                     value={field.value}
                     onChange={field.onChange}
                     onBlur={field.onBlur}

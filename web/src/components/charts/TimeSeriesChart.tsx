@@ -4,7 +4,7 @@ import { area as d3area, curveMonotoneX, line as d3line } from 'd3-shape'
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { usePrivacy } from '@/lib/privacy'
 import { cn } from '@/lib/cn'
-import { axisNumber, timeTickFormat, toDate, TOKENS, useElementWidth } from './utils'
+import { axisLabels, distinctTicks, timeTickFormat, toDate, TOKENS, useElementWidth } from './utils'
 
 export interface TSPoint {
   date: string
@@ -161,17 +161,21 @@ export function TimeSeriesChart({ series, height, ariaLabel, markers = [], bands
               const bw = Math.max(1, geo.x(toDate(b.to)) - bx)
               return <rect key={i} x={bx} y={0} width={bw} height={geo.innerH} style={{ fill: TOKENS.warningSoft }} opacity={0.85} />
             })}
-            {geo.y.ticks(4).map((t) => (
-              <g key={t} transform={`translate(0,${geo.y(t)})`}>
-                <line x2={geo.innerW} style={{ stroke: TOKENS.grid }} strokeWidth={1} />
-                <text x={-8} dy="0.32em" textAnchor="end" className="num" style={{ fill: TOKENS.axis, fontSize: 11 }}>
-                  {axisNumber(t, hidden)}
-                </text>
-              </g>
-            ))}
-            {geo.x.ticks(Math.max(2, Math.floor(geo.innerW / 96))).map((t) => (
-              <text key={t.getTime()} x={geo.x(t)} y={geo.innerH + 18} textAnchor="middle" style={{ fill: TOKENS.axis, fontSize: 11 }}>
-                {timeTickFormat(geo.spanDays)(t)}
+            {(() => {
+              const ticks = geo.y.ticks(4)
+              const labels = axisLabels(ticks, hidden)
+              return ticks.map((t, i) => (
+                <g key={t} transform={`translate(0,${geo.y(t)})`}>
+                  <line x2={geo.innerW} style={{ stroke: TOKENS.grid }} strokeWidth={1} />
+                  <text x={-8} dy="0.32em" textAnchor="end" className="num" style={{ fill: TOKENS.axis, fontSize: 11 }}>
+                    {labels[i]}
+                  </text>
+                </g>
+              ))
+            })()}
+            {distinctTicks(geo.x.ticks(Math.max(2, Math.floor(geo.innerW / 96))), timeTickFormat(geo.spanDays)).map(({ tick, label }) => (
+              <text key={tick.getTime()} x={geo.x(tick)} y={geo.innerH + 18} textAnchor="middle" style={{ fill: TOKENS.axis, fontSize: 11 }}>
+                {label}
               </text>
             ))}
             {refLines.map((r) => (
