@@ -77,7 +77,8 @@ The production service worker never intercepts `/api` requests and therefore
 never caches authenticated financial responses. It precaches only the offline
 HTML page, web manifest, and icons. A failed navigation receives the offline
 page; previously viewed pages and records are not guaranteed to remain usable.
-There is no background-sync handler, mutation queue, or in-app install prompt.
+There is no background-sync handler or mutation queue. The profile menu offers
+**Install app** when the browser supports installation.
 The client displays an offline warning, blocks forms marked as financial
 mutations while the browser reports offline, and offers Reload when a new
 service worker is waiting. Users must reconnect and retry writes themselves.

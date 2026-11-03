@@ -30,6 +30,9 @@ type fakeCoreReadService struct {
 	transactionCalls  int
 	accountListCalls  int
 	accountErr        error
+	feedCalls         int
+	feedUserID        uuid.UUID
+	feedFilter        service.ActivityFilter
 }
 
 func (fake *fakeCoreReadService) Settings(context.Context, uuid.UUID) (service.Settings, error) {
@@ -74,6 +77,12 @@ func (fake *fakeCoreReadService) Valuations(context.Context, uuid.UUID, service.
 
 func (fake *fakeCoreReadService) Activity(context.Context, uuid.UUID, service.ActivityFilter) (service.Page[service.ActivityItem], error) {
 	return service.Page[service.ActivityItem]{}, nil
+}
+
+func (fake *fakeCoreReadService) ActivityFeed(_ context.Context, userID uuid.UUID, filter service.ActivityFilter) (service.Page[service.ActivityItem], error) {
+	fake.feedCalls++
+	fake.feedUserID, fake.feedFilter = userID, filter
+	return service.Page[service.ActivityItem]{Items: []service.ActivityItem{}, Limit: filter.Page.Limit, Offset: filter.Page.Offset}, fake.accountErr
 }
 
 func TestCoreReadTransactionsDerivesOwnerAndParsesFilters(t *testing.T) {

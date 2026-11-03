@@ -286,9 +286,27 @@ func TestEstateMutationsPostgreSQLSnapshotImmutabilityHashAndIsolation(t *testin
 	if _, err := estate.UpsertAllocation(ctx, ownerID, directive.ID, EstateAllocationInput{BeneficiaryID: beneficiary.ID, Tier: "primary", AllocationBPS: 10000}); err != nil {
 		t.Fatalf("upsert allocation: %v", err)
 	}
+	secondBeneficiary, err := estate.CreateBeneficiary(ctx, ownerID, BeneficiaryInput{Kind: "person", Name: "Sam", Relationship: "Sibling"})
+	if err != nil {
+		t.Fatalf("create second beneficiary: %v", err)
+	}
+	_, err = estate.UpsertAllocation(ctx, ownerID, directive.ID, EstateAllocationInput{BeneficiaryID: secondBeneficiary.ID, Tier: "primary", AllocationBPS: 100})
+	if detail, ok := PublicDetail(err); !errors.Is(err, ErrEstateValidation) || !ok || detail != "Allocations cannot exceed 100%; 0% remains in the primary tier." {
+		t.Fatalf("over-allocation error=%v detail=%q", err, detail)
+	}
+	if err := estate.SetBeneficiaryArchived(ctx, ownerID, secondBeneficiary.ID, true); err != nil {
+		t.Fatalf("archive second beneficiary: %v", err)
+	}
+	_, err = estate.UpsertAllocation(ctx, ownerID, directive.ID, EstateAllocationInput{BeneficiaryID: secondBeneficiary.ID, Tier: "contingent", AllocationBPS: 100})
+	if detail, ok := PublicDetail(err); !errors.Is(err, ErrEstateValidation) || !ok || !strings.Contains(detail, "Restore this beneficiary") {
+		t.Fatalf("archived beneficiary error=%v detail=%q", err, detail)
+	}
 	snapshot, err := estate.CreateSnapshot(ctx, ownerID)
 	if err != nil {
 		t.Fatalf("create snapshot: %v", err)
+	}
+	if snapshot.Version != 1 {
+		t.Fatalf("first snapshot version=%d, want 1", snapshot.Version)
 	}
 	actual := sha256.Sum256(snapshot.Content)
 	if snapshot.EstatePlanID != plan.ID || snapshot.ContentHash != hex.EncodeToString(actual[:]) || !strings.Contains(string(snapshot.Content), `"name":"Alex"`) {
@@ -311,7 +329,22 @@ func TestEstateMutationsPostgreSQLSnapshotImmutabilityHashAndIsolation(t *testin
 	if err := estate.DeleteSnapshot(ctx, otherID, snapshot.ID); !errors.Is(err, ErrEstateNotFound) {
 		t.Fatalf("foreign delete error=%v", err)
 	}
+	second, err := estate.CreateSnapshot(ctx, ownerID)
+	if err != nil || second.Version != 2 {
+		t.Fatalf("second snapshot version=%d err=%v, want 2", second.Version, err)
+	}
 	if err := estate.DeleteSnapshot(ctx, ownerID, snapshot.ID); err != nil {
 		t.Fatalf("delete owner snapshot: %v", err)
+	}
+	third, err := estate.CreateSnapshot(ctx, ownerID)
+	if err != nil || third.Version != 3 {
+		t.Fatalf("snapshot after delete version=%d err=%v, want 3 (versions are never reused)", third.Version, err)
+	}
+	if _, err := estate.UpsertDirective(ctx, ownerID, accountID, EstateDirectiveInput{IsIncluded: false, OwnershipShareBPS: 10000, TransferContext: "estate", DistributionMethod: "sell_and_divide"}); err != nil {
+		t.Fatalf("exclude directive: %v", err)
+	}
+	_, err = estate.UpsertAllocation(ctx, ownerID, directive.ID, EstateAllocationInput{BeneficiaryID: beneficiary.ID, Tier: "contingent", AllocationBPS: 100})
+	if detail, ok := PublicDetail(err); !errors.Is(err, ErrEstateValidation) || !ok || !strings.Contains(detail, "Include this asset in the plan") {
+		t.Fatalf("excluded directive error=%v detail=%q", err, detail)
 	}
 }

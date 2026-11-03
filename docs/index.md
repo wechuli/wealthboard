@@ -36,7 +36,7 @@ Wealthboard has three layers:
 
 1. **Accounts and assets** describe what you own or owe right now.
 2. **Activity and valuations** explain how those balances changed over time.
-3. **Goals, reports, and estate plans** interpret the same underlying records without rewriting them.
+3. **Goals, insights, and estate plans** interpret the same underlying records without rewriting them.
 
 ::: tip Start small
 Create one real account with a current value, then add history only when you
@@ -51,7 +51,7 @@ one.
 | Add land, a bank account, a loan, or an investment         | [Accounts and assets](./guides/accounts)                 |
 | Track brokerage cash, units, prices, or corporate actions  | [Position-tracked investments](./guides/investments)     |
 | Record a deposit, fee, transfer, or updated property value | [Transactions and values](./guides/activity)             |
-| Understand allocation and net worth                        | [Reports and privacy](./guides/reports)                  |
+| Understand allocation and net worth                        | [Insights and privacy](./guides/reports)                 |
 | Assign inheritance percentages                             | [Estate planning](./guides/estate-planning)              |
 | Move or restore my data                                    | [Import, export, and restore](./guides/data-portability) |
 | Configure the server                                       | [Deployment](./admin/deployment)                         |

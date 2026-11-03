@@ -1,38 +1,22 @@
 import js from "@eslint/js";
+import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   { ignores: ["dist", "src/api/schema.ts"] },
   {
-    files: ["src/**/*.{ts,tsx}"],
-    extends: [
-      js.configs.recommended,
-      ...tseslint.configs.recommended,
-      reactHooks.configs.flat.recommended,
-    ],
-    languageOptions: {
-      ecmaVersion: 2022,
-      globals: {
-        document: "readonly",
-        fetch: "readonly",
-        File: "readonly",
-        FormData: "readonly",
-        HTMLElement: "readonly",
-        localStorage: "readonly",
-        navigator: "readonly",
-        RequestInit: "readonly",
-        sessionStorage: "readonly",
-        URL: "readonly",
-        window: "readonly",
-      },
-    },
-    plugins: { "react-refresh": reactRefresh },
+    extends: [js.configs.recommended, ...tseslint.configs.recommended, jsxA11y.flatConfigs.recommended],
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: { ecmaVersion: 2023, globals: { ...globals.browser } },
+    plugins: { "react-hooks": reactHooks, "react-refresh": reactRefresh },
     rules: {
-      "no-empty": ["error", { allowEmptyCatch: true }],
-      "no-empty-pattern": "off",
+      ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "jsx-a11y/no-autofocus": "off",
     },
   },
 );

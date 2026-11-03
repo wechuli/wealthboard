@@ -59,6 +59,9 @@ type Querier interface {
 	ListChartPrices(ctx context.Context, userID uuid.UUID) ([]ListChartPricesRow, error)
 	ListCoreAccountActivity(ctx context.Context, arg ListCoreAccountActivityParams) ([]ListCoreAccountActivityRow, error)
 	ListCoreAccounts(ctx context.Context, arg ListCoreAccountsParams) ([]ListCoreAccountsRow, error)
+	// Generalises ListCoreAccountActivity across all of the owner's accounts with optional filters.
+	// Price rows are emitted once per position account that holds or held the instrument.
+	ListCoreActivity(ctx context.Context, arg ListCoreActivityParams) ([]ListCoreActivityRow, error)
 	ListCoreCategories(ctx context.Context, userID uuid.UUID) ([]ListCoreCategoriesRow, error)
 	ListCoreInstitutions(ctx context.Context, userID uuid.UUID) ([]ListCoreInstitutionsRow, error)
 	ListCoreTransactions(ctx context.Context, arg ListCoreTransactionsParams) ([]ListCoreTransactionsRow, error)

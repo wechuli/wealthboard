@@ -6,12 +6,12 @@ applyTo: "web/src/**/*.tsx, web/src/**/*.css"
 
 # Frontend implementation
 
-- Preserve the established compact, dark financial-dashboard language in `web/src/styles/globals.css` and existing components. Build the working product interface, not a marketing page or explanatory landing page.
+- Preserve the "Quiet Ledger" design system documented in `web/docs/design-direction.md`, with its light (Paper) and dark (Night ledger) themes defined as tokens in `web/src/styles/tokens.css`, and the existing components. Read colours and spacing from tokens instead of hard-coding values. Build the working product interface, not a marketing page or explanatory landing page.
 - Distinguish an application user from a financial account in labels, variable names, and help text. Signup and login use a username; portfolio pages use “account” only for tracked financial holdings.
 - Keep database access, session signing, secrets, and authoritative financial calculations out of the Vite client.
 - Reuse `web/src/components/ui` primitives, existing feature forms, Lucide icons, semantic CSS tokens, and page shells before creating a new component abstraction or visual treatment.
 - Use React Hook Form with `zodResolver` and colocated client schemas. Follow the existing API error, pending-state, field-error, and idempotency-key patterns for financial forms.
-- Format money and dates with project helpers and user settings. Never perform authoritative financial arithmetic in a component. Convert safe display values for Recharts only at the chart boundary.
+- Format money and dates with project helpers and user settings. Never perform authoritative financial arithmetic in a component. Convert safe display values for the d3-based chart components in `web/src/components/charts` only at the chart boundary.
 - Route every sensitive amount through the existing privacy-value behavior. New summaries, labels, chart tooltips, tables, and mobile views must respect hidden-value mode.
 - Never send or persist an owner `userId` merely to authorize a client action. Show the current identity and logout affordance where appropriate, while ownership remains a server-session concern.
 - Clear user-specific client state on logout and account changes. Do not service-worker cache authenticated financial responses or allow one user to see the previous user's stale data on a shared device.

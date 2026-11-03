@@ -10,15 +10,17 @@ They do not move money or create transactions.
 
 ## Create a goal
 
-Open **Goals**, then select **Create goal**. Enter:
+Open **Goals**, then select **New goal**, or press **N** anywhere and choose
+**New goal**. Enter:
 
-- target amount and currency;
+- goal name, currency, and target amount;
 - target date;
-- optional linked account;
-- planned contribution amount and frequency;
-- contribution start and optional end date;
-- assumed annual return;
-- priority and status.
+- what to track progress with: a linked account or an amount saved so far;
+- planned contribution amount and how often;
+- assumed annual return.
+
+Select **Create goal**. On the goal page, **Edit** adds a description, the plan's
+start and optional end date, and the priority.
 
 When an account is linked, its cached balance supplies current progress. Use an
 unlinked goal only when no account should be the source of truth.
@@ -30,7 +32,7 @@ exist; use the same currency for the goal and account.
 
 Position-account progress also uses the cached value, without propagating
 missing-price, missing-rate, or stale-price warnings. Review the account's
-Positions table and analytics before relying on goal progress or forecasts.
+Holdings table and analytics before relying on goal progress or forecasts.
 :::
 
 Goal progress does not treat account-internal buys or sells as contributions

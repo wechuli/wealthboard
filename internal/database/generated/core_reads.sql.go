@@ -457,6 +457,239 @@ func (q *Queries) ListCoreAccounts(ctx context.Context, arg ListCoreAccountsPara
 	return items, nil
 }
 
+const listCoreActivity = `-- name: ListCoreActivity :many
+SELECT
+    kind,
+    id,
+    account_id,
+    account_name,
+    tracking_mode,
+    type,
+    amount_minor,
+    currency,
+    activity_date,
+    description,
+    notes,
+    instrument_id,
+    instrument_name,
+    instrument_symbol,
+    quantity,
+    unit_price,
+    event_group_id::text AS event_group_id
+FROM (
+    SELECT
+        'transaction'::text AS kind,
+        transactions.id,
+        transactions.account_id,
+        accounts.name AS account_name,
+        accounts.tracking_mode,
+        transactions.type,
+        transactions.amount_minor,
+        transactions.currency,
+        transactions.transaction_date AS activity_date,
+        transactions.description,
+        transactions.notes,
+        transactions.created_at,
+        ''::text AS instrument_id,
+        ''::text AS instrument_name,
+        ''::text AS instrument_symbol,
+        ''::text AS quantity,
+        ''::text AS unit_price,
+        COALESCE(transactions.event_group_id::text, '') AS event_group_id
+    FROM transactions
+    JOIN accounts
+      ON accounts.user_id = transactions.user_id
+     AND accounts.id = transactions.account_id
+    WHERE transactions.user_id = $1
+
+    UNION ALL
+
+    SELECT
+        'valuation'::text AS kind,
+        valuation_snapshots.id,
+        valuation_snapshots.account_id,
+        accounts.name AS account_name,
+        accounts.tracking_mode,
+        'valuation'::text AS type,
+        valuation_snapshots.value_minor AS amount_minor,
+        valuation_snapshots.currency,
+        valuation_snapshots.valuation_date AS activity_date,
+        NULL::text AS description,
+        valuation_snapshots.notes,
+        valuation_snapshots.created_at,
+        ''::text AS instrument_id,
+        ''::text AS instrument_name,
+        ''::text AS instrument_symbol,
+        ''::text AS quantity,
+        ''::text AS unit_price,
+        ''::text AS event_group_id
+    FROM valuation_snapshots
+    JOIN accounts
+      ON accounts.user_id = valuation_snapshots.user_id
+     AND accounts.id = valuation_snapshots.account_id
+    WHERE valuation_snapshots.user_id = $1
+
+    UNION ALL
+
+    SELECT
+        'position'::text AS kind,
+        event.id,
+        event.account_id,
+        accounts.name AS account_name,
+        accounts.tracking_mode,
+        event.type,
+        event.cash_effect_minor AS amount_minor,
+        accounts.currency,
+        event.trade_date AS activity_date,
+        event.description,
+        event.notes,
+        event.created_at,
+        instrument.id::text AS instrument_id,
+        instrument.name AS instrument_name,
+        COALESCE(instrument.symbol, '') AS instrument_symbol,
+        event.quantity::text,
+        COALESCE(event.unit_price::text, '') AS unit_price,
+        COALESCE(event.event_group_id::text, '') AS event_group_id
+    FROM position_events event
+    JOIN accounts ON accounts.user_id = event.user_id AND accounts.id = event.account_id
+    JOIN investment_instruments instrument
+      ON instrument.user_id = event.user_id AND instrument.id = event.instrument_id
+    WHERE event.user_id = $1
+
+    UNION ALL
+
+    SELECT
+        'price'::text AS kind,
+        price.id,
+        accounts.id AS account_id,
+        accounts.name AS account_name,
+        accounts.tracking_mode,
+        'security_price'::text AS type,
+        0::bigint AS amount_minor,
+        price.currency,
+        price.effective_date AS activity_date,
+        price.source AS description,
+        NULL::text AS notes,
+        price.created_at,
+        instrument.id::text AS instrument_id,
+        instrument.name AS instrument_name,
+        COALESCE(instrument.symbol, '') AS instrument_symbol,
+        ''::text AS quantity,
+        price.price::text AS unit_price,
+        ''::text AS event_group_id
+    FROM security_prices price
+    JOIN investment_instruments instrument
+      ON instrument.user_id = price.user_id AND instrument.id = price.instrument_id
+    JOIN accounts ON accounts.user_id = price.user_id
+    WHERE price.user_id = $1
+      AND EXISTS (
+          SELECT 1 FROM position_events event
+          WHERE event.user_id = price.user_id AND event.account_id = accounts.id
+            AND (event.instrument_id = price.instrument_id OR event.related_instrument_id = price.instrument_id)
+      )
+) AS activity
+WHERE ($2::uuid IS NULL OR account_id = $2::uuid)
+  AND ($3::text IS NULL OR kind = $3::text)
+  AND ($4::text IS NULL OR type = $4::text)
+  AND ($5::date IS NULL OR activity_date >= $5::date)
+  AND ($6::date IS NULL OR activity_date <= $6::date)
+  AND (
+      $7::text IS NULL
+      OR strpos(lower(COALESCE(description, '')), lower($7::text)) > 0
+      OR strpos(lower(COALESCE(notes, '')), lower($7::text)) > 0
+      OR strpos(lower(account_name), lower($7::text)) > 0
+      OR strpos(lower(instrument_name), lower($7::text)) > 0
+      OR strpos(lower(instrument_symbol), lower($7::text)) > 0
+  )
+ORDER BY activity_date DESC, created_at DESC, kind DESC, id DESC, account_id DESC
+LIMIT $9 OFFSET $8
+`
+
+type ListCoreActivityParams struct {
+	UserID       uuid.UUID      `json:"user_id"`
+	AccountID    uuid.NullUUID  `json:"account_id"`
+	Kind         sql.NullString `json:"kind"`
+	ActivityType sql.NullString `json:"activity_type"`
+	FromDate     sql.NullTime   `json:"from_date"`
+	ToDate       sql.NullTime   `json:"to_date"`
+	Search       sql.NullString `json:"search"`
+	PageOffset   int32          `json:"page_offset"`
+	PageLimit    int32          `json:"page_limit"`
+}
+
+type ListCoreActivityRow struct {
+	Kind             string         `json:"kind"`
+	ID               uuid.UUID      `json:"id"`
+	AccountID        uuid.UUID      `json:"account_id"`
+	AccountName      string         `json:"account_name"`
+	TrackingMode     string         `json:"tracking_mode"`
+	Type             string         `json:"type"`
+	AmountMinor      int64          `json:"amount_minor"`
+	Currency         string         `json:"currency"`
+	ActivityDate     time.Time      `json:"activity_date"`
+	Description      sql.NullString `json:"description"`
+	Notes            sql.NullString `json:"notes"`
+	InstrumentID     string         `json:"instrument_id"`
+	InstrumentName   string         `json:"instrument_name"`
+	InstrumentSymbol string         `json:"instrument_symbol"`
+	Quantity         string         `json:"quantity"`
+	UnitPrice        string         `json:"unit_price"`
+	EventGroupID     string         `json:"event_group_id"`
+}
+
+// Generalises ListCoreAccountActivity across all of the owner's accounts with optional filters.
+// Price rows are emitted once per position account that holds or held the instrument.
+func (q *Queries) ListCoreActivity(ctx context.Context, arg ListCoreActivityParams) ([]ListCoreActivityRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCoreActivity,
+		arg.UserID,
+		arg.AccountID,
+		arg.Kind,
+		arg.ActivityType,
+		arg.FromDate,
+		arg.ToDate,
+		arg.Search,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCoreActivityRow{}
+	for rows.Next() {
+		var i ListCoreActivityRow
+		if err := rows.Scan(
+			&i.Kind,
+			&i.ID,
+			&i.AccountID,
+			&i.AccountName,
+			&i.TrackingMode,
+			&i.Type,
+			&i.AmountMinor,
+			&i.Currency,
+			&i.ActivityDate,
+			&i.Description,
+			&i.Notes,
+			&i.InstrumentID,
+			&i.InstrumentName,
+			&i.InstrumentSymbol,
+			&i.Quantity,
+			&i.UnitPrice,
+			&i.EventGroupID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCoreCategories = `-- name: ListCoreCategories :many
 SELECT
     id,

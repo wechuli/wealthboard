@@ -258,7 +258,7 @@ func writeEstateMutationError(response http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrEstateNotFound):
 		writeProblem(response, http.StatusNotFound, "Not Found", "The requested resource does not exist.")
 	case errors.Is(err, service.ErrEstateValidation):
-		writeProblem(response, http.StatusUnprocessableEntity, "Validation failed", "The estate planning change is invalid.")
+		writeProblem(response, http.StatusUnprocessableEntity, "Validation failed", publicDetailOr(err, "The estate planning change is invalid."))
 	default:
 		writeProblem(response, http.StatusServiceUnavailable, "Service unavailable", "The estate planning change could not be completed.")
 	}

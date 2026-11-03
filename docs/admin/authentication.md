@@ -75,8 +75,8 @@ To move from local to provider-only authentication without duplicate portfolios:
 1. Keep `AUTH_METHODS=local` while configuring the provider.
 2. Change to `AUTH_METHODS=local,oidc` and restart.
 3. Each existing user signs in with the local password.
-4. In **Settings → Authentication methods**, confirm the password and link the
-   provider.
+4. In **Settings → Security → Sign-in methods**, confirm the password and link
+   the provider.
 5. Verify provider login returns to the same portfolio.
 6. Repeat for every active user.
 7. Once every active user has a link, change to `AUTH_METHODS=oidc`, restart,

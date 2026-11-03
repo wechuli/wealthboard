@@ -490,16 +490,29 @@ INSERT INTO transactions (
 	})
 }
 
-func (service *CorporateActions) DeleteGroup(ctx context.Context, userID, eventID uuid.UUID) error {
-	if eventID == uuid.Nil {
+// DeleteGroup undoes a whole corporate action. id may be the event group ID returned when the
+// action was recorded, or the ID of any position event in the group.
+func (service *CorporateActions) DeleteGroup(ctx context.Context, userID, id uuid.UUID) error {
+	if id == uuid.Nil {
 		return ErrInvestmentMutationNotFound
 	}
 	return service.investments.withTx(ctx, func(tx *sql.Tx) error {
 		var groupID uuid.NullUUID
-		if err := tx.QueryRowContext(ctx, `
+		err := tx.QueryRowContext(ctx, `
 SELECT event_group_id FROM position_events
-WHERE user_id = $1 AND id = $2 FOR UPDATE`, userID, eventID).Scan(&groupID); err != nil {
-			return mutationNotFound(err)
+WHERE user_id = $1 AND id = $2 FOR UPDATE`, userID, id).Scan(&groupID)
+		if errors.Is(err, sql.ErrNoRows) {
+			var grouped bool
+			if err := tx.QueryRowContext(ctx, `
+SELECT EXISTS (SELECT 1 FROM position_events WHERE user_id = $1 AND event_group_id = $2)`, userID, id).Scan(&grouped); err != nil {
+				return fmt.Errorf("find corporate action group: %w", err)
+			}
+			if !grouped {
+				return ErrInvestmentMutationNotFound
+			}
+			groupID = uuid.NullUUID{UUID: id, Valid: true}
+		} else if err != nil {
+			return err
 		}
 		if !groupID.Valid {
 			return investmentConflictError("use ordinary position event deletion for ungrouped activity")

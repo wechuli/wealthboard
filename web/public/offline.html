@@ -3,57 +3,82 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#60706b" />
+    <meta name="theme-color" content="#F5F3EE" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0E1311" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>Wealthboard is offline</title>
     <style>
       :root {
-        color-scheme: light;
-        font-family: Georgia, "Times New Roman", serif;
-        background: #edf2ef;
-        color: #17221e;
+        color-scheme: light dark;
+        --bg: #f5f3ee;
+        --surface: #fffefb;
+        --border: #e1dcd2;
+        --text: #1b201d;
+        --muted: #545b56;
+        --accent: #1d5a46;
+        --on-accent: #ffffff;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       }
-      * {
-        box-sizing: border-box;
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0e1311;
+          --surface: #151b18;
+          --border: #26302b;
+          --text: #e8ece7;
+          --muted: #a9b2ac;
+          --accent: #86c9ab;
+          --on-accent: #0e1311;
+        }
       }
+      * { box-sizing: border-box; }
       body {
-        min-height: 100vh;
         margin: 0;
+        min-height: 100dvh;
         display: grid;
         place-items: center;
-        background: radial-gradient(
-          circle at top left,
-          #ffffff 0,
-          #edf2ef 42%,
-          #dce7e1 100%
-        );
+        padding: 24px;
+        background: var(--bg);
+        color: var(--text);
       }
       main {
-        width: min(38rem, calc(100% - 2rem));
-        padding: 2rem 0;
-        border-top: 4px solid #60706b;
+        width: min(460px, 100%);
+        padding: 32px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 18px 48px -12px rgb(40 34 20 / 0.18);
       }
+      img { width: 40px; height: 40px; display: block; margin-bottom: 20px; }
       h1 {
-        margin: 0 0 0.75rem;
-        font-size: clamp(2rem, 7vw, 4rem);
+        margin: 0 0 8px;
+        font-family: "Iowan Old Style", Georgia, serif;
         font-weight: 500;
-        line-height: 1;
+        font-size: 1.625rem;
+        line-height: 2rem;
       }
-      p {
-        max-width: 32rem;
-        margin: 0;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 0.95rem;
-        line-height: 1.7;
+      p { margin: 0 0 12px; color: var(--muted); line-height: 1.5; }
+      button {
+        margin-top: 12px;
+        min-height: 44px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--accent);
+        color: var(--on-accent);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
       }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Wealthboard is offline</h1>
-      <p>
-        Your financial data was not cached. Reconnect, then reload this page to
-        continue.
-      </p>
+      <img src="/logo.svg" alt="" />
+      <h1>You're offline</h1>
+      <p>Wealthboard needs a connection to your server to show current balances. Nothing is stored on this device.</p>
+      <p>Reconnect, then try again. Recording is paused until then.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
     </main>
   </body>
 </html>

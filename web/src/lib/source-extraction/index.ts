@@ -1,4 +1,4 @@
-import type { AISource } from "@/lib/types";
+import type { AISource } from "@/api/types";
 import {
   EXTRACTION_TIMEOUT_MS,
   MAX_PASSWORD_LENGTH,

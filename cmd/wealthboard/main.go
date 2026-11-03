@@ -126,6 +126,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	overviewHandler := api.NewOverviewHandler(authHandler, service.NewOverviewService(generated.New(db)))
 	coreReads := api.NewCoreReadHandler(authHandler, service.NewCoreReadService(service.NewSQLCoreReadRepository(db)))
 	goalsReports := api.NewGoalsReportsHandler(authHandler, service.NewGoalsReportsService(service.NewSQLGoalsReportsRepository(db)))
+	insights := api.NewInsightsHandler(authHandler, service.NewInsightsService(service.NewSQLGoalsReportsRepository(db)))
 	featureReads := api.NewFeatureReadHandler(authHandler, service.NewFeatureReads(db))
 	var credentialCodec *aiworkflow.CredentialCodec
 	if os.Getenv("AI_CREDENTIAL_ENCRYPTION_KEY") != "" {
@@ -174,7 +175,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	server := &http.Server{
 		Addr: cfg.HTTP.Address,
 		Handler: api.NewRouterWithReads(logger, ready, authHandler, overviewHandler, api.ReadHandlers{
-			Core: coreReads, GoalsReports: goalsReports, Features: featureReads, Static: spa, Mutations: mutations,
+			Core: coreReads, GoalsReports: goalsReports, Insights: insights, Features: featureReads, Static: spa, Mutations: mutations,
 		}),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,

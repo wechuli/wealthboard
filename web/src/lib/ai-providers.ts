@@ -1,4 +1,4 @@
-import type { AIProvider } from "@/lib/types";
+import type { AIProvider } from "@/api/types";
 
 export type AIProviderOption = {
   value: AIProvider;
@@ -43,7 +43,7 @@ export const aiProviders: readonly AIProviderOption[] = [
 
 export function aiProviderOption(provider: AIProvider): AIProviderOption {
   return (
-    aiProviders.find((option) => option.value === provider) ?? aiProviders[0]
+    aiProviders.find((option) => option.value === provider) ?? aiProviders[0]!
   );
 }
 

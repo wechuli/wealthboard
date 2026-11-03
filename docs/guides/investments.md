@@ -22,8 +22,8 @@ Select the method when creating the account.
 
 | Method               | Use it for                                                                                     | Authoritative value                                                               |
 | -------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **Account value**    | Cash, property, vehicles, liabilities, unsupported investments, or one manually valued holding | Monetary transactions and absolute valuations                                     |
-| **Units and prices** | A brokerage cash ledger with long-only stocks, ETFs, or directly priced funds                  | Cash transactions, position events, security prices, and effective exchange rates |
+| **Value-tracked**    | Cash, property, vehicles, liabilities, unsupported investments, or one manually valued holding | Monetary transactions and absolute valuations                                     |
+| **Position-tracked** | A brokerage cash ledger with long-only stocks, ETFs, or directly priced funds                  | Cash transactions, position events, security prices, and effective exchange rates |
 
 An account cannot switch methods through normal editing. Use the guided
 conversion workflow when an existing investible balance account needs explicit
@@ -31,17 +31,18 @@ units and prices.
 
 ## Create a position account
 
-1. Open **Accounts → Add account**.
-2. Choose an active investment category such as **Securities**.
-3. Select **Units and prices**.
-4. Choose the permanent account currency and enter opening broker cash.
-5. Create or select an instrument.
-6. Record an opening position with its explicit quantity and optional reference
-   cost basis.
-7. Add an effective-dated unit price.
+1. Add each instrument under **Settings → Instruments** if it does not exist yet.
+2. Open **Accounts → Add account** and select **Position-tracked**.
+3. Choose an active investment category such as **Securities**.
+4. Choose the permanent account currency and enter **Opening cash**.
+5. Optionally select **Add holding** for each opening position with its
+   explicit quantity and unit price.
+6. Review and select **Create account**.
+7. Use **Update price** to add an effective-dated unit price when needed.
 
-Leave **Fee amount**, **Cash effect**, and **Applied exchange rate** empty for
-opening positions and quantity adjustments. Those fields describe cash-settled
+To record an opening position later, choose **Add holding** in the **Holdings**
+card. Leave **Fee**, **Cash paid**, and **Applied rate** empty for opening
+positions and quantity adjustments. Those fields describe cash-settled
 buys and sells, not an opening holding; the form starts with no fee.
 
 An instrument has its own identity, symbol, type, quote currency, and optional
@@ -56,30 +57,36 @@ The current account value is:
 2. plus each replayed quantity multiplied by its effective unit price;
 3. converted into the account currency when the instrument is quoted elsewhere.
 
-For a foreign-currency account, **Base-currency value** shows that same current
-account total in your configured base currency. **Current value** and **Cash**
-remain in the account currency. A missing exchange rate is shown as incomplete,
+For a foreign-currency account, the figure beside **≈** under **Total value ·
+cash and holdings** shows that same current account total in your configured
+base currency. The total, **Holdings**, and **Cash** remain in the account
+currency. A missing exchange rate is shown as incomplete,
 not as zero. Account lists and detail pages use the same Go calculation and
 owner-scoped, effective-dated rates for base-currency values.
 
-The **Positions** table keeps each security's quantity separate and shows its
-effective unit price, date, source, and account-currency value. Use **Add holding**
-for an opening position, **Add instrument** for a new security reference, and the
-price edit control on a row to update that specific security. Prices are shared
-by all of your accounts holding that instrument.
+The **Holdings** table keeps each security's quantity separate and shows its
+effective unit price, date, source, account-currency value, and freshness. Use
+**Add holding** for an opening position, **Settings → Instruments** for a new
+security reference, and a row's actions menu (**Buy more**, **Sell**, **Update
+price**, **Adjust quantity**, **Corporate action**, or **View instrument**) to
+work with that specific security. Prices are shared by all of your accounts
+holding that instrument; an instrument's page lists every account that holds
+it.
 
 ## Review investment history
 
-**Investment activity** combines cash transactions, position events, corporate
-actions, and price observations in one newest-first timeline. Use **Previous**
-and **Next** to browse older records; the selected page remains in the URL.
-Ordinary position events can be opened directly for correction, including
-events older than the first page of history. Grouped and corporate-action
-records remain managed through their dedicated workflows.
+**Trades, prices, and cash** combines cash transactions, position events,
+corporate actions, and price observations in one newest-first timeline, grouped
+by month. Filter it to **Trades**, **Prices**, or **Cash**, and select **Load
+more** for older records. A trade's row menu offers **Edit trade** and **Delete
+trade**; grouped and corporate-action records offer **Undo** for the whole
+group instead.
 
 ## Permanently delete an instrument
 
-Open **Instruments** and select the instrument's delete control. Confirming
+Open **Settings → Instruments** to archive an instrument you no longer use;
+archived instruments can't be chosen for new activity. Permanent deletion is
+available through the API (`DELETE /api/v1/instruments/{id}`). Confirming it
 permanently removes the instrument and all its saved prices. Both active and
 archived instruments can be deleted when no account history references them.
 
@@ -116,7 +123,8 @@ Deposits, withdrawals, interest, cash dividends, fees, and signed cash
 adjustments belong to the account cash subledger. A cash dividend alone does
 not add units.
 
-Use **Reinvest** when one dividend immediately purchases units. Wealthboard
+Use **More → Dividend reinvestment** when one dividend immediately purchases
+units. Wealthboard
 stores the dividend cash row and the buy as one grouped economic event. Saving,
 deleting, restoring, or importing the group is atomic.
 
@@ -124,8 +132,8 @@ deleting, restoring, or importing the group is atomic.
 
 ## Transfer units and record corporate actions
 
-Open **Investment action** from the account and choose the source event that
-matches the statement.
+Open the account's **More** menu and choose the corporate action that matches
+the statement.
 
 | Action               | Result                                                                                                          |
 | -------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -161,9 +169,10 @@ cannot value the new share count; the holding remains incomplete until a
 post-split quote is available. Earlier historical values are preserved.
 
 Configure separate stock, ETF, and fund freshness thresholds under
-**Settings → Preferences → Price freshness thresholds**. The account's
-Positions table shows the instrument, quote currency, effective price date,
-source, and stale state. Account analytics, dashboard history, and reports flag
+**Settings → Preferences → Price freshness**. The account's **Holdings**
+table shows the instrument, quote currency, effective price date, source, and
+stale state. Account analytics, Home history, Insights, and the **Needs
+attention** list (the bell in the header) flag
 incomplete values; the investment import report identifies missing prices and
 currencies. These views do not all provide detailed affected-date ranges.
 
@@ -172,8 +181,8 @@ the result incomplete. Do not interpret that partial total as zero exposure.
 
 ## Reconcile a broker statement
 
-Choose **Reconcile** and record the statement date, reported total, optional
-reported cash, and notes. The current screen stores these observations and
+Choose **More → Reconcile to statement** and record the statement date,
+reported total, optional reported cash, and notes. The current screen stores these observations and
 lists reported totals; it does not calculate a same-date cash/position
 difference. Compare the statement with the account history before recording
 any corrections.
@@ -184,19 +193,19 @@ the underlying source event or adding a confirmed missing record.
 
 ## Convert an existing account
 
-Use **Convert** on an active, investible Account value account. The workflow does
-not rewrite or infer historical units.
+Use **More → Convert to position tracking** on an active, investible
+value-tracked account. The workflow does not rewrite or infer historical units.
 
 1. Choose a conversion date no earlier than the account's latest activity.
 2. Enter explicit opening broker cash.
-3. Select an existing instrument and enter its quantity, unit price, and
-   optional reference basis. The current web form accepts one holding and uses
-   `conversion` as the price source; the Go API supports multiple holdings.
-4. Preview the source balance, opening cash, positions, projected total, and
-   difference.
+3. Select an existing instrument and enter its quantity, unit price, optional
+   reference basis, and price source (`conversion` by default). Select **Add
+   holding** for each additional instrument.
+4. Select **Preview conversion** to compare the source balance, opening cash,
+   holdings, new account total, and difference.
 5. Resolve the difference, or explicitly accept it when the source statement
    supports the replacement values.
-6. Confirm conversion.
+6. Select **Convert account**.
 
 ![Guided conversion preview matching an archived total-value account to explicit cash and holdings](/images/screenshots/account-conversion-preview.png)
 
@@ -214,13 +223,12 @@ Position accounts use **Investment History v1**, not Account History Import v1.
 The Go preview resolves instruments, replays every event in deterministic order,
 and returns before/after quantities, price effective dates, projected cash and
 positions, net change, duplicates, conflicts, oversells, and missing prices or
-rates. The page shows counts and the first 50 row outcomes. Download **Report**
-to inspect the complete preview before committing.
+rates. **Review before importing** shows counts, instruments, trades, prices,
+and **Every record** so you can inspect the complete preview before committing.
 
-The optional **Convert document with AI** workflow extracts a source in your
-self-hosted instance, then asks for approval before sending selected source
-sections to your configured provider. The current import page does not expose
-the older copyable transformation prompts. Review the generated JSON through
+The optional **Convert with AI** tab reads a source file in your browser, then
+asks for approval before sending selected source sections to your configured
+provider. Review the generated JSON through
 the same preview and commit workflow; see [AI-assisted import](../reference/ai-import).
 Use complete JSON when records are interdependent or a dividend and its
 reinvestment buys must share one atomic group.
@@ -241,7 +249,7 @@ It also refreshes the values of your other accounts holding that instrument.
 - **Estate planning** retains account-based instructions, but does not yet
   perform complete effective-dated price and FX valuation. See
   [Estate planning](./estate-planning#step-1-make-the-asset-list-trustworthy).
-- **Dashboard and reports** include complete converted exposure and identify
+- **Home and Insights** include complete converted exposure and identify
   unresolved components.
 - **Movement attribution** separates external cash, income, fees, internal trade
   cash, quantity, price, and currency movement.

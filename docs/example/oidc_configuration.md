@@ -583,8 +583,9 @@ requires an explicit linking step.
 2. Configure the provider client and its user/group assignments.
 3. Change to `AUTH_METHODS=local,oidc` and restart Wealthboard.
 4. Sign in locally as an existing user.
-5. Open **Settings > Authentication methods**.
-6. Confirm the local password and complete **Link the provider**.
+5. Open **Settings → Security → Sign-in methods**.
+6. Confirm the local password and complete **Link _provider_** (for example,
+   **Link E2E Keycloak**).
 7. Repeat for every active user who must keep the existing portfolio.
 8. Verify provider login returns each user to the existing portfolio.
 9. Only after every active user is linked, change to `AUTH_METHODS=oidc` and
@@ -734,7 +735,7 @@ client and Authorization Code flow.
 
 This usually means an existing local user used provider login before explicitly
 linking the identity. Return to hybrid mode, sign in to the intended local
-account, and use **Settings > Authentication methods**. Do not attempt to merge
+account, and use **Settings → Security → Sign-in methods**. Do not attempt to merge
 users by editing email, username, provider subject, or database rows.
 
 ### OIDC-only readiness fails after switching modes

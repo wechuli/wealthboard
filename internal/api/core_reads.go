@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -27,6 +29,7 @@ type coreReadService interface {
 	Transactions(context.Context, uuid.UUID, service.ActivityFilter) (service.Page[service.Transaction], error)
 	Valuations(context.Context, uuid.UUID, service.ActivityFilter) (service.Page[service.Valuation], error)
 	Activity(context.Context, uuid.UUID, service.ActivityFilter) (service.Page[service.ActivityItem], error)
+	ActivityFeed(context.Context, uuid.UUID, service.ActivityFilter) (service.Page[service.ActivityItem], error)
 }
 
 type CoreReadHandler struct {
@@ -110,6 +113,51 @@ func (handler *CoreReadHandler) Transactions(response http.ResponseWriter, reque
 	}
 	result, err := handler.service.Transactions(request.Context(), principal.UserID, filter)
 	handler.writeResult(response, result, err)
+}
+
+// ActivityFeed serves GET /activity: one owner-scoped ledger across all accounts.
+func (handler *CoreReadHandler) ActivityFeed(response http.ResponseWriter, request *http.Request) {
+	principal, ok := handler.authorize(response, request)
+	if !ok {
+		return
+	}
+	filter, err := parseActivityFeedFilter(request)
+	if err != nil {
+		writeProblem(response, http.StatusBadRequest, "Invalid filters", err.Error())
+		return
+	}
+	result, err := handler.service.ActivityFeed(request.Context(), principal.UserID, filter)
+	handler.writeResult(response, result, err)
+}
+
+func parseActivityFeedFilter(request *http.Request) (service.ActivityFilter, error) {
+	query := request.URL.Query()
+	activityType := query.Get("type")
+	query.Del("type")
+	stripped := request.Clone(request.Context())
+	stripped.URL.RawQuery = query.Encode()
+	filter, err := parseActivityFilter(stripped, nil, false)
+	if err != nil {
+		return service.ActivityFilter{}, err
+	}
+	if activityType != "" {
+		if !activityFeedTypes[activityType] {
+			return service.ActivityFilter{}, errors.New("type is not a supported activity type")
+		}
+		filter.Type = activityType
+	}
+	if kind := query.Get("kind"); kind != "" {
+		if kind != "transaction" && kind != "valuation" && kind != "position" && kind != "price" {
+			return service.ActivityFilter{}, errors.New("kind must be transaction, valuation, position, or price")
+		}
+		filter.Kind = kind
+	}
+	search := strings.TrimSpace(query.Get("q"))
+	if utf8.RuneCountInString(search) > 200 || strings.ContainsRune(search, 0) {
+		return service.ActivityFilter{}, errors.New("q must be at most 200 characters")
+	}
+	filter.Query = search
+	return filter, nil
 }
 
 func (handler *CoreReadHandler) accountActivity(response http.ResponseWriter, request *http.Request, kind string) {
@@ -234,6 +282,19 @@ func parseOptionalDate(value string) (*time.Time, error) {
 	}
 	return &parsed, nil
 }
+
+var activityFeedTypes = func() map[string]bool {
+	types := map[string]bool{
+		"valuation": true, "security_price": true,
+		"opening_position": true, "buy": true, "sell": true, "quantity_adjustment": true,
+		"transfer_in": true, "transfer_out": true, "split": true, "spinoff": true,
+		"merger_in": true, "merger_out": true,
+	}
+	for transactionType := range transactionTypes {
+		types[transactionType] = true
+	}
+	return types
+}()
 
 var transactionTypes = map[string]bool{
 	"opening_balance": true, "deposit": true, "withdrawal": true, "interest": true,

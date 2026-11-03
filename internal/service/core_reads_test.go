@@ -17,6 +17,8 @@ type fakeCoreReadRepository struct {
 	activityCalls    int
 	transactions     []TransactionRow
 	activityRows     []ActivityRow
+	feedUserID       uuid.UUID
+	feedFilter       ActivityFilter
 }
 
 func (repository *fakeCoreReadRepository) GetSettings(context.Context, uuid.UUID) (SettingsRow, error) {
@@ -53,6 +55,12 @@ func (repository *fakeCoreReadRepository) ListValuations(context.Context, uuid.U
 
 func (repository *fakeCoreReadRepository) ListActivity(context.Context, uuid.UUID, ActivityFilter) ([]ActivityRow, error) {
 	repository.activityCalls++
+	return repository.activityRows, nil
+}
+
+func (repository *fakeCoreReadRepository) ListActivityFeed(_ context.Context, userID uuid.UUID, filter ActivityFilter) ([]ActivityRow, error) {
+	repository.activityCalls++
+	repository.feedUserID, repository.feedFilter = userID, filter
 	return repository.activityRows, nil
 }
 
