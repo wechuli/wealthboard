@@ -1,3 +1,5 @@
+import { browserStorage } from './storage'
+
 export type ThemePreference = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 
@@ -12,7 +14,7 @@ export function resolveTheme(preference: ThemePreference, systemPrefersDark: boo
   return preference
 }
 
-export function readThemePreference(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): ThemePreference {
+export function readThemePreference(storage: Pick<Storage, 'getItem'> | undefined = browserStorage()): ThemePreference {
   try {
     return parseThemePreference(storage?.getItem(THEME_STORAGE_KEY))
   } catch {
@@ -20,7 +22,7 @@ export function readThemePreference(storage: Pick<Storage, 'getItem'> | undefine
   }
 }
 
-export function writeThemePreference(pref: ThemePreference, storage: Pick<Storage, 'setItem'> | undefined = globalThis.localStorage): void {
+export function writeThemePreference(pref: ThemePreference, storage: Pick<Storage, 'setItem'> | undefined = browserStorage()): void {
   try {
     storage?.setItem(THEME_STORAGE_KEY, pref)
   } catch {

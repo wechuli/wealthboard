@@ -35,7 +35,7 @@ export function isDecimalString(value: string): boolean {
 }
 
 function assertMinor(value: string): void {
-  if (!MINOR_RE.test(value)) throw new TypeError(`Not a minor-unit string: ${value}`)
+  if (!MINOR_RE.test(value)) throw new TypeError('Not a minor-unit string')
 }
 
 /** Converts minor units to an exact major-unit decimal string, for example ("-1250", "KES") → "-12.50". */
@@ -165,7 +165,7 @@ export interface DecimalFormatOptions {
 
 /** Formats an exact decimal string (quantity, unit price, rate) with grouping. */
 export function formatDecimal(decimal: string, options: DecimalFormatOptions = {}): string {
-  if (!DECIMAL_RE.test(decimal)) throw new TypeError(`Not a decimal string: ${decimal}`)
+  if (!DECIMAL_RE.test(decimal)) throw new TypeError('Not a decimal string')
   const { minFraction = 0, maxFraction = UNIT_DECIMALS, sign = 'auto' } = options
   const negative = decimal.startsWith('-')
   const abs = negative ? decimal.slice(1) : decimal

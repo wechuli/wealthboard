@@ -15,7 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { SelectField } from '@/components/ui/Field'
 import { Notice } from '@/components/ui/Notice'
 import { cn } from '@/lib/cn'
-import { CURRENCIES, type CurrencyInfo } from '@/lib/currency'
+import { CURRENCIES, orderCurrencyCodes, type CurrencyInfo } from '@/lib/currency'
 import { formatDecimal } from '@/lib/money'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
 import { usePrefs } from '@/lib/prefs'
@@ -136,7 +136,7 @@ function CurrencyForm({ data }: { data: SettingsRead }) {
 
   const onSubmit = handleSubmit((v) => {
     if (save.isPending) return
-    const supported = CURRENCIES.map((c) => c.code).filter((c) => v.enabled.includes(c) || locked.has(c))
+    const supported = orderCurrencyCodes([...v.enabled, ...locked.keys()])
     save.mutate({ baseCurrency: v.baseCurrency, supportedCurrencies: supported }, { onError: (err) => applyFieldErrors(err, setError, ['baseCurrency'], { supportedCurrencies: 'enabled' }) })
   })
 
@@ -362,8 +362,7 @@ function ExchangeRatesPanel({ data, add }: { data: SettingsRead; add: ReturnType
   const formBase = prefill?.base ?? firstForeign
   const formQuote = prefill?.quote ?? base
   const offered = useMemo(() => {
-    const set = new Set([...config.enabledCurrencies, ...config.referencedCurrencies, base, formBase, formQuote])
-    return CURRENCIES.map((c) => c.code).filter((c) => set.has(c))
+    return orderCurrencyCodes([...config.enabledCurrencies, ...config.referencedCurrencies, base, formBase, formQuote])
   }, [config, base, formBase, formQuote])
 
   const remove = useApiMutation({

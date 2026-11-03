@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
+import { readStored, writeStored } from '@/lib/storage'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -67,13 +68,13 @@ export function PwaPrompts() {
   }, [])
 
   useEffect(() => {
-    if (!install.available || localStorage.getItem('wealthboard-install-dismissed')) return
+    if (!install.available || readStored('wealthboard-install-dismissed')) return
     toast('Install Wealthboard', {
       id: 'pwa-install',
       description: 'Open it like an app, with its own window and icon.',
       duration: 12_000,
       action: { label: 'Install', onClick: install.prompt },
-      onDismiss: () => localStorage.setItem('wealthboard-install-dismissed', '1'),
+      onDismiss: () => writeStored('wealthboard-install-dismissed', '1'),
     })
   }, [install.available, install.prompt])
 

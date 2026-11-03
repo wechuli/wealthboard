@@ -2,6 +2,7 @@ import { Download, Keyboard, LogOut, Monitor, Moon, Settings, Sun, User } from '
 import { useNavigate } from 'react-router'
 import { usePrefs } from '@/lib/prefs'
 import { useSession } from '@/lib/session'
+import { useSignOut } from './useSignOut'
 import { useTheme } from '@/lib/theme-context'
 import type { ThemePreference } from '@/lib/theme'
 import { MenuContent, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuRoot, MenuSeparator, MenuTrigger } from '@/components/ui/Menu'
@@ -14,7 +15,8 @@ export function initials(name: string): string {
 }
 
 export function UserMenu() {
-  const { user, signOut } = useSession()
+  const { user } = useSession()
+  const signOut = useSignOut()
   const { displayName } = usePrefs()
   const theme = useTheme()
   const navigate = useNavigate()
@@ -63,10 +65,7 @@ export function UserMenu() {
         </MenuItem>
         <MenuItem
           icon={<LogOut />}
-          onSelect={async () => {
-            await signOut()
-            navigate('/sign-in', { replace: true })
-          }}
+          onSelect={signOut}
         >
           Sign out
         </MenuItem>

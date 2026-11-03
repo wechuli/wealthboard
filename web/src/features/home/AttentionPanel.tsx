@@ -18,13 +18,26 @@ export function AttentionPanel({ dash }: { dash: Dashboard }) {
   const items = q.data?.items ?? []
   const shown = all ? items : items.slice(0, LIMIT)
   const count = items.length
+  // "All clear" needs a successful check; a failed one must stay open on phones to show its retry.
+  const checked = q.isSuccess
+  const failed = q.isError && !q.data
   return (
     <Panel
       title="Needs attention"
       description={count ? 'Fix these to keep totals complete and current' : 'Prices, rates, and goals'}
-      teaser={count ? `${count} ${count === 1 ? 'item' : 'items'} to review` : 'Everything is current'}
-      collapsible={dash.currentComplete}
-      action={count ? <Badge tone="warning">{count} open</Badge> : <Badge tone="positive" icon={<CheckCircle2 size={12} aria-hidden />}>All clear</Badge>}
+      teaser={count ? `${count} ${count === 1 ? 'item' : 'items'} to review` : checked ? 'Everything is current' : 'Checking prices, rates, and goals'}
+      collapsible={dash.currentComplete && !failed}
+      action={
+        count ? (
+          <Badge tone="warning">{count} open</Badge>
+        ) : failed ? (
+          <Badge tone="warning">Check failed</Badge>
+        ) : checked ? (
+          <Badge tone="positive" icon={<CheckCircle2 size={12} aria-hidden />}>
+            All clear
+          </Badge>
+        ) : null
+      }
     >
       {!dash.currentComplete ? <IncompleteTotalsNotice missingCurrencies={dash.missingCurrencies} scope="net-worth totals" className="mb-3" /> : null}
       {q.isPending ? (

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router'
+import { NavLink } from 'react-router'
 import { LogOut, Menu as MenuIcon, Plus } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { usePrefs } from '@/lib/prefs'
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button'
 import { useRecorder } from '@/features/recording/recorder'
 import { PLANNING_NAV, PRIMARY_NAV, SETTINGS_NAV, type NavItem } from './nav'
 import { initials } from './UserMenu'
+import { useSignOut } from './useSignOut'
 
 function Tab({ item }: { item: NavItem }) {
   const Icon = item.icon
@@ -72,11 +73,11 @@ export function BottomNav() {
 }
 
 function MobileMenu({ open, onOpenChange }: { open: boolean; onOpenChange(o: boolean): void }) {
-  const { user, signOut } = useSession()
+  const { user } = useSession()
+  const signOut = useSignOut()
   const { displayName } = usePrefs()
   const privacy = usePrivacy()
   const theme = useTheme()
-  const navigate = useNavigate()
   const close = () => onOpenChange(false)
   const items = [PRIMARY_NAV[2]!, PRIMARY_NAV[4]!, SETTINGS_NAV]
   const name = displayName || user?.username || ''
@@ -129,7 +130,6 @@ function MobileMenu({ open, onOpenChange }: { open: boolean; onOpenChange(o: boo
         onClick={async () => {
           close()
           await signOut()
-          navigate('/sign-in', { replace: true })
         }}
       >
         Sign out

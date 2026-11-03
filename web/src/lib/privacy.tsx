@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { PRIVACY_STORAGE_KEY } from '@/config'
+import { browserStorage, writeStored } from './storage'
 
 interface PrivacyContextValue {
   hidden: boolean
@@ -9,7 +10,7 @@ interface PrivacyContextValue {
 
 const PrivacyContext = createContext<PrivacyContextValue>({ hidden: false, setHidden: () => {}, toggle: () => {} })
 
-export function readPrivacy(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): boolean {
+export function readPrivacy(storage: Pick<Storage, 'getItem'> | undefined = browserStorage()): boolean {
   try {
     return storage?.getItem(PRIVACY_STORAGE_KEY) === 'true'
   } catch {
@@ -21,11 +22,7 @@ export function PrivacyProvider({ children }: { children: ReactNode }) {
   const [hidden, setHiddenState] = useState(readPrivacy)
   const setHidden = useCallback((next: boolean) => {
     setHiddenState(next)
-    try {
-      localStorage.setItem(PRIVACY_STORAGE_KEY, String(next))
-    } catch {
-      /* ignore */
-    }
+    writeStored(PRIVACY_STORAGE_KEY, String(next))
   }, [])
   useEffect(() => {
     document.documentElement.dataset.valuesHidden = String(hidden)
