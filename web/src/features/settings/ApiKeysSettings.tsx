@@ -27,7 +27,6 @@ export const API_KEY_SCOPES: { scope: APIKeyScope; label: string; description: s
   { scope: 'portfolio:write', label: 'Change portfolio data', description: 'Record transactions, valuations, trades, and goal changes.' },
   { scope: 'imports:write', label: 'Preview and commit imports', description: 'Upload account history files.' },
   { scope: 'exports:read', label: 'Download exports', description: 'Full-portfolio JSON and CSV exports.' },
-  { scope: 'ai:invoke', label: 'Invoke AI workflows', description: 'Run the AI features you have configured, using your provider key.' },
 ]
 const SCOPE_VALUES = API_KEY_SCOPES.map((s) => s.scope) as [APIKeyScope, ...APIKeyScope[]]
 

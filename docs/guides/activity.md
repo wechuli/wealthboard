@@ -141,9 +141,21 @@ precision, such as `derived-2026-09-01-deposit-10.50`. Identical transactions
 on the same date are numbered in file order (`…-10.50-2`), so keep the
 statement order when you re-import overlapping periods.
 
-To convert a statement with an AI service you already use, expand **Prefer
-your own AI tool?** on either import tab, choose CSV or JSON, and copy the
-prompt. Wealthboard does not send the prompt or your statement anywhere.
-Preview the result before importing it.
+### Convert a statement with an AI chat
+
+Wealthboard has no built-in AI conversion. To turn a bank statement into this
+format, expand **Convert a statement with an AI chat** on the import page,
+choose CSV or JSON, and copy the prompt. Paste it into ChatGPT, Claude, or
+another AI chat you trust, add the statement at the marker, and save the reply
+as a `.csv` or `.json` file. Then choose that file on the import page.
+
+The prompt asks for exactly the format above, the account currency's decimal
+places, and a blank `external_id` when the statement has no ID. AI output can
+contain mistakes, so check every row in the preview before importing.
+Wealthboard never sends the prompt or your statement anywhere; the AI service's
+terms apply to what you paste into it.
+
+To record a few transactions instead, an assistant connected through
+[MCP](../reference/mcp) can add them one at a time if you allow changes.
 
 Opening balances and transfers cannot be imported through this format.

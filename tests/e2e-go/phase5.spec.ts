@@ -9,7 +9,6 @@ import {
 } from "@playwright/test";
 
 import type { components } from "../../web/src/api/schema";
-import { docxDocument, pdfDocument, xlsxWorkbook } from "./document-fixtures";
 
 const origin = `http://127.0.0.1:${process.env.E2E_GO_PORT || 3200}`;
 
@@ -1083,166 +1082,42 @@ test("asks a signed-out user to sign in before consent and returns a declined co
   }
 });
 
-test("rejects unsupported AI providers and server-side source extraction", async ({
+test("imports without in-app AI and offers a prompt for an AI chat", async ({
   page,
 }) => {
-  const session = await signUp(page, "go-ai-owner");
-  const settingsInput = {
-    model: "fixture-import-model",
-    monthlyTokenLimit: 100000,
-    maxOutputTokens: 4000,
-  };
-  const custom = await mutation(page, session, "PUT", "/ai/settings", {
-    ...settingsInput,
-    provider: "custom",
-  });
-  expect(custom.status()).toBe(422);
-  expect(await custom.json()).toEqual(
-    expect.objectContaining({
-      detail: expect.stringContaining("choose OpenAI, Anthropic, or DeepSeek"),
-    }),
-  );
-  const endpoint = await mutation(page, session, "PUT", "/ai/settings", {
-    ...settingsInput,
-    provider: "openai",
-    baseUrl: "http://127.0.0.1:4200/v1",
-  });
-  expect(endpoint.status()).toBe(400);
+  const session = await signUp(page, "go-no-ai-owner");
+  const accountId = await createAccount(page, session, "Prompt savings");
 
-  const extracted = await page.request.post("/api/v1/ai/import/extract", {
-    headers: { Origin: origin, "X-CSRF-Token": session.csrfToken },
-    multipart: {
-      file: {
-        name: "statement.csv",
-        mimeType: "text/csv",
-        buffer: Buffer.from("id,amount\nfixture-1,24.00"),
-      },
-    },
+  // The bring-your-own-key provider and conversion endpoints are gone.
+  expect((await page.request.get("/api/v1/ai")).status()).toBe(404);
+  for (const [method, path] of [
+    ["PUT", "/ai/settings"],
+    ["POST", "/ai/credential"],
+    ["POST", "/ai/import/convert"],
+  ] as const) {
+    expect((await mutation(page, session, method, path, {})).status()).toBe(404);
+  }
+  const aiKey = await mutation(page, session, "POST", "/api-keys", {
+    name: "Old AI key",
+    scopes: ["ai:invoke"],
   });
-  expect(extracted.status()).toBe(404);
+  expect(aiKey.status()).toBe(422);
 
-  const review = await mutation(page, session, "POST", "/ai/review", {
-    period: "1y",
-    focus: "overall",
-    snapshot: {},
-  });
-  expect(review.status()).toBe(404);
-  const legacy = await mutation(page, session, "PUT", "/ai/settings", {
-    ...settingsInput,
-    provider: "openai",
-    includeExactAmounts: true,
-  });
-  expect(legacy.status()).toBe(400);
-});
+  await page.goto("/settings/ai");
+  await expect(page).toHaveURL(/\/settings\/connected-apps$/);
+  await expect(page.getByRole("link", { name: "AI provider" })).toHaveCount(0);
 
-test("extracts PDF, protected PDF, XLSX, DOCX, and CSV sources in the browser", async ({
-  page,
-}) => {
-  const session = await signUp(page, "go-ai-extract-owner");
-  const accountId = await createAccount(page, session, "Browser extraction");
-  const uploads: string[] = [];
-  page.on("request", (request) => {
-    const body = request.postDataBuffer();
-    if (
-      request.url().includes("/ai/import/extract") ||
-      body?.includes("FIXTURE_SOURCE_TEXT") ||
-      body?.includes("fictional-pdf-unlock")
-    )
-      uploads.push(`${request.method()} ${request.url()}`);
-  });
-  await page.goto(`/accounts/${accountId}/import`);
-  await page.getByRole("tab", { name: "Convert with AI" }).click();
-  await expect(page).toHaveURL(/[?&]tab=ai/);
+  await page.goto(`/accounts/${accountId}/import?tab=ai`);
   await expect(
-    page.getByRole("heading", { name: "Convert a statement with AI" }),
+    page.getByRole("heading", { level: 1, name: "Import history" }),
   ).toBeVisible();
-
-  const sourceFile = page.getByLabel("Source file");
-  const extractButton = page.getByRole("button", { name: "Read file" });
-  const firstUnit = page.getByLabel("Text to send for source-1");
-  const discard = page.getByRole("button", { name: "Choose another file" });
-  const extract = async (
-    file: { name: string; mimeType: string; buffer: Buffer },
-    expected: RegExp,
-    documentPassword?: string,
-  ) => {
-    await sourceFile.setInputFiles(file);
-    if (documentPassword !== undefined)
-      await page
-        .getByLabel("PDF password (if required)")
-        .fill(documentPassword);
-    await extractButton.click();
-    await expect(firstUnit).toHaveValue(expected);
-    await expect(page.getByText(file.name, { exact: true })).toBeVisible();
-    await discard.click();
-    await expect(firstUnit).toBeHidden();
-    await expect(sourceFile).toBeVisible();
-  };
-
-  await extract(
-    {
-      name: "statement.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from("id,description\nfixture-1,FIXTURE_SOURCE_TEXT csv"),
-    },
-    /\["id","description"\]/,
+  await expect(page.getByRole("tab", { name: "Convert with AI" })).toHaveCount(0);
+  await page
+    .getByRole("button", { name: /Convert a statement with an AI chat/ })
+    .click();
+  await expect(page.getByLabel("Conversion prompt")).toHaveValue(
+    /external_id,type,amount,date,description,notes/,
   );
-  await extract(
-    {
-      name: "statement.pdf",
-      mimeType: "application/pdf",
-      buffer: pdfDocument(["FIXTURE_SOURCE_TEXT pdf deposit 24.00"]),
-    },
-    /FIXTURE_SOURCE_TEXT pdf deposit 24\.00/,
-  );
-  await extract(
-    {
-      name: "activity.xlsx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      buffer: xlsxWorkbook([["FIXTURE_SOURCE_TEXT xlsx", "24.00"]]),
-    },
-    /Excel date system: 1900/,
-  );
-  await expect(page.getByLabel("Text to send for source-2")).toBeHidden();
-  await extract(
-    {
-      name: "statement.docx",
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      buffer: docxDocument(["FIXTURE_SOURCE_TEXT docx deposit 24.00"]),
-    },
-    /FIXTURE_SOURCE_TEXT docx deposit 24\.00/,
-  );
-
-  const protectedPdf = {
-    name: "protected.pdf",
-    mimeType: "application/pdf",
-    buffer: pdfDocument(["FIXTURE_SOURCE_TEXT protected deposit 24.00"], {
-      userPassword: "fictional-pdf-unlock",
-      ownerPassword: "fictional-pdf-owner",
-    }),
-  };
-  await sourceFile.setInputFiles(protectedPdf);
-  await extractButton.click();
-  await expect(page.getByRole("alert")).toContainText(
-    "This PDF requires a password",
-  );
-  const passwordField = page.getByLabel("PDF password (if required)");
-  await expect(passwordField).toBeFocused();
-  await passwordField.fill("wrong-fixture-password");
-  await extractButton.click();
-  await expect(page.getByRole("alert")).toContainText(
-    "The PDF password is incorrect",
-  );
-  await expect(passwordField).toHaveValue("");
-  await passwordField.fill("fictional-pdf-unlock");
-  await extractButton.click();
-  await expect(firstUnit).toHaveValue(
-    /FIXTURE_SOURCE_TEXT protected deposit 24\.00/,
-  );
-
-  expect(uploads).toEqual([]);
 });
 
 test("registers the built service worker and blocks offline financial mutations", async ({

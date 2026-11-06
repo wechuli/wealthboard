@@ -14,7 +14,7 @@ reachable through search and the command palette.
 | **Insights** | Net-worth history, allocation, income and returns, and account comparison |
 
 Secondary destinations are **Settings** (user menu, sidebar footer, palette) and **Planning**
-(estate planning and AI portfolio review, in the sidebar's "Planning" group and the mobile menu).
+(estate planning, in the sidebar's "Planning" group and the mobile menu).
 
 ### Global affordances (every signed-in screen)
 
@@ -53,7 +53,7 @@ All screens are lazy-loaded. Protected routes render only after `GET /session` b
 | `/accounts` | Accounts list | `?group=category\|institution\|currency\|kind\|mode\|state&sort=value\|name\|category\|change\|updated&view=cards\|table&show=active\|archived` |
 | `/accounts/new` | New-account wizard | Value-tracked or position-tracked first |
 | `/accounts/:accountId` | Account detail | Variant chosen by `trackingMode` and `isLiability`; `?tab=` selects a section |
-| `/accounts/:accountId/import` | Account history import | Direct import (balance or investment history) and "Convert with AI" |
+| `/accounts/:accountId/import` | Account history import | Direct import (balance or investment history) with a copyable prompt for converting a statement in an AI chat |
 | `/instruments/:instrumentId` | Instrument detail | Price history with stale ranges, plus an add-price form |
 | `/activity` | Activity ledger | `?kind=&account=&type=&from=&to=&q=` |
 | `/goals` | Goals overview | `?status=active\|paused\|completed\|cancelled\|all` |
@@ -71,15 +71,15 @@ All screens are lazy-loaded. Protected routes render only after `GET /session` b
 | `/settings/institutions` | Institutions | — |
 | `/settings/instruments` | Instruments and latest prices | Links to `/instruments/:id` |
 | `/settings/security` | Sign-in methods (password, single sign-on link/unlink), change password, session timeout | `?auth=<code>` shows the provider result |
-| `/settings/ai` | AI provider, key, sharing defaults, usage | — |
 | `/settings/api-keys` | Personal API keys | Token shown once at creation |
+| `/settings/connected-apps` | AI assistants connected over MCP | `/settings/ai` redirects here |
 | `/settings/data` | Export and restore | Restore requires typed confirmation and offers export first |
 | `/estate` | Estate planning overview | Sections: Overview, Beneficiaries, Distribution, Summary |
 | `/estate/beneficiaries` | Beneficiaries | — |
 | `/estate/distribution` | Per-asset directives, primary/contingent shares, residual estate | `?account=<id>` opens an asset |
 | `/estate/summary` | Review checks and retained summaries | — |
 | `/estate/snapshots/:snapshotId` | Printable retained summary | Privacy controls exclude sensitive fields by default |
-| `/review` | AI portfolio review | Consent and sharing controls; not financial advice |
+| `/oauth/consent` | Approve an AI assistant's MCP connection | `?request=<id>`; outside the app shell |
 | `/dev/style-guide` | Living style guide | Dev builds only |
 | `*` | Not found | — |
 

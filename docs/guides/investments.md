@@ -226,12 +226,12 @@ positions, net change, duplicates, conflicts, oversells, and missing prices or
 rates. **Review before importing** shows counts, instruments, trades, prices,
 and **Every record** so you can inspect the complete preview before committing.
 
-The optional **Convert with AI** tab reads a source file in your browser, then
-asks for approval before sending selected source sections to your configured
-provider. Review the generated JSON through
-the same preview and commit workflow; see [AI-assisted import](../reference/ai-import).
-Use complete JSON when records are interdependent or a dividend and its
-reinvestment buys must share one atomic group.
+To convert a brokerage statement, expand **Convert a statement with an AI
+chat** on the import page, choose a template, and copy the prompt into an AI
+chat you trust along with the statement. Import the file it returns through the
+same preview and commit workflow. Use complete JSON when records are
+interdependent or a dividend and its reinvestment buys must share one atomic
+group.
 
 ![Atomic investment import preview with instrument resolution, event ordering, quantities, and price impact](/images/screenshots/investment-import-preview.png)
 

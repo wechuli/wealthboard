@@ -116,17 +116,6 @@ export type ResiduaryAllocation = S['ResiduaryAllocation']
 export type EstateSnapshotMeta = S['EstateSnapshotMeta']
 export type EstateSnapshot = S['EstateSnapshot']
 
-// AI import conversion
-export type AIRead = S['AIRead']
-export type AIProvider = S['AIProvider']
-export type AIProviderSettings = S['AIProviderSettings']
-export type AISettingsInput = S['AISettingsInput']
-export type AIWorkflowSettings = S['AIWorkflowSettings']
-export type AIClearUsageResult = S['AIClearUsageResult']
-export type AIConversionRequest = S['AIConversionRequest']
-export type AIConversionDraft = S['AIConversionDraft']
-export type AISource = S['AISource']
-
 // API keys and authentication methods
 export type APIKeyScope = S['APIKeyScope']
 export type APIKeyMetadata = S['APIKeyMetadata']

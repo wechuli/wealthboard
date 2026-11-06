@@ -11,8 +11,8 @@ import { accountHistoryAiPrompt, FORMAT_LABELS, investmentHistoryAiPrompt, type 
 type CopyState = 'idle' | 'copied' | 'failed'
 
 /**
- * The browser-only alternative to AI conversion: a strict prompt to paste into an AI service the
- * person already trusts. Wealthboard never sends this prompt or any file anywhere.
+ * A strict prompt the person pastes into an AI chat they already use, together with their statement,
+ * to get a file in the import format. Wealthboard never sends this prompt or any file anywhere.
  */
 export function ManualPrompt({ currency, trackingMode }: { currency: string; trackingMode: 'balance' | 'positions' }) {
   const { enabledCurrencies } = usePrefs()
@@ -46,8 +46,8 @@ export function ManualPrompt({ currency, trackingMode }: { currency: string; tra
           className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-4 py-3 text-left hover:bg-sunken/60"
         >
           <span className="min-w-0">
-            <span className="block text-sm font-semibold text-ink">Prefer your own AI tool?</span>
-            <span className="mt-0.5 block text-xs font-normal text-muted">Copy a strict conversion prompt and use it anywhere. Nothing is sent by Wealthboard.</span>
+            <span className="block text-sm font-semibold text-ink">Convert a statement with an AI chat</span>
+            <span className="mt-0.5 block text-xs font-normal text-muted">Copy a prompt for ChatGPT, Claude, or another AI chat that turns a statement into this import format. Wealthboard sends nothing.</span>
           </span>
           <ChevronDown size={18} aria-hidden className={cn('shrink-0 text-muted transition-transform duration-[var(--dur-2)]', open && 'rotate-180')} />
         </button>

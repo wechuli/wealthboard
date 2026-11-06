@@ -23,7 +23,6 @@ type featureReadService interface {
 	Instrument(context.Context, uuid.UUID, uuid.UUID) (service.InstrumentDetail, error)
 	EstateWorkspace(context.Context, uuid.UUID) (service.EstateWorkspaceRead, error)
 	EstateSnapshot(context.Context, uuid.UUID, uuid.UUID) (service.EstateSnapshot, error)
-	AI(context.Context, uuid.UUID) (service.AIRead, error)
 }
 
 type FeatureReadHandler struct {
@@ -42,7 +41,6 @@ func RegisterFeatureReadRoutes(router chi.Router, handler *FeatureReadHandler) {
 	router.Get("/instruments/{id}", handler.Instrument)
 	router.Get("/estate", handler.EstateWorkspace)
 	router.Get("/estate/snapshots/{id}", handler.EstateSnapshot)
-	router.Get("/ai", handler.AI)
 }
 
 func (handler *FeatureReadHandler) Settings(response http.ResponseWriter, request *http.Request) {
@@ -123,19 +121,6 @@ func (handler *FeatureReadHandler) EstateSnapshot(response http.ResponseWriter, 
 			return
 		}
 		writeFeatureReadError(response, err, "The estate snapshot is temporarily unavailable.")
-		return
-	}
-	writeJSON(response, http.StatusOK, result)
-}
-
-func (handler *FeatureReadHandler) AI(response http.ResponseWriter, request *http.Request) {
-	principal, ok := handler.authorize(response, request)
-	if !ok {
-		return
-	}
-	result, err := handler.service.AI(request.Context(), principal.UserID)
-	if err != nil {
-		writeFeatureReadError(response, err, "AI provider metadata is temporarily unavailable.")
 		return
 	}
 	writeJSON(response, http.StatusOK, result)

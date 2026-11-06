@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
-import { Coins, DatabaseBackup, KeyRound, Landmark, LineChart, ShieldCheck, SlidersHorizontal, Sparkles, Tags, UserRound, type LucideIcon } from 'lucide-react'
+import { Coins, DatabaseBackup, KeyRound, Landmark, LineChart, ShieldCheck, SlidersHorizontal, Tags, UserRound, type LucideIcon } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { cn } from '@/lib/cn'
 import { SETTINGS_SECTIONS } from '@/features/shell/nav'
@@ -13,7 +13,6 @@ const ICONS: Record<string, LucideIcon> = {
   '/settings/institutions': Landmark,
   '/settings/instruments': LineChart,
   '/settings/security': ShieldCheck,
-  '/settings/ai': Sparkles,
   '/settings/api-keys': KeyRound,
   '/settings/data': DatabaseBackup,
 }

@@ -309,15 +309,6 @@ export function createHttpDataSource(baseUrl = API_BASE): DataSource {
       removeSnapshot: (id) => sendJson(`/estate/snapshots/${id}`, 'DELETE'),
     },
 
-    ai: {
-      get: () => getJson('/ai'),
-      saveSettings: (body) => sendJson('/ai/settings', 'PUT', body),
-      disconnect: () => sendJson('/ai/settings', 'DELETE'),
-      saveCredential: (apiKey) => sendJson('/ai/credential', 'POST', { apiKey }),
-      removeCredential: () => sendJson('/ai/credential', 'DELETE'),
-      clearUsage: () => sendJson('/ai/usage/clear', 'POST'),
-      convertImport: (body) => sendJson('/ai/import/convert', 'POST', body),
-    },
 
     apiKeys: {
       list: async () => (await getJson<{ keys: APIKeyMetadata[] }>('/api-keys')).keys,

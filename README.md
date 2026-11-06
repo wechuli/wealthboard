@@ -34,7 +34,8 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Browser-local System, Light, and Dark appearance themes in the profile menu
 - Quick add (`N`), a ⌘K / Ctrl K command palette, and a `Shift H` privacy
   toggle
-- Optional bring-your-own-key AI conversion of statements into import files
+- Strict CSV and JSON import formats, with a copyable prompt that turns a
+  statement into an import file in any AI chat
 - MCP endpoint so an AI assistant you choose (Claude, ChatGPT, or a developer
   tool) can query your data and, if you allow changes, record transactions and
   valuations, with OAuth consent and Connected apps
@@ -125,8 +126,7 @@ The Go binary reads process environment variables, not `.env` files.
 `.env.example` documents the available settings; export them or supply them
 through your process manager. Compose reads `.env` for its own interpolation.
 
-The root npm dependencies support documentation, browser tests, and direct-install
-document extraction. The separate `web/` dependencies build and test the client.
+The root npm dependencies support documentation and browser tests. The separate `web/` dependencies build and test the client.
 
 The default `AUTH_METHODS=local` mode preserves the original workflow. Open
 `/signup` to create local users. Signup atomically creates the internal identity,
@@ -184,8 +184,6 @@ conflict handling make repeat runs safe for the same target.
 | `OIDC_PROVIDER_NAME`           | Login-button provider label; 1-60 characters                              |
 | `OIDC_TRANSACTION_SECRET`      | Dedicated base64-encoded 32-byte OIDC transaction key                     |
 | `TZ`                           | Default timezone for new users; default `Africa/Nairobi`                  |
-| `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys           |
-| `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
 | `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                                     |
 | `MCP_ENABLED`                  | `false` removes `/mcp`, its OAuth sign-in, and Connected apps; default `true` |
 | `MCP_REQUESTS_PER_MINUTE`      | Per-API-key `/mcp` request limit in each replica; default `120`           |
@@ -281,23 +279,6 @@ the same reverse proxy can share its rate-limit bucket. Account for this when
 configuring ingress-side throttling; enabling the legacy toggle does not
 provide per-client rate limiting behind a proxy.
 
-Generate a dedicated AI credential key only when users should be able to save
-provider keys:
-
-```bash
-openssl rand -base64 32
-```
-
-Do not reuse `SESSION_SECRET`. The value must be canonical base64 for exactly 32
-bytes. Without it, users can still submit a session-only provider key for one
-request. OpenAI, Anthropic, and DeepSeek use fixed built-in endpoints that
-provider environment variables such as `OPENAI_BASE_URL` cannot redirect. Every
-provider hostname is resolved before use, and private, loopback, link-local,
-multicast, and other local ranges are rejected. Redirects and environment HTTP
-proxies are disabled, and operator provider keys in the environment are never
-sent. Keep the encryption key stable;
-changing it makes remembered keys undecryptable until users replace them.
-
 ## Password changes and operator reset
 
 Users with a local credential change it under **Settings → Security → Change
@@ -338,7 +319,7 @@ retrieves its session and CSRF token from `/api/v1/session`.
 External clients may use personal API keys in `Authorization: Bearer <token>`.
 Keys are owner-scoped, show their full secret only at creation, and default to
 `portfolio:read`. Other explicit scopes are `portfolio:write`, `imports:write`,
-`exports:read`, and `ai:invoke`. They do not grant credential management or
+and `exports:read`. They do not grant credential management or
 user-restore access. Password resets invalidate browser sessions, not API keys;
 revoke keys separately when needed.
 
@@ -423,57 +404,21 @@ test restores. TLS must terminate at
 the configured `APP_URL`; the ingress must overwrite rather than append
 client-supplied forwarding headers. The example egress policy allows only DNS
 and the selected PostgreSQL pods. Add narrowly scoped provider egress before
-enabling OIDC or AI; those integrations cannot use the default policy unchanged.
+enabling OIDC; it cannot use the default policy unchanged.
 
-## AI statement conversion
+## AI assistants
 
-AI-assisted import is optional and runs only on request. Choose OpenAI,
-Anthropic, or DeepSeek and a model under **Settings → AI provider**, then open
-**Convert with AI** on an account's **Import history** page. The settings form
-suggests current models for each provider and accepts any other model ID the
-provider serves. Users supply their own provider API keys.
+Wealthboard has no built-in AI provider and stores no AI API keys. Instead:
 
-All AI calls run through [Genkit for Go](https://genkit.dev/docs/go/get-started/).
-The server calls `genkit.Init` once at startup with the OpenAI, Anthropic, and
-DeepSeek plugins and runs import conversion as a Genkit flow. Each request
-carries only the requesting user's key, attached per request rather than to the
-shared plugin clients, and fails closed without it.
-
-The database retains only owner-scoped usage metadata such as provider host,
-model, status, latency, and token counts; users can clear that history or
-disconnect the provider. Prompts, responses, API keys, and portfolio values are
-not written to usage records. Conversion is limited to 10 reservations per
-rolling minute per user, a UTC calendar-month token budget, response bounds,
-redirect blocking, and local response validation. The flow uses Genkit
-structured output: OpenAI receives a strict JSON Schema response format with
-`store: false`, Anthropic models with native structured output receive the
-schema as an output format, and DeepSeek receives JSON mode plus the schema as
-instructions. Genkit validates every response against the schema before
-Wealthboard checks bounds and source coverage.
-
-The in-app AI portfolio review has been removed. Ask the AI assistant you
-already use instead: Wealthboard's MCP endpoint lets Claude and
-ChatGPT connect after you approve them (OAuth, which needs a public HTTPS
-`APP_URL`), and developer tools such as Claude Code, VS Code, Cursor, and Codex
-connect with a `portfolio:read` API key. See
-[Connect an AI assistant (MCP)](docs/reference/mcp.md).
-
-Import conversion uses a two-minute provider request timeout with
-automatic retries disabled. The monthly token limit accepts 10,000 to
-100,000,000 tokens; existing saved limits are not increased automatically.
-
-Provider keys entered for one request are not persisted. Remembered keys are
-encrypted with AES-256-GCM and bound to the owning user. They are excluded from
-per-user exports, but deployment-wide PostgreSQL backups contain encrypted
-credential rows and must remain access-restricted. AI output is explanatory and
-is not financial advice.
-
-AI-assisted import reads TXT, CSV, TSV, JSON, PDF, XLSX, and DOCX source files
-entirely in the browser, in a Web Worker that is stopped on completion,
-cancellation, or after 15 seconds. The original file and any PDF password never
-reach Wealthboard or the AI provider; only the text sections the user approves
-are sent for conversion, and the server re-validates their limits. There is no
-server-side extraction endpoint, parser sidecar, or production Node runtime.
+- Connect an AI assistant you already use through the MCP endpoint. Claude and
+  ChatGPT connect after you approve them (OAuth, which needs a public HTTPS
+  `APP_URL`), and developer tools such as Claude Code, VS Code, Cursor, and
+  Codex connect with a `portfolio:read` API key. See
+  [Connect an AI assistant (MCP)](docs/reference/mcp.md).
+- To import a statement, copy the prompt on an account's **Import history**
+  page into any AI chat together with the statement. The chat returns a file in
+  the import format, which you then preview and import as usual. Wealthboard
+  sends nothing to the AI service.
 
 ## Per-user import, export, and restore
 
@@ -485,28 +430,11 @@ Settings provides:
   portfolio in one transaction
 
 Each active balance-tracked account provides a **More → Import history** action
-for strict Account History Import v1 CSV or JSON files. The **Direct import**
-tab accepts a chosen or dropped file and performs no provider request. Templates
-and format rules are available on the page and in the guides.
-
-The separate **Convert with AI** mode supports CSV, TSV, JSON, TXT, XLSX,
-text-based PDF, and DOCX. Wealthboard extracts text locally in the self-hosted
-application, lets you select/redact sections, and requests explicit consent
-before contacting your configured provider/model. Selected text is sent with
-section IDs, types, and location labels; review labels for sensitive content
-despite the current UI's narrower sharing description. It reuses
-your encrypted remembered key or accepts a session-only key. Review and correct
-the generated JSON draft, then use the existing preview and confirmation flow.
-No conversion automatically posts financial records. Cancel clears visible
-draft state but does not reliably abort an in-flight extraction/provider request.
-
-Sources are limited to 5 MB and extracted content to 64 KB/1,000 sections.
-Password-protected PDFs accept an optional one-time password for local extraction;
-it is cleared after each attempt and never stored or sent to the AI provider.
-Scanned documents, image input, legacy DOC/XLS, encrypted Office files/archives,
-and external document references are unsupported. Original files are never sent to the model;
-provider-side retention policies still apply to approved text. See
-[AI-assisted import](docs/reference/ai-import.md) for limits and provider requirements.
+for strict Account History Import v1 CSV or JSON files. The page accepts a
+chosen or dropped file. Templates and format rules are available on the page and
+in the guides, along with a copyable prompt: paste it and your statement into an
+AI chat you trust, then import the file it returns. The import preview checks
+every row before anything is recorded.
 
 Position-tracked investment accounts instead use strict Investment History v1
 JSON or dedicated holdings, trades, cash, and price CSV templates. The current
@@ -515,7 +443,7 @@ downloadable report; it does not render every API projection as a UI table.
 Confirmation commits the complete interdependent sequence atomically. Optional
 JSON event groups represent one dividend plus its same-date reinvestment buys.
 
-Exports contain no credentials, AI provider settings or usage, login attempts,
+Exports contain no credentials, login attempts,
 session data, idempotency records, or another user's rows. Restore downloads a pre-restore user export,
 validates the archive, rejects owner fields and invalid relationships, remaps
 record IDs, and rolls back completely on failure. Current exports use version 8

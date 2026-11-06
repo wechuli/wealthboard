@@ -21,10 +21,10 @@ Files are limited to 5 MB and 10,000 combined source records. Dates are
 non-future `YYYY-MM-DD` values. Quantities, prices, rates, and money are decimal
 strings, not JSON numbers.
 
-The position import page also offers an optional **Convert with AI** tab.
-Extraction happens in your browser; selected source sections
-are sent to the configured provider only after approval. The resulting JSON
-draft must pass the normal import preview. See [AI-assisted import](./ai-import).
+The position import page also offers a copyable prompt, under **Convert a
+statement with an AI chat**, that asks an AI chat for any of these formats.
+Wealthboard sends nothing to the AI service, and the result must pass the
+normal import preview.
 
 ## Stable external IDs
 

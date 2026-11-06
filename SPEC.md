@@ -32,10 +32,6 @@ can actually do. Known Go/Vite gaps include:
   position balances.
 - Account conversion, reconciliation, and import previews expose less detail
   than the full product contract.
-- AI import currently sends selected section location labels and does not
-  guarantee cancellation of in-flight requests when the user cancels or leaves.
-  OpenAI conversion requests use prompt-requested JSON with local Go
-  validation, not the native JSON Schema response option described below.
 
 These are implementation limitations, not permission to weaken ownership,
 exact-money, atomicity, or consent requirements. Track remaining parity work in
@@ -222,7 +218,7 @@ its SHA-256 hash, display prefix, name, scopes, optional expiry, usage timestamp
 and revocation metadata.
 
 - Default to `portfolio:read`; additional explicit scopes are `portfolio:write`,
-  `imports:write`, `exports:read`, and `ai:invoke`. A `portfolio:read` key also
+  `imports:write`, and `exports:read`. A `portfolio:read` key also
   authorizes the MCP endpoint described in
   [AI assistant connections (MCP)](#ai-assistant-connections-mcp); adding
   `portfolio:write` enables its write tools.
@@ -1218,7 +1214,7 @@ balance-tracked account rejects Investment History Import v1, before parsing
 financial rows.
 
 The import page provides a copyable, currency-aware prompt for use with an
-external AI service on both the direct-import and AI-conversion tabs. It must
+external AI chat. It must
 offer CSV and JSON output modes, require the exact v1 schema, preserve one
 output row per source transaction, prohibit invented or ambiguous financial
 records, and explain deterministic external IDs and balance directions. In this
@@ -1226,7 +1222,8 @@ manual prompt workflow, generation and copying are entirely
 client-side: Wealthboard must not send the prompt, account history, statement,
 or generated file to an AI provider. Users are responsible for choosing a
 provider they trust and must still preview the generated file before importing
-it. The separately consented AI conversion path below is optional.
+it. A test keeps the prompt's headers and types in sync with the import
+templates.
 
 Each row has a trimmed, case-sensitive external ID of at most 200 characters.
 Provider IDs should be used when available. When a row has no ID, the Go
@@ -1344,128 +1341,22 @@ tools. Require every application replica and other writer to be stopped for a
 restore, retain the automatic pre-restore safety dump, and validate readiness
 before reopening traffic.
 
-### AI provider settings
+### Statement conversion with an AI chat
 
-Users may configure OpenAI, Anthropic, or DeepSeek with their own API key for
-AI import conversion. All model calls go through one process-wide Genkit
-instance and its provider plugins.
+Wealthboard has no built-in AI provider, stores no AI API keys, and parses no
+statement documents. Imports accept only the strict Account History Import v1
+and Investment History v1 formats. The copyable prompts described above are the
+supported way to convert a bank or brokerage statement: the user pastes the
+prompt and statement into an AI chat they trust and imports the returned file
+through the normal preview and confirmation. Assistants connected through MCP
+may also record individual transactions and valuations when the user allows
+changes (see below).
 
-- Only the fixed OpenAI, Anthropic, and DeepSeek endpoints are allowed. Custom
-  endpoints are not supported, requests must not follow redirects, and a user's
-  key is attached per request and never sent to another provider.
-- Provider credentials remain server-side. Session-only keys are not persisted;
-  remembered keys require a dedicated encryption key and owner-bound
-  authenticated encryption. Never reuse the session secret.
-- Derive ownership only from the verified principal. Apply a per-user rate
-  limit, a configurable monthly token limit of 10,000 to 100,000,000, a
-  two-minute provider request timeout with automatic retries disabled,
-  cancellation, and bounded output size. Existing saved budgets and defaults
-  are unchanged.
-- Store only privacy-safe owner-scoped usage metadata. Users must be able to
-  delete this metadata, delete a stored credential, and disconnect the
-  provider. Per-user exports exclude all AI credentials and usage.
-- Clearly state that AI output is explanatory and not regulated financial
-  advice.
-
-### LLM-assisted text-file import
-
-An optional source-file conversion step supports both balance- and
-position-tracked accounts without changing Account History Import v1 or
-Investment History Import v1. File extraction runs in the user's browser; the
-original file never leaves the device, and only approved extracted text goes to
-the server and the configured model.
-
-- **Two entry paths:** Keep direct import of already compliant CSV/JSON and the
-  existing browser-only copyable prompts. Offer a separate "Convert with AI"
-  choice on the same account import page. Direct imports never call a provider,
-  and local-first import remains available without an AI configuration.
-- **Provider and credentials:** Reuse the current user's configured provider,
-  model, encrypted remembered key, and usage limits. Decrypt keys only
-  server-side; never return a saved key to the browser or ask users to re-enter
-  it for each file. Preserve the existing session-only key alternative. A
-  missing key or unsupported model offers configuration or direct import,
-  never a silent provider/model substitution.
-- **Supported sources:** Noncanonical UTF-8 CSV, TSV, JSON, TXT, XLSX, text-based
-  PDF, and DOCX. Preserve spreadsheet numeric cells as their original decimal
-  text; never execute formulas or macros. Cached formula values carry a stale
-  value warning. PDF text order and Word body-only extraction have explicit
-  completeness warnings. Embedded images and unreadable/scanned pages are
-  identified for review; image-only documents fail. OCR, PNG/JPEG input, legacy
-  DOC/XLS, encrypted Office documents/archives, and external document references
-  are unsupported. Password-protected PDFs are supported with a supplied password.
-  Source files are limited to 5 MB, extracted content to 64 KB/1,000 sections,
-  PDFs to 100 pages, and workbooks to 20 sheets. Office archives are limited to
-  20 MB expanded and 2,000 entries; document parsing times out after 15 seconds.
-- **Document passwords:** Offer a masked, optional PDF password field when a PDF
-  is selected. Use one unmodified password of at most 1,024 characters only for
-  extraction in the browser; never send it to the server or put it in URLs,
-  source text, conversion requests, provider prompts, logs, usage records, or
-  persistent storage. Missing and incorrect passwords return distinct safe errors and allow
-  retry with the same file. Clear the field after submission, failure, success,
-  cancellation, file changes, or leaving the import flow. Pass it only to PDF.js
-  in the browser's bounded extraction worker; password support does not add OCR or remove
-  extraction limits. Password-to-open XLSX/DOCX encryption remains unsupported
-  with actionable export guidance. Workbook/sheet and Word editing protection
-  are not file encryption and do not prevent reading otherwise supported content.
-  CSV, TSV, JSON, and TXT have no native password encryption; encrypted wrappers
-  and archives must be opened outside Wealthboard before upload.
-- **Explicit sharing:** After local extraction and before each provider call,
-  show the destination/model, selected source content, minimal target-account
-  context, source size, and output-token ceiling with a possible-charge notice.
-  Allow selection and editing/redaction of extracted sections before sending.
-  Never send original files, images, filenames, or section labels alongside the
-  approved text. Saved
-  credentials are not import consent;
-  selecting a file alone must not trigger external processing. Editing source
-  text or selection clears consent. Changes to the provider/model or target
-  account context invalidate the consent-bound configuration fingerprint.
-- **Scope:** The verified session and selected active owned account determine
-  ownership, tracking mode, and account currency. Send only approved source
-  content and the minimum schema/account context needed for conversion, not a
-  portfolio snapshot or unrelated records. Multi-account statements require
-  explicit source selection; extraction cannot create accounts or choose a
-  different destination. Source currency/account mismatches require resolution.
-- **Draft output:** Request a bounded structured response containing a draft of
-  the matching v1 JSON envelope plus separate source references and extraction
-  issues. Validate it in Go against the bounded response contract and existing
-  deterministic import rules; client form validation is not authoritative.
-  Preserve decimal values as strings and original source identifiers. Missing
-  IDs may be derived only by deterministic application logic from stable source
-  fields, never guessed by the model or based on changing row numbers; block
-  ambiguous identity and show conflicts. Repeated conversion must not mint new
-  identities for unchanged source activity. Cash records reuse the established
-  date/type/amount identity rule when no source ID exists. Extraction responses
-  are limited to 1,000 candidate records. Conversion uses Genkit structured
-  output for every provider and validates the result locally. Users choose a
-  suggested model or enter any model ID the provider serves; unsupported
-  requests fail without switching models.
-- **Source review:** Show candidate records alongside page/sheet/row references,
-  source coverage, and unresolved or excluded activity. Let users correct,
-  explicitly exclude with acknowledgment, or cancel; model confidence alone
-  does not establish correctness. Require resolution of ambiguous dates,
-  amounts, currencies, instrument identities, settlement effects, or missing
-  fields before normal preview. Never fabricate trades, prices, rates, opening
-  balances, or transfers from statement totals, and do not turn valuations
-  into contributions. Unsupported activity remains visible, not silently lost.
-- **Preview and commit:** Conversion writes no financial records. Users can
-  inspect/correct/download the canonical draft, then run the existing import
-  preview and separately confirm its exact bytes/hash. Draft edits invalidate
-  that preview. Commit reparses and rechecks the confirmed draft, never reruns
-  the model, and preserves account-history accepted-subset behavior versus
-  investment-history all-or-nothing behavior, duplicate policy, and replay.
-  Canonical output retains the existing 5 MB/10,000-record limits even when a
-  source-file limit differs.
-- **Failure and retention:** Refusals, invalid or truncated responses, timeouts,
-  cancellation, and exhausted budgets never auto-import partial output. Retries
-  require an explicit user action and may incur new charges. Do not persist or
-  log source files, extracted text, prompts, drafts, or provider responses;
-  clear transient content on cancel, completion, navigation, or logout. Parsing
-  uses memory and terminable workers, with no temporary document files. Usage
-  history remains owner-scoped metadata only and is subject to the per-user
-  rate and monthly token limits.
-  Failed conversions retain the conservative reservation when token usage is
-  unknown. Disclose that provider-side retention is governed by the provider and
-  cannot be guaranteed by Wealthboard's local cleanup.
+The bring-your-own-key provider settings, AI import conversion, browser
+document extraction, and the `ai:invoke` API key scope were removed. Migration
+00008 drops the stored provider settings, encrypted provider keys, and usage
+metadata; it removes `ai:invoke` from API keys and deletes keys that had no
+other scope rather than leaving them with the default read scope.
 
 ## AI assistant connections (MCP)
 
@@ -2091,8 +1982,8 @@ Required environment variables should include:
 - APP_URL
 
 `AUTH_METHODS` defaults to `local` and `TZ` defaults to `Africa/Nairobi`.
-Set `NODE_ENV=production` for secure cookies in production. OIDC mode and
-remembered AI credentials have their own additional configuration requirements.
+Set `NODE_ENV=production` for secure cookies in production. OIDC mode has its
+own additional configuration requirements.
 
 Backups use an explicit operator-supplied file path and are not written by an
 HTTP route or scheduled by the application container.

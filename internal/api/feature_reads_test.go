@@ -34,7 +34,6 @@ type fakeFeatureReadService struct {
 	estate         service.EstateWorkspaceRead
 	snapshot       service.EstateSnapshot
 	snapshotErr    error
-	ai             service.AIRead
 	lastUserID     uuid.UUID
 	lastResourceID uuid.UUID
 }
@@ -62,11 +61,6 @@ func (fake *fakeFeatureReadService) EstateWorkspace(_ context.Context, userID uu
 func (fake *fakeFeatureReadService) EstateSnapshot(_ context.Context, userID, resourceID uuid.UUID) (service.EstateSnapshot, error) {
 	fake.lastUserID, fake.lastResourceID = userID, resourceID
 	return fake.snapshot, fake.snapshotErr
-}
-
-func (fake *fakeFeatureReadService) AI(_ context.Context, userID uuid.UUID) (service.AIRead, error) {
-	fake.lastUserID = userID
-	return fake.ai, nil
 }
 
 func TestFeatureReadRoutesRequirePortfolioReadAndPassOwner(t *testing.T) {
@@ -130,25 +124,13 @@ func TestFeatureReadsRejectInvalidIDsAndAuthentication(t *testing.T) {
 
 	response = httptest.NewRecorder()
 	featureRouter(fakeFeatureAuthenticator{err: errors.New("invalid")}, fake).
-		ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/ai", nil))
+		ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/settings", nil))
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("authentication status = %d, want 401", response.Code)
 	}
 }
 
-func TestAIResponseExcludesEncryptedCredentialAndKeepsDecimalStrings(t *testing.T) {
-	ownerID := uuid.New()
-	fake := &fakeFeatureReadService{ai: service.AIRead{
-		Settings: &service.AIProviderSettings{Provider: "openai", HasStoredAPIKey: true},
-	}}
-	response := httptest.NewRecorder()
-	featureRouter(fakeFeatureAuthenticator{principal: webauth.Principal{UserID: ownerID, Method: "session"}}, fake).
-		ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/ai", nil))
-	body := response.Body.String()
-	if response.Code != http.StatusOK || strings.Contains(body, "encrypted") {
-		t.Fatalf("AI response status = %d, body = %s", response.Code, body)
-	}
-
+func TestFeatureReadsKeepDecimalStrings(t *testing.T) {
 	priceBody, err := json.Marshal(service.SecurityPrice{Price: "1234567890.123456789"})
 	if err != nil {
 		t.Fatalf("marshal price: %v", err)

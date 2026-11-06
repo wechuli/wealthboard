@@ -35,18 +35,14 @@ See [Investment History v1](../reference/investment-import) for the JSON
 envelope, four CSV templates, stable-ID policy, preview fields, and grouped
 reinvestment rules.
 
-## AI-assisted source conversion
+## Converting statements with an AI chat
 
-Both account modes offer a **Convert with AI** tab on the import page for CSV,
-TSV, JSON, TXT, XLSX, text-based PDF, and DOCX sources. Wealthboard reads the
-file in your browser, then asks for approval before sending selected section
-IDs, location labels, and edited text to your configured provider using a
-remembered or session-only key. Review the generated draft before the normal
-import preview and confirmation; conversion itself never posts records.
-
-Scanned documents and images are unsupported. See
-[AI-assisted import](../reference/ai-import) for supported formats, limits,
-provider compatibility, source review, and privacy controls.
+Wealthboard imports only the strict formats above. Both account modes offer a
+copyable prompt on the import page that asks an AI chat, such as ChatGPT or
+Claude, to turn a pasted statement into one of these formats. Wealthboard sends
+nothing to the AI service; you paste the prompt and statement yourself and
+import the file it returns after reviewing the preview. See
+[Convert a statement with an AI chat](./activity#convert-a-statement-with-an-ai-chat).
 
 ## CSV downloads
 

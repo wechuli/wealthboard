@@ -25,12 +25,10 @@ const (
 	ScopePortfolioWrite Scope = "portfolio:write"
 	ScopeImportsWrite   Scope = "imports:write"
 	ScopeExportsRead    Scope = "exports:read"
-	ScopeAIInvoke       Scope = "ai:invoke"
 )
 
 var allowedScopes = map[Scope]bool{
-	ScopePortfolioRead: true, ScopePortfolioWrite: true, ScopeImportsWrite: true,
-	ScopeExportsRead: true, ScopeAIInvoke: true,
+	ScopePortfolioRead: true, ScopePortfolioWrite: true, ScopeImportsWrite: true, ScopeExportsRead: true,
 }
 
 type APIKeyService struct {

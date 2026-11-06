@@ -42,7 +42,7 @@ The database can contain:
 - estate allocation and document-location notes;
 - password hashes and OIDC identity mappings;
 - personal API-key hashes, scopes, and revocation metadata;
-- encrypted AI provider credentials when enabled.
+- MCP connection grants, hashed OAuth tokens, and tool-call history.
 
 Protect PostgreSQL, database backups, and user exports accordingly.
 
@@ -83,30 +83,14 @@ The client displays an offline warning, blocks forms marked as financial
 mutations while the browser reports offline, and offers Reload when a new
 service worker is waiting. Users must reconnect and retry writes themselves.
 
-## AI provider boundary
+## AI services
 
-AI import conversion is optional and produces a draft that must pass the
-normal import preview; it has no financial mutation tools. Session-only API keys
-remain in client memory for the request; remembered keys require the deployment
-encryption key.
-
-Only the fixed OpenAI, Anthropic, and DeepSeek endpoints are used, through one
-shared Genkit instance. Each request carries only the requesting user's key for
-that provider. Users should review provider retention, training, and billing
-terms before sending data. Leave `GENKIT_ENV` unset in production: `dev` starts
-Genkit's local Developer UI server, which can show prompts and responses.
-
-AI import currently sends selected text with section IDs, types, and location
-labels, not the original file. Its current cancellation UI clears visible state
-but does not reliably abort an already-started provider request. See
-[AI-assisted import](./ai-import) for the actual sharing and cleanup limits.
-
-Remembered provider keys require a dedicated canonical base64 32-byte key and
-are bound to one user with AES-256-GCM associated data. Provider hosts are
-resolved and rejected when they map to private or local address space;
-redirects and environment proxies are disabled. Source documents are parsed in
-the browser and never uploaded, so the server never parses untrusted document
-formats, and PDF passwords never leave the browser.
+Wealthboard has no built-in AI provider, stores no AI API keys, and never sends
+data to an AI service itself. Assistants read and record data only through the
+MCP boundary below. The import page's copyable prompt is plain text: you paste
+it and your statement into an AI chat yourself, so that service's terms apply,
+and the file it returns must pass the normal import preview. Source documents
+are never uploaded to or parsed by Wealthboard.
 
 The distroless application image contains no Node.js runtime, and production
 runs no JavaScript on the server.

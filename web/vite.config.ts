@@ -9,9 +9,6 @@ export default defineConfig({
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
-  worker: {
-    format: "es",
-  },
   server: {
     port: 5173,
     proxy: {

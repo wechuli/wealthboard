@@ -198,14 +198,14 @@ func TestAuthorizeScopedAndSessionOnlyMutations(t *testing.T) {
 		t.Fatalf("session-only authorization principal=%+v err=%v", principal, err)
 	}
 
-	apiKeyRequest := httptest.NewRequest(http.MethodPost, "/ai/import/convert", nil)
+	apiKeyRequest := httptest.NewRequest(http.MethodPost, "/accounts/history-import/commit", nil)
 	apiKeyRequest.Header.Set("Authorization", "Bearer test")
 	handler.EnableAPIKeys(&fakeAPIKeyService{principal: webauth.Principal{
-		UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke},
+		UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeImportsWrite},
 	}})
-	principal, err = handler.AuthorizeScopedMutation(apiKeyRequest, webauth.ScopeAIInvoke)
+	principal, err = handler.AuthorizeScopedMutation(apiKeyRequest, webauth.ScopeImportsWrite)
 	if err != nil || principal.UserID != ownerID {
-		t.Fatalf("AI API key authorization principal=%+v err=%v", principal, err)
+		t.Fatalf("API key authorization principal=%+v err=%v", principal, err)
 	}
 	if _, err := handler.AuthorizeSessionMutation(apiKeyRequest); !errors.Is(err, errMutationMethod) {
 		t.Fatalf("session-only API key error=%v, want errMutationMethod", err)
@@ -214,8 +214,8 @@ func TestAuthorizeScopedAndSessionOnlyMutations(t *testing.T) {
 	handler.EnableAPIKeys(&fakeAPIKeyService{principal: webauth.Principal{
 		UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite},
 	}})
-	if _, err := handler.AuthorizeScopedMutation(apiKeyRequest, webauth.ScopeAIInvoke); !errors.Is(err, errMutationScope) {
-		t.Fatalf("wrong AI API key scope error=%v, want errMutationScope", err)
+	if _, err := handler.AuthorizeScopedMutation(apiKeyRequest, webauth.ScopeImportsWrite); !errors.Is(err, errMutationScope) {
+		t.Fatalf("wrong API key scope error=%v, want errMutationScope", err)
 	}
 }
 

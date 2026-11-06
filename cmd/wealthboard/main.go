@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wechuli/wealthboard/internal/aiworkflow"
 	"github.com/wechuli/wealthboard/internal/api"
 	webauth "github.com/wechuli/wealthboard/internal/auth"
 	"github.com/wechuli/wealthboard/internal/config"
@@ -145,18 +144,6 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 		})
 	}
 	featureReads := api.NewFeatureReadHandler(authHandler, service.NewFeatureReads(db))
-	var credentialCodec *aiworkflow.CredentialCodec
-	if os.Getenv("AI_CREDENTIAL_ENCRYPTION_KEY") != "" {
-		credentialCodec, err = aiworkflow.NewCredentialCodecFromEnvironment()
-		if err != nil {
-			return err
-		}
-	}
-	aiService := aiworkflow.NewService(
-		aiworkflow.NewPostgresRepository(db),
-		credentialCodec,
-		aiworkflow.DefineFlows(aiworkflow.NewGenkit(ctx, aiworkflow.GenkitOptions{})),
-	)
 	mutations := api.MutationHandlers{
 		Metadata:    api.NewMetadataMutationHandler(authHandler, service.NewMetadataMutations(db)),
 		Ledger:      api.NewLedgerHandler(authHandler, ledgerService, trustedOrigin),
@@ -167,7 +154,6 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 		Imports:     api.NewImportHandler(authHandler, service.NewAccountHistoryImportService(db), service.NewInvestmentHistoryImportService(db), trustedOrigin),
 		Portability: api.NewPortabilityHandler(authHandler, service.NewPortabilityService(db)),
 		Estate:      api.NewEstateMutationHandler(authHandler, service.NewEstateMutations(db)),
-		AI:          api.NewAIWorkflowHandler(authHandler, aiService),
 	}
 	distPath := os.Getenv("WEB_DIST_PATH")
 	if distPath == "" {
