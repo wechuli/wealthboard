@@ -487,17 +487,22 @@ func (service *InvestmentHistoryImportService) prepare(ctx context.Context, quer
 	if err != nil {
 		return preparedInvestmentImport{}, err
 	}
-	duplicateCash := duplicateImportStrings(cashExternalIDs(envelope.CashTransactions, account.Currency))
+	cashIDs := cashExternalIDs(envelope.CashTransactions, account.Currency)
+	duplicateCash := duplicateImportStrings(cashIDIdentities(cashIDs))
 	for index, source := range envelope.CashTransactions {
 		rowNumber := index + 1
-		externalID := sourceCashExternalID(source, account.Currency)
+		externalID := cashIDs[index].id
 		row := newInvestmentRow("cash_transactions", rowNumber, externalID)
 		cash, validationMessage := prepareImportCash(source, externalID, account.Currency, today, groupIDs, timestamp.Add(time.Duration(len(envelope.Instruments)+len(envelope.PositionEvents)+index)*time.Nanosecond))
+		existing, found := existingCash[externalID]
+		if !found && cashIDs[index].legacy != "" {
+			existing, found = existingCash[cashIDs[index].legacy]
+		}
 		if duplicateCash[externalID] {
 			row.fail("duplicate_in_file", "Cash external ID occurs more than once in this file.")
 		} else if validationMessage != "" {
 			row.fail("invalid_cash", validationMessage)
-		} else if existing, found := existingCash[externalID]; found {
+		} else if found {
 			if importedCashMatches(existing, cash) {
 				row.duplicate()
 			} else {
@@ -1258,10 +1263,28 @@ func eventExternalIDs(rows []investmentSourceEvent) []string {
 	}
 	return result
 }
-func cashExternalIDs(rows []investmentSourceCash, currency string) []string {
-	result := make([]string, len(rows))
+func cashExternalIDs(rows []investmentSourceCash, currency string) []derivedExternalID {
+	result := make([]derivedExternalID, len(rows))
+	derived := derivedExternalIDs{}
 	for i, row := range rows {
-		result[i] = sourceCashExternalID(row, currency)
+		if row.ExternalID != nil && strings.TrimSpace(*row.ExternalID) != "" {
+			result[i] = derivedExternalID{id: strings.TrimSpace(*row.ExternalID)}
+			continue
+		}
+		amount, err := parseInvestmentMoneyMinor(row.Amount, currency)
+		if err != nil {
+			// The row fails validation; this ID only labels it in the preview.
+			result[i] = derivedExternalID{id: fmt.Sprintf("derived-%s-%s-%s", row.Date, row.Type, strings.TrimSpace(row.Amount))}
+			continue
+		}
+		result[i] = derived.next(row.Date, row.Type, amount, currency)
+	}
+	return result
+}
+func cashIDIdentities(ids []derivedExternalID) []string {
+	result := make([]string, len(ids))
+	for i, id := range ids {
+		result[i] = id.id
 	}
 	return result
 }
@@ -1271,13 +1294,6 @@ func priceExternalIDs(rows []investmentSourcePrice) []string {
 		result[i] = row.InstrumentExternalID + ":" + row.ExternalID
 	}
 	return result
-}
-func sourceCashExternalID(row investmentSourceCash, currency string) string {
-	if row.ExternalID != nil && strings.TrimSpace(*row.ExternalID) != "" {
-		return strings.TrimSpace(*row.ExternalID)
-	}
-	amount, _ := parseInvestmentMoneyMinor(row.Amount, currency)
-	return fmt.Sprintf("derived-%s-%s-%d", row.Date, row.Type, amount)
 }
 func findPreparedEventExternal(events []preparedEvent, id uuid.UUID) string {
 	for _, event := range events {

@@ -194,5 +194,26 @@ describe('history import', () => {
     await renderRoute(`/accounts/${IDS.faida}/import`)
     expect(await screen.findByText('Drop an investment history file here')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sample JSON' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Prefer your own AI tool/ })).toBeInTheDocument()
+  })
+
+  it('offers a copyable AI prompt and derives IDs for rows without one', async () => {
+    setScenario({ data: 'full' })
+    const user = userEvent.setup()
+    await renderRoute(`/accounts/${IDS.zimele}/import`)
+    await screen.findByText('Drop a CSV or JSON file here')
+    await user.click(screen.getByRole('button', { name: /Prefer your own AI tool/ }))
+    const prompt = (screen.getByLabelText('Conversion prompt') as HTMLTextAreaElement).value
+    expect(prompt).toContain('external_id,type,amount,date,description,notes')
+    expect(prompt).toContain('If the source has no ID, leave external_id empty')
+    expect(prompt).not.toContain('would receive the same derived ID')
+
+    const csv = 'external_id,type,amount,date,description,notes\n,deposit,1500.00,2025-01-05,Top-up,\n,deposit,1500,2025-01-05,Top-up,\n'
+    const input = document.querySelector('input[type=file]') as HTMLInputElement
+    await user.upload(input, new File([csv], 'history.csv', { type: 'text/csv' }))
+    expect(await screen.findByText('Review before importing')).toBeInTheDocument()
+    expect(screen.getAllByText(/derived-2025-01-05-deposit-1500\.00$/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/derived-2025-01-05-deposit-1500\.00-2$/).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Import 2 transactions' })).toBeInTheDocument()
   })
 })

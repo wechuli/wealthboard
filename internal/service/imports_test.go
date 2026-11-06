@@ -56,6 +56,30 @@ func TestParseInvestmentHistoryTemplatesAndLimits(t *testing.T) {
 	}
 }
 
+func TestDerivedExternalIDsUseCurrencyPrecisionAndOccurrenceSuffixes(t *testing.T) {
+	derived := derivedExternalIDs{}
+	cases := []struct {
+		date, transactionType string
+		amount                int64
+		currency, want        string
+		legacy                string
+	}{
+		{"2026-09-01", "deposit", 1050, "KES", "derived-2026-09-01-deposit-10.50", "derived-2026-09-01-deposit-1050"},
+		{"2026-09-01", "deposit", 1050, "KES", "derived-2026-09-01-deposit-10.50-2", ""},
+		{"2026-09-01", "deposit", 1050, "KES", "derived-2026-09-01-deposit-10.50-3", ""},
+		{"2026-09-01", "fee", 5, "USD", "derived-2026-09-01-fee-0.05", "derived-2026-09-01-fee-5"},
+		{"2026-09-01", "deposit", 1500, "JPY", "derived-2026-09-01-deposit-1500", "derived-2026-09-01-deposit-1500"},
+		{"2026-09-01", "deposit", 1234, "KWD", "derived-2026-09-01-deposit-1.234", "derived-2026-09-01-deposit-1234"},
+		{"2026-09-01", "manual_adjustment", -250, "KES", "derived-2026-09-01-manual_adjustment--2.50", "derived-2026-09-01-manual_adjustment--250"},
+	}
+	for _, test := range cases {
+		got := derived.next(test.date, test.transactionType, test.amount, test.currency)
+		if got.id != test.want || got.legacy != test.legacy {
+			t.Errorf("next(%s, %s, %d, %s) = %#v, want id %q legacy %q", test.date, test.transactionType, test.amount, test.currency, got, test.want, test.legacy)
+		}
+	}
+}
+
 func TestVerifyImportHashRequiresExactContent(t *testing.T) {
 	content := []byte("same bytes")
 	if err := verifyImportHash(content, importHash(content)); err != nil {

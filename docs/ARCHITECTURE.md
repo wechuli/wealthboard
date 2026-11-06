@@ -295,9 +295,9 @@ cross-feature requirement in `SPEC.md`.
 ## LLM-assisted text-file import
 
 The implemented conversion layer sits upstream of existing import services;
-it is not a financial write path. Strict v1 contracts remain unchanged. Manual
-copyable-prompt components remain in source but are not mounted in the current
-import page. OCR/image processing remains backlog AI3.
+it is not a financial write path. Strict v1 contracts remain unchanged. The
+manual copyable-prompt panel is mounted on both import tabs and runs entirely in
+the browser. OCR/image processing remains backlog AI3.
 
 1. The account import UI offers direct structured import or explicit AI
    conversion. The browser extracts source text locally; Go exposes

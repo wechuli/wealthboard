@@ -60,12 +60,13 @@ type AccountHistoryImportRow struct {
 }
 
 type accountHistoryPreparedRow struct {
-	externalID      string
-	transactionType string
-	amountMinor     int64
-	date            time.Time
-	description     *string
-	notes           *string
+	externalID       string
+	legacyExternalID string
+	transactionType  string
+	amountMinor      int64
+	date             time.Time
+	description      *string
+	notes            *string
 }
 
 type AccountHistoryImportSummary struct {
@@ -234,8 +235,19 @@ func (service *AccountHistoryImportService) classifyAccountHistory(ctx context.C
 	today := service.now().In(location).Format(time.DateOnly)
 	rows := make([]AccountHistoryImportRow, len(sources))
 	counts := map[string]int{}
+	derived := derivedExternalIDs{}
 	for index, source := range sources {
 		rows[index] = validateAccountHistoryRow(source, firstRow+index, account.Currency, today)
+		if rows[index].ExternalID == nil || *rows[index].ExternalID == "" {
+			// Invalid rows still take an occurrence so fixing one later does not renumber the others.
+			if amount, err := parseInvestmentMoneyMinor(source.Amount, account.Currency); err == nil {
+				identity := derived.next(source.Date, source.Type, amount, account.Currency)
+				if rows[index].prepared != nil {
+					rows[index].ExternalID = &identity.id
+					rows[index].prepared.externalID, rows[index].prepared.legacyExternalID = identity.id, identity.legacy
+				}
+			}
+		}
 		if rows[index].ExternalID != nil {
 			counts[*rows[index].ExternalID]++
 		}
@@ -256,10 +268,20 @@ func (service *AccountHistoryImportService) classifyAccountHistory(ctx context.C
 		var currency string
 		var date time.Time
 		var description, notes sql.NullString
-		err := queryer.QueryRowContext(ctx, `
+		candidates := []string{row.prepared.externalID}
+		if row.prepared.legacyExternalID != "" {
+			candidates = append(candidates, row.prepared.legacyExternalID)
+		}
+		err := sql.ErrNoRows
+		for _, candidate := range candidates {
+			err = queryer.QueryRowContext(ctx, `
 SELECT id,type,amount_minor,currency,transaction_date,description,notes
-FROM transactions WHERE user_id=$1 AND account_id=$2 AND external_id=$3`, userID, account.ID, row.prepared.externalID).
-			Scan(&id, &transactionType, &amount, &currency, &date, &description, &notes)
+FROM transactions WHERE user_id=$1 AND account_id=$2 AND external_id=$3`, userID, account.ID, candidate).
+				Scan(&id, &transactionType, &amount, &currency, &date, &description, &notes)
+			if !errors.Is(err, sql.ErrNoRows) {
+				break
+			}
+		}
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -311,10 +333,6 @@ func validateAccountHistoryRow(source accountHistorySourceRow, row int, currency
 	externalID := ""
 	if result.ExternalID != nil {
 		externalID = *result.ExternalID
-	}
-	if externalID == "" {
-		externalID = fmt.Sprintf("derived-%s-%s-%d", source.Date, source.Type, amount)
-		result.ExternalID = &externalID
 	}
 	result.Status, result.Code, result.Message = "ready", "ready", "Ready to import."
 	result.prepared = &accountHistoryPreparedRow{externalID: externalID, transactionType: source.Type, amountMinor: amount, date: date, description: normalizedOptionalText(source.Description), notes: normalizedOptionalText(source.Notes)}
