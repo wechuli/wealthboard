@@ -2772,7 +2772,7 @@ paths:
     post:
       operationId: approveOAuthConsentRequest
       summary: Approve an assistant's connection and get the redirect carrying its authorization code
-      description: Browser sessions only, with a trusted Origin and `X-CSRF-Token`. Approving the same application again replaces the user's earlier connection to it.
+      description: Browser sessions only, with a trusted Origin and `X-CSRF-Token`. Approving the same application again replaces the user's earlier connection to it. `allowChanges` grants `portfolio:write` only when the application requested it and `dataLevel` is `detailed`; otherwise it returns 422.
       security:
         - sessionCookie: []
       parameters:
@@ -2791,6 +2791,10 @@ paths:
               required: [dataLevel]
               properties:
                 dataLevel: { $ref: "#/components/schemas/OAuthDataLevel" }
+                allowChanges:
+                  type: boolean
+                  default: false
+                  description: Let the application record new transactions and valuations. It can't edit or delete records.
       responses:
         "200":
           description: Where to send the browser next

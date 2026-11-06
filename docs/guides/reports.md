@@ -129,6 +129,6 @@ reconciled.
 ## Asking an AI assistant about your portfolio
 
 The in-app AI portfolio review has been removed. Instead, connect an assistant
-you already use, such as Claude or ChatGPT, to Wealthboard's read-only MCP
-endpoint and approve it; it can then read the same reports, accounts, and goals
+you already use, such as Claude or ChatGPT, to Wealthboard's MCP endpoint and
+approve it; it can then read the same reports, accounts, and goals
 shown here. See [Connect an AI assistant (MCP)](../reference/mcp).

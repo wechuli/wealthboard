@@ -168,10 +168,14 @@ func (h harness) register(body map[string]any) string {
 
 // authorize runs the authorization request and returns the pending consent request ID.
 func (h harness) authorize(clientID, redirect, state string) uuid.UUID {
+	return h.authorizeScope(clientID, redirect, state, "portfolio:read")
+}
+
+func (h harness) authorizeScope(clientID, redirect, state, scope string) uuid.UUID {
 	h.t.Helper()
 	query := url.Values{
 		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {redirect}, "state": {state},
-		"code_challenge": {challenge(verifier)}, "code_challenge_method": {"S256"}, "scope": {"portfolio:read"}, "resource": {issuer + "/mcp"},
+		"code_challenge": {challenge(verifier)}, "code_challenge_method": {"S256"}, "scope": {scope}, "resource": {issuer + "/mcp"},
 	}
 	response := h.get("/oauth/authorize?" + query.Encode())
 	location, _ := url.Parse(response.Header.Get("Location"))
@@ -186,8 +190,12 @@ func (h harness) authorize(clientID, redirect, state string) uuid.UUID {
 }
 
 func (h harness) approve(userID, requestID uuid.UUID, level, state string) string {
+	return h.approveChanges(userID, requestID, level, state, false)
+}
+
+func (h harness) approveChanges(userID, requestID uuid.UUID, level, state string, allowChanges bool) string {
 	h.t.Helper()
-	redirect, err := h.oauth.Approve(context.Background(), userID, requestID, level)
+	redirect, err := h.oauth.Approve(context.Background(), userID, requestID, level, allowChanges)
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -237,12 +245,9 @@ func (h harness) mcpStatus(token string) int {
 	return response.StatusCode
 }
 
-func TestPostgreSQLOAuthFlowGrantsScopedRevocableAccess(t *testing.T) {
-	db := openTestDatabase(t)
-	ctx := context.Background()
-	ownerID, ownerAccount := seedUser(t, ctx, db, "owner", 150_050)
-	otherID, otherAccount := seedUser(t, ctx, db, "other", 999_900)
-
+// newHarness serves the OAuth endpoints and an MCP endpoint that can write.
+func newHarness(t *testing.T, db *sql.DB) (harness, *oauth.Service) {
+	t.Helper()
 	authorization := oauth.NewService(db, oauth.Config{Issuer: issuer})
 	mux := http.NewServeMux()
 	protocol := oauth.NewHandler(authorization, oauth.HandlerOptions{})
@@ -252,10 +257,33 @@ func TestPostgreSQLOAuthFlowGrantsScopedRevocableAccess(t *testing.T) {
 		Core:     service.NewCoreReadService(service.NewSQLCoreReadRepository(db)),
 		Reports:  service.NewGoalsReportsService(service.NewSQLGoalsReportsRepository(db)),
 		Insights: service.NewInsightsService(service.NewSQLGoalsReportsRepository(db)),
+		Ledger:   service.NewLedgerService(db),
 	}, webauth.NewAPIKeyService(generated.New(db)), mcpserver.Options{RequestsPerMinute: 1000, OAuth: authorization}))
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
-	h := harness{t: t, server: server, oauth: authorization}
+	return harness{t: t, server: server, oauth: authorization}, authorization
+}
+
+func toolNames(t *testing.T, session *mcp.ClientSession) string {
+	t.Helper()
+	tools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := []string{}
+	for _, tool := range tools.Tools {
+		names = append(names, tool.Name)
+	}
+	return strings.Join(names, ",")
+}
+
+func TestPostgreSQLOAuthFlowGrantsScopedRevocableAccess(t *testing.T) {
+	db := openTestDatabase(t)
+	ctx := context.Background()
+	ownerID, ownerAccount := seedUser(t, ctx, db, "owner", 150_050)
+	otherID, otherAccount := seedUser(t, ctx, db, "other", 999_900)
+	h, authorization := newHarness(t, db)
+	server := h.server
 
 	// Discovery: an unauthenticated MCP request points to the resource metadata, which names the issuer.
 	request, _ := http.NewRequest(http.MethodPost, server.URL+"/mcp", strings.NewReader(`{}`))
@@ -305,7 +333,7 @@ func TestPostgreSQLOAuthFlowGrantsScopedRevocableAccess(t *testing.T) {
 		t.Fatalf("consent = %+v, %v", consent, err)
 	}
 	code := h.approve(ownerID, requestID, oauth.DataLevelDetailed, "s1")
-	if _, err := authorization.Approve(ctx, ownerID, requestID, oauth.DataLevelDetailed); !errors.Is(err, oauth.ErrNotFound) {
+	if _, err := authorization.Approve(ctx, ownerID, requestID, oauth.DataLevelDetailed, false); !errors.Is(err, oauth.ErrNotFound) {
 		t.Fatalf("second approval error = %v", err)
 	}
 	if response, body := h.postForm("/oauth/token", url.Values{"grant_type": {"authorization_code"}, "code": {code}, "code_verifier": {strings.Repeat("a", 43)}, "client_id": {clientID}}); response.StatusCode != http.StatusBadRequest || body["error"] != "invalid_grant" {
@@ -476,7 +504,7 @@ func TestPostgreSQLOAuthTokensAreBoundToTheMCPResource(t *testing.T) {
 	}
 	parsed, _ := url.Parse(start)
 	requestID := uuid.MustParse(parsed.Query().Get("request"))
-	redirect, err := authorization.Approve(ctx, ownerID, requestID, oauth.DataLevelDetailed)
+	redirect, err := authorization.Approve(ctx, ownerID, requestID, oauth.DataLevelDetailed, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -493,7 +521,117 @@ func TestPostgreSQLOAuthTokensAreBoundToTheMCPResource(t *testing.T) {
 	if _, err := elsewhere.VerifyAccessToken(ctx, tokens.AccessToken); !errors.Is(err, oauth.ErrInvalidToken) {
 		t.Fatalf("token accepted for another resource: %v", err)
 	}
-	if _, err := authorization.Approve(ctx, ownerID, uuid.New(), "everything"); !errors.Is(err, oauth.ErrInvalidChoice) {
+	if _, err := authorization.Approve(ctx, ownerID, uuid.New(), "everything", false); !errors.Is(err, oauth.ErrInvalidChoice) {
 		t.Fatalf("invalid data level error = %v", err)
+	}
+}
+
+func TestPostgreSQLOAuthWriteAccessNeedsTheUsersExplicitChoice(t *testing.T) {
+	db := openTestDatabase(t)
+	ctx := context.Background()
+	ownerID, ownerAccount := seedUser(t, ctx, db, "owner", 150_050)
+	_, otherAccount := seedUser(t, ctx, db, "other", 999_900)
+	h, authorization := newHarness(t, db)
+
+	var metadata map[string]any
+	_ = json.NewDecoder(h.get("/.well-known/oauth-protected-resource/mcp").Body).Decode(&metadata)
+	if encoded, _ := json.Marshal(metadata["scopes_supported"]); string(encoded) != `["portfolio:read","portfolio:write"]` {
+		t.Fatalf("scopes_supported = %s", encoded)
+	}
+	clientID := h.register(map[string]any{"redirect_uris": []string{callback}, "client_name": "Claude", "token_endpoint_auth_method": "none"})
+	if response, _ := h.postJSON("/oauth/register", map[string]any{"redirect_uris": []string{callback}, "scope": "portfolio:delete"}); response.StatusCode != http.StatusCreated {
+		t.Fatalf("registration with an unknown scope = %d", response.StatusCode)
+	}
+	if response := h.get("/oauth/authorize?" + url.Values{
+		"response_type": {"code"}, "client_id": {clientID}, "redirect_uri": {callback}, "state": {"bad"},
+		"code_challenge": {challenge(verifier)}, "code_challenge_method": {"S256"}, "scope": {"portfolio:read portfolio:delete"},
+	}.Encode()); response.StatusCode != http.StatusBadRequest || response.Header.Get("Location") != "" {
+		t.Fatalf("unknown scope = %d %q", response.StatusCode, response.Header.Get("Location"))
+	}
+
+	// A read-only request can't be approved with changes.
+	readOnly := h.authorize(clientID, callback, "r1")
+	if _, err := authorization.Approve(ctx, ownerID, readOnly, oauth.DataLevelDetailed, true); !errors.Is(err, oauth.ErrInvalidChoice) {
+		t.Fatalf("changes on a read-only request = %v", err)
+	}
+
+	// The client asks for changes; the user leaves them off, so the token is read-only.
+	declined := h.authorizeScope(clientID, callback, "w1", "portfolio:read portfolio:write offline_access")
+	if consent, err := authorization.ConsentRequest(ctx, declined); err != nil || strings.Join(consent.Scopes, " ") != "portfolio:read portfolio:write" {
+		t.Fatalf("consent scopes = %+v, %v", consent.Scopes, err)
+	}
+	declinedTokens := h.exchange(clientID, h.approve(ownerID, declined, oauth.DataLevelDetailed, "w1"))
+	if declinedTokens["scope"] != "portfolio:read" {
+		t.Fatalf("declined token scope = %v", declinedTokens["scope"])
+	}
+	readSession, err := h.session(declinedTokens["access_token"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names := toolNames(t, readSession); strings.Contains(names, "record_") {
+		t.Fatalf("read-only grant sees write tools: %s", names)
+	}
+	_ = readSession.Close()
+	if response, body := h.postForm("/oauth/token", url.Values{"grant_type": {"refresh_token"}, "refresh_token": {declinedTokens["refresh_token"].(string)}, "client_id": {clientID}, "scope": {"portfolio:read portfolio:write"}}); response.StatusCode != http.StatusBadRequest || body["error"] != "invalid_scope" {
+		t.Fatalf("refresh escalating to write = %d %v", response.StatusCode, body)
+	}
+
+	// Changes need detailed access; a rejected choice leaves the request pending.
+	allowed := h.authorizeScope(clientID, callback, "w2", "portfolio:write")
+	if _, err := authorization.Approve(ctx, ownerID, allowed, oauth.DataLevelSummary, true); !errors.Is(err, oauth.ErrInvalidChoice) {
+		t.Fatalf("summary with changes = %v", err)
+	}
+	tokens := h.exchange(clientID, h.approveChanges(ownerID, allowed, oauth.DataLevelDetailed, "w2", true))
+	if tokens["scope"] != "portfolio:read portfolio:write" {
+		t.Fatalf("write token scope = %v", tokens["scope"])
+	}
+	session, err := h.session(tokens["access_token"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names := toolNames(t, session); !strings.Contains(names, "record_transaction") || !strings.Contains(names, "record_valuation") {
+		t.Fatalf("write grant tools = %s", names)
+	}
+	key := uuid.NewString()
+	arguments := map[string]any{"accountId": ownerAccount.String(), "type": "deposit", "amount": "250.25", "date": "2026-02-01", "description": "Bonus", "idempotencyKey": key}
+	for attempt := range 2 {
+		result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "record_transaction", Arguments: arguments})
+		if err != nil || result.IsError {
+			t.Fatalf("record_transaction attempt %d = %+v, %v", attempt, result, err)
+		}
+		if encoded, _ := json.Marshal(result.StructuredContent); !strings.Contains(string(encoded), `"balance":{"currency":"KES","decimal":"1750.75","minor":"175075"}`) {
+			t.Fatalf("record_transaction attempt %d = %s", attempt, encoded)
+		}
+	}
+	var deposits int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM transactions WHERE user_id = $1 AND account_id = $2 AND type = 'deposit'`, ownerID, ownerAccount).Scan(&deposits); err != nil || deposits != 1 {
+		t.Fatalf("deposits = %d, %v", deposits, err)
+	}
+	valuation, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "record_valuation", Arguments: map[string]any{"accountId": ownerAccount.String(), "value": "2000", "date": "2026-03-01", "idempotencyKey": uuid.NewString()}})
+	if encoded, _ := json.Marshal(valuation.StructuredContent); err != nil || valuation.IsError || !strings.Contains(string(encoded), `"decimal":"2000.00","minor":"200000"`) {
+		t.Fatalf("record_valuation = %+v, %v", valuation, err)
+	}
+	foreign, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "record_transaction", Arguments: map[string]any{"accountId": otherAccount.String(), "type": "withdrawal", "amount": "1", "date": "2026-02-01", "idempotencyKey": uuid.NewString()}})
+	if err != nil || !foreign.IsError {
+		t.Fatalf("foreign write = %+v, %v", foreign, err)
+	}
+	var otherTransactions int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM transactions WHERE account_id = $1 AND type <> 'opening_balance'`, otherAccount).Scan(&otherTransactions); err != nil || otherTransactions != 0 {
+		t.Fatalf("other user's transactions = %d, %v", otherTransactions, err)
+	}
+	future, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "record_transaction", Arguments: map[string]any{"accountId": ownerAccount.String(), "type": "deposit", "amount": "1", "date": "2999-01-01", "idempotencyKey": uuid.NewString()}})
+	if err != nil || !future.IsError || !strings.Contains(future.Content[0].(*mcp.TextContent).Text, "future") {
+		t.Fatalf("future write = %+v, %v", future, err)
+	}
+	_ = session.Close()
+
+	apps, err := authorization.ConnectedApps(ctx, ownerID)
+	if err != nil || len(apps) != 1 || strings.Join(apps[0].Scopes, " ") != "portfolio:read portfolio:write" || apps[0].RecentCalls[0].Tool != "record_transaction" {
+		t.Fatalf("connected apps = %+v, %v", apps, err)
+	}
+	// Refreshing keeps the approved scope.
+	response, refreshed := h.postForm("/oauth/token", url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tokens["refresh_token"].(string)}, "client_id": {clientID}})
+	if response.StatusCode != http.StatusOK || refreshed["scope"] != "portfolio:read portfolio:write" {
+		t.Fatalf("refresh = %d %v", response.StatusCode, refreshed)
 	}
 }

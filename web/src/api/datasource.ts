@@ -259,7 +259,8 @@ export interface DataSource {
   /** The consent step of an assistant's OAuth sign-in. */
   oauth: {
     request(id: string): Promise<OAuthConsentRequest>
-    approve(id: string, dataLevel: OAuthDataLevel): Promise<{ redirectTo: string }>
+    /** `allowChanges` grants portfolio:write; the server accepts it only for detailed access the application requested. */
+    approve(id: string, dataLevel: OAuthDataLevel, allowChanges: boolean): Promise<{ redirectTo: string }>
     deny(id: string): Promise<{ redirectTo: string }>
   }
 

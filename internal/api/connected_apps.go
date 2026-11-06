@@ -13,7 +13,7 @@ import (
 
 type oauthConsentService interface {
 	ConsentRequest(context.Context, uuid.UUID) (oauth.ConsentRequest, error)
-	Approve(context.Context, uuid.UUID, uuid.UUID, string) (string, error)
+	Approve(context.Context, uuid.UUID, uuid.UUID, string, bool) (string, error)
 	Deny(context.Context, uuid.UUID) (string, error)
 	ConnectedApps(context.Context, uuid.UUID) ([]oauth.ConnectedApp, error)
 	RevokeConnectedApp(context.Context, uuid.UUID, uuid.UUID) error
@@ -73,7 +73,7 @@ func (handler *ConnectedAppsHandler) writeError(response http.ResponseWriter, _ 
 	case errors.Is(err, oauth.ErrNotFound):
 		writeProblem(response, http.StatusNotFound, "Not Found", "The "+resource+" was not found or has expired.")
 	case errors.Is(err, oauth.ErrInvalidChoice):
-		writeProblem(response, http.StatusUnprocessableEntity, "Validation failed", "Choose detailed or summary access.")
+		writeProblem(response, http.StatusUnprocessableEntity, "Validation failed", "Choose detailed or summary access. Changes need detailed access and an application that asked for them.")
 	default:
 		writeProblem(response, http.StatusServiceUnavailable, "Service unavailable", "Connected apps are temporarily unavailable.")
 	}
@@ -105,13 +105,14 @@ func (handler *ConnectedAppsHandler) Approve(response http.ResponseWriter, reque
 		return
 	}
 	var input struct {
-		DataLevel string `json:"dataLevel"`
+		DataLevel    string `json:"dataLevel"`
+		AllowChanges bool   `json:"allowChanges"`
 	}
 	if err := decodeJSON(response, request, &input); err != nil {
 		writeProblem(response, http.StatusBadRequest, "Invalid request", "Provide a valid JSON request body.")
 		return
 	}
-	redirect, err := handler.service.Approve(request.Context(), userID, id, input.DataLevel)
+	redirect, err := handler.service.Approve(request.Context(), userID, id, input.DataLevel, input.AllowChanges)
 	if err != nil {
 		handler.writeError(response, request, err, "connection request")
 		return

@@ -1,12 +1,12 @@
 import { useMutation } from '@tanstack/react-query'
-import { Ban, Eye, Lock, PlugZap } from 'lucide-react'
+import { Ban, Eye, Lock, PencilLine, PlugZap } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { api } from '@/api'
 import { ApiProblem } from '@/api/problem'
 import type { OAuthDataLevel } from '@/api/types'
 import { Button, buttonClass } from '@/components/ui/Button'
-import { ChoiceCards } from '@/components/ui/Field'
+import { ChoiceCards, SwitchField } from '@/components/ui/Field'
 import { Notice } from '@/components/ui/Notice'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { AuthCard, AuthLayout } from '@/features/auth/AuthLayout'
@@ -16,6 +16,8 @@ import { OFFLINE_REASON, useOnline } from '@/lib/online'
 import { useOAuthRequest } from '@/lib/queries'
 import { useSession } from '@/lib/session'
 import { usePageTitle } from '@/lib/usePageTitle'
+
+export const WRITE_SCOPE = 'portfolio:write'
 
 export const DATA_LEVELS: { value: OAuthDataLevel; title: string; description: string }[] = [
   {
@@ -49,8 +51,16 @@ export default function ConsentPage() {
   const online = useOnline()
   const request = useOAuthRequest(requestId)
   const [dataLevel, setDataLevel] = useState<OAuthDataLevel>('detailed')
+  const [allowChanges, setAllowChanges] = useState(false)
+  const wantsChanges = request.data?.scopes.includes(WRITE_SCOPE) ?? false
+  const changes = wantsChanges && allowChanges && dataLevel === 'detailed'
+  // Changes need detailed access, so choosing Summary turns them off until the user turns them on again.
+  const chooseDataLevel = (level: OAuthDataLevel) => {
+    setDataLevel(level)
+    if (level !== 'detailed') setAllowChanges(false)
+  }
   const decide = useMutation({
-    mutationFn: (approve: boolean) => (approve ? api.oauth.approve(requestId!, dataLevel) : api.oauth.deny(requestId!)),
+    mutationFn: (approve: boolean) => (approve ? api.oauth.approve(requestId!, dataLevel, changes) : api.oauth.deny(requestId!)),
     onSuccess: ({ redirectTo }) => leaveApp(redirectTo),
   })
 
@@ -79,7 +89,7 @@ export default function ConsentPage() {
         title={`Connect ${consent.clientName}?`}
         description={
           <>
-            It's asking to read your Wealthboard data{user ? <> as <span className="font-medium text-ink">@{user.username}</span></> : null}, then return to{' '}
+            It's asking to {wantsChanges ? 'read and add to' : 'read'} your Wealthboard data{user ? <> as <span className="font-medium text-ink">@{user.username}</span></> : null}, then return to{' '}
             <span className="font-medium text-ink">{consent.redirectHost}</span>.
           </>
         }
@@ -88,11 +98,35 @@ export default function ConsentPage() {
           <Notice tone="warning" title="Only continue if you started this">
             The application chose its own name. Allow access only if you just connected Wealthboard from an assistant that returns to {consent.redirectHost}.
           </Notice>
-          <ChoiceCards<OAuthDataLevel> name="data-level" legend="What it can read" value={dataLevel} onChange={setDataLevel} columns={1} options={DATA_LEVELS} />
+          <ChoiceCards<OAuthDataLevel> name="data-level" legend="What it can read" value={dataLevel} onChange={chooseDataLevel} columns={1} options={DATA_LEVELS} />
+          {wantsChanges ? (
+            <div className="rounded-md border border-line p-3">
+              <SwitchField
+                label="Allow changes"
+                description={
+                  dataLevel === 'detailed'
+                    ? "It can record new transactions and valuations when you ask it to. It can't edit or delete anything."
+                    : 'Changes need detailed access.'
+                }
+                checked={changes}
+                onCheckedChange={setAllowChanges}
+                disabled={dataLevel !== 'detailed'}
+              />
+            </div>
+          ) : null}
           <ul className="flex flex-col gap-2 text-sm text-muted">
             <li className="flex gap-2.5">
-              <Eye size={16} aria-hidden className="mt-0.5 shrink-0 text-subtle" />
-              Read-only: it can't record, change, or delete anything.
+              {changes ? (
+                <>
+                  <PencilLine size={16} aria-hidden className="mt-0.5 shrink-0 text-subtle" />
+                  Adds only: it can record transactions and valuations, but can't edit or delete anything.
+                </>
+              ) : (
+                <>
+                  <Eye size={16} aria-hidden className="mt-0.5 shrink-0 text-subtle" />
+                  Read-only: it can't record, change, or delete anything.
+                </>
+              )}
             </li>
             <li className="flex gap-2.5">
               <Lock size={16} aria-hidden className="mt-0.5 shrink-0 text-subtle" />

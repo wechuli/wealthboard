@@ -38,3 +38,32 @@ func TestCurrencyExponentMatchesSupportedMinorUnits(t *testing.T) {
 		}
 	}
 }
+
+func TestParseDecimalAmountIsExact(t *testing.T) {
+	for _, test := range []struct {
+		value, currency string
+		want            int64
+	}{
+		{"1500.50", "KES", 150050},
+		{"1500.5", "KES", 150050},
+		{"1500", "KES", 150000},
+		{" 0.05 ", "USD", 5},
+		{"-12.50", "KES", -1250},
+		{"1500", "JPY", 1500},
+		{"1.234", "KWD", 1234},
+		{"92233720368547758.07", "USD", 9223372036854775807},
+	} {
+		got, err := ParseDecimalAmount(test.value, test.currency)
+		if err != nil || got != test.want {
+			t.Errorf("ParseDecimalAmount(%q, %q) = %d, %v; want %d", test.value, test.currency, got, err, test.want)
+		}
+	}
+	for _, test := range []struct{ value, currency string }{
+		{"1,500.00", "KES"}, {"1e3", "KES"}, {"12.345", "KES"}, {"1.5", "JPY"}, {"", "KES"},
+		{"abc", "KES"}, {".5", "KES"}, {"5.", "KES"}, {"92233720368547758.08", "USD"}, {"+5", "KES"},
+	} {
+		if _, err := ParseDecimalAmount(test.value, test.currency); !errors.Is(err, ErrInvalidAmount) {
+			t.Errorf("ParseDecimalAmount(%q, %q) error = %v", test.value, test.currency, err)
+		}
+	}
+}

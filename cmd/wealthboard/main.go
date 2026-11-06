@@ -133,13 +133,14 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	coreReads := api.NewCoreReadHandler(authHandler, coreReadService)
 	goalsReports := api.NewGoalsReportsHandler(authHandler, goalsReportsService)
 	insights := api.NewInsightsHandler(authHandler, insightsService)
+	ledgerService := service.NewLedgerService(db)
 	var mcpHandler, oauthHandler http.Handler
 	var connectedApps *api.ConnectedAppsHandler
 	if cfg.MCP.Enabled {
 		oauthService := oauth.NewService(db, oauth.Config{Issuer: trustedOrigin, Logger: logger})
 		oauthHandler = oauth.NewHandler(oauthService, oauth.HandlerOptions{})
 		connectedApps = api.NewConnectedAppsHandler(authHandler, oauthService)
-		mcpHandler = mcpserver.NewHandler(mcpserver.Readers{Core: coreReadService, Reports: goalsReportsService, Insights: insightsService}, apiKeys, mcpserver.Options{
+		mcpHandler = mcpserver.NewHandler(mcpserver.Readers{Core: coreReadService, Reports: goalsReportsService, Insights: insightsService, Ledger: ledgerService}, apiKeys, mcpserver.Options{
 			RequestsPerMinute: cfg.MCP.RequestsPerMinute, Logger: logger, OAuth: oauthService,
 		})
 	}
@@ -158,7 +159,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	)
 	mutations := api.MutationHandlers{
 		Metadata:    api.NewMetadataMutationHandler(authHandler, service.NewMetadataMutations(db)),
-		Ledger:      api.NewLedgerHandler(authHandler, service.NewLedgerService(db), trustedOrigin),
+		Ledger:      api.NewLedgerHandler(authHandler, ledgerService, trustedOrigin),
 		Goals:       api.NewGoalMutationHandler(authHandler, service.NewGoalMutationService(service.NewSQLGoalMutationRepository(db))),
 		Investment:  api.NewInvestmentMutationHandler(authHandler, service.NewInvestmentMutations(db), trustedOrigin),
 		Conversion:  api.NewAccountConversionHandler(authHandler, service.NewAccountConversionService(db)),

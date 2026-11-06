@@ -15,18 +15,23 @@ import (
 )
 
 type fakeConnectedApps struct {
-	approvedBy uuid.UUID
-	level      string
-	revokedBy  uuid.UUID
+	approvedBy     uuid.UUID
+	level          string
+	changesAllowed bool
+	revokedBy      uuid.UUID
 }
 
 func (*fakeConnectedApps) ConsentRequest(_ context.Context, id uuid.UUID) (oauth.ConsentRequest, error) {
 	return oauth.ConsentRequest{ID: id, ClientName: "Claude", RedirectHost: "https://claude.ai", Scopes: []string{"portfolio:read"}}, nil
 }
 
-func (fake *fakeConnectedApps) Approve(_ context.Context, userID, _ uuid.UUID, level string) (string, error) {
-	if level != oauth.DataLevelDetailed && level != oauth.DataLevelSummary {
+func (fake *fakeConnectedApps) Approve(_ context.Context, userID, _ uuid.UUID, level string, allowChanges bool) (string, error) {
+	if level != oauth.DataLevelDetailed && level != oauth.DataLevelSummary || allowChanges && level != oauth.DataLevelDetailed {
 		return "", oauth.ErrInvalidChoice
+	}
+	if allowChanges {
+		fake.changesAllowed = true
+		return "https://claude.ai/cb?code=c", nil
 	}
 	fake.approvedBy, fake.level = userID, level
 	return "https://claude.ai/cb?code=c", nil
@@ -86,6 +91,8 @@ func TestConnectedAppsRoutesRequireABrowserSession(t *testing.T) {
 		"approve without CSRF":      {http.MethodPost, "/oauth/requests/" + requestID + "/approve", `{"dataLevel":"detailed"}`, true, false, false, http.StatusUnauthorized},
 		"approve unknown level":     {http.MethodPost, "/oauth/requests/" + requestID + "/approve", `{"dataLevel":"everything"}`, true, true, false, http.StatusUnprocessableEntity},
 		"approve with session":      {http.MethodPost, "/oauth/requests/" + requestID + "/approve", `{"dataLevel":"summary"}`, true, true, false, http.StatusOK},
+		"approve summary changes":   {http.MethodPost, "/oauth/requests/" + requestID + "/approve", `{"dataLevel":"summary","allowChanges":true}`, true, true, false, http.StatusUnprocessableEntity},
+		"approve detailed changes":  {http.MethodPost, "/oauth/requests/" + requestID + "/approve", `{"dataLevel":"detailed","allowChanges":true}`, true, true, false, http.StatusOK},
 		"list with API key":         {http.MethodGet, "/connected-apps", "", false, false, true, http.StatusUnauthorized},
 		"list with session":         {http.MethodGet, "/connected-apps", "", true, false, false, http.StatusOK},
 		"revoke without CSRF":       {http.MethodDelete, "/connected-apps/" + uuid.NewString(), "", true, false, false, http.StatusUnauthorized},
@@ -99,7 +106,7 @@ func TestConnectedAppsRoutesRequireABrowserSession(t *testing.T) {
 			}
 		})
 	}
-	if service.approvedBy != ownerID || service.level != oauth.DataLevelSummary || service.revokedBy != ownerID {
+	if service.approvedBy != ownerID || service.level != oauth.DataLevelSummary || !service.changesAllowed || service.revokedBy != ownerID {
 		t.Fatalf("service saw approvedBy=%s level=%s revokedBy=%s", service.approvedBy, service.level, service.revokedBy)
 	}
 }

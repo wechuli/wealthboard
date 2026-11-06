@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	ScopePortfolioRead = "portfolio:read"
-	DataLevelDetailed  = "detailed"
-	DataLevelSummary   = "summary"
+	ScopePortfolioRead  = "portfolio:read"
+	ScopePortfolioWrite = "portfolio:write"
+	DataLevelDetailed   = "detailed"
+	DataLevelSummary    = "summary"
 
 	requestLifetime      = 10 * time.Minute
 	codeLifetime         = 5 * time.Minute
@@ -38,7 +39,7 @@ const (
 var (
 	ErrNotFound      = errors.New("OAuth resource not found")
 	ErrInvalidToken  = errors.New("invalid access token")
-	ErrInvalidChoice = errors.New("choose detailed or summary access")
+	ErrInvalidChoice = errors.New("choose detailed or summary access; changes need detailed access and an application that asked for them")
 )
 
 // Error is an OAuth protocol error (RFC 6749 section 5.2) that is safe to return.
@@ -169,7 +170,7 @@ func (service *Service) Register(ctx context.Context, input ClientRegistration) 
 	now := service.timestamp()
 	result := RegisteredClient{
 		ClientID: randomToken(clientIDPrefix, 18), ClientIDIssuedAt: now.Unix(), ClientName: name, ClientURI: clientURI,
-		RedirectURIs: redirects, GrantTypes: grantTypes, ResponseTypes: responseTypes, TokenEndpointAuthMethod: method, Scope: ScopePortfolioRead,
+		RedirectURIs: redirects, GrantTypes: grantTypes, ResponseTypes: responseTypes, TokenEndpointAuthMethod: method, Scope: ScopePortfolioRead + " " + ScopePortfolioWrite,
 	}
 	var secretHash []byte
 	if method != "none" {
@@ -275,8 +276,9 @@ func (service *Service) StartAuthorization(ctx context.Context, params Authorize
 	if params.CodeChallengeMethod != "S256" || !codeChallengePattern.MatchString(params.CodeChallenge) {
 		return "", &PageError{"The application didn't use PKCE with the S256 method, which Wealthboard requires."}
 	}
-	if _, ok := normalizeScope(params.Scope); !ok {
-		return "", &PageError{"The application asked for access Wealthboard doesn't offer; the only scope is portfolio:read."}
+	scope, ok := normalizeScope(params.Scope)
+	if !ok {
+		return "", &PageError{"The application asked for access Wealthboard doesn't offer; the scopes are portfolio:read and portfolio:write."}
 	}
 	if !service.resourceMatches(params.Resource) {
 		return "", &PageError{"The application asked for access to a different server than " + service.Resource() + "."}
@@ -288,21 +290,41 @@ func (service *Service) StartAuthorization(ctx context.Context, params Authorize
 	}
 	if _, err := service.db.ExecContext(ctx, `
 INSERT INTO oauth_authorization_requests (id, client_id, redirect_uri, state, code_challenge, scope, resource, created_at, expires_at)
-VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9)`, id, registered.id, redirect, params.State, params.CodeChallenge, ScopePortfolioRead, service.Resource(), now, now.Add(requestLifetime)); err != nil {
+VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9)`, id, registered.id, redirect, params.State, params.CodeChallenge, scope, service.Resource(), now, now.Add(requestLifetime)); err != nil {
 		return "", fmt.Errorf("store OAuth request: %w", err)
 	}
 	return service.issuer + "/oauth/consent?request=" + id.String(), nil
 }
 
-// normalizeScope accepts portfolio:read and the no-op offline_access that some
-// clients add to ask for refresh tokens, which are always issued.
+// normalizeScope returns the canonical scope list for a request. Read access is
+// always included; portfolio:write is kept only when asked for; offline_access is
+// accepted as a no-op because refresh tokens are always issued.
 func normalizeScope(value string) (string, bool) {
+	write := false
 	for _, scope := range strings.Fields(value) {
-		if scope != ScopePortfolioRead && scope != "offline_access" {
+		switch scope {
+		case ScopePortfolioRead, "offline_access":
+		case ScopePortfolioWrite:
+			write = true
+		default:
 			return "", false
 		}
 	}
+	if write {
+		return ScopePortfolioRead + " " + ScopePortfolioWrite, true
+	}
 	return ScopePortfolioRead, true
+}
+
+// grantedScope narrows the requested scope to what the user approved.
+func grantedScope(requested, dataLevel string, allowChanges bool) (string, error) {
+	if !allowChanges {
+		return ScopePortfolioRead, nil
+	}
+	if dataLevel != DataLevelDetailed || !slices.Contains(strings.Fields(requested), ScopePortfolioWrite) {
+		return "", ErrInvalidChoice
+	}
+	return ScopePortfolioRead + " " + ScopePortfolioWrite, nil
 }
 
 type ConsentRequest struct {
@@ -359,9 +381,10 @@ RETURNING client_id, redirect_uri, state, code_challenge, scope, resource`, requ
 }
 
 // Approve records the user's consent and returns the client redirect carrying a
-// single-use authorization code. Approving a client again replaces the user's
-// earlier grant for it.
-func (service *Service) Approve(ctx context.Context, userID, requestID uuid.UUID, dataLevel string) (string, error) {
+// single-use authorization code. Changes are granted only when the user allows
+// them, the client asked for them, and access is detailed. Approving a client
+// again replaces the user's earlier grant for it.
+func (service *Service) Approve(ctx context.Context, userID, requestID uuid.UUID, dataLevel string, allowChanges bool) (string, error) {
 	if dataLevel != DataLevelDetailed && dataLevel != DataLevelSummary {
 		return "", ErrInvalidChoice
 	}
@@ -375,13 +398,18 @@ func (service *Service) Approve(ctx context.Context, userID, requestID uuid.UUID
 	if err != nil {
 		return "", err
 	}
+	scope, err := grantedScope(request.scope, dataLevel, allowChanges)
+	if err != nil {
+		// The request stays pending so the user can choose again.
+		return "", err
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE oauth_grants SET revoked_at = $3 WHERE user_id = $1 AND client_id = $2 AND revoked_at IS NULL`, userID, request.clientID, now); err != nil {
 		return "", fmt.Errorf("replace earlier OAuth grant: %w", err)
 	}
 	grantID := uuid.New()
 	if _, err := tx.ExecContext(ctx, `
 INSERT INTO oauth_grants (id, user_id, client_id, redirect_uri, scope, data_level, resource, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, grantID, userID, request.clientID, request.redirectURI, request.scope, dataLevel, request.resource, now); err != nil {
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, grantID, userID, request.clientID, request.redirectURI, scope, dataLevel, request.resource, now); err != nil {
 		return "", fmt.Errorf("create OAuth grant: %w", err)
 	}
 	code := randomToken("", 32)
@@ -500,16 +528,16 @@ func (service *Service) exchangeCode(ctx context.Context, registered client, req
 	}
 	defer tx.Rollback()
 	var grantID, clientID uuid.UUID
-	var redirect, challenge, status string
+	var redirect, challenge, status, scope string
 	var expiresAt time.Time
 	var usedAt, revokedAt sql.NullTime
 	err = tx.QueryRowContext(ctx, `
-SELECT code.grant_id, grant_row.client_id, code.redirect_uri, code.code_challenge, code.expires_at, code.used_at, grant_row.revoked_at, account.status
+SELECT code.grant_id, grant_row.client_id, code.redirect_uri, code.code_challenge, code.expires_at, code.used_at, grant_row.revoked_at, account.status, grant_row.scope
 FROM oauth_authorization_codes code
 JOIN oauth_grants grant_row ON grant_row.id = code.grant_id
 JOIN users account ON account.id = grant_row.user_id
 WHERE code.code_hash = $1
-FOR UPDATE OF code`, hashToken(request.Code)).Scan(&grantID, &clientID, &redirect, &challenge, &expiresAt, &usedAt, &revokedAt, &status)
+FOR UPDATE OF code`, hashToken(request.Code)).Scan(&grantID, &clientID, &redirect, &challenge, &expiresAt, &usedAt, &revokedAt, &status, &scope)
 	if errors.Is(err, sql.ErrNoRows) {
 		return TokenResponse{}, errInvalidGrant
 	}
@@ -541,7 +569,7 @@ FOR UPDATE OF code`, hashToken(request.Code)).Scan(&grantID, &clientID, &redirec
 	if _, err := tx.ExecContext(ctx, `UPDATE oauth_authorization_codes SET used_at = $2 WHERE code_hash = $1`, hashToken(request.Code), now); err != nil {
 		return TokenResponse{}, fmt.Errorf("use OAuth code: %w", err)
 	}
-	response, err := issueTokens(ctx, tx, grantID, now)
+	response, err := issueTokens(ctx, tx, grantID, scope, now)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -555,8 +583,9 @@ func (service *Service) refresh(ctx context.Context, registered client, request 
 	if request.RefreshToken == "" {
 		return TokenResponse{}, protocolError(400, "invalid_request", "refresh_token is required")
 	}
-	if _, ok := normalizeScope(request.Scope); !ok {
-		return TokenResponse{}, protocolError(400, "invalid_scope", "the only supported scope is portfolio:read")
+	requestedScope, ok := normalizeScope(request.Scope)
+	if !ok {
+		return TokenResponse{}, protocolError(400, "invalid_scope", "the scopes are portfolio:read and portfolio:write")
 	}
 	now := service.timestamp()
 	tx, err := service.db.BeginTx(ctx, nil)
@@ -567,14 +596,14 @@ func (service *Service) refresh(ctx context.Context, registered client, request 
 	var grantID, clientID uuid.UUID
 	var expiresAt time.Time
 	var usedAt, tokenRevokedAt, grantRevokedAt sql.NullTime
-	var status string
+	var status, scope string
 	err = tx.QueryRowContext(ctx, `
-SELECT token.grant_id, grant_row.client_id, token.expires_at, token.used_at, token.revoked_at, grant_row.revoked_at, account.status
+SELECT token.grant_id, grant_row.client_id, token.expires_at, token.used_at, token.revoked_at, grant_row.revoked_at, account.status, grant_row.scope
 FROM oauth_tokens token
 JOIN oauth_grants grant_row ON grant_row.id = token.grant_id
 JOIN users account ON account.id = grant_row.user_id
 WHERE token.token_hash = $1 AND token.kind = 'refresh'
-FOR UPDATE OF token, grant_row`, hashToken(request.RefreshToken)).Scan(&grantID, &clientID, &expiresAt, &usedAt, &tokenRevokedAt, &grantRevokedAt, &status)
+FOR UPDATE OF token, grant_row`, hashToken(request.RefreshToken)).Scan(&grantID, &clientID, &expiresAt, &usedAt, &tokenRevokedAt, &grantRevokedAt, &status, &scope)
 	if errors.Is(err, sql.ErrNoRows) {
 		return TokenResponse{}, errInvalidGrant
 	}
@@ -598,10 +627,17 @@ FOR UPDATE OF token, grant_row`, hashToken(request.RefreshToken)).Scan(&grantID,
 	if usedAt.Valid || tokenRevokedAt.Valid || grantRevokedAt.Valid || !expiresAt.After(now) || status != "active" {
 		return TokenResponse{}, errInvalidGrant
 	}
+	if request.Scope != "" {
+		for _, wanted := range strings.Fields(requestedScope) {
+			if !slices.Contains(strings.Fields(scope), wanted) {
+				return TokenResponse{}, protocolError(400, "invalid_scope", "a refresh can't add access the user didn't approve")
+			}
+		}
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE oauth_tokens SET used_at = $2 WHERE token_hash = $1`, hashToken(request.RefreshToken), now); err != nil {
 		return TokenResponse{}, fmt.Errorf("rotate OAuth refresh token: %w", err)
 	}
-	response, err := issueTokens(ctx, tx, grantID, now)
+	response, err := issueTokens(ctx, tx, grantID, scope, now)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -611,7 +647,7 @@ FOR UPDATE OF token, grant_row`, hashToken(request.RefreshToken)).Scan(&grantID,
 	return response, nil
 }
 
-func issueTokens(ctx context.Context, tx *sql.Tx, grantID uuid.UUID, now time.Time) (TokenResponse, error) {
+func issueTokens(ctx context.Context, tx *sql.Tx, grantID uuid.UUID, scope string, now time.Time) (TokenResponse, error) {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_tokens WHERE grant_id = $1 AND expires_at < $2`, grantID, now.Add(-24*time.Hour)); err != nil {
 		return TokenResponse{}, fmt.Errorf("prune OAuth tokens: %w", err)
 	}
@@ -621,7 +657,7 @@ INSERT INTO oauth_tokens (token_hash, grant_id, kind, created_at, expires_at)
 VALUES ($1, $3, 'access', $4, $5), ($2, $3, 'refresh', $4, $6)`, hashToken(access), hashToken(refresh), grantID, now, now.Add(accessTokenLifetime), now.Add(refreshTokenLifetime)); err != nil {
 		return TokenResponse{}, fmt.Errorf("issue OAuth tokens: %w", err)
 	}
-	return TokenResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int(accessTokenLifetime.Seconds()), RefreshToken: refresh, Scope: ScopePortfolioRead}, nil
+	return TokenResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int(accessTokenLifetime.Seconds()), RefreshToken: refresh, Scope: scope}, nil
 }
 
 func revokeGrant(ctx context.Context, tx *sql.Tx, grantID uuid.UUID, now time.Time) error {

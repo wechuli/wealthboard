@@ -375,3 +375,21 @@ type AttentionResult struct {
 	TotalsComplete bool            `json:"totalsComplete"`
 	Items          []AttentionItem `json:"items"`
 }
+
+type RecordTransactionResult struct {
+	Transaction TransactionItem `json:"transaction"`
+	Account     AccountSummary  `json:"account" jsonschema:"The account after the change, with its new balance."`
+}
+
+type ValuationItem struct {
+	ID          string `json:"id"`
+	AccountID   string `json:"accountId"`
+	AccountName string `json:"accountName"`
+	Value       Money  `json:"value"`
+	Date        string `json:"date"`
+}
+
+type RecordValuationResult struct {
+	Valuation ValuationItem  `json:"valuation"`
+	Account   AccountSummary `json:"account" jsonschema:"The account after the change, with its new balance."`
+}

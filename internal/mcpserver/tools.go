@@ -48,6 +48,8 @@ type toolset struct {
 	// summary limits a connection to aggregates: no account, goal, institution,
 	// instrument, or transaction details.
 	summary bool
+	// write adds the tools that record new transactions and valuations.
+	write bool
 }
 
 func readOnly(title string) *mcp.ToolAnnotations {
@@ -109,6 +111,9 @@ func (tools *toolset) register(server *mcp.Server) {
 		Description: "Data-quality and goal items that need attention, such as missing exchange rates, stale prices, and goals behind schedule.",
 		Annotations: readOnly("Attention items"),
 	}, handle(tools, tools.attention))
+	if tools.write {
+		tools.registerWrites(server)
+	}
 }
 
 // addTool registers a tool with an output schema that lists one JSON type per field.
@@ -163,8 +168,11 @@ func handle[In, Out any](tools *toolset, run func(context.Context, uuid.UUID, In
 		switch {
 		case errors.As(err, &safe):
 			return nil, zero, safe
-		case errors.Is(err, service.ErrCoreReadNotFound), errors.Is(err, service.ErrGoalsReportsNotFound):
+		case errors.Is(err, service.ErrCoreReadNotFound), errors.Is(err, service.ErrGoalsReportsNotFound), errors.Is(err, service.ErrLedgerNotFound):
 			return nil, zero, toolError{"No matching record was found for this user."}
+		case errors.Is(err, service.ErrLedgerValidation), errors.Is(err, service.ErrLedgerConflict):
+			// Ledger messages are fixed text without user data, and help the assistant correct the call.
+			return nil, zero, toolError{ledgerMessage(err)}
 		case errors.Is(err, service.ErrInsightsInvalidRange):
 			return nil, zero, invalid("range must be 1m, 3m, 6m, 1y, or all")
 		default:

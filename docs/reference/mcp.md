@@ -1,14 +1,16 @@
 ---
 title: Connect an AI assistant (MCP)
-description: Let an AI assistant you already use read your Wealthboard data through a read-only Model Context Protocol endpoint.
+description: Let an AI assistant you already use read your Wealthboard data, and optionally record transactions and valuations, through a Model Context Protocol endpoint.
 ---
 
 # Connect an AI assistant (MCP)
 
-Wealthboard serves a read-only [Model Context Protocol](https://modelcontextprotocol.io/)
+Wealthboard serves a [Model Context Protocol](https://modelcontextprotocol.io/)
 (MCP) endpoint at `/mcp`. An assistant that supports MCP can use it to answer
 questions about your accounts, transactions, goals, and reports using
-Wealthboard's own figures. Wealthboard never sends your data to an AI provider
+Wealthboard's own figures. Connections are read-only unless you
+[allow changes](#allow-changes), which let the assistant record new
+transactions and valuations you ask for. Wealthboard never sends your data to an AI provider
 itself. The assistant you connect requests it, and that provider's terms then
 apply to what it receives.
 
@@ -36,8 +38,8 @@ on your home network, a VPN, or `localhost` won't connect.
      choose OAuth authentication. See
      [Connecting custom MCP servers in ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
 3. The assistant opens Wealthboard. Sign in if asked, check the application
-   name and the address it returns to, choose what it can read, and select
-   **Allow access**.
+   name and the address it returns to, choose what it can read, decide whether
+   to allow changes, and select **Allow access**.
 
 Choose what the assistant can read:
 
@@ -49,10 +51,24 @@ Choose what the assistant can read:
 The application name on the consent page comes from the application and isn't
 verified. Allow access only when you've just started the connection yourself.
 
+### Allow changes
+
+When an assistant asks for permission to make changes, the consent page shows
+an **Allow changes** switch. It is off by default and needs **Detailed**
+access. With it on, the assistant can use `record_transaction` and
+`record_valuation` to add records when you ask, for example "record a 1,500 KES
+deposit to Savings today". It can't edit or delete anything, move money between
+accounts, record trades, or change accounts or settings. To fix a mistake,
+edit or delete the record in Wealthboard.
+
+Leave the switch off for a read-only connection. To change your choice later,
+connect the assistant again.
+
 ### Manage connections
 
-**Settings → Connected apps** lists each assistant with its access level, when
-it was connected and last used, and its recent tool calls (name, outcome, and
+**Settings → Connected apps** lists each assistant with its access level, a
+**Can make changes** badge if you allowed changes, when it was connected and
+last used, and its recent tool calls (name, outcome, and
 time; never what it read). Select **Disconnect** to stop it immediately.
 Connecting the same assistant again replaces its earlier connection.
 Connections that aren't used for 30 days expire.
@@ -64,7 +80,9 @@ Connections that aren't used for 30 days expire.
 1. Open **Settings → API keys** and create a key with only the
    `portfolio:read` scope. Keys with other scopes are refused by `/mcp` unless
    they also include `portfolio:read`, but a read-only key limits what a leaked
-   key can do elsewhere in the API.
+   key can do elsewhere in the API. Add `portfolio:write` only if the assistant
+   should record transactions and valuations; that key can also change data
+   through the rest of the API.
 2. Copy the key; it's shown only once.
 3. Revoke the key from the same page to disconnect the assistant immediately.
 
@@ -134,7 +152,7 @@ bearer_token_env_var = "WEALTHBOARD_API_KEY"
 
 ## Tools
 
-All tools are read-only and return only the key owner's data.
+Tools return only the signed-in user's data. Read tools:
 
 | Tool                    | Returns                                                                                                                                 |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -148,6 +166,28 @@ All tools are read-only and return only the key owner's data.
 | `get_goal`              | One goal's plan, scenarios, milestones, and projection                                                                                 |
 | `get_holdings`          | Positions, prices, and cash for investment accounts; `accountId` is optional                                                           |
 | `get_attention_items`   | Missing exchange rates, stale prices, and goals behind schedule                                                                        |
+
+Write tools, listed only for a Detailed connection with changes allowed or an
+API key with both `portfolio:read` and `portfolio:write`:
+
+| Tool                 | Does                                                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `record_transaction` | Adds one transaction (`accountId`, `type`, `amount`, `date`, optional `description`, `idempotencyKey`) and returns it with the new balance |
+| `record_valuation`   | Sets a balance-tracked account's `value` on a `date` (with an `idempotencyKey`) and returns the new balance                             |
+
+- `amount` and `value` are plain decimal strings in the account's currency,
+  such as `"1500.00"`, with at most the currency's decimal places. Separators,
+  symbols, and exponents are refused. Only `manual_adjustment` amounts may be
+  negative.
+- `type` is any transaction type except `opening_balance` and `transfer`.
+  Investment accounts accept only `deposit`, `withdrawal`, `interest`,
+  `dividend`, `fee`, and `manual_adjustment`; record trades in Wealthboard.
+- Dates can't be in the future, and archived accounts can't be changed.
+- `idempotencyKey` is a new UUID for each record. Retrying with the same key and
+  details returns the original record instead of adding another; the same key
+  with different details is refused.
+- The server instructions tell the assistant to record only when you ask and to
+  confirm the details first.
 
 The server also offers a `portfolio_review` prompt. Its optional `focus` is
 `overall`, `allocation`, `goals`, `cash-flow`, or `data-quality`.
@@ -177,7 +217,7 @@ mark them as untrusted text the assistant must not follow as instructions.
 | Response | Meaning                                                                                |
 | -------- | -------------------------------------------------------------------------------------- |
 | `401`    | No credentials, an unknown, revoked, or expired key or token, or more than one `Authorization` header |
-| `403`    | The key or token lacks `portfolio:read`                                                                |
+| `403`    | The key or token lacks `portfolio:read`; the `WWW-Authenticate` header has `error="insufficient_scope"` |
 | `429`    | The key or connection reached its per-minute limit; wait for `Retry-After` seconds                     |
 
 `/mcp` never uses the browser session cookie. A `401` includes a
@@ -228,7 +268,11 @@ with `APP_URL` as the issuer and `APP_URL/mcp` as the resource.
 - Authorization, token, and revocation requests are limited to 120 a minute per
   client. Wealthboard rate-limits by the connecting address, so behind a
   reverse proxy the registration limit is shared by the whole instance.
-- The only scope is `portfolio:read`; `offline_access` is accepted and ignored
-  because refresh tokens are always issued.
+- Scopes are `portfolio:read` (always granted) and `portfolio:write`, which is
+  granted only if the user turns on **Allow changes** with Detailed access. The
+  token response's `scope` says what was granted, and a refresh can't add
+  scopes. `offline_access` is accepted and ignored because refresh tokens are
+  always issued. A `401` from `/mcp` names no scope, so clients request the
+  scopes in the protected resource metadata.
 - Access tokens last one hour. Refresh tokens last 30 days and rotate on every
   use; reusing one revokes the connection, as does revoking a refresh token.

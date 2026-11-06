@@ -45,12 +45,47 @@ describe('assistant consent', () => {
     expect(screen.getAllByText(/https:\/\/claude\.ai/).length).toBeGreaterThan(0)
     expect(screen.getByText('Only continue if you started this')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Detailed/ })).toBeChecked()
+    expect(screen.queryByRole('switch', { name: 'Allow changes' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Read-only: it can't record/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('radio', { name: /Summary only/ }))
     await user.click(screen.getByRole('button', { name: 'Allow access' }))
-    await waitFor(() => expect(approve).toHaveBeenCalledWith(requestId, 'summary'))
+    await waitFor(() => expect(approve).toHaveBeenCalledWith(requestId, 'summary', false))
     await waitFor(() => expect(leaveApp).toHaveBeenCalledWith('https://claude.ai/api/mcp/auth_callback?code=c&state=s'))
     expect(deny).not.toHaveBeenCalled()
+  })
+
+  it('offers changes, off by default, only with detailed access when the client asks for them', async () => {
+    setScenario({ data: 'full', auth: 'local' })
+    const user = userEvent.setup()
+    vi.spyOn(api.oauth, 'request').mockResolvedValue({
+      id: requestId,
+      clientName: 'Claude',
+      redirectHost: 'https://claude.ai',
+      scopes: ['portfolio:read', 'portfolio:write'],
+      expiresAt: '2026-11-06T18:10:00Z',
+    })
+    const approve = vi.spyOn(api.oauth, 'approve').mockResolvedValue({ redirectTo: 'https://claude.ai/cb?code=c' })
+    const r = renderWithApp(<ConsentPage />, { route: `/oauth/consent?request=${requestId}` })
+    await settle(r.client)
+
+    expect(await screen.findByText(/asking to read and add to your Wealthboard data/)).toBeInTheDocument()
+    const changes = screen.getByRole('switch', { name: 'Allow changes' })
+    expect(changes).not.toBeChecked()
+    await user.click(changes)
+    expect(changes).toBeChecked()
+    expect(screen.getByText(/Adds only: it can record transactions and valuations/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /Summary only/ }))
+    expect(changes).toBeDisabled()
+    expect(changes).not.toBeChecked()
+    expect(screen.getByText('Changes need detailed access.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /Detailed/ }))
+    expect(changes).not.toBeChecked()
+    await user.click(changes)
+    await user.click(screen.getByRole('button', { name: 'Allow access' }))
+    await waitFor(() => expect(approve).toHaveBeenCalledWith(requestId, 'detailed', true))
   })
 
   it('declines and returns to the client', async () => {
@@ -107,6 +142,7 @@ describe('connected apps settings', () => {
 
     expect(await screen.findByText('Claude')).toBeInTheDocument()
     expect(screen.getByText('Returns to https://claude.ai')).toBeInTheDocument()
+    expect(screen.queryByText('Can make changes', { exact: true })).not.toBeInTheDocument()
     expect(screen.getByText(`${window.location.origin}/mcp`)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /Recent activity/ }))
@@ -121,6 +157,19 @@ describe('connected apps settings', () => {
     expect(revoke).not.toHaveBeenCalled()
     await user.click(within(confirm).getByRole('button', { name: 'Disconnect' }))
     await waitFor(() => expect(revoke).toHaveBeenCalledWith(app.id))
+  })
+
+  it('marks a connection that can make changes and labels its write activity', async () => {
+    setScenario({ data: 'full', auth: 'local' })
+    const user = userEvent.setup()
+    vi.spyOn(api.connectedApps, 'list').mockResolvedValue([
+      { ...app, scopes: ['portfolio:read', 'portfolio:write'], recentCalls: [{ tool: 'record_transaction', outcome: 'success', at: '2026-11-06T08:00:00Z' }] },
+    ])
+    const r = renderWithApp(<ConnectedAppsSettings />, { route: '/settings/connected-apps' })
+    await settle(r.client)
+    expect(await screen.findByText('Can make changes', { exact: true })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Recent activity/ }))
+    expect(within(screen.getByRole('list', { name: 'Recent activity for Claude' })).getByText('Recorded a transaction')).toBeInTheDocument()
   })
 
   it('explains how to connect when nothing is connected', async () => {
