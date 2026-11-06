@@ -290,6 +290,70 @@ type LoginAttempt struct {
 	AttemptedAt time.Time `json:"attempted_at"`
 }
 
+type OauthAuthorizationCode struct {
+	CodeHash      []byte       `json:"code_hash"`
+	GrantID       uuid.UUID    `json:"grant_id"`
+	RedirectUri   string       `json:"redirect_uri"`
+	CodeChallenge string       `json:"code_challenge"`
+	ExpiresAt     time.Time    `json:"expires_at"`
+	UsedAt        sql.NullTime `json:"used_at"`
+}
+
+type OauthAuthorizationRequest struct {
+	ID            uuid.UUID      `json:"id"`
+	ClientID      uuid.UUID      `json:"client_id"`
+	RedirectUri   string         `json:"redirect_uri"`
+	State         sql.NullString `json:"state"`
+	CodeChallenge string         `json:"code_challenge"`
+	Scope         string         `json:"scope"`
+	Resource      string         `json:"resource"`
+	CreatedAt     time.Time      `json:"created_at"`
+	ExpiresAt     time.Time      `json:"expires_at"`
+}
+
+type OauthClient struct {
+	ID                      uuid.UUID       `json:"id"`
+	ClientID                string          `json:"client_id"`
+	ClientSecretHash        []byte          `json:"client_secret_hash"`
+	ClientName              string          `json:"client_name"`
+	ClientUri               sql.NullString  `json:"client_uri"`
+	RedirectUris            json.RawMessage `json:"redirect_uris"`
+	TokenEndpointAuthMethod string          `json:"token_endpoint_auth_method"`
+	CreatedAt               time.Time       `json:"created_at"`
+}
+
+type OauthGrant struct {
+	ID          uuid.UUID    `json:"id"`
+	UserID      uuid.UUID    `json:"user_id"`
+	ClientID    uuid.UUID    `json:"client_id"`
+	RedirectUri string       `json:"redirect_uri"`
+	Scope       string       `json:"scope"`
+	DataLevel   string       `json:"data_level"`
+	Resource    string       `json:"resource"`
+	CreatedAt   time.Time    `json:"created_at"`
+	LastUsedAt  sql.NullTime `json:"last_used_at"`
+	RevokedAt   sql.NullTime `json:"revoked_at"`
+}
+
+type OauthToken struct {
+	TokenHash []byte       `json:"token_hash"`
+	GrantID   uuid.UUID    `json:"grant_id"`
+	Kind      string       `json:"kind"`
+	CreatedAt time.Time    `json:"created_at"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	UsedAt    sql.NullTime `json:"used_at"`
+	RevokedAt sql.NullTime `json:"revoked_at"`
+}
+
+type OauthToolCall struct {
+	ID        uuid.UUID `json:"id"`
+	GrantID   uuid.UUID `json:"grant_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Tool      string    `json:"tool"`
+	Outcome   string    `json:"outcome"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type OidcIdentity struct {
 	ID          uuid.UUID `json:"id"`
 	UserID      uuid.UUID `json:"user_id"`
