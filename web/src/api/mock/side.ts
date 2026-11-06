@@ -1,5 +1,5 @@
 /**
- * Mock state for estate planning, AI review, and API keys. Kept separate from the ledger engine:
+ * Mock state for estate planning, AI settings, and API keys. Kept separate from the ledger engine:
  * these features don't change balances. Values come from the engine's current account values.
  */
 import type { AIRead, APIKeyMetadata, Beneficiary, CreatedAPIKey, EstateAllocation, EstateDirective, EstatePlan, EstateSnapshot, EstateWorkspace, ResiduaryAllocation } from '../types'
@@ -29,11 +29,11 @@ export function emptySideState(): SideState {
     snapshots: [],
     ai: {
       settings: null,
-      usage: { billingMonth: month, chargedTokens: 0, remainingTokens: 0, monthlyTokenLimit: 0, successfulReviews: 0, lastUsedAt: null },
+      usage: { billingMonth: month, chargedTokens: 0, remainingTokens: 0, monthlyTokenLimit: 0, successfulRequests: 0, lastUsedAt: null },
       events: [],
-      reviewAvailability: {
+      availability: {
         available: false,
-        reason: 'Connect an AI provider to request a review.',
+        reason: 'Connect an AI provider to convert statements.',
         providerConfigured: false,
         storedCredentialAvailable: false,
         sessionCredentialAccepted: false,

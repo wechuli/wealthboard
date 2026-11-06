@@ -86,7 +86,7 @@ Wealthboard extracts text before submission. Access and compatibility errors
 for the chosen model surface when conversion runs. Wealthboard never
 silently substitutes a model or provider.
 
-Review and conversion share the same monthly token budget and rate limits.
+Conversion uses a per-user monthly token budget and rate limit.
 The monthly limit can be set between **10,000 and 100,000,000 tokens**; existing
 saved limits and the 100,000-token form default are unchanged. Provider requests
 use a **120-second (two-minute) timeout**, with no automatic retries. This does

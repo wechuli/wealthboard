@@ -46,19 +46,17 @@ type AccountConversion struct {
 }
 
 type AiProviderSetting struct {
-	ID                  uuid.UUID      `json:"id"`
-	UserID              uuid.UUID      `json:"user_id"`
-	Provider            string         `json:"provider"`
-	BaseUrl             string         `json:"base_url"`
-	Model               string         `json:"model"`
-	EncryptedApiKey     sql.NullString `json:"encrypted_api_key"`
-	ApiKeyHint          sql.NullString `json:"api_key_hint"`
-	IncludeExactAmounts bool           `json:"include_exact_amounts"`
-	IncludeAccountNames bool           `json:"include_account_names"`
-	MonthlyTokenLimit   int32          `json:"monthly_token_limit"`
-	MaxOutputTokens     int32          `json:"max_output_tokens"`
-	CreatedAt           time.Time      `json:"created_at"`
-	UpdatedAt           time.Time      `json:"updated_at"`
+	ID                uuid.UUID      `json:"id"`
+	UserID            uuid.UUID      `json:"user_id"`
+	Provider          string         `json:"provider"`
+	BaseUrl           string         `json:"base_url"`
+	Model             string         `json:"model"`
+	EncryptedApiKey   sql.NullString `json:"encrypted_api_key"`
+	ApiKeyHint        sql.NullString `json:"api_key_hint"`
+	MonthlyTokenLimit int32          `json:"monthly_token_limit"`
+	MaxOutputTokens   int32          `json:"max_output_tokens"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
 }
 
 type AiUsageEvent struct {

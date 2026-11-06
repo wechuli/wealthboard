@@ -726,8 +726,6 @@ test("rejects unsupported AI providers and server-side source extraction", async
   const session = await signUp(page, "go-ai-owner");
   const settingsInput = {
     model: "fixture-import-model",
-    includeExactAmounts: false,
-    includeAccountNames: false,
     monthlyTokenLimit: 100000,
     maxOutputTokens: 4000,
   };
@@ -759,6 +757,19 @@ test("rejects unsupported AI providers and server-side source extraction", async
     },
   });
   expect(extracted.status()).toBe(404);
+
+  const review = await mutation(page, session, "POST", "/ai/review", {
+    period: "1y",
+    focus: "overall",
+    snapshot: {},
+  });
+  expect(review.status()).toBe(404);
+  const legacy = await mutation(page, session, "PUT", "/ai/settings", {
+    ...settingsInput,
+    provider: "openai",
+    includeExactAmounts: true,
+  });
+  expect(legacy.status()).toBe(400);
 });
 
 test("extracts PDF, protected PDF, XLSX, DOCX, and CSV sources in the browser", async ({

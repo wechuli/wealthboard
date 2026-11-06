@@ -140,11 +140,6 @@ type ModelSelection struct {
 	MaxOutputTokens int      `json:"maxOutputTokens"`
 }
 
-type reviewFlowInput struct {
-	Selection ModelSelection `json:"selection"`
-	Snapshot  string         `json:"snapshot"`
-}
-
 type conversionFlowInput struct {
 	Selection    ModelSelection `json:"selection"`
 	TrackingMode string         `json:"trackingMode"`
@@ -155,20 +150,11 @@ type conversionFlowInput struct {
 // Flows holds the Genkit flows the AI workflows run. Define them once at
 // startup with [DefineFlows]; they are safe for concurrent use.
 type Flows struct {
-	review     *core.Flow[reviewFlowInput, ReviewContent, struct{}]
 	conversion *core.Flow[conversionFlowInput, Extraction, struct{}]
 }
 
 func DefineFlows(g *genkit.Genkit) *Flows {
 	return &Flows{
-		review: genkit.DefineFlow(g, "portfolioReview", func(ctx context.Context, input reviewFlowInput) (ReviewContent, error) {
-			output, response, err := genkit.GenerateData[ReviewContent](ctx, g, generateOptions(input.Selection, reviewPrompt(input.Snapshot))...)
-			recordUsage(ctx, response)
-			if err != nil {
-				return ReviewContent{}, classifyProviderError(ctx, err)
-			}
-			return *output, nil
-		}),
 		conversion: genkit.DefineFlow(g, "importConversion", func(ctx context.Context, input conversionFlowInput) (Extraction, error) {
 			output, response, err := genkit.GenerateData[Extraction](ctx, g, generateOptions(input.Selection, conversionPrompt(input.TrackingMode, input.Currency, input.Units))...)
 			recordUsage(ctx, response)
@@ -178,13 +164,6 @@ func DefineFlows(g *genkit.Genkit) *Flows {
 			return *output, nil
 		}),
 	}
-}
-
-func (flows *Flows) Review(ctx context.Context, apiKey string, selection ModelSelection, snapshot string) (ReviewContent, Usage, error) {
-	ctx, recorder, cancel := flowContext(ctx, selection.Provider, apiKey)
-	defer cancel()
-	output, err := flows.review.Run(ctx, reviewFlowInput{Selection: selection, Snapshot: snapshot})
-	return output, recorder.usage, classifyProviderError(ctx, err)
 }
 
 func (flows *Flows) Convert(ctx context.Context, apiKey string, selection ModelSelection, request ConversionRequest) (Extraction, Usage, error) {

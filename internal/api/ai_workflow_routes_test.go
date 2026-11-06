@@ -82,11 +82,10 @@ func TestAIWorkflowAuthorizationContracts(t *testing.T) {
 	}{
 		{name: "session credential", path: "/ai/credential", body: `{"apiKey":"session-secret-key"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "session"}, want: http.StatusOK},
 		{name: "API key credential denied", path: "/ai/credential", body: `{"apiKey":"api-key-secret"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusForbidden},
-		{name: "AI invoke scope", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusOK},
-		{name: "wrong invoke scope", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}, want: http.StatusForbidden},
 		{name: "convert AI invoke scope", path: "/ai/import/convert", body: `{"source":{"units":[],"warnings":[]},"configurationHash":"hash","consent":true,"trackingMode":"balance","currency":"USD"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke}}, want: http.StatusOK},
 		{name: "convert wrong scope", path: "/ai/import/convert", body: `{"source":{"units":[],"warnings":[]},"configurationHash":"hash","consent":true,"trackingMode":"balance","currency":"USD"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeImportsWrite}}, want: http.StatusForbidden},
-		{name: "session invoke", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "session"}, want: http.StatusOK},
+		{name: "session invoke", path: "/ai/import/convert", body: `{"source":{"units":[],"warnings":[]},"configurationHash":"hash","consent":true,"trackingMode":"balance","currency":"USD"}`, principal: webauth.Principal{UserID: uuid.New(), Method: "session"}, want: http.StatusOK},
+		{name: "portfolio review removed", path: "/ai/review", body: `{"period":"1y","focus":"overall","snapshot":{}}`, principal: webauth.Principal{UserID: uuid.New(), Method: "session"}, want: http.StatusNotFound},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -154,9 +153,6 @@ func (*fakeAIWorkflowService) DeleteCredential(context.Context, uuid.UUID) error
 func (*fakeAIWorkflowService) Disconnect(context.Context, uuid.UUID) error       { return nil }
 func (*fakeAIWorkflowService) ClearUsage(context.Context, uuid.UUID) (int64, error) {
 	return 0, nil
-}
-func (*fakeAIWorkflowService) Review(context.Context, uuid.UUID, aiworkflow.ReviewRequest) (map[string]any, error) {
-	return map[string]any{}, nil
 }
 func (*fakeAIWorkflowService) Convert(context.Context, uuid.UUID, aiworkflow.ConversionRequest) (aiworkflow.ConversionDraft, error) {
 	return aiworkflow.ConversionDraft{}, nil

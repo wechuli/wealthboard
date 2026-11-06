@@ -2507,7 +2507,7 @@ paths:
   /ai:
     get:
       operationId: getAIReadModel
-      summary: Return AI provider metadata, usage, and review availability
+      summary: Return AI provider metadata, usage, and conversion availability
       description: Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Stored API key secrets are never returned.
       security:
         - sessionCookie: []
@@ -2622,32 +2622,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AIClearUsageResult" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "422": { $ref: "#/components/responses/Problem" }
-        "429": { $ref: "#/components/responses/Problem" }
-        "502": { $ref: "#/components/responses/Problem" }
-        "503": { $ref: "#/components/responses/Problem" }
-        "504": { $ref: "#/components/responses/Problem" }
-  /ai/review:
-    post:
-      operationId: createAIReview
-      summary: Generate a review from a supplied portfolio snapshot
-      description: Bearer API keys require `ai:invoke`. Browser sessions require a trusted Origin and `X-CSRF-Token`. The JSON body is limited to 40 KiB and the embedded snapshot to 25,000 bytes. Exact amounts and account names are sent only when the explicit sharing flags permit them. A request API key is ephemeral and never returned, stored, or logged.
-      security: [{ sessionCookie: [] }, { apiKey: [] }]
-      parameters: [{ $ref: "#/components/parameters/MutationCSRFToken" }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AIReviewRequest" }
-      responses:
-        "200":
-          description: Grounded review, echoed snapshot, redacted provider metadata, and usage
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AIReviewResult" }
-        "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
@@ -6326,8 +6300,6 @@ components:
           model,
           hasStoredApiKey,
           apiKeyHint,
-          includeExactAmounts,
-          includeAccountNames,
           monthlyTokenLimit,
           maxOutputTokens,
           createdAt,
@@ -6339,8 +6311,6 @@ components:
         model: { type: string }
         hasStoredApiKey: { type: boolean }
         apiKeyHint: { type: [string, "null"] }
-        includeExactAmounts: { type: boolean }
-        includeAccountNames: { type: boolean }
         monthlyTokenLimit: { type: integer, format: int32 }
         maxOutputTokens: { type: integer, format: int32 }
         createdAt: { type: string, format: date-time }
@@ -6389,7 +6359,7 @@ components:
           chargedTokens,
           remainingTokens,
           monthlyTokenLimit,
-          successfulReviews,
+          successfulRequests,
           lastUsedAt,
         ]
       properties:
@@ -6397,10 +6367,11 @@ components:
         chargedTokens: { type: integer, format: int64 }
         remainingTokens: { type: integer, format: int64 }
         monthlyTokenLimit: { type: integer, format: int32 }
-        successfulReviews: { type: integer, minimum: 0 }
+        successfulRequests: { type: integer, minimum: 0 }
         lastUsedAt: { type: [string, "null"], format: date-time }
-    ReviewAvailability:
+    AIAvailability:
       type: object
+      description: Whether an AI import conversion can start now.
       additionalProperties: false
       required:
         [
@@ -6423,7 +6394,7 @@ components:
     AIRead:
       type: object
       additionalProperties: false
-      required: [settings, usage, events, reviewAvailability]
+      required: [settings, usage, events, availability]
       properties:
         settings:
           oneOf:
@@ -6435,8 +6406,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AIUsageEvent"
-        reviewAvailability:
-          $ref: "#/components/schemas/ReviewAvailability"
+        availability:
+          $ref: "#/components/schemas/AIAvailability"
     AIProvider:
       type: string
       enum: [openai, anthropic, deepseek]
@@ -6447,8 +6418,6 @@ components:
         [
           provider,
           model,
-          includeExactAmounts,
-          includeAccountNames,
           monthlyTokenLimit,
           maxOutputTokens,
         ]
@@ -6461,16 +6430,6 @@ components:
             maxLength: 200,
             pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
             description: "Provider model identifier: a suggested model or any other model the provider serves.",
-          }
-        includeExactAmounts:
-          {
-            type: boolean,
-            description: Whether exact financial amounts may be shared with the configured provider.,
-          }
-        includeAccountNames:
-          {
-            type: boolean,
-            description: Whether private account names may be shared with the configured provider.,
           }
         monthlyTokenLimit: { type: integer, minimum: 10000, maximum: 100000000 }
         maxOutputTokens:
@@ -6487,8 +6446,6 @@ components:
           provider,
           baseUrl,
           model,
-          includeExactAmounts,
-          includeAccountNames,
           monthlyTokenLimit,
           maxOutputTokens,
           hasStoredApiKey,
@@ -6504,8 +6461,6 @@ components:
             description: Fixed provider API endpoint derived from `provider`; read-only.,
           }
         model: { type: string }
-        includeExactAmounts: { type: boolean }
-        includeAccountNames: { type: boolean }
         monthlyTokenLimit: { type: integer }
         maxOutputTokens: { type: integer }
         hasStoredApiKey: { type: boolean }
@@ -6527,163 +6482,6 @@ components:
       required: [deleted]
       properties:
         deleted: { type: integer, format: int64, minimum: 0 }
-    AIReviewPeriod:
-      type: string
-      enum: [1m, 3m, 6m, 1y, all]
-    AIReviewFocus:
-      type: string
-      enum: [overall, allocation, goals, cash-flow, data-quality]
-    AIReviewSnapshot:
-      type: object
-      additionalProperties: false
-      required:
-        [
-          schemaVersion,
-          asOf,
-          period,
-          focus,
-          baseCurrency,
-          sharing,
-          completeness,
-          portfolio,
-          allocations,
-          topAccounts,
-          cashFlow,
-          goals,
-          dataQuality,
-          methodology,
-        ]
-      properties:
-        schemaVersion: { type: integer, const: 1 }
-        asOf: { type: string, minLength: 1 }
-        period: { $ref: "#/components/schemas/AIReviewPeriod" }
-        focus: { $ref: "#/components/schemas/AIReviewFocus" }
-        baseCurrency: { $ref: "#/components/schemas/CurrencyCode" }
-        sharing: { type: object, additionalProperties: true }
-        completeness: { type: object, additionalProperties: true }
-        portfolio: { type: object, additionalProperties: true }
-        allocations: { type: [object, array] }
-        topAccounts: { type: array, items: {} }
-        cashFlow: { type: object, additionalProperties: true }
-        goals: { type: array, items: {} }
-        dataQuality: { type: [object, array] }
-        methodology: { type: object, additionalProperties: true }
-    AIReviewRequest:
-      type: object
-      additionalProperties: false
-      required:
-        [period, focus, includeExactAmounts, includeAccountNames, snapshot]
-      properties:
-        period: { $ref: "#/components/schemas/AIReviewPeriod" }
-        focus: { $ref: "#/components/schemas/AIReviewFocus" }
-        includeExactAmounts: { type: boolean }
-        includeAccountNames: { type: boolean }
-        apiKey:
-          {
-            type: string,
-            minLength: 8,
-            maxLength: 4096,
-            writeOnly: true,
-            description: Ephemeral provider key; used only when no stored credential is selected.,
-          }
-        snapshot: { $ref: "#/components/schemas/AIReviewSnapshot" }
-    AIReviewFinding:
-      type: object
-      additionalProperties: false
-      required:
-        [id, category, severity, confidence, title, explanation, evidenceRefs]
-      properties:
-        id: { type: string, minLength: 1, maxLength: 80 }
-        category:
-          {
-            type: string,
-            enum:
-              [data-quality, allocation, liquidity, cash-flow, goals, general],
-          }
-        severity: { type: string, enum: [info, attention, high] }
-        confidence: { type: string, enum: [low, medium, high] }
-        title: { type: string, minLength: 1, maxLength: 140 }
-        explanation: { type: string, minLength: 1, maxLength: 700 }
-        evidenceRefs:
-          { type: array, minItems: 1, maxItems: 6, items: { type: string } }
-    AIReview:
-      type: object
-      additionalProperties: false
-      required:
-        [
-          schemaVersion,
-          headline,
-          executiveSummary,
-          dataQuality,
-          strengths,
-          attentionItems,
-          goalObservations,
-          questions,
-          possibleNextChecks,
-          limitations,
-        ]
-      properties:
-        schemaVersion: { type: integer, const: 1 }
-        headline: { type: string, minLength: 1, maxLength: 160 }
-        executiveSummary: { type: string, minLength: 1, maxLength: 1400 }
-        dataQuality:
-          {
-            type: array,
-            maxItems: 6,
-            items: { $ref: "#/components/schemas/AIReviewFinding" },
-          }
-        strengths:
-          {
-            type: array,
-            maxItems: 6,
-            items: { $ref: "#/components/schemas/AIReviewFinding" },
-          }
-        attentionItems:
-          {
-            type: array,
-            maxItems: 8,
-            items: { $ref: "#/components/schemas/AIReviewFinding" },
-          }
-        goalObservations:
-          {
-            type: array,
-            maxItems: 6,
-            items: { $ref: "#/components/schemas/AIReviewFinding" },
-          }
-        questions:
-          { type: array, maxItems: 6, items: { type: string, maxLength: 300 } }
-        possibleNextChecks:
-          { type: array, maxItems: 6, items: { type: string, maxLength: 300 } }
-        limitations:
-          {
-            type: array,
-            minItems: 1,
-            maxItems: 8,
-            items: { type: string, minLength: 1, maxLength: 300 },
-          }
-    AIReviewResult:
-      type: object
-      additionalProperties: false
-      required: [review, snapshot, provider, usage, generatedAt]
-      properties:
-        review: { $ref: "#/components/schemas/AIReview" }
-        snapshot: { $ref: "#/components/schemas/AIReviewSnapshot" }
-        provider:
-          type: object
-          additionalProperties: false
-          required: [name, host, model]
-          properties:
-            name: { $ref: "#/components/schemas/AIProvider" }
-            host: { type: string }
-            model: { type: string }
-        usage:
-          type: object
-          additionalProperties: false
-          required: [inputTokens, outputTokens]
-          properties:
-            inputTokens: { type: [integer, "null"] }
-            outputTokens: { type: [integer, "null"] }
-        generatedAt: { type: string, format: date-time }
     AISourceUnit:
       type: object
       additionalProperties: false

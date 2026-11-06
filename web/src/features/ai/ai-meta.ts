@@ -1,4 +1,4 @@
-import type { AIProviderSettings, AIReviewFocus, AIReviewPeriod } from '@/api/types'
+import type { AIProviderSettings } from '@/api/types'
 import { aiProviderOption, isAIProvider } from '@/lib/ai-providers'
 
 /**
@@ -30,23 +30,8 @@ export function endpointHost(baseUrl: string): string {
 const tokenFormat = new Intl.NumberFormat('en-US')
 export const formatTokens = (n: number | null | undefined) => (n === null || n === undefined ? '—' : tokenFormat.format(n))
 
-export const PERIOD_OPTIONS: { value: AIReviewPeriod; label: string; ariaLabel: string }[] = [
-  { value: '1m', label: '1M', ariaLabel: 'One month' },
-  { value: '3m', label: '3M', ariaLabel: 'Three months' },
-  { value: '6m', label: '6M', ariaLabel: 'Six months' },
-  { value: '1y', label: '1Y', ariaLabel: 'One year' },
-  { value: 'all', label: 'All', ariaLabel: 'All history' },
-]
-
-export const FOCUS_OPTIONS: { value: AIReviewFocus; title: string; description: string }[] = [
-  { value: 'overall', title: 'Overall', description: 'A balanced look across everything' },
-  { value: 'allocation', title: 'Allocation', description: 'Concentration by category and currency' },
-  { value: 'goals', title: 'Goals', description: 'Progress and pace toward each goal' },
-  { value: 'cash-flow', title: 'Cash flow', description: 'Money in, money out, and liquidity' },
-  { value: 'data-quality', title: 'Data quality', description: 'Gaps, stale values, and missing rates' },
-]
-
 export const REQUEST_TYPE_LABELS: Record<string, string> = {
+  // Usage from the retired in-app review stays visible until the 90-day pruning removes it.
   portfolio_review: 'Portfolio review',
   import_conversion: 'Import conversion',
 }

@@ -18,8 +18,6 @@ import type {
   AIConversionDraft,
   AIConversionRequest,
   AIRead,
-  AIReviewRequest,
-  AIReviewResult,
   AISettingsInput,
   AIWorkflowSettings,
   APIKeyMetadata,
@@ -237,7 +235,6 @@ export interface DataSource {
     saveCredential(apiKey: string): Promise<AIWorkflowSettings>
     removeCredential(): Promise<void>
     clearUsage(): Promise<AIClearUsageResult>
-    review(body: AIReviewRequest): Promise<AIReviewResult>
     convertImport(body: AIConversionRequest): Promise<AIConversionDraft>
   }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -208,13 +207,13 @@ func testSettings(monthlyLimit int) *Settings {
 	return &Settings{SettingsInput: SettingsInput{Provider: ProviderAnthropic, Model: "test-model", MonthlyTokenLimit: monthlyLimit, MaxOutputTokens: 256}, BaseURL: ProviderAnthropic.BaseURL(), UpdatedAt: time.Date(2026, 9, 20, 10, 0, 0, 0, time.UTC)}
 }
 
-func validReviewRequest(apiKey string) ReviewRequest {
-	return ReviewRequest{Period: "1y", Focus: "overall", APIKey: apiKey, Snapshot: json.RawMessage(`{
-		"schemaVersion":1,"asOf":"2026-09-20T12:00:00Z","period":"1y","focus":"overall","baseCurrency":"USD",
-		"sharing":{},"completeness":{},"portfolio":{"totals":{"evidenceId":"portfolio.totals"}},"allocations":{},"topAccounts":[],"cashFlow":{},"goals":[],"dataQuality":[],"methodology":[]
-	}`)}
+func validConversionRequest(settings Settings, apiKey, location string) ConversionRequest {
+	return ConversionRequest{
+		Source:            Source{Units: []SourceUnit{{ID: "source-1", Location: location, Text: "txn-1,deposit,10.00,2026-09-01"}}, Warnings: []string{}},
+		ConfigurationHash: configurationHash(settings, "balance", "USD"), Consent: true, APIKey: apiKey, TrackingMode: "balance", Currency: "USD",
+	}
 }
 
-func validReviewJSON() string {
-	return `{"headline":"Review","executiveSummary":"Summary","dataQuality":[],"strengths":[],"attentionItems":[{"id":"finding-1","category":"general","severity":"info","confidence":"high","title":"Title","explanation":"Explanation","evidenceRefs":["portfolio.totals"]}],"goalObservations":[],"questions":[],"possibleNextChecks":[],"limitations":["Explanatory analysis, not financial advice."]}`
+func validExtractionJSON() string {
+	return `{"records":[{"collection":"transactions","sourceIds":["source-1"],"fields":[{"name":"external_id","value":"txn-1"},{"name":"type","value":"deposit"},{"name":"amount","value":"10.00"},{"name":"date","value":"2026-09-01"}]}],"exclusions":[],"issues":[]}`
 }

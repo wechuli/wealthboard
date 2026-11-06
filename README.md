@@ -34,7 +34,7 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Browser-local System, Light, and Dark appearance themes in the profile menu
 - Quick add (`N`), a ⌘K / Ctrl K command palette, and a `Shift H` privacy
   toggle
-- Optional on-demand, evidence-linked AI portfolio review with private BYOK
+- Optional bring-your-own-key AI conversion of statements into import files
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
 Money is stored as integer minor units in PostgreSQL `bigint` columns. Exchange
@@ -417,41 +417,38 @@ client-supplied forwarding headers. The example egress policy allows only DNS
 and the selected PostgreSQL pods. Add narrowly scoped provider egress before
 enabling OIDC or AI; those integrations cannot use the default policy unchanged.
 
-## AI portfolio review
+## AI statement conversion
 
-Portfolio Review is optional, read-only, and generated only on request. Choose
-OpenAI, Anthropic, or DeepSeek and a model under **Settings → AI provider**,
-then open **Portfolio review** under **Planning** in the sidebar. The settings form suggests current models for each
-provider and accepts any other model ID the provider serves. Users supply their
-own provider API keys.
+AI-assisted import is optional and runs only on request. Choose OpenAI,
+Anthropic, or DeepSeek and a model under **Settings → AI provider**, then open
+**Convert with AI** on an account's **Import history** page. The settings form
+suggests current models for each provider and accepts any other model ID the
+provider serves. Users supply their own provider API keys.
 
 All AI calls run through [Genkit for Go](https://genkit.dev/docs/go/get-started/).
 The server calls `genkit.Init` once at startup with the OpenAI, Anthropic, and
-DeepSeek plugins and runs review and import conversion as Genkit flows. Each
-request carries only the requesting user's key, attached per request rather
-than to the shared plugin clients, and fails closed without it.
+DeepSeek plugins and runs import conversion as a Genkit flow. Each request
+carries only the requesting user's key, attached per request rather than to the
+shared plugin clients, and fails closed without it.
 
-Wealthboard calculates a bounded, versioned snapshot before contacting a model.
-By default it contains ratios, concentration, goal trajectory, and data-quality
-warnings with pseudonymous account and goal labels. Exact aggregate amounts and
-names are separate per-request opt-ins. Notes, account references, transaction
-descriptions, raw activity rows, and the current cash-flow-naive annualized return
-figures are never sent.
+The database retains only owner-scoped usage metadata such as provider host,
+model, status, latency, and token counts; users can clear that history or
+disconnect the provider. Prompts, responses, API keys, and portfolio values are
+not written to usage records. Conversion is limited to 10 reservations per
+rolling minute per user, a UTC calendar-month token budget, response bounds,
+redirect blocking, and local response validation. The flow uses Genkit
+structured output: OpenAI receives a strict JSON Schema response format with
+`store: false`, Anthropic models with native structured output receive the
+schema as an output format, and DeepSeek receives JSON mode plus the schema as
+instructions. Genkit validates every response against the schema before
+Wealthboard checks bounds and source coverage.
 
-Generated reviews are not stored. The database retains only owner-scoped usage
-metadata such as provider host, model, status, latency, and token counts; users
-can clear that history or disconnect the provider. Prompts, responses, API keys,
-and portfolio values are not written to usage records. Review and import
-conversion share a limit of 10 reservations per rolling minute per user, a UTC
-calendar-month token budget, response bounds, redirect blocking, and local
-response validation. Both flows use Genkit structured output: OpenAI receives a
-strict JSON Schema response format with `store: false`, Anthropic models with
-native structured output receive the schema as an output format, and DeepSeek
-receives JSON mode plus the schema as instructions. Genkit validates every
-response against the schema before Wealthboard checks bounds, evidence IDs, and
-source coverage.
+The in-app AI portfolio review has been removed. Asking questions about your
+portfolio will instead happen in the AI assistant you already use, through a
+planned Wealthboard MCP server; see **AI assistant connections (MCP)** in
+`SPEC.md`.
 
-AI reviews and import conversion use a two-minute provider request timeout with
+Import conversion uses a two-minute provider request timeout with
 automatic retries disabled. The monthly token limit accepts 10,000 to
 100,000,000 tokens; existing saved limits are not increased automatically.
 

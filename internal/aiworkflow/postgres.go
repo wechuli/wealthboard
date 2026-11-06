@@ -21,8 +21,7 @@ func NewPostgresRepository(db *sql.DB) *PostgresRepository {
 func (repository *PostgresRepository) GetSettings(ctx context.Context, userID uuid.UUID) (*Settings, error) {
 	return scanSettings(repository.db.QueryRowContext(ctx, `
 SELECT provider, base_url, model, encrypted_api_key, api_key_hint,
-       include_exact_amounts, include_account_names, monthly_token_limit,
-       max_output_tokens, updated_at
+       monthly_token_limit, max_output_tokens, updated_at
 FROM ai_provider_settings
 WHERE user_id = $1`, userID))
 }
@@ -31,21 +30,18 @@ func (repository *PostgresRepository) SaveSettings(ctx context.Context, userID u
 	now := time.Now().UTC()
 	_, err := repository.db.ExecContext(ctx, `
 INSERT INTO ai_provider_settings (
-    id, user_id, provider, base_url, model, include_exact_amounts,
-    include_account_names, monthly_token_limit, max_output_tokens, created_at, updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+    id, user_id, provider, base_url, model, monthly_token_limit,
+    max_output_tokens, created_at, updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
 ON CONFLICT (user_id) DO UPDATE SET
     provider = EXCLUDED.provider,
     base_url = EXCLUDED.base_url,
     model = EXCLUDED.model,
-    include_exact_amounts = EXCLUDED.include_exact_amounts,
-    include_account_names = EXCLUDED.include_account_names,
     monthly_token_limit = EXCLUDED.monthly_token_limit,
     max_output_tokens = EXCLUDED.max_output_tokens,
     updated_at = EXCLUDED.updated_at`,
 		uuid.New(), userID, input.Provider, input.Provider.BaseURL(), input.Model,
-		input.IncludeExactAmounts, input.IncludeAccountNames, input.MonthlyTokenLimit,
-		input.MaxOutputTokens, now)
+		input.MonthlyTokenLimit, input.MaxOutputTokens, now)
 	if err != nil {
 		return nil, fmt.Errorf("save AI settings: %w", err)
 	}
@@ -181,7 +177,7 @@ type rowScanner interface {
 func scanSettings(row rowScanner) (*Settings, error) {
 	var settings Settings
 	var encrypted, hint sql.NullString
-	if err := row.Scan(&settings.Provider, &settings.BaseURL, &settings.Model, &encrypted, &hint, &settings.IncludeExactAmounts, &settings.IncludeAccountNames, &settings.MonthlyTokenLimit, &settings.MaxOutputTokens, &settings.UpdatedAt); err != nil {
+	if err := row.Scan(&settings.Provider, &settings.BaseURL, &settings.Model, &encrypted, &hint, &settings.MonthlyTokenLimit, &settings.MaxOutputTokens, &settings.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}

@@ -85,9 +85,9 @@ service worker is waiting. Users must reconnect and retry writes themselves.
 
 ## AI provider boundary
 
-AI review is optional. Wealthboard builds a bounded deterministic snapshot and
-does not provide financial mutation tools. Session-only API keys remain in
-client memory for the request; remembered keys require the deployment
+AI import conversion is optional and produces a draft that must pass the
+normal import preview; it has no financial mutation tools. Session-only API keys
+remain in client memory for the request; remembered keys require the deployment
 encryption key.
 
 Only the fixed OpenAI, Anthropic, and DeepSeek endpoints are used, through one

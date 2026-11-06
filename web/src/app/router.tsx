@@ -58,7 +58,8 @@ const legacyRedirects = [
   { path: 'goals/new', element: <Navigate to="/goals?record=goal" replace /> },
   { path: 'goals/:id/edit', element: <Redirect to={(p) => `/goals/${p.id}?edit=1`} /> },
   { path: 'labs/estate', element: <Navigate to="/estate" replace /> },
-  { path: 'labs/ai-review', element: <Navigate to="/review" replace /> },
+  { path: 'labs/ai-review', element: <Navigate to="/" replace /> },
+  { path: 'review', element: <Navigate to="/" replace /> },
   { path: 'offline', element: <Navigate to="/" replace /> },
 ]
 
@@ -134,7 +135,6 @@ export const router = createBrowserRouter([
                 ],
               },
               { path: 'estate/snapshots/:snapshotId', element: page(() => import('@/features/estate/SnapshotPage')) },
-              { path: 'review', element: page(() => import('@/features/review/ReviewPage')) },
               ...legacyRedirects,
               ...devRoutes,
               { path: '*', element: page(() => import('@/features/system/NotFoundPage')) },

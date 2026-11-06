@@ -165,8 +165,6 @@ SELECT
     model,
     encrypted_api_key IS NOT NULL AS has_stored_api_key,
     api_key_hint,
-    include_exact_amounts,
-    include_account_names,
     monthly_token_limit,
     max_output_tokens,
     created_at,

@@ -20,8 +20,6 @@ SELECT
     model,
     encrypted_api_key IS NOT NULL AS has_stored_api_key,
     api_key_hint,
-    include_exact_amounts,
-    include_account_names,
     monthly_token_limit,
     max_output_tokens,
     created_at,
@@ -31,17 +29,15 @@ WHERE user_id = $1
 `
 
 type GetFeatureAIProviderSettingsRow struct {
-	Provider            string         `json:"provider"`
-	BaseUrl             string         `json:"base_url"`
-	Model               string         `json:"model"`
-	HasStoredApiKey     interface{}    `json:"has_stored_api_key"`
-	ApiKeyHint          sql.NullString `json:"api_key_hint"`
-	IncludeExactAmounts bool           `json:"include_exact_amounts"`
-	IncludeAccountNames bool           `json:"include_account_names"`
-	MonthlyTokenLimit   int32          `json:"monthly_token_limit"`
-	MaxOutputTokens     int32          `json:"max_output_tokens"`
-	CreatedAt           time.Time      `json:"created_at"`
-	UpdatedAt           time.Time      `json:"updated_at"`
+	Provider          string         `json:"provider"`
+	BaseUrl           string         `json:"base_url"`
+	Model             string         `json:"model"`
+	HasStoredApiKey   interface{}    `json:"has_stored_api_key"`
+	ApiKeyHint        sql.NullString `json:"api_key_hint"`
+	MonthlyTokenLimit int32          `json:"monthly_token_limit"`
+	MaxOutputTokens   int32          `json:"max_output_tokens"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
 }
 
 func (q *Queries) GetFeatureAIProviderSettings(ctx context.Context, userID uuid.UUID) (GetFeatureAIProviderSettingsRow, error) {
@@ -53,8 +49,6 @@ func (q *Queries) GetFeatureAIProviderSettings(ctx context.Context, userID uuid.
 		&i.Model,
 		&i.HasStoredApiKey,
 		&i.ApiKeyHint,
-		&i.IncludeExactAmounts,
-		&i.IncludeAccountNames,
 		&i.MonthlyTokenLimit,
 		&i.MaxOutputTokens,
 		&i.CreatedAt,
