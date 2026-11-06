@@ -40,7 +40,6 @@ type MutationHandlers struct {
 	Imports     *ImportHandler
 	Portability *PortabilityHandler
 	Estate      *EstateMutationHandler
-	AI          *AIWorkflowHandler
 }
 
 func NewRouter(logger *slog.Logger, ready readinessCheck) http.Handler {
@@ -121,9 +120,6 @@ func NewRouterWithReads(logger *slog.Logger, ready readinessCheck, auth *AuthHan
 				}
 				if reads.Mutations.Estate != nil {
 					RegisterEstateMutationRoutes(router, reads.Mutations.Estate)
-				}
-				if reads.Mutations.AI != nil {
-					RegisterAIWorkflowRoutes(router, reads.Mutations.AI)
 				}
 				if reads.ConnectedApps != nil {
 					RegisterConnectedAppsRoutes(router, reads.ConnectedApps)

@@ -194,7 +194,7 @@ describe('history import', () => {
     await renderRoute(`/accounts/${IDS.faida}/import`)
     expect(await screen.findByText('Drop an investment history file here')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sample JSON' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Prefer your own AI tool/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Convert a statement with an AI chat/ })).toBeInTheDocument()
   })
 
   it('offers a copyable AI prompt and derives IDs for rows without one', async () => {
@@ -202,7 +202,7 @@ describe('history import', () => {
     const user = userEvent.setup()
     await renderRoute(`/accounts/${IDS.zimele}/import`)
     await screen.findByText('Drop a CSV or JSON file here')
-    await user.click(screen.getByRole('button', { name: /Prefer your own AI tool/ }))
+    await user.click(screen.getByRole('button', { name: /Convert a statement with an AI chat/ }))
     const prompt = (screen.getByLabelText('Conversion prompt') as HTMLTextAreaElement).value
     expect(prompt).toContain('external_id,type,amount,date,description,notes')
     expect(prompt).toContain('If the source has no ID, leave external_id empty')

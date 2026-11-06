@@ -812,30 +812,6 @@ export function createMockDataSource(): DataSource {
         }),
     },
 
-    ai: {
-      get: () => read((_e, w) => sideFor(w).ai, { allowInErrorScenario: true }),
-      saveSettings: async () => {
-        await delay()
-        throw unsupported('Connecting an AI provider')
-      },
-      disconnect: async () => {
-        await delay()
-        throw unsupported('AI settings')
-      },
-      saveCredential: async () => {
-        await delay()
-        throw unsupported('Storing an AI provider key')
-      },
-      removeCredential: async () => {
-        await delay()
-        throw unsupported('AI provider keys')
-      },
-      clearUsage: () => write(() => ({ deleted: 0 })),
-      convertImport: async () => {
-        await delay()
-        throw unsupported('AI-assisted import')
-      },
-    },
 
     apiKeys: {
       list: () => read((_e, w) => sideFor(w).apiKeys.filter((k) => !k.revokedAt)),

@@ -155,7 +155,7 @@ the commands in [OIDC provider configuration](../example/oidc_configuration).
 
 Register `${APP_URL}/api/v1/auth/oidc/callback`, not the legacy unversioned
 callback. The example Kubernetes egress policy allows only DNS and PostgreSQL;
-it needs additional provider egress before OIDC or AI can connect.
+it needs additional provider egress before OIDC can connect.
 
 Provider claims are not account-link evidence. Existing local users must link
 from Settings in hybrid mode.

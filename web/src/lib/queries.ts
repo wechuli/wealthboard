@@ -106,14 +106,13 @@ export function newIdempotencyKey(): string {
   return crypto.randomUUID()
 }
 
-// ---- advanced workflows, estate, AI, API keys --------------------------------
+// ---- advanced workflows, estate, API keys --------------------------------
 
 export const usePositionEvent = (accountId: string | undefined, id: string | undefined) =>
   useUserQuery(['account', accountId, 'position-event', id], () => api.positionEvents.get(accountId!, id!), { enabled: !!accountId && !!id })
 export const useReconciliations = (accountId: string | undefined) => useUserQuery(['account', accountId, 'reconciliations'], () => api.reconciliations.list(accountId!, { limit: 100 }), { enabled: !!accountId })
 export const useEstate = () => useUserQuery(['estate'], () => api.estate.get())
 export const useEstateSnapshot = (id: string | undefined) => useUserQuery(['estate', 'snapshot', id], () => api.estate.getSnapshot(id!), { enabled: !!id })
-export const useAI = () => useUserQuery(['ai'], () => api.ai.get())
 export const useApiKeys = () => useUserQuery(['api-keys'], () => api.apiKeys.list())
 export const useConnectedApps = () => useUserQuery(['connected-apps'], () => api.connectedApps.list())
 export const useOAuthRequest = (id: string | null) => useUserQuery(['oauth-request', id], () => api.oauth.request(id!), { enabled: !!id, retry: false })

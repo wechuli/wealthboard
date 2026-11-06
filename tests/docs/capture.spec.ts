@@ -280,13 +280,15 @@ test("capture the Wealthboard product guide", async ({ page }) => {
   ).toBeVisible();
   await capturePage(page, "position-account-detail.png");
 
-  await page.goto(`/accounts/${positionAccountId}/import?tab=ai`);
-  const aiConvert = page.getByRole("region", {
-    name: "Convert a statement with AI",
+  await page.goto(`/accounts/${positionAccountId}/import`);
+  await page
+    .getByRole("button", { name: /Convert a statement with an AI chat/ })
+    .click();
+  const aiPrompt = page.getByRole("region", {
+    name: /Convert a statement with an AI chat/,
   });
-  await captureLocator(aiConvert, "investment-ai-prompt.png");
+  await captureLocator(aiPrompt, "investment-ai-prompt.png");
 
-  await page.getByRole("tab", { name: "Direct import" }).click();
   const previewResponse = page.waitForResponse((response) =>
     response.url().includes("/investment-import/preview"),
   );

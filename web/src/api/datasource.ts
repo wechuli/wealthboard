@@ -14,12 +14,6 @@ import type {
   NetWorthStats,
 } from './extensions'
 import type {
-  AIClearUsageResult,
-  AIConversionDraft,
-  AIConversionRequest,
-  AIRead,
-  AISettingsInput,
-  AIWorkflowSettings,
   APIKeyMetadata,
   ConnectedApp,
   OAuthConsentRequest,
@@ -229,16 +223,6 @@ export interface DataSource {
     createSnapshot(): Promise<EstateSnapshot>
     getSnapshot(id: string): Promise<EstateSnapshot>
     removeSnapshot(id: string): Promise<void>
-  }
-
-  ai: {
-    get(): Promise<AIRead>
-    saveSettings(body: AISettingsInput): Promise<AIWorkflowSettings>
-    disconnect(): Promise<void>
-    saveCredential(apiKey: string): Promise<AIWorkflowSettings>
-    removeCredential(): Promise<void>
-    clearUsage(): Promise<AIClearUsageResult>
-    convertImport(body: AIConversionRequest): Promise<AIConversionDraft>
   }
 
   apiKeys: {

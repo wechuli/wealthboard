@@ -4,13 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"maps"
-	"reflect"
-	"slices"
 	"strings"
 	"testing"
-
-	"github.com/wechuli/wealthboard/internal/aiworkflow"
 )
 
 func TestParseAccountHistoryCSVAndJSON(t *testing.T) {
@@ -87,60 +82,5 @@ func TestVerifyImportHashRequiresExactContent(t *testing.T) {
 	}
 	if err := verifyImportHash(append(content, '\n'), importHash(content)); !errors.Is(err, ErrImportConflict) {
 		t.Fatalf("changed content error = %v, want conflict", err)
-	}
-}
-
-func TestAIDraftFieldsMatchTheStrictImportEnvelopes(t *testing.T) {
-	jsonFields := func(value any) []string {
-		kind := reflect.TypeOf(value)
-		names := make([]string, 0, kind.NumField())
-		for index := range kind.NumField() {
-			names = append(names, strings.Split(kind.Field(index).Tag.Get("json"), ",")[0])
-		}
-		slices.Sort(names)
-		return names
-	}
-	want := map[string][]string{
-		"transactions":      jsonFields(accountHistorySourceRow{}),
-		"instruments":       jsonFields(investmentSourceInstrument{}),
-		"position_events":   jsonFields(investmentSourceEvent{}),
-		"cash_transactions": jsonFields(investmentSourceCash{}),
-		"prices":            jsonFields(investmentSourcePrice{}),
-	}
-	got := aiworkflow.DraftCollectionFields()
-	if len(got) != len(want) {
-		t.Fatalf("AI draft collections = %v, want %v", slices.Collect(maps.Keys(got)), slices.Collect(maps.Keys(want)))
-	}
-	for collection, fields := range want {
-		names := slices.Clone(got[collection])
-		slices.Sort(names)
-		if !slices.Equal(names, fields) {
-			t.Errorf("%s: AI draft fields %v, import accepts %v", collection, names, fields)
-		}
-	}
-}
-
-func TestAIDraftValuesMatchTheStrictImportRules(t *testing.T) {
-	keys := func(set map[string]bool) []string { return slices.Sorted(maps.Keys(set)) }
-	want := map[string]map[string][]string{
-		"transactions":      {"type": keys(accountHistoryTypes)},
-		"instruments":       {"identifier_type": keys(instrumentIdentifierTypes), "asset_type": keys(instrumentAssetTypes)},
-		"position_events":   {"type": keys(ordinaryPositionEventTypes)},
-		"cash_transactions": {"type": keys(positionCashTypes)},
-	}
-	got := aiworkflow.DraftFieldValues()
-	if len(got) != len(want) {
-		t.Fatalf("AI draft enumerates %v, want %v", slices.Sorted(maps.Keys(got)), slices.Sorted(maps.Keys(want)))
-	}
-	for collection, fields := range want {
-		if len(got[collection]) != len(fields) {
-			t.Errorf("%s: AI draft enumerates %v, import validates %v", collection, slices.Sorted(maps.Keys(got[collection])), slices.Sorted(maps.Keys(fields)))
-			continue
-		}
-		for field, values := range fields {
-			if allowed := slices.Sorted(slices.Values(got[collection][field])); !slices.Equal(allowed, values) {
-				t.Errorf("%s.%s: AI draft allows %v, import accepts %v", collection, field, allowed, values)
-			}
-		}
 	}
 }

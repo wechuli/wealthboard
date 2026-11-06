@@ -13,50 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const getFeatureAIProviderSettings = `-- name: GetFeatureAIProviderSettings :one
-SELECT
-    provider,
-    base_url,
-    model,
-    encrypted_api_key IS NOT NULL AS has_stored_api_key,
-    api_key_hint,
-    monthly_token_limit,
-    max_output_tokens,
-    created_at,
-    updated_at
-FROM ai_provider_settings
-WHERE user_id = $1
-`
-
-type GetFeatureAIProviderSettingsRow struct {
-	Provider          string         `json:"provider"`
-	BaseUrl           string         `json:"base_url"`
-	Model             string         `json:"model"`
-	HasStoredApiKey   interface{}    `json:"has_stored_api_key"`
-	ApiKeyHint        sql.NullString `json:"api_key_hint"`
-	MonthlyTokenLimit int32          `json:"monthly_token_limit"`
-	MaxOutputTokens   int32          `json:"max_output_tokens"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
-}
-
-func (q *Queries) GetFeatureAIProviderSettings(ctx context.Context, userID uuid.UUID) (GetFeatureAIProviderSettingsRow, error) {
-	row := q.db.QueryRowContext(ctx, getFeatureAIProviderSettings, userID)
-	var i GetFeatureAIProviderSettingsRow
-	err := row.Scan(
-		&i.Provider,
-		&i.BaseUrl,
-		&i.Model,
-		&i.HasStoredApiKey,
-		&i.ApiKeyHint,
-		&i.MonthlyTokenLimit,
-		&i.MaxOutputTokens,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const getFeatureAuthMethodState = `-- name: GetFeatureAuthMethodState :one
 SELECT status, password_hash IS NOT NULL AS has_password
 FROM users
@@ -251,70 +207,6 @@ func (q *Queries) GetFeatureSettings(ctx context.Context, userID uuid.UUID) (Get
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const listFeatureAIUsage = `-- name: ListFeatureAIUsage :many
-SELECT
-    id, provider, endpoint_host, model, request_type, status, billing_month,
-    charged_tokens, input_tokens, output_tokens, latency_ms, error_code, created_at, updated_at
-FROM ai_usage_events
-WHERE user_id = $1
-ORDER BY created_at DESC, id
-`
-
-type ListFeatureAIUsageRow struct {
-	ID            uuid.UUID      `json:"id"`
-	Provider      string         `json:"provider"`
-	EndpointHost  string         `json:"endpoint_host"`
-	Model         string         `json:"model"`
-	RequestType   string         `json:"request_type"`
-	Status        string         `json:"status"`
-	BillingMonth  string         `json:"billing_month"`
-	ChargedTokens int32          `json:"charged_tokens"`
-	InputTokens   sql.NullInt32  `json:"input_tokens"`
-	OutputTokens  sql.NullInt32  `json:"output_tokens"`
-	LatencyMs     sql.NullInt32  `json:"latency_ms"`
-	ErrorCode     sql.NullString `json:"error_code"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-}
-
-func (q *Queries) ListFeatureAIUsage(ctx context.Context, userID uuid.UUID) ([]ListFeatureAIUsageRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFeatureAIUsage, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListFeatureAIUsageRow{}
-	for rows.Next() {
-		var i ListFeatureAIUsageRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Provider,
-			&i.EndpointHost,
-			&i.Model,
-			&i.RequestType,
-			&i.Status,
-			&i.BillingMonth,
-			&i.ChargedTokens,
-			&i.InputTokens,
-			&i.OutputTokens,
-			&i.LatencyMs,
-			&i.ErrorCode,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listFeatureBeneficiaries = `-- name: ListFeatureBeneficiaries :many

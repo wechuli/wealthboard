@@ -41,8 +41,7 @@ The target directory must already exist and the file must not. The command uses
 `DATABASE_URL` and `pg_dump --format=custom --no-owner --no-privileges`, checks
 that the result is a nonempty regular file, and sets mode `0600`. A database
 archive contains password hashes, OIDC mappings, personal API-key hashes and
-metadata, encrypted remembered AI keys, provider settings, and every user's
-financial data. Treat it as a high-sensitivity secret.
+metadata, MCP connection grants, and every user's financial data. Treat it as a high-sensitivity secret.
 
 ## Retention
 

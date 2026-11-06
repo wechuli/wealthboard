@@ -37,7 +37,6 @@ func TestPortabilityPostgreSQLVersionsIsolationAndRollback(t *testing.T) {
 		{`INSERT INTO transactions (id,user_id,account_id,type,amount_minor,currency,transaction_date,created_at,updated_at) VALUES ($1,$2,$3,'opening_balance',1250,'KES','2026-01-01',now(),now())`, []any{uuid.New(), ownerID, ownerAccountID}},
 		{`INSERT INTO oidc_identities (id,user_id,issuer,subject,created_at,updated_at,last_login_at) VALUES ($1,$2,'https://issuer.example','private-subject',now(),now(),now())`, []any{uuid.New(), ownerID}},
 		{`INSERT INTO api_keys (id,user_id,name,display_prefix,token_hash,created_at) VALUES ($1,$2,'private','wb_private',decode('deadbeef','hex'),now())`, []any{uuid.New(), ownerID}},
-		{`INSERT INTO ai_provider_settings (id,user_id,provider,base_url,model,encrypted_api_key,created_at,updated_at) VALUES ($1,$2,'openai','https://api.openai.com','model','never-export-this-ai-key',now(),now())`, []any{uuid.New(), ownerID}},
 	} {
 		if _, err := db.ExecContext(ctx, statement.query, statement.args...); err != nil {
 			t.Fatalf("seed portability integration test: %v", err)
@@ -53,7 +52,7 @@ func TestPortabilityPostgreSQLVersionsIsolationAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("export v8: %v", err)
 	}
-	for _, forbidden := range []string{"never-export-this-password", "private-subject", "wb_private", "never-export-this-ai-key", "passwordHash", "oidcIdentities", "apiKeys", "aiCredentials"} {
+	for _, forbidden := range []string{"never-export-this-password", "private-subject", "wb_private", "passwordHash", "oidcIdentities", "apiKeys", "aiCredentials"} {
 		if strings.Contains(string(v8), forbidden) {
 			t.Fatalf("export contains forbidden value %q", forbidden)
 		}

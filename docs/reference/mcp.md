@@ -10,9 +10,9 @@ Wealthboard serves a [Model Context Protocol](https://modelcontextprotocol.io/)
 questions about your accounts, transactions, goals, and reports using
 Wealthboard's own figures. Connections are read-only unless you
 [allow changes](#allow-changes), which let the assistant record new
-transactions and valuations you ask for. Wealthboard never sends your data to an AI provider
-itself. The assistant you connect requests it, and that provider's terms then
-apply to what it receives.
+transactions and valuations you ask for. Wealthboard has no built-in AI
+provider and never sends your data to an AI service itself. The assistant you
+connect requests it, and that provider's terms then apply to what it receives.
 
 There are two ways to connect:
 

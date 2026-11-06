@@ -67,7 +67,6 @@ Available scopes are:
 - `portfolio:write`
 - `imports:write`
 - `exports:read`
-- `ai:invoke`
 
 External clients send the token in the Authorization header:
 

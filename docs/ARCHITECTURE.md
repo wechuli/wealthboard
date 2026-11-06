@@ -48,8 +48,8 @@ fixtures and archived migration history remain as non-executable evidence.
   Authenticated browser mutations also require the session's `X-CSRF-Token`.
   `/api/v1/session` supplies the browser's session identity and CSRF token.
 - **API keys:** External clients use owner-scoped bearer keys with explicit
-  `portfolio:read`, `portfolio:write`, `imports:write`, `exports:read`, or
-  `ai:invoke` scopes. Only the token hash and metadata are retained. Browser
+  `portfolio:read`, `portfolio:write`, `imports:write`, or `exports:read`
+  scopes. Only the token hash and metadata are retained. Browser
   sessions alone may manage keys, credentials, and user restores; sensitive
   browser mutations additionally require origin and CSRF checks. Revocation
   and expiry are checked independently of browser session version.
@@ -143,16 +143,12 @@ fixtures and archived migration history remain as non-executable evidence.
   cached, and mutations are never queued. The client exposes connection state,
   blocks marked financial forms while offline, and reports a waiting update.
   Offline portfolio reads are not a runtime guarantee.
-- **AI import conversion:** Optional, on-request conversion of approved source
-  text into an import draft. The model never receives SQL or mutation tools and
-  cannot become authoritative for balances, conversions, performance, or goals.
-  `cmd/wealthboard` calls `genkit.Init` once with the OpenAI, Anthropic, and
-  DeepSeek plugins; `internal/aiworkflow` defines the `importConversion` flow
-  and requests typed structured output with `genkit.GenerateData`. Genkit
-  validates responses against the output schema, then Go checks bounds and
-  source coverage. The in-app portfolio review was removed (migration 00006
-  drops its sharing preferences); portfolio questions move to the MCP
-  endpoint below.
+- **No built-in AI:** Wealthboard calls no AI provider and stores no AI keys.
+  The in-app portfolio review (migration 00006) and bring-your-own-key import
+  conversion (migration 00008 drops `ai_provider_settings` and
+  `ai_usage_events` and the `ai:invoke` API key scope) were removed. Assistants
+  connect through MCP below; statement conversion is a copyable prompt the user
+  runs in their own AI chat.
 - **AI assistant connections (MCP):** `internal/mcpserver` serves a
   stateless Streamable HTTP endpoint at `/mcp` with the official Go MCP SDK.
   The SDK's bearer middleware verifies a personal API key through
@@ -185,16 +181,6 @@ fixtures and archived migration history remain as non-executable evidence.
   Codes and tokens are stored as SHA-256 hashes, and `/mcp` verifies `wbo_at_`
   tokens through `oauth.Service.VerifyAccessToken`. Client ID Metadata
   Documents are not supported, to avoid outbound fetches of client-chosen URLs.
-- **AI credentials and retention:** Session-only keys stay in client component
-  memory for one request. Remembered keys use AES-256-GCM with a dedicated
-  deployment key and immutable `userId` associated data. Usage rows contain
-  metadata only and are user-deletable; prompts, responses, portfolio values,
-  and provider keys are not retained. The user's key travels in the request
-  context and an SDK middleware on each plugin client attaches it only for the
-  matching provider; requests without it fail before leaving the process.
-  Provider endpoints are fixed, redirects are disabled, and private or local
-  addresses are rejected.
-
 ## Runtime and cutover boundary
 
 The supported production request path is browser or API client to the Go/Chi
@@ -202,9 +188,8 @@ process, then PostgreSQL. Go serves `/api/v1/*`, health probes, compiled Vite
 assets, and the SPA fallback. There is no production Next.js process, React
 server rendering, Server Action, Node.js API handler, or SQLite database.
 
-Production has no JavaScript runtime. Document extraction for AI-assisted
-import runs in the browser, so the server never parses untrusted document
-formats and deployments need no parser sidecar.
+Production has no JavaScript runtime, and the server never parses untrusted
+document formats: imports accept only the strict CSV and JSON formats.
 
 Phase 6 acceptance and removal evidence is recorded in
 `docs/admin/cutover-evidence.md`.
@@ -326,141 +311,17 @@ cross-feature requirement in `SPEC.md`.
   automatic trading, and mandatory market-data providers remain outside the
   initial extension.
 
-## LLM-assisted text-file import
+## Statement conversion with an AI chat
 
-The implemented conversion layer sits upstream of existing import services;
-it is not a financial write path. Strict v1 contracts remain unchanged. The
-manual copyable-prompt panel is mounted on both import tabs and runs entirely in
-the browser. OCR/image processing remains backlog AI3.
-
-1. The account import UI offers direct structured import or explicit AI
-   conversion. The browser extracts source text locally; Go exposes
-   `/api/v1/ai/import/convert` for model conversion and has no extraction route.
-   Browser calls require the verified session, trusted origin, and CSRF token;
-   API keys require `ai:invoke`. The later account-scoped preview and commit
-   routes resolve the active account by session-derived `userId` and account ID
-   before any financial write and return not found for foreign accounts.
-2. Bounded parsers in `web/src/lib/source-extraction` prepare source
-   text/tables and stable page/sheet/row references in the browser for user
-   review, selection, and redaction before external submission. `text.ts`
-   handles UTF-8 CSV, TSV, JSON, and TXT with Go `encoding/csv` quoting rules;
-   `zip.ts`, `office.ts`, and `pdf.ts` handle XLSX, DOCX, and text PDFs using the
-   browser's `DecompressionStream`, fast-xml-parser, Mammoth, and PDF.js. All
-   parsing runs in one dedicated module Web Worker that lazily loads those
-   parsers and is terminated on completion, failure, cancellation, unmount, or
-   the 15-second timeout. PDF.js runs on the worker's own thread through its
-   fake-worker handler; because it also attaches to the worker scope and posts
-   its own messages, replies to the page carry a protocol marker.
-   XLSX numeric cells remain original strings. Formula caches and excluded
-   image/Word/PDF content have review warnings; no OCR is performed. Enforce
-   extension/content validation, 5 MB source size, 64 KB/1,000 extracted sections,
-   100 PDF pages, 20 sheets, 20 MB expanded archives/2,000 ZIP entries, and a
-   15-second document timeout. Section size is measured as Go encodes JSON, so
-   a source accepted in the browser is not rejected by the server's limits. An
-   optional PDF password stays in the browser: it is passed to PDF.js through
-   the worker message and never sent to the server or included in source
-   records, conversion requests, provider prompts, logs, or storage. PDF.js
-   password exceptions map to `password_required` and `incorrect_password` with
-   fixed safe messages; each attempt uses a new worker and retries reuse the
-   selected file locally. The masked client field clears at submission, file
-   change, cancellation, or unmount.
-   Compound-file Office headers are rejected as encrypted-or-legacy containers,
-   not assumed to prove encryption. Encrypted ZIP entries are also rejected with
-   export guidance. Office password-to-open decryption remains unsupported;
-   worksheet/workbook and Word editing-protection metadata need no decryption.
-   Never execute macros, formulas, embedded scripts, or external references.
-   Reject unsupported encryption, corrupt, or over-limit input rather than
-   silently truncating. Because extraction is client-side, the conversion route
-   re-validates section IDs and the 1,000-section, 100-warning, and 64 KB limits
-   and bounds its request body to 128 KiB.
-3. After explicit per-request consent, `Service` in `internal/aiworkflow/service.go` resolves
-   the current user's provider and credentials. Reuse encrypted-key
-   handling, fixed provider endpoints, disabled redirects, cancellation, and
-   safe errors. Existing usage reservation/completion functions enforce the
-   conversion rate and monthly token budgets. The settings form, Zod
-   schema, and service enforce a 10,000 to 100,000,000 monthly token range.
-   Genkit provider requests use a 120-second timeout with SDK retries disabled;
-   browser extraction keeps its separate 15-second timeout. Existing saved
-   limits remain unchanged. A configuration fingerprint covers the provider,
-   endpoint, model, output limit, settings timestamp, tracking mode, and currency.
-   It does not bind the source text, draft bytes, or selected account ID and is
-   not proof of human review.
-   Record only owner-scoped status/model/token/latency metadata; no source names,
-   financial values, prompts, output, or credentials. Reserve conservatively
-   from prompt bytes plus the output ceiling; retain the reservation on failed
-   conversion when usage is unknown. Requests have bounded body reads.
-   Conversion is limited to 10 reservations per rolling minute per user plus
-   the UTC calendar-month token budget. There is no Go preparation
-   semaphore per user or process.
-4. The Go AI workflow exposes a conversion operation and validates its bounded
-   request and response models. It runs as a Genkit flow with structured output: a strict
-   JSON Schema for OpenAI, a native output format for Anthropic models that
-   support it, and JSON mode with schema instructions for DeepSeek.
-   The configured model ID is not discovered or probed during settings save;
-   incompatible requests fail without model/provider substitution. Conversion
-   validates locally and rejects refusals, malformed JSON, and incomplete
-   output. Provider response bodies are bounded to 8 MiB, and conversion output
-   to 1,000 candidate records, 1,000 exclusions, and 100
-   issues. A generated import file still must satisfy the canonical 5 MiB
-   import limit. No document or vision model capability is needed.
-   The model receives only approved text, minimal account/schema context,
-   and no internal owner/account IDs, SQL, tools, URL fetching, or write access.
-   Original files and filenames are not sent, but selected section IDs,
-   types, and location labels accompany the approved text. Review labels for
-   sensitive content; current UI copy understates this sharing. Treat source
-   text as untrusted data, including instructions embedded in it.
-5. Validate a bounded extraction envelope containing candidate v1 records,
-   source references, exclusions, and issues, with metadata outside the canonical
-   contract. The conversion service maps string-valued fields deterministically
-   to canonical JSON; money, dates, sign rules, identifiers, and replay stay in
-   their existing deterministic modules. Prefer original external IDs; otherwise
-   derive cash IDs through the existing date/type/amount rule and other IDs
-   through versioned normalized-field hashes, rejecting collisions. An instrument
-   without an original external ID requires a stable source identifier. Supplied
-   IDs must appear in cited source text. Unknown references fail; unaccounted
-   source sections, currency mismatches, and deterministic preview errors become
-   visible review issues. Users resolve/correct the editable draft and acknowledge
-   exclusions before a fresh preview. Section coverage and schema validity are
-   not proof that every event was interpreted correctly.
-6. Keep the source review and editable/downloadable draft transient. After
-   resolution, serialize the canonical file and submit it to the existing
-   `history-import/preview` or `investment-import/preview` route. Editing any
-   draft invalidates its preview/hash. Confirmation sends those same canonical
-   bytes and hash to the corresponding existing commit route. Commit rechecks
-   ownership, account state, duplicates, and replay in its transaction; it
-   never invokes AI. Both Go commit services verify the submitted bytes against
-   the supplied SHA-256 hash; this is stateless integrity checking, not stored
-   proof that a preview or human confirmation occurred. Balance imports can
-   accept ready rows while skipping invalid rows, but any conflicting existing
-   external ID aborts the commit. The current UI blocks confirmation whenever
-   any row failed. Investment imports remain whole-file atomic, with canonical
-   5 MiB/10,000-record limits.
-
-The implementation is bounded and request-scoped within the Go service, with no
-durable document store or required job queue. Source parsing runs in the
-browser's extraction worker; the server receives only approved text.
-Apply cancellation and time/output limits across parsing and provider
-work; no silent chunking, retries, truncation, or automatic partial acceptance.
-Larger-document/background processing requires a separate durable-job design.
-Content stays in memory; workers are terminated on completion, failure, timeout,
-or cancellation, and no temporary document files are written. All financial
-responses use `Cache-Control: no-store` and remain outside service-worker caches.
-Client drafts are held in React state rather than localStorage/IndexedDB.
-Cancel aborts a running extraction and discards a late conversion response,
-but does not abort the pending provider request; unmounting or logging out is
-not a provider-request cancellation guarantee. Disable provider
-storage where supported and disclose that local cleanup cannot control provider
-retention. These cleanup and consent-copy gaps remain tracked in backlog A17.
-
-Regression coverage includes deterministic parser/identity fixtures, both
-account modes, direct-import/no-provider regressions, two-user account and
-credential isolation, consent/redaction, malicious files and prompt injection,
-provider compatibility errors, missing keys, shared budget enforcement,
-encrypted-PDF missing/wrong/correct passwords, secret isolation, Office container
-rejection and readable editing protection,
-refusal/malformed/truncated output, cancellation/cleanup, changed-draft hashes,
-duplicates, rollback, and existing financial replay invariants. Mock provider
-responses in tests; never use real statements or credentials.
+Imports accept only the strict Account History Import v1 and Investment History
+v1 formats. To convert a bank or brokerage statement, the import page offers a
+copyable prompt (`web/src/features/imports/ai-prompts.ts`) that the user pastes
+with the statement into an AI chat they choose. The prompt states the exact
+headers, field rules, currency precision, and the derived external ID rule; a
+unit test keeps it in sync with the import templates. Wealthboard never sends
+the prompt or the statement anywhere. The returned file goes through the normal
+preview and hash-checked commit, so AI output never bypasses deterministic
+validation.
 
 ## Isolation boundary
 
@@ -515,8 +376,6 @@ responses in tests; never use real statements or credentials.
 | `estate_plan_snapshots`        | Immutable versioned summary JSON with as-of date and SHA-256 hash         |
 | `login_attempts`               | Bounded rate limiting by normalized username and client key               |
 | `idempotency_keys`             | User-scoped duplicate-submission protection                               |
-| `ai_provider_settings`         | Owner-scoped provider, sharing defaults, limits, encrypted key            |
-| `ai_usage_events`              | Owner-scoped request status, latency, model, and token metadata           |
 
 Every application table except `login_attempts` is either the identity table or
 is owned by one user. Goose separately maintains `goose_db_version`.
@@ -561,7 +420,7 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 - `/activity` — the cross-account ledger
 - `/goals`, `/goals/[id]`
 - `/insights/{net-worth,allocation,income,compare}`
-- `/settings/{profile,currencies,preferences,categories,institutions,instruments,security,ai,api-keys,data}`
+- `/settings/{profile,currencies,preferences,categories,institutions,instruments,security,api-keys,connected-apps,data}`
 - `/estate`, `/estate/{beneficiaries,distribution,summary}`, and
   `/estate/snapshots/[id]` — private estate planning and retained print views
 - `/api/v1/exports/*`, `/api/v1/accounts/[id]/history-import/{preview,commit}`, `/api/v1/restore/user`,
@@ -577,7 +436,8 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 - Earlier client paths such as `/login`, `/signup`, `/transactions`, `/reports`,
   `/categories`, `/institutions`, `/instruments`, `/accounts/archived`,
   `/accounts/[id]/edit`, `/goals/new`, and `/labs/*` redirect to their new
-  locations. The retired `/review` page redirects to the home page.
+  locations. The retired `/review` page redirects to the home page, and
+  `/settings/ai` to Connected apps.
 - `/offline.html`, `/manifest.webmanifest`, `/sw.js`
 
 The protected layout owns the responsive sidebar, header, mobile bottom
@@ -624,6 +484,7 @@ own authorization decisions.
 - Appearance is a non-sensitive browser-local preference with System, Light,
   and Dark choices. A bootstrap before React renders resolves semantic CSS tokens;
   appearance is not user settings, financial data, or portable state.
-- AI output remains explanatory, non-authoritative, and non-advisory. Import
-  extraction produces untrusted drafts only; deterministic
-  validation and explicit user confirmation remain the sole path to persistence.
+- AI output remains explanatory, non-authoritative, and non-advisory. Files
+  produced by an AI chat are untrusted input; deterministic validation and
+  explicit user confirmation remain the sole path to persistence. MCP write
+  tools only add records through the same ledger validation.

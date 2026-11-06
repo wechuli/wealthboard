@@ -45,38 +45,6 @@ type AccountConversion struct {
 	CreatedAt          time.Time `json:"created_at"`
 }
 
-type AiProviderSetting struct {
-	ID                uuid.UUID      `json:"id"`
-	UserID            uuid.UUID      `json:"user_id"`
-	Provider          string         `json:"provider"`
-	BaseUrl           string         `json:"base_url"`
-	Model             string         `json:"model"`
-	EncryptedApiKey   sql.NullString `json:"encrypted_api_key"`
-	ApiKeyHint        sql.NullString `json:"api_key_hint"`
-	MonthlyTokenLimit int32          `json:"monthly_token_limit"`
-	MaxOutputTokens   int32          `json:"max_output_tokens"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
-}
-
-type AiUsageEvent struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	Provider      string         `json:"provider"`
-	EndpointHost  string         `json:"endpoint_host"`
-	Model         string         `json:"model"`
-	RequestType   string         `json:"request_type"`
-	Status        string         `json:"status"`
-	BillingMonth  string         `json:"billing_month"`
-	ChargedTokens int32          `json:"charged_tokens"`
-	InputTokens   sql.NullInt32  `json:"input_tokens"`
-	OutputTokens  sql.NullInt32  `json:"output_tokens"`
-	LatencyMs     sql.NullInt32  `json:"latency_ms"`
-	ErrorCode     sql.NullString `json:"error_code"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-}
-
 type ApiKey struct {
 	ID            uuid.UUID       `json:"id"`
 	UserID        uuid.UUID       `json:"user_id"`

@@ -157,25 +157,3 @@ ORDER BY generated_at DESC, id;
 SELECT id, estate_plan_id, version, title, value_as_of_date, base_currency, content, content_hash, generated_at
 FROM estate_plan_snapshots
 WHERE user_id = $1 AND id = $2;
-
--- name: GetFeatureAIProviderSettings :one
-SELECT
-    provider,
-    base_url,
-    model,
-    encrypted_api_key IS NOT NULL AS has_stored_api_key,
-    api_key_hint,
-    monthly_token_limit,
-    max_output_tokens,
-    created_at,
-    updated_at
-FROM ai_provider_settings
-WHERE user_id = $1;
-
--- name: ListFeatureAIUsage :many
-SELECT
-    id, provider, endpoint_host, model, request_type, status, billing_month,
-    charged_tokens, input_tokens, output_tokens, latency_ms, error_code, created_at, updated_at
-FROM ai_usage_events
-WHERE user_id = $1
-ORDER BY created_at DESC, id;

@@ -86,12 +86,10 @@ the [PostgreSQL 18 data-directory change](https://github.com/docker-library/docs
 | `AUTH_METHODS`                 | `local`, `oidc`, or `local,oidc`                                          |
 | `TRUST_PROXY_HEADERS`          | Legacy no-op; Go rate limits use the socket peer IP                       |
 | `TZ`                           | Default timezone for new users                                            |
-| `AI_CREDENTIAL_ENCRYPTION_KEY` | Canonical base64 32-byte key for remembered provider credentials          |
-| `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
 | `WEB_DIST_PATH`                | Compiled Vite assets served by Go; default `web/dist`                     |
 
-OIDC and AI variables are described in [Authentication](./authentication) and
-the repository README. Set `NODE_ENV=production` for every direct production
+OIDC variables are described in [Authentication](./authentication), and MCP
+variables in [Connect an AI assistant (MCP)](../reference/mcp). Set `NODE_ENV=production` for every direct production
 installation; the supplied container image already sets it.
 
 ## Direct installation
@@ -114,10 +112,9 @@ secret for persistent deployments. Go reads exported process variables and does
 not automatically load `.env`. Export `DATABASE_URL` for subsequent operator
 commands; `.env.example` is a configuration reference, not a Go dotenv loader.
 
-Root npm dependencies support docs, browser tests, and local document extraction;
-the separate `web/` dependencies support the Vite client. A deployment that
-only runs a prebuilt Go binary and client needs neither set unless it uses the
-direct-install Node parser.
+Root npm dependencies support docs and browser tests; the separate `web/`
+dependencies support the Vite client. A deployment that only runs a prebuilt Go
+binary and client needs neither set.
 
 Useful operator commands are:
 
@@ -191,8 +188,7 @@ Run that image with an external `DATABASE_URL` and the required authentication
 environment. The image runs as non-root; the supplied Compose and Kubernetes
 configurations additionally enforce a read-only application filesystem.
 
-Node.js is not part of any production container. AI-assisted import parses
-source files in the browser, so there is no parser sidecar to deploy.
+Node.js is not part of any production container.
 
 Before an update, export the target deployment's `DATABASE_URL` on the operator
 host, ensure the backup directory exists, and choose a new backup filename:
@@ -247,10 +243,10 @@ backup policy, retention, encryption, and restore drills. The application image
 is distroless and contains no `pg_dump`, `pg_restore`, Node.js, or shell, so run
 database operations from a trusted admin host/job. Adjust the example egress
 NetworkPolicy to match the real PostgreSQL namespace and labels. It permits
-only DNS and that PostgreSQL destination by default. OIDC and AI require
-additional, deliberately scoped outbound access to their configured providers.
-All replicas must share the same session, OIDC transaction, and optional AI
-credential-encryption secrets.
+only DNS and that PostgreSQL destination by default. OIDC requires additional,
+deliberately scoped outbound access to its provider. AI assistants connect
+inbound to `/mcp`, so they need no egress. All replicas must share the same
+session and OIDC transaction secrets.
 
 ## Optional fictional demo data
 

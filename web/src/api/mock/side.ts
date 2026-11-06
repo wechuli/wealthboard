@@ -1,8 +1,8 @@
 /**
- * Mock state for estate planning, AI settings, and API keys. Kept separate from the ledger engine:
+ * Mock state for estate planning, API keys, and connected apps. Kept separate from the ledger engine:
  * these features don't change balances. Values come from the engine's current account values.
  */
-import type { AIRead, APIKeyMetadata, ConnectedApp, Beneficiary, CreatedAPIKey, EstateAllocation, EstateDirective, EstatePlan, EstateSnapshot, EstateWorkspace, ResiduaryAllocation } from '../types'
+import type { APIKeyMetadata, ConnectedApp, Beneficiary, CreatedAPIKey, EstateAllocation, EstateDirective, EstatePlan, EstateSnapshot, EstateWorkspace, ResiduaryAllocation } from '../types'
 import { randomId, stableId } from './rng'
 
 export interface SideState {
@@ -12,7 +12,6 @@ export interface SideState {
   allocations: EstateAllocation[]
   residuary: ResiduaryAllocation[]
   snapshots: EstateSnapshot[]
-  ai: AIRead
   apiKeys: APIKeyMetadata[]
   connectedApps: ConnectedApp[]
 }
@@ -20,7 +19,6 @@ export interface SideState {
 const stamp = (daysAgo: number) => new Date(Date.now() - daysAgo * 86_400_000).toISOString()
 
 export function emptySideState(): SideState {
-  const month = new Date().toISOString().slice(0, 7)
   return {
     plan: null,
     beneficiaries: [],
@@ -28,20 +26,6 @@ export function emptySideState(): SideState {
     allocations: [],
     residuary: [],
     snapshots: [],
-    ai: {
-      settings: null,
-      usage: { billingMonth: month, chargedTokens: 0, remainingTokens: 0, monthlyTokenLimit: 0, successfulRequests: 0, lastUsedAt: null },
-      events: [],
-      availability: {
-        available: false,
-        reason: 'Connect an AI provider to convert statements.',
-        providerConfigured: false,
-        storedCredentialAvailable: false,
-        sessionCredentialAccepted: false,
-        cooldownUntil: null,
-        budgetRemainingTokens: 0,
-      },
-    },
     apiKeys: [],
     connectedApps: [],
   }

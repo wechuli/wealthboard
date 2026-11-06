@@ -59,6 +59,7 @@ const legacyRedirects = [
   { path: 'goals/:id/edit', element: <Redirect to={(p) => `/goals/${p.id}?edit=1`} /> },
   { path: 'labs/estate', element: <Navigate to="/estate" replace /> },
   { path: 'labs/ai-review', element: <Navigate to="/" replace /> },
+  { path: 'settings/ai', element: <Navigate to="/settings/connected-apps" replace /> },
   { path: 'review', element: <Navigate to="/" replace /> },
   { path: 'offline', element: <Navigate to="/" replace /> },
 ]
@@ -121,7 +122,6 @@ export const router = createBrowserRouter([
                   { path: 'institutions', element: page(() => import('@/features/settings/InstitutionSettings'), true) },
                   { path: 'instruments', element: page(() => import('@/features/settings/InstrumentSettings'), true) },
                   { path: 'security', element: page(() => import('@/features/settings/SecuritySettings'), true) },
-                  { path: 'ai', element: page(() => import('@/features/settings/AiSettings'), true) },
                   { path: 'api-keys', element: page(() => import('@/features/settings/ApiKeysSettings'), true) },
                   { path: 'connected-apps', element: page(() => import('@/features/settings/ConnectedAppsSettings'), true) },
                   { path: 'data', element: page(() => import('@/features/settings/DataSettings'), true) },

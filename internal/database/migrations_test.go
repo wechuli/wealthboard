@@ -97,8 +97,8 @@ func assertCompleteSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	`).Scan(&tableCount); err != nil {
 		t.Fatalf("count complete schema: %v", err)
 	}
-	if tableCount != 35 {
-		t.Fatalf("application table count = %d, want 35", tableCount)
+	if tableCount != 33 {
+		t.Fatalf("application table count = %d, want 33", tableCount)
 	}
 
 	var amountType string
@@ -292,11 +292,9 @@ func TestPostgreSQLPortfolioReviewRemovalUpgradesAndRollsBack(t *testing.T) {
 		}
 	}
 
-	if err := MigrateUp(ctx, db); err != nil {
+	// Version 8 drops the AI tables, so this test stops at version 6.
+	if _, err := provider.UpTo(ctx, 6); err != nil {
 		t.Fatalf("upgrade: %v", err)
-	}
-	if err := CheckReady(ctx, db); err != nil {
-		t.Fatalf("upgraded database is not ready: %v", err)
 	}
 	assertAISharingColumns(t, ctx, db, 0)
 	var limits string
@@ -329,10 +327,118 @@ func TestPostgreSQLPortfolioReviewRemovalUpgradesAndRollsBack(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM ai_provider_settings WHERE include_exact_amounts OR include_account_names`).Scan(&shared); err != nil || shared != 0 {
 		t.Fatalf("rolled-back sharing preferences = %d, %v; want private defaults", shared, err)
 	}
-	if err := MigrateUp(ctx, db); err != nil {
+	if _, err := provider.UpTo(ctx, 6); err != nil {
 		t.Fatalf("re-apply after rollback: %v", err)
 	}
 	assertAISharingColumns(t, ctx, db, 0)
+}
+
+func TestPostgreSQLAIProviderRemovalUpgradesAndRollsBack(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	admin, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatalf("open admin database: %v", err)
+	}
+	defer admin.Close()
+	schema := fmt.Sprintf("wealthboard_ai_removal_%d", time.Now().UnixNano())
+	if _, err := admin.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create test schema: %v", err)
+	}
+	defer func() {
+		if _, err := admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("drop test schema: %v", err)
+		}
+	}()
+	schemaURL, err := url.Parse(databaseURL)
+	if err != nil {
+		t.Fatalf("parse TEST_DATABASE_URL: %v", err)
+	}
+	query := schemaURL.Query()
+	query.Set("search_path", schema)
+	schemaURL.RawQuery = query.Encode()
+	db, err := Open(ctx, config.Database{URL: schemaURL.String(), MaxOpenConns: 2, MaxIdleConns: 1, ConnMaxLifetime: time.Minute, ConnMaxIdleTime: time.Minute, PingTimeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+	provider, err := newMigrationProvider(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 7); err != nil {
+		t.Fatalf("migrate to the previous version: %v", err)
+	}
+
+	const ownerID, foreignID = "00000000-0000-0000-0000-0000000000a1", "00000000-0000-0000-0000-0000000000b2"
+	key := func(name, user, scopes string) string {
+		return `INSERT INTO api_keys (id, user_id, name, display_prefix, token_hash, scopes, created_at)
+			VALUES (gen_random_uuid(), '` + user + `', '` + name + `', 'wbk_` + name + `', decode(md5('` + name + `'), 'hex'), '` + scopes + `'::JSONB, now())`
+	}
+	for _, statement := range []string{
+		`INSERT INTO users (id, username, created_at, updated_at) VALUES ('` + ownerID + `', 'ai-owner', now(), now()), ('` + foreignID + `', 'ai-foreign', now(), now())`,
+		`INSERT INTO ai_provider_settings (id, user_id, provider, base_url, model, encrypted_api_key, created_at, updated_at)
+		 VALUES (gen_random_uuid(), '` + ownerID + `', 'openai', 'https://api.openai.com/v1', 'gpt-5.5', 'sealed', now(), now())`,
+		`INSERT INTO ai_usage_events (id, user_id, provider, endpoint_host, model, status, billing_month, created_at, updated_at)
+		 VALUES (gen_random_uuid(), '` + ownerID + `', 'openai', 'api.openai.com', 'gpt-5.5', 'success', '2026-11', now(), now())`,
+		key("ai-only", ownerID, `["ai:invoke"]`),
+		key("mixed", ownerID, `["ai:invoke","exports:read"]`),
+		key("reader", foreignID, `["portfolio:read"]`),
+	} {
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			t.Fatalf("seed version 7: %v", err)
+		}
+	}
+
+	if err := MigrateUp(ctx, db); err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+	if err := CheckReady(ctx, db); err != nil {
+		t.Fatalf("upgraded database is not ready: %v", err)
+	}
+	assertAITables(t, ctx, db, 0)
+	var keys string
+	if err := db.QueryRowContext(ctx, `SELECT string_agg(name || '=' || scopes::text, ' ' ORDER BY name) FROM api_keys`).Scan(&keys); err != nil {
+		t.Fatal(err)
+	}
+	// The AI-only key granted nothing else, so it is gone instead of falling back to the default read scope.
+	if keys != `mixed=["exports:read"] reader=["portfolio:read"]` {
+		t.Fatalf("API keys after upgrade = %s", keys)
+	}
+	if _, err := db.ExecContext(ctx, key("new-ai", foreignID, `["ai:invoke"]`)); err == nil {
+		t.Fatal("a new key with ai:invoke was accepted")
+	}
+
+	if _, err := provider.DownTo(ctx, 7); err != nil {
+		t.Fatalf("roll back: %v", err)
+	}
+	assertAITables(t, ctx, db, 2)
+	if _, err := db.ExecContext(ctx, key("restored-ai", foreignID, `["ai:invoke"]`)); err != nil {
+		t.Fatalf("rolled-back scope check rejects ai:invoke: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM api_keys WHERE name = 'restored-ai'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateUp(ctx, db); err != nil {
+		t.Fatalf("re-apply after rollback: %v", err)
+	}
+	assertAITables(t, ctx, db, 0)
+}
+
+func assertAITables(t *testing.T, ctx context.Context, db *sql.DB, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRowContext(ctx, `
+		SELECT count(*) FROM information_schema.tables
+		WHERE table_schema = current_schema() AND table_name IN ('ai_provider_settings', 'ai_usage_events')`).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("AI tables = %d, want %d", got, want)
+	}
 }
 
 func assertAISharingColumns(t *testing.T, ctx context.Context, db *sql.DB, want int) {
