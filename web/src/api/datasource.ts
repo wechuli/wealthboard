@@ -21,6 +21,9 @@ import type {
   AISettingsInput,
   AIWorkflowSettings,
   APIKeyMetadata,
+  ConnectedApp,
+  OAuthConsentRequest,
+  OAuthDataLevel,
   AccountConversionPreview,
   AccountConversionRequest,
   AccountConversionResult,
@@ -244,6 +247,20 @@ export interface DataSource {
     create(body: CreateAPIKeyRequest): Promise<CreatedAPIKey>
     revoke(id: string): Promise<void>
     revokeAll(): Promise<{ revoked: number }>
+  }
+
+  /** AI assistants connected to the MCP endpoint with OAuth. Browser session only. */
+  connectedApps: {
+    list(): Promise<ConnectedApp[]>
+    revoke(id: string): Promise<void>
+    clearCalls(id: string): Promise<void>
+  }
+
+  /** The consent step of an assistant's OAuth sign-in. */
+  oauth: {
+    request(id: string): Promise<OAuthConsentRequest>
+    approve(id: string, dataLevel: OAuthDataLevel): Promise<{ redirectTo: string }>
+    deny(id: string): Promise<{ redirectTo: string }>
   }
 
   goals: {

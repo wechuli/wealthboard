@@ -113,16 +113,42 @@ runs no JavaScript on the server.
 
 ## AI assistant (MCP) boundary
 
-`/mcp` is read-only and accepts only a personal API key with `portfolio:read`
-in a single `Authorization: Bearer` header; it never uses the session cookie,
-so a browser can't be tricked into calling it. Every tool reads with the
+`/mcp` is read-only and accepts only a personal API key or an OAuth access
+token with `portfolio:read` in a single `Authorization: Bearer` header; it
+never uses the session cookie, so a browser can't be tricked into calling it. Every tool reads with the
 `userId` from the verified key, and another user's IDs return the same
 "not found" result as unknown IDs. Tool results exclude account references,
 notes, and import external IDs, and mark transaction descriptions as
 untrusted text. Errors returned to the assistant never include internal
 details. Data an assistant reads is subject to that assistant's provider
-terms. Revoke the key to disconnect it, or set `MCP_ENABLED=false` to remove
-the endpoint. See [Connect an AI assistant (MCP)](./mcp).
+terms. Revoke the key or disconnect the app to cut access, or set
+`MCP_ENABLED=false` to remove the endpoint and OAuth sign-in. See
+[Connect an AI assistant (MCP)](./mcp).
+
+OAuth sign-in for assistants follows OAuth 2.1:
+
+- Only registered redirect URIs are used, compared exactly (loopback addresses
+  on any port). An unknown client or redirect shows an error page instead of
+  redirecting, so Wealthboard can't be used as an open redirect.
+- PKCE with `S256` is required. Codes are single-use and short-lived; a
+  replayed code revokes everything it produced, and so does a reused refresh
+  token. Tokens are opaque, stored only as SHA-256 hashes, and valid only for
+  this deployment's `/mcp`.
+- Consent needs a signed-in browser session, and approving or declining also
+  needs the trusted origin and CSRF token. The page warns that the
+  application's name is self-reported and shows where the browser returns.
+  API keys and OAuth tokens can't approve or manage connections.
+- Disabled users' tokens stop working immediately. Password changes don't
+  revoke connections; disconnect them in **Settings → Connected apps**.
+- Authorization request errors show a Wealthboard error page rather than
+  redirecting, because anyone can register a client; the client's redirect URI
+  is used only after the user approves or cancels.
+- Authorization, token, and revocation requests are limited per client, so one
+  client can't exhaust another's quota, with a high backstop per connecting
+  address. Registration is limited per connecting address; behind a reverse
+  proxy that address is the proxy's, so the limit applies to the whole
+  instance, but existing connections keep working. Wealthboard never fetches
+  URLs supplied by clients.
 
 ## Estate-planning boundary
 

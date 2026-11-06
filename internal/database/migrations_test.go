@@ -97,8 +97,8 @@ func assertCompleteSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	`).Scan(&tableCount); err != nil {
 		t.Fatalf("count complete schema: %v", err)
 	}
-	if tableCount != 29 {
-		t.Fatalf("application table count = %d, want 29", tableCount)
+	if tableCount != 35 {
+		t.Fatalf("application table count = %d, want 35", tableCount)
 	}
 
 	var amountType string

@@ -12,15 +12,54 @@ Wealthboard's own figures. Wealthboard never sends your data to an AI provider
 itself. The assistant you connect requests it, and that provider's terms then
 apply to what it receives.
 
-::: warning Current scope
-This first version uses personal API keys. It works with MCP clients that let
-you set a request header, such as Claude Code, VS Code, Cursor, and Codex.
-claude.ai, Claude Desktop and mobile connectors, and ChatGPT need OAuth sign-in,
-which is planned. Those assistants also connect from the vendor's cloud, so they
-will need Wealthboard on a public HTTPS address.
+There are two ways to connect:
+
+- **Hosted assistants** such as Claude (web, Desktop, and mobile) and ChatGPT
+  sign in with OAuth: you approve the connection on a Wealthboard consent page.
+- **Developer tools** such as Claude Code, VS Code, Cursor, and Codex can also
+  use a personal API key in a request header.
+
+## Connect Claude or ChatGPT
+
+::: warning Your server must be public
+Claude and ChatGPT connect from their own cloud, not from your device. Your
+`APP_URL` must be a public HTTPS address they can reach. A server that is only
+on your home network, a VPN, or `localhost` won't connect.
 :::
 
-## Create a key
+1. In **Settings → Connected apps**, copy the MCP address. It is your `APP_URL`
+   followed by `/mcp`, for example `https://wealth.example.com/mcp`.
+2. Add it as a custom connector:
+   - **Claude:** add a custom connector with that URL. See
+     [Get started with custom connectors](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
+   - **ChatGPT:** turn on developer mode, create an app with that URL, and
+     choose OAuth authentication. See
+     [Connecting custom MCP servers in ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
+3. The assistant opens Wealthboard. Sign in if asked, check the application
+   name and the address it returns to, choose what it can read, and select
+   **Allow access**.
+
+Choose what the assistant can read:
+
+| Access           | Tools                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| **Detailed**     | All tools below, including account, goal, institution, and instrument names and transactions |
+| **Summary only** | `get_portfolio_summary`, `get_cash_flow_report`, and `get_income_report`, without institution, instrument, or account-level detail |
+
+The application name on the consent page comes from the application and isn't
+verified. Allow access only when you've just started the connection yourself.
+
+### Manage connections
+
+**Settings → Connected apps** lists each assistant with its access level, when
+it was connected and last used, and its recent tool calls (name, outcome, and
+time; never what it read). Select **Disconnect** to stop it immediately.
+Connecting the same assistant again replaces its earlier connection.
+Connections that aren't used for 30 days expire.
+
+## Use an API key
+
+### Create a key
 
 1. Open **Settings → API keys** and create a key with only the
    `portfolio:read` scope. Keys with other scopes are refused by `/mcp` unless
@@ -31,19 +70,19 @@ will need Wealthboard on a public HTTPS address.
 
 Use one key per assistant so you can revoke them separately.
 
-## Configure your client
+### Configure your client
 
 Replace `https://wealth.example.com` with your deployment's `APP_URL`. Keep keys
 out of shared or committed files.
 
-### Claude Code
+#### Claude Code
 
 ```sh
 claude mcp add --transport http wealthboard https://wealth.example.com/mcp \
   --header "Authorization: Bearer $WEALTHBOARD_API_KEY"
 ```
 
-### VS Code
+#### VS Code
 
 In your user `mcp.json` (**MCP: Open User Configuration**), prompt for the key
 instead of storing it:
@@ -68,7 +107,7 @@ instead of storing it:
 }
 ```
 
-### Cursor
+#### Cursor
 
 Add the server to the user-level `~/.cursor/mcp.json`, not a project file:
 
@@ -83,7 +122,7 @@ Add the server to the user-level `~/.cursor/mcp.json`, not a project file:
 }
 ```
 
-### Codex
+#### Codex
 
 In `~/.codex/config.toml`, read the key from an environment variable:
 
@@ -137,18 +176,20 @@ mark them as untrusted text the assistant must not follow as instructions.
 
 | Response | Meaning                                                                                |
 | -------- | -------------------------------------------------------------------------------------- |
-| `401`    | No key, an unknown, revoked, or expired key, or more than one `Authorization` header |
-| `403`    | The key lacks `portfolio:read`                                                         |
-| `429`    | The key reached its per-minute limit; wait for `Retry-After` seconds                   |
+| `401`    | No credentials, an unknown, revoked, or expired key or token, or more than one `Authorization` header |
+| `403`    | The key or token lacks `portfolio:read`                                                                |
+| `429`    | The key or connection reached its per-minute limit; wait for `Retry-After` seconds                     |
 
-`/mcp` never uses the browser session cookie. Inside a tool call, another user's
+`/mcp` never uses the browser session cookie. A `401` includes a
+`WWW-Authenticate` header that points assistants to
+`/.well-known/oauth-protected-resource/mcp`, where OAuth sign-in starts. Inside a tool call, another user's
 IDs and unknown IDs both return "No matching record was found for this user."
 
 Operators can change the endpoint with these environment variables:
 
 | Variable                  | Default | Purpose                                                    |
 | ------------------------- | ------- | ---------------------------------------------------------- |
-| `MCP_ENABLED`             | `true`  | Set `false` to remove the `/mcp` endpoint                  |
+| `MCP_ENABLED`             | `true`  | Set `false` to remove `/mcp`, OAuth sign-in, and Connected apps |
 | `MCP_REQUESTS_PER_MINUTE` | `120`   | Requests per API key per minute, counted in each replica   |
 
 ## Check the connection
@@ -161,3 +202,33 @@ npx @modelcontextprotocol/inspector --cli https://wealth.example.com/mcp \
   --transport http --header "Authorization: Bearer $WEALTHBOARD_API_KEY" \
   --method tools/list
 ```
+
+## OAuth details
+
+For developers of MCP clients. Wealthboard implements the
+[MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+with `APP_URL` as the issuer and `APP_URL/mcp` as the resource.
+
+| Endpoint                                     | Purpose                                                        |
+| -------------------------------------------- | -------------------------------------------------------------- |
+| `/.well-known/oauth-protected-resource/mcp`  | Protected resource metadata (RFC 9728)                         |
+| `/.well-known/oauth-authorization-server`    | Authorization server metadata (RFC 8414)                       |
+| `/oauth/register`                            | Dynamic Client Registration (RFC 7591); 60 per address per hour |
+| `/oauth/authorize`                           | Authorization code with `S256` PKCE; returns `iss` (RFC 9207)  |
+| `/oauth/token`                               | `authorization_code` and `refresh_token` grants                |
+| `/oauth/revoke`                              | Token revocation (RFC 7009)                                    |
+
+- Redirect URIs must use HTTPS, an HTTP loopback address (matched on any
+  port), or an app-specific scheme, without fragments.
+- Clients may be public (`none`) or confidential (`client_secret_basic` or
+  `client_secret_post`). Client ID Metadata Documents aren't supported.
+- Authorization request errors show a Wealthboard error page instead of
+  redirecting, because anyone can register a client. The client's redirect URI
+  is used only after the user approves or cancels.
+- Authorization, token, and revocation requests are limited to 120 a minute per
+  client. Wealthboard rate-limits by the connecting address, so behind a
+  reverse proxy the registration limit is shared by the whole instance.
+- The only scope is `portfolio:read`; `offline_access` is accepted and ignored
+  because refresh tokens are always issued.
+- Access tokens last one hour. Refresh tokens last 30 days and rotate on every
+  use; reusing one revokes the connection, as does revoking a refresh token.

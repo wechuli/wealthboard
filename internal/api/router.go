@@ -11,6 +11,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
 	requestmiddleware "github.com/wechuli/wealthboard/internal/api/middleware"
+	"github.com/wechuli/wealthboard/internal/oauth"
 )
 
 type readinessCheck func(context.Context) error
@@ -21,9 +22,12 @@ type ReadHandlers struct {
 	Insights     *InsightsHandler
 	Features     *FeatureReadHandler
 	// MCP serves the read-only Model Context Protocol endpoint; nil disables it.
-	MCP       http.Handler
-	Static    http.Handler
-	Mutations MutationHandlers
+	MCP http.Handler
+	// OAuth serves the authorization server for MCP clients at [oauth.Paths].
+	OAuth         http.Handler
+	ConnectedApps *ConnectedAppsHandler
+	Static        http.Handler
+	Mutations     MutationHandlers
 }
 
 type MutationHandlers struct {
@@ -121,6 +125,9 @@ func NewRouterWithReads(logger *slog.Logger, ready readinessCheck, auth *AuthHan
 				if reads.Mutations.AI != nil {
 					RegisterAIWorkflowRoutes(router, reads.Mutations.AI)
 				}
+				if reads.ConnectedApps != nil {
+					RegisterConnectedAppsRoutes(router, reads.ConnectedApps)
+				}
 				if auth.apiKeys != nil {
 					router.Get("/api-keys", auth.ListAPIKeys)
 					router.Post("/api-keys", auth.CreateAPIKey)
@@ -147,6 +154,11 @@ func NewRouterWithReads(logger *slog.Logger, ready readinessCheck, auth *AuthHan
 	})
 	if reads.MCP != nil {
 		router.Handle("/mcp", reads.MCP)
+	}
+	if reads.OAuth != nil {
+		for _, path := range oauth.Paths {
+			router.Handle(path, reads.OAuth)
+		}
 	}
 	if reads.Static != nil {
 		router.Mount("/", reads.Static)

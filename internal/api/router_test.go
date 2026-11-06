@@ -144,6 +144,26 @@ func TestMCPEndpointIsMountedBeforeTheStaticFallback(t *testing.T) {
 	if response.Body.String() != "spa" {
 		t.Fatalf("disabled /mcp = %d %q", response.Code, response.Body.String())
 	}
+
+	authorization := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		_, _ = response.Write([]byte("oauth " + request.URL.Path))
+	})
+	withOAuth := NewRouterWithReads(logger, ready, nil, nil, ReadHandlers{Static: static, MCP: mcp, OAuth: authorization})
+	for path, want := range map[string]string{
+		"/.well-known/oauth-authorization-server":   "oauth /.well-known/oauth-authorization-server",
+		"/.well-known/oauth-protected-resource/mcp": "oauth /.well-known/oauth-protected-resource/mcp",
+		"/oauth/authorize":                          "oauth /oauth/authorize",
+		"/oauth/token":                              "oauth /oauth/token",
+		"/oauth/register":                           "oauth /oauth/register",
+		"/oauth/revoke":                             "oauth /oauth/revoke",
+		"/oauth/consent":                            "spa",
+	} {
+		response := httptest.NewRecorder()
+		withOAuth.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Body.String() != want {
+			t.Errorf("GET %s = %q, want %q", path, response.Body.String(), want)
+		}
+	}
 }
 
 func testRouter(check readinessCheck) http.Handler {

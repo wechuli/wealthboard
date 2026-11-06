@@ -162,8 +162,23 @@ fixtures and archived migration history remain as non-executable evidence.
   results to MCP-specific output types with string IDs and
   `{minor, decimal, currency}` money from `domain.FormatMinorUnits`, so
   account references, notes, and import external IDs never leave the server.
-  A per-key fixed-window limiter runs in each process. OAuth for hosted
-  assistants is the planned second phase.
+  A per-key or per-grant fixed-window limiter (`internal/ratelimit`) runs in
+  each process. Summary-level grants get a separate server instance that
+  registers only the aggregate tools.
+- **MCP OAuth:** `internal/oauth` is the authorization server for `/mcp`, with
+  `APP_URL` as issuer and `APP_URL/mcp` as the only resource. It serves RFC 9728
+  and RFC 8414 metadata, Dynamic Client Registration, the authorization-code
+  flow with `S256` PKCE, rotating refresh tokens, and RFC 7009 revocation from
+  `/.well-known/*` and `/oauth/*`. `/oauth/authorize` stores a ten-minute
+  request and redirects to the client app's `/oauth/consent` route, which uses
+  the normal session and `ConnectedAppsHandler` (`/api/v1/oauth/requests/*`,
+  `/api/v1/connected-apps*`) to approve or decline. Migration 00007 adds
+  `oauth_clients`, `oauth_authorization_requests`, `oauth_grants`,
+  `oauth_authorization_codes`, `oauth_tokens`, and `oauth_tool_calls`; clients
+  are not user-owned, and everything else belongs to a user through its grant.
+  Codes and tokens are stored as SHA-256 hashes, and `/mcp` verifies `wbo_at_`
+  tokens through `oauth.Service.VerifyAccessToken`. Client ID Metadata
+  Documents are not supported, to avoid outbound fetches of client-chosen URLs.
 - **AI credentials and retention:** Session-only keys stay in client component
   memory for one request. Remembered keys use AES-256-GCM with a dedicated
   deployment key and immutable `userId` associated data. Usage rows contain
@@ -547,7 +562,12 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
   `/api/v1/accounts/[id]/investment-import/{preview,commit}`,
   `/api/v1/estate/snapshots/[id]`, `/api/health/{live,ready}`
 - `/mcp` — read-only MCP endpoint for AI assistants, authenticated with
-  `portfolio:read` API keys; removed when `MCP_ENABLED=false`
+  `portfolio:read` API keys or OAuth access tokens; removed when
+  `MCP_ENABLED=false`
+- `/.well-known/oauth-{protected-resource,authorization-server}` and
+  `/oauth/{authorize,token,register,revoke}` — the MCP authorization server
+- `/oauth/consent` — the client-app page where a signed-in user approves an
+  assistant; `/settings/connected-apps` lists and disconnects them
 - Earlier client paths such as `/login`, `/signup`, `/transactions`, `/reports`,
   `/categories`, `/institutions`, `/instruments`, `/accounts/archived`,
   `/accounts/[id]/edit`, `/goals/new`, and `/labs/*` redirect to their new

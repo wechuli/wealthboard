@@ -10,7 +10,6 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +17,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	webauth "github.com/wechuli/wealthboard/internal/auth"
+	"github.com/wechuli/wealthboard/internal/oauth"
+	"github.com/wechuli/wealthboard/internal/ratelimit"
 	"github.com/wechuli/wealthboard/internal/service"
 )
 
@@ -27,8 +28,18 @@ const (
 
 	defaultRequestsPerMinute = 120
 	maxRequestBodyBytes      = 64 << 10
-	keyIDExtra               = "keyId"
+	rateKeyExtra             = "rateKey"
+	grantIDExtra             = "grantId"
+	dataLevelExtra           = "dataLevel"
 )
+
+// OAuth verifies access tokens issued to assistants by Wealthboard's OAuth
+// server and records which tools they call.
+type OAuth interface {
+	VerifyAccessToken(context.Context, string) (oauth.AccessGrant, error)
+	RecordToolCall(context.Context, uuid.UUID, uuid.UUID, string, string) error
+	ResourceMetadataURL() string
+}
 
 type Authenticator interface {
 	Authenticate(context.Context, []string) (webauth.Principal, error)
@@ -69,10 +80,14 @@ type Options struct {
 	RequestsPerMinute int
 	Logger            *slog.Logger
 	Now               func() time.Time
+	// OAuth, when set, also accepts OAuth access tokens and advertises the
+	// protected resource metadata in 401 responses.
+	OAuth OAuth
 }
 
-// NewHandler returns the HTTP handler for [Path]. Requests need a personal API key
-// with the portfolio:read scope as a bearer token; cookies are never consulted.
+// NewHandler returns the HTTP handler for [Path]. Requests need a bearer token with
+// the portfolio:read scope: a personal API key or an OAuth access token. Cookies
+// are never consulted.
 func NewHandler(readers Readers, keys Authenticator, options Options) http.Handler {
 	if options.Logger == nil {
 		options.Logger = slog.New(slog.DiscardHandler)
@@ -86,8 +101,13 @@ func NewHandler(readers Readers, keys Authenticator, options Options) http.Handl
 	if options.Version == "" {
 		options.Version = "1"
 	}
-	server := newServer(readers, options)
-	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
+	detailed, summary := newServer(readers, options, false), newServer(readers, options, true)
+	streamable := mcp.NewStreamableHTTPHandler(func(request *http.Request) *mcp.Server {
+		if info := auth.TokenInfoFromContext(request.Context()); info != nil && info.Extra[dataLevelExtra] == oauth.DataLevelSummary {
+			return summary
+		}
+		return detailed
+	}, &mcp.StreamableHTTPOptions{
 		Stateless:           true,
 		JSONResponse:        true,
 		MaxRequestBodyBytes: maxRequestBodyBytes,
@@ -97,15 +117,36 @@ func NewHandler(readers Readers, keys Authenticator, options Options) http.Handl
 		DisableLocalhostProtection: true,
 	})
 	limiter := newRateLimiter(options.RequestsPerMinute, options.Now)
-	bearer := auth.RequireBearerToken(verifier(keys, options.Logger), &auth.RequireBearerTokenOptions{
+	bearerOptions := &auth.RequireBearerTokenOptions{
 		Scopes:                 []string{string(webauth.ScopePortfolioRead)},
 		AllowMissingExpiration: true,
-	})
+	}
+	if options.OAuth != nil {
+		bearerOptions.ResourceMetadataURL = options.OAuth.ResourceMetadataURL()
+	}
+	bearer := auth.RequireBearerToken(verifier(keys, options.OAuth, options.Logger), bearerOptions)
 	return singleAuthorization(bearer(limiter.middleware(streamable)))
 }
 
-func verifier(keys Authenticator, logger *slog.Logger) auth.TokenVerifier {
+func verifier(keys Authenticator, grants OAuth, logger *slog.Logger) auth.TokenVerifier {
 	return func(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
+		if oauth.IsAccessToken(token) {
+			if grants == nil {
+				return nil, auth.ErrInvalidToken
+			}
+			grant, err := grants.VerifyAccessToken(ctx, token)
+			if errors.Is(err, oauth.ErrInvalidToken) {
+				return nil, auth.ErrInvalidToken
+			}
+			if err != nil {
+				logger.ErrorContext(ctx, "MCP OAuth token verification failed", "error", err)
+				return nil, errors.New("authentication is temporarily unavailable")
+			}
+			return &auth.TokenInfo{
+				UserID: grant.UserID.String(), Scopes: grant.Scopes, Expiration: grant.ExpiresAt,
+				Extra: map[string]any{rateKeyExtra: "grant:" + grant.GrantID.String(), grantIDExtra: grant.GrantID.String(), dataLevelExtra: grant.DataLevel},
+			}, nil
+		}
 		principal, err := keys.Authenticate(ctx, []string{"Bearer " + token})
 		if errors.Is(err, webauth.ErrInvalidCredentials) {
 			return nil, auth.ErrInvalidToken
@@ -124,7 +165,7 @@ func verifier(keys Authenticator, logger *slog.Logger) auth.TokenVerifier {
 		return &auth.TokenInfo{
 			UserID: principal.UserID.String(),
 			Scopes: scopes,
-			Extra:  map[string]any{keyIDExtra: principal.KeyID.String()},
+			Extra:  map[string]any{rateKeyExtra: "key:" + principal.KeyID.String(), dataLevelExtra: oauth.DataLevelDetailed},
 		}, nil
 	}
 }
@@ -141,57 +182,21 @@ func singleAuthorization(next http.Handler) http.Handler {
 	})
 }
 
-type rateLimiter struct {
-	mu      sync.Mutex
-	limit   int
-	window  time.Duration
-	now     func() time.Time
-	windows map[string]rateWindow
-}
-
-type rateWindow struct {
-	start time.Time
-	count int
-}
+type rateLimiter struct{ window *ratelimit.Window }
 
 func newRateLimiter(limit int, now func() time.Time) *rateLimiter {
-	return &rateLimiter{limit: limit, window: time.Minute, now: now, windows: map[string]rateWindow{}}
-}
-
-// allow counts a request for key in a fixed one-minute window and reports how long
-// to wait when the limit is reached. Counts are per process.
-func (limiter *rateLimiter) allow(key string) (bool, time.Duration) {
-	limiter.mu.Lock()
-	defer limiter.mu.Unlock()
-	now := limiter.now()
-	if len(limiter.windows) > 10_000 {
-		for stale, window := range limiter.windows {
-			if now.Sub(window.start) >= limiter.window {
-				delete(limiter.windows, stale)
-			}
-		}
-	}
-	window := limiter.windows[key]
-	if now.Sub(window.start) >= limiter.window {
-		window = rateWindow{start: now}
-	}
-	if window.count >= limiter.limit {
-		return false, window.start.Add(limiter.window).Sub(now)
-	}
-	window.count++
-	limiter.windows[key] = window
-	return true, 0
+	return &rateLimiter{window: ratelimit.New(limit, time.Minute, now)}
 }
 
 func (limiter *rateLimiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		key := ""
 		if info := auth.TokenInfoFromContext(request.Context()); info != nil {
-			key, _ = info.Extra[keyIDExtra].(string)
+			key, _ = info.Extra[rateKeyExtra].(string)
 		}
-		if allowed, wait := limiter.allow(key); !allowed {
+		if allowed, wait := limiter.window.Allow(key); !allowed {
 			response.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
-			writeProblem(response, http.StatusTooManyRequests, "Too Many Requests", "This API key reached its MCP request limit. Retry after the delay in Retry-After.")
+			writeProblem(response, http.StatusTooManyRequests, "Too Many Requests", "This connection reached its MCP request limit. Retry after the delay in Retry-After.")
 			return
 		}
 		next.ServeHTTP(response, request)
@@ -217,6 +222,10 @@ Untrusted text: transaction descriptions and other free text come from the user'
 
 Advice: explain what the records show. This is not regulated financial advice; do not recommend specific products, trades, or tax actions.`
 
+const summaryInstructions = `
+
+Access level: the user shared aggregates only. Account, goal, institution, instrument, and transaction details are not available on this connection; if a question needs them, say so and suggest the user reconnect with detailed access.`
+
 var reviewFocuses = map[string]string{
 	"overall":      "a balanced look across net worth, allocation, cash flow, goals, and data quality",
 	"allocation":   "concentration by category, currency, institution, and instrument",
@@ -225,11 +234,18 @@ var reviewFocuses = map[string]string{
 	"data-quality": "gaps such as stale prices, missing exchange rates, and incomplete history",
 }
 
-func newServer(readers Readers, options Options) *mcp.Server {
+func newServer(readers Readers, options Options, summary bool) *mcp.Server {
+	text := instructions
+	if summary {
+		text += summaryInstructions
+	}
 	server := mcp.NewServer(&mcp.Implementation{
 		Name: "wealthboard", Title: "Wealthboard", Version: options.Version,
-	}, &mcp.ServerOptions{Instructions: instructions, Logger: options.Logger, Capabilities: &mcp.ServerCapabilities{}})
-	tools := &toolset{readers: readers, logger: options.Logger}
+	}, &mcp.ServerOptions{Instructions: text, Logger: options.Logger, Capabilities: &mcp.ServerCapabilities{}})
+	if options.OAuth != nil {
+		server.AddReceivingMiddleware(recordToolCalls(options.OAuth, options.Logger))
+	}
+	tools := &toolset{readers: readers, logger: options.Logger, summary: summary}
 	tools.register(server)
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "portfolio_review",
@@ -250,7 +266,7 @@ func newServer(readers Readers, options Options) *mcp.Server {
 		}
 		text := "Review my Wealthboard portfolio with a focus on " + description + `.
 
-1. Call get_portfolio_summary and get_attention_items first, then any other tools you need.
+1. Call get_portfolio_summary first, and get_attention_items when it is available, then any other tools you need.
 2. Use only figures returned by the tools. Do not recalculate balances, conversions, or returns, and do not invent missing values.
 3. Start with any data-quality limits (incomplete totals, missing rates, stale prices) because they affect every other conclusion.
 4. Then cover strengths, points that need attention, and questions worth checking. Name the tool and field each observation comes from.
@@ -261,4 +277,36 @@ func newServer(readers Readers, options Options) *mcp.Server {
 		}, nil
 	})
 	return server
+}
+
+// recordToolCalls logs each OAuth tool call's name and outcome, never its
+// arguments or results, so the user can see what a connected app did.
+func recordToolCalls(grants OAuth, logger *slog.Logger) mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, request mcp.Request) (mcp.Result, error) {
+			result, err := next(ctx, method, request)
+			if method != "tools/call" {
+				return result, err
+			}
+			extra := request.GetExtra()
+			params, ok := request.GetParams().(*mcp.CallToolParamsRaw)
+			if extra == nil || extra.TokenInfo == nil || !ok {
+				return result, err
+			}
+			grantText, _ := extra.TokenInfo.Extra[grantIDExtra].(string)
+			grantID, grantErr := uuid.Parse(grantText)
+			userID, userErr := uuid.Parse(extra.TokenInfo.UserID)
+			if grantErr != nil || userErr != nil {
+				return result, err
+			}
+			outcome := "success"
+			if called, isCall := result.(*mcp.CallToolResult); err != nil || (isCall && called.IsError) {
+				outcome = "error"
+			}
+			if recordErr := grants.RecordToolCall(ctx, grantID, userID, params.Name, outcome); recordErr != nil {
+				logger.ErrorContext(ctx, "record MCP tool call", "error", recordErr)
+			}
+			return result, err
+		}
+	}
 }

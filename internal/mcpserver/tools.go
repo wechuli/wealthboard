@@ -45,6 +45,9 @@ func invalid(format string, args ...any) error { return toolError{fmt.Sprintf(fo
 type toolset struct {
 	readers Readers
 	logger  *slog.Logger
+	// summary limits a connection to aggregates: no account, goal, institution,
+	// instrument, or transaction details.
+	summary bool
 }
 
 func readOnly(title string) *mcp.ToolAnnotations {
@@ -58,6 +61,19 @@ func (tools *toolset) register(server *mcp.Server) {
 		Description: "Net worth, assets, liabilities, liquid and investible totals in the base currency, net-worth change over 1, 3, and 12 months and all time, allocation by category, currency, institution, and instrument, and completeness warnings. Start here.",
 		Annotations: readOnly("Portfolio summary"),
 	}, handle(tools, tools.portfolioSummary))
+	addTool(server, &mcp.Tool{
+		Name:        "get_cash_flow_report",
+		Description: "Contributions, withdrawals, income, fees, and growth for a period in the base currency, by month, plus net-worth year-over-year, highest, and since-start statistics.",
+		Annotations: readOnly("Cash flow report"),
+	}, handle(tools, tools.cashFlowReport))
+	addTool(server, &mcp.Tool{
+		Name:        "get_income_report",
+		Description: "Interest, dividends, capital growth, and fees for a period, by account, instrument, and month.",
+		Annotations: readOnly("Income report"),
+	}, handle(tools, tools.incomeReport))
+	if tools.summary {
+		return
+	}
 	addTool(server, &mcp.Tool{
 		Name:        "list_accounts",
 		Description: "Accounts with category, institution, currency, tracking mode, current balance, base-currency value, and 30-day change.",
@@ -73,16 +89,6 @@ func (tools *toolset) register(server *mcp.Server) {
 		Description: "Transactions, newest first, filtered by account, type, and date range. Pages hold at most 100 rows; pass nextOffset as offset to continue.",
 		Annotations: readOnly("List transactions"),
 	}, handle(tools, tools.listTransactions))
-	addTool(server, &mcp.Tool{
-		Name:        "get_cash_flow_report",
-		Description: "Contributions, withdrawals, income, fees, and growth for a period in the base currency, by month, plus net-worth year-over-year, highest, and since-start statistics.",
-		Annotations: readOnly("Cash flow report"),
-	}, handle(tools, tools.cashFlowReport))
-	addTool(server, &mcp.Tool{
-		Name:        "get_income_report",
-		Description: "Interest, dividends, capital growth, and fees for a period, by account, instrument, and month.",
-		Annotations: readOnly("Income report"),
-	}, handle(tools, tools.incomeReport))
 	addTool(server, &mcp.Tool{
 		Name:        "list_goals",
 		Description: "Goals with target, current progress, target date, tracking status, and linked account.",
@@ -221,7 +227,7 @@ func (tools *toolset) portfolioSummary(ctx context.Context, userID uuid.UUID, _ 
 	}
 	base := dashboard.BaseCurrency
 	totals := dashboard.Totals
-	return PortfolioSummary{
+	result := PortfolioSummary{
 		AsOf: dashboard.AsOf, BaseCurrency: base,
 		NetWorth: money(totals.NetWorth, base), Assets: money(totals.Assets, base), Liabilities: money(totals.Liabilities, base),
 		Liquid: money(totals.Liquid, base), Investible: money(totals.Investible, base),
@@ -239,7 +245,11 @@ func (tools *toolset) portfolioSummary(ctx context.Context, userID uuid.UUID, _ 
 			InvestibleByCategory: slices(dashboard.InvestibleAllocation, base),
 		},
 		AttentionItemCount: len(attention.Items),
-	}, nil
+	}
+	if tools.summary {
+		result.Allocation.ByInstitution, result.Allocation.ByInstrument = []AllocationSlice{}, []AllocationSlice{}
+	}
+	return result, nil
 }
 
 func slices(items []service.AllocationItemRead, currency string) []AllocationSlice {
@@ -510,6 +520,10 @@ func (tools *toolset) incomeReport(ctx context.Context, userID uuid.UUID, input 
 		},
 		InterestByAccount: incomeLines(report.InterestByAccount, base), FeesByAccount: incomeLines(report.FeesByAccount, base),
 		Dividends: make([]DividendLine, 0, len(report.Dividends)), Months: months, MonthsTruncated: truncated,
+	}
+	if tools.summary {
+		result.InterestByAccount, result.FeesByAccount = []IncomeLine{}, []IncomeLine{}
+		return result, nil
 	}
 	for _, line := range report.Dividends {
 		result.Dividends = append(result.Dividends, DividendLine{

@@ -82,6 +82,8 @@ export const router = createBrowserRouter([
       {
         element: <RequireSession />,
         children: [
+          // An AI assistant sends the browser here to approve its connection; it stands apart from the app shell.
+          { path: 'oauth/consent', element: page(() => import('@/features/oauth/ConsentPage')) },
           {
             element: <AppShell />,
             errorElement: <RouteError />,
@@ -121,6 +123,7 @@ export const router = createBrowserRouter([
                   { path: 'security', element: page(() => import('@/features/settings/SecuritySettings'), true) },
                   { path: 'ai', element: page(() => import('@/features/settings/AiSettings'), true) },
                   { path: 'api-keys', element: page(() => import('@/features/settings/ApiKeysSettings'), true) },
+                  { path: 'connected-apps', element: page(() => import('@/features/settings/ConnectedAppsSettings'), true) },
                   { path: 'data', element: page(() => import('@/features/settings/DataSettings'), true) },
                 ],
               },

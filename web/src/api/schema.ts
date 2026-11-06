@@ -1893,6 +1893,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/oauth/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Describe a pending request from an AI assistant to connect over MCP
+         * @description Browser sessions only. Requests expire ten minutes after the assistant starts them.
+         */
+        get: operations["getOAuthConsentRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve an assistant's connection and get the redirect carrying its authorization code
+         * @description Browser sessions only, with a trusted Origin and `X-CSRF-Token`. Approving the same application again replaces the user's earlier connection to it.
+         */
+        post: operations["approveOAuthConsentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/requests/{id}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline an assistant's connection and get the redirect carrying access_denied */
+        post: operations["denyOAuthConsentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connected-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List AI assistants connected over MCP with OAuth
+         * @description Browser sessions only. Each connection includes its 20 most recent tool calls (name, outcome, and time only).
+         */
+        get: operations["listConnectedApps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connected-apps/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect an assistant immediately */
+        delete: operations["revokeConnectedApp"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connected-apps/{id}/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Clear a connection's tool-call history */
+        delete: operations["clearConnectedAppCalls"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/signup": {
         parameters: {
             query?: never;
@@ -3947,6 +4058,49 @@ export interface components {
         };
         /** @enum {string} */
         APIKeyScope: "portfolio:read" | "portfolio:write" | "imports:write" | "exports:read" | "ai:invoke";
+        /**
+         * @description `detailed` shares accounts, goals, transactions, and holdings; `summary` shares aggregate totals and reports only.
+         * @enum {string}
+         */
+        OAuthDataLevel: "detailed" | "summary";
+        OAuthConsentRequest: {
+            /** Format: uuid */
+            id: string;
+            /** @description Name the application registered; not verified. */
+            clientName: string;
+            /** Format: uri */
+            clientUri?: string;
+            /** @description Scheme and host the browser returns to, such as https://claude.ai. */
+            redirectHost: string;
+            scopes: string[];
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        OAuthRedirect: {
+            redirectTo: string;
+        };
+        ConnectedAppToolCall: {
+            tool: string;
+            /** @enum {string} */
+            outcome: "success" | "error";
+            /** Format: date-time */
+            at: string;
+        };
+        ConnectedApp: {
+            /** Format: uuid */
+            id: string;
+            clientName: string;
+            /** Format: uri */
+            clientUri?: string;
+            redirectHost: string;
+            scopes: string[];
+            dataLevel: components["schemas"]["OAuthDataLevel"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastUsedAt: string | null;
+            recentCalls: components["schemas"]["ConnectedAppToolCall"][];
+        };
         APIKeyMetadata: {
             /** Format: uuid */
             id: string;
@@ -7486,6 +7640,160 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    getOAuthConsentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The application, its redirect host, and the requested scopes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthConsentRequest"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    approveOAuthConsentRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    dataLevel: components["schemas"]["OAuthDataLevel"];
+                };
+            };
+        };
+        responses: {
+            /** @description Where to send the browser next */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthRedirect"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    denyOAuthConsentRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where to send the browser next */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthRedirect"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listConnectedApps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active connections, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        apps: components["schemas"]["ConnectedApp"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    revokeConnectedApp: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    clearConnectedAppCalls: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description History cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     signup: {

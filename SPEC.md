@@ -1468,9 +1468,9 @@ the server and the configured model.
 
 ## AI assistant connections (MCP)
 
-Status: phase 1 (read-only tools with personal API keys) is implemented in
-`internal/mcpserver`; phase 2 (OAuth) is planned. This replaces the removed
-in-app AI portfolio review. Instead
+Status: phase 1 (read-only tools with personal API keys, `internal/mcpserver`)
+and phase 2 (OAuth for hosted assistants, `internal/oauth`) are implemented.
+This replaces the removed in-app AI portfolio review. Instead
 of Wealthboard sending a snapshot to a model, the user connects an AI assistant
 they already use (for example Claude or ChatGPT) to Wealthboard through the
 [Model Context Protocol](https://modelcontextprotocol.io/specification/2025-11-25)
@@ -1506,40 +1506,73 @@ can reach a private deployment.
   turns it off, and `MCP_REQUESTS_PER_MINUTE` (default 120, 1 to 10,000) sets
   the per-key limit, counted per process.
 - **Phase 2, OAuth 2.1:** Wealthboard acts as its own authorization server for
-  `/mcp`, following the MCP authorization specification:
+  `/mcp`, following the MCP authorization specification. It is available
+  whenever `MCP_ENABLED` is true, with `APP_URL` as the issuer and
+  `APP_URL/mcp` as the resource.
   - Protected resource metadata (RFC 9728) at
-    `/.well-known/oauth-protected-resource`, naming `APP_URL` as the resource
-    and the single authorization server. Unauthenticated `/mcp` requests
-    return `401` with a `WWW-Authenticate` header pointing at that document.
-  - Authorization server metadata (RFC 8414) advertising the authorization,
-    token, registration, and revocation endpoints, `S256` PKCE only,
-    `client_id_metadata_document_supported`, `none` among token endpoint
-    authentication methods, and RFC 9207 issuer identification.
-  - Client identification through Dynamic Client Registration (RFC 7591) and
-    Client ID Metadata Documents. Registration is rate limited, stores no
-    secrets for public clients, and prunes clients that never complete a grant.
-  - Authorization code flow with PKCE, exact redirect URI matching (loopback
-    redirects match on any port), and the `resource` parameter (RFC 8707)
-    binding every token to `/mcp`. No `client_credentials` grant.
-  - The consent page runs in the Vite app behind the normal login (local or
-    OIDC). It names the client, its redirect host, the requested scope, and the
-    data level, and records nothing until the user approves.
-  - Access tokens are opaque, short-lived, stored only as SHA-256 hashes, and
-    audience-bound. Refresh tokens rotate on use; reuse revokes the grant.
-  - Tokens are rejected for revoked grants, disabled users, wrong audience, or
-    missing scope. An invalid bearer token never falls back to a cookie.
+    `/.well-known/oauth-protected-resource/mcp` (and without the suffix) names
+    the resource, the single authorization server, and `portfolio:read`.
+    Unauthenticated `/mcp` requests return `401` with a `WWW-Authenticate`
+    header pointing at that document. Other `/.well-known/` paths return `404`
+    instead of the client app.
+  - Authorization server metadata (RFC 8414) at
+    `/.well-known/oauth-authorization-server` advertises
+    `/oauth/{authorize,token,register,revoke}`, the `code` response type,
+    `authorization_code` and `refresh_token` grants, `S256` PKCE only, `none`,
+    `client_secret_basic`, and `client_secret_post` client authentication,
+    RFC 9207 issuer identification, and
+    `client_id_metadata_document_supported: false`.
+  - Clients register with Dynamic Client Registration (RFC 7591). Redirect URIs
+    must be HTTPS, HTTP loopback, or an app-specific scheme, without fragments
+    or credentials; at most 10 per client. Public clients get no secret;
+    confidential clients get one secret stored only as a hash. Registration is
+    limited to 60 per peer address per hour, and clients that never complete a
+    grant are pruned after a day. Client ID Metadata Documents are not
+    supported, because fetching client-chosen URLs from a self-hosted server
+    adds SSRF risk and needs outbound access that private deployments block;
+    Claude and ChatGPT both register through DCR.
+  - `/oauth/authorize` validates the client, exact redirect URI (loopback URIs
+    match on any port), response type, `S256` PKCE, scope, and resource. Every
+    failure shows an error page and never redirects: registration is open, so
+    redirecting before the user has seen the consent screen would make
+    Wealthboard an open redirect (RFC 9700 section 4.11.2). A valid request is
+    stored for ten minutes and the browser goes to `/oauth/consent?request=…`.
+    The client's redirect URI is used only after the user approves or cancels.
+  - The consent page runs in the client app behind the normal login (local or
+    OIDC, returning to the page afterwards). It shows the self-reported client
+    name with a warning that it is unverified, the redirect host, the signed-in
+    user, the data level choice, and what is never shared, and records nothing
+    until the user approves or cancels. Each request can be decided once.
+    Approving a client again replaces that user's earlier grant for it.
+  - Authorization codes are single-use, last five minutes, and are bound to
+    the client, redirect URI, and PKCE challenge. A replayed code revokes the
+    grant it produced.
+  - Access tokens (`wbo_at_…`) are opaque, last one hour, are stored only as
+    SHA-256 hashes, and are bound to the `/mcp` resource. Refresh tokens
+    (`wbo_rt_…`) last 30 days and rotate on every use; presenting a used refresh
+    token revokes the whole grant. Revoking a refresh token at
+    `/oauth/revoke` (RFC 7009) also ends the grant.
+  - Tokens are rejected for revoked grants, disabled users, another resource,
+    expiry, or missing scope. An invalid bearer token never falls back to a
+    cookie. Token and revocation endpoints answer CORS requests from any origin
+    because they never use cookies.
 - OAuth grants cannot manage credentials, API keys, connections, or perform a
-  restore.
+  restore. Approving, listing, and revoking connections need a browser session;
+  mutations also need the trusted origin and CSRF token.
 
 ### Connected apps
 
-- Settings gains **Connected apps** beside API keys, listing each grant's client
-  name, redirect host, scope, data level, created and last-used times, and a
-  revoke action. Revocation takes effect on the next request.
-- Each grant keeps an owner-scoped call log of tool name, time, and outcome
-  only; arguments and results are never logged. Users can clear it.
+- **Settings → Connected apps** lists each active grant's client name,
+  redirect host, data level, connection and last-used times, and its 20 most
+  recent tool calls, with a disconnect action that takes effect on the next
+  request and a way to clear the history. It also shows the `/mcp` address to
+  paste into an assistant.
+- Each grant keeps an owner-scoped call log of tool name, outcome, and time
+  only; arguments and results are never logged. Rows older than 90 days are
+  pruned.
 - Grants and logs are excluded from per-user exports and included only in
-  protected deployment-wide PostgreSQL backups.
+  protected deployment-wide PostgreSQL backups. Password changes do not revoke
+  grants, matching API keys.
 
 ### Tools
 
@@ -1576,15 +1609,23 @@ bounds its result size.
 
 - The consent screen discloses that approved data leaves Wealthboard for the
   assistant's provider, whose retention terms apply.
-- Each grant has a data level. **Detailed** (default) includes account, goal,
-  and institution names, transactions, and descriptions. **Summary** returns
-  aggregates and pseudonymous labels only. Notes are excluded at both levels
-  unless the user enables them for that grant.
+- Each grant has a data level. **Detailed** (default) exposes every tool,
+  including account, goal, institution, and instrument names, transactions, and
+  descriptions. **Summary** exposes only `get_portfolio_summary`,
+  `get_cash_flow_report`, and `get_income_report`, without institution or
+  instrument allocation or per-account and per-instrument income lines. Notes
+  are never shared at either level.
 - Transaction descriptions and notes are marked as untrusted source text in tool
   results, because imported statements can contain prompt-injection attempts.
-- Phase 1 API keys always use the Detailed level without notes. Account
-  references, notes, and import external IDs never leave Wealthboard.
-- Rate limit each grant and API key; return `429` with retry guidance.
+- API keys always use the Detailed level. Account references, notes, and
+  import external IDs never leave Wealthboard.
+- Rate limit each grant and API key on `/mcp`; return `429` with
+  `Retry-After`. On the OAuth endpoints, authorization, token, and revocation
+  requests are limited per client (120 a minute, with unknown client IDs
+  sharing one bucket) plus a 3,000-a-minute backstop per peer address.
+  Wealthboard uses the socket peer address, so behind a reverse proxy the
+  registration limit applies to the whole instance; existing connections are
+  unaffected when it is reached.
 
 ### Later phases
 
@@ -1594,16 +1635,23 @@ bounds its result size.
   valuation. They require `portfolio:write`, set `destructiveHint` where
   applicable, reuse idempotency keys and existing validation, and never
   restore, delete accounts, or manage credentials.
+- **Possible later work:** Client ID Metadata Documents with an SSRF-safe
+  fetcher, OIDC UserInfo for ChatGPT Enterprise domain checks, and a
+  shared rate-limit store for multi-replica deployments.
 
 ### Testing
 
 - At least two users: owner success and foreign-ID not found for every tool.
   Phase 1 covers this, revoked and wrong-scope keys, cookie refusal, rate
   limiting, safe error messages, and a strict MCP Inspector schema check.
+  Phase 2 covers discovery metadata, registration rules, untrusted redirects,
+  PKCE, code replay, refresh rotation and reuse, revocation, resource binding,
+  disabled users, Summary tool limits, cross-user connected-app access, and
+  the browser consent flow including sign-in first.
 - Token audience mismatch, revoked grant, expired token, refresh reuse, missing
   scope, disabled user, and cookie fallback refusal.
-- Protocol conformance with the MCP Inspector, plus a documented manual check
-  with one hosted assistant.
+- Protocol conformance with the MCP Inspector. A manual check with a hosted
+  assistant needs a public HTTPS deployment.
 
 ## User interface and styling
 
