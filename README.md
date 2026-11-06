@@ -35,8 +35,9 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Quick add (`N`), a ⌘K / Ctrl K command palette, and a `Shift H` privacy
   toggle
 - Optional bring-your-own-key AI conversion of statements into import files
-- Read-only MCP endpoint so an AI assistant you choose (Claude, ChatGPT, or a
-  developer tool) can query your data, with OAuth consent and Connected apps
+- MCP endpoint so an AI assistant you choose (Claude, ChatGPT, or a developer
+  tool) can query your data and, if you allow changes, record transactions and
+  valuations, with OAuth consent and Connected apps
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
 Money is stored as integer minor units in PostgreSQL `bigint` columns. Exchange
@@ -343,7 +344,8 @@ revoke keys separately when needed.
 
 See [Go authentication and API keys](docs/reference/go-authentication.md) and
 the [OpenAPI contract](api/openapi.yaml) for endpoints and request formats.
-`portfolio:read` keys also authorize the read-only MCP endpoint at `/mcp`; see
+`portfolio:read` keys also authorize the MCP endpoint at `/mcp`, and adding
+`portfolio:write` enables its write tools; see
 [Connect an AI assistant (MCP)](docs/reference/mcp.md).
 
 ## Database migrations
@@ -450,7 +452,7 @@ instructions. Genkit validates every response against the schema before
 Wealthboard checks bounds and source coverage.
 
 The in-app AI portfolio review has been removed. Ask the AI assistant you
-already use instead: Wealthboard's read-only MCP endpoint lets Claude and
+already use instead: Wealthboard's MCP endpoint lets Claude and
 ChatGPT connect after you approve them (OAuth, which needs a public HTTPS
 `APP_URL`), and developer tools such as Claude Code, VS Code, Cursor, and Codex
 connect with a `portfolio:read` API key. See

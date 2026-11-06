@@ -19,10 +19,12 @@ import (
 )
 
 const (
-	ownerToken    = "wbk_v1_owner"
-	exportsToken  = "wbk_v1_exports"
-	failingToken  = "wbk_v1_failing"
-	initializeRPC = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}`
+	ownerToken     = "wbk_v1_owner"
+	writerToken    = "wbk_v1_writer"
+	writeOnlyToken = "wbk_v1_write_only"
+	exportsToken   = "wbk_v1_exports"
+	failingToken   = "wbk_v1_failing"
+	initializeRPC  = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}`
 )
 
 var (
@@ -39,6 +41,10 @@ func (fakeKeys) Authenticate(_ context.Context, values []string) (webauth.Princi
 	switch values[0] {
 	case "Bearer " + ownerToken:
 		return webauth.Principal{UserID: ownerID, Method: "api_key", KeyID: ownerKey, Scopes: []webauth.Scope{webauth.ScopePortfolioRead}}, nil
+	case "Bearer " + writerToken:
+		return webauth.Principal{UserID: ownerID, Method: "api_key", KeyID: uuid.New(), Scopes: []webauth.Scope{webauth.ScopePortfolioRead, webauth.ScopePortfolioWrite}}, nil
+	case "Bearer " + writeOnlyToken:
+		return webauth.Principal{UserID: ownerID, Method: "api_key", KeyID: uuid.New(), Scopes: []webauth.Scope{webauth.ScopePortfolioWrite}}, nil
 	case "Bearer " + exportsToken:
 		return webauth.Principal{UserID: ownerID, Method: "api_key", KeyID: uuid.New(), Scopes: []webauth.Scope{webauth.ScopeExportsRead}}, nil
 	case "Bearer " + failingToken:
@@ -256,6 +262,7 @@ func TestEndpointRequiresOneReadScopedBearerToken(t *testing.T) {
 		"unknown key":             {headers: map[string][]string{"Authorization": {"Bearer wbk_v1_unknown"}}, cookie: sessionCookie, want: http.StatusUnauthorized},
 		"basic scheme":            {headers: map[string][]string{"Authorization": {"Basic " + ownerToken}}, want: http.StatusUnauthorized},
 		"key without read scope":  {headers: map[string][]string{"Authorization": {"Bearer " + exportsToken}}, want: http.StatusForbidden},
+		"write-only key":          {headers: map[string][]string{"Authorization": {"Bearer " + writeOnlyToken}}, want: http.StatusForbidden},
 		"two authorization lines": {headers: map[string][]string{"Authorization": {"Bearer " + ownerToken, "Bearer " + exportsToken}}, want: http.StatusUnauthorized},
 		"verification failure":    {headers: map[string][]string{"Authorization": {"Bearer " + failingToken}}, want: http.StatusInternalServerError},
 		"read-scoped key":         {headers: map[string][]string{"Authorization": {"Bearer " + ownerToken}}, want: http.StatusOK},
@@ -269,8 +276,13 @@ func TestEndpointRequiresOneReadScopedBearerToken(t *testing.T) {
 			if strings.Contains(string(body), "10.0.0.5") {
 				t.Fatalf("response leaked an internal error: %s", body)
 			}
-			if test.want == http.StatusForbidden && !strings.Contains(response.Header.Get("WWW-Authenticate"), `scope="portfolio:read"`) {
-				t.Fatalf("WWW-Authenticate = %q", response.Header.Get("WWW-Authenticate"))
+			challenge := response.Header.Get("WWW-Authenticate")
+			if test.want == http.StatusForbidden && (!strings.Contains(challenge, `error="insufficient_scope"`) || !strings.Contains(challenge, `scope="portfolio:read"`)) {
+				t.Fatalf("WWW-Authenticate = %q", challenge)
+			}
+			// Clients request the scopes in a 401 challenge, so naming only portfolio:read would hide portfolio:write.
+			if test.want == http.StatusUnauthorized && strings.Contains(challenge, "scope=") {
+				t.Fatalf("401 challenge names a scope: %q", challenge)
 			}
 		})
 	}

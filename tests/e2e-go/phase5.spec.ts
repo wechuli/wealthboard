@@ -823,14 +823,19 @@ async function registerAssistant(page: Page, name: string) {
   return ((await registered.json()) as { client_id: string }).client_id;
 }
 
-function authorizePath(clientId: string, challenge: string, state: string) {
+function authorizePath(
+  clientId: string,
+  challenge: string,
+  state: string,
+  scope = "portfolio:read",
+) {
   return `/oauth/authorize?${new URLSearchParams({
     response_type: "code",
     client_id: clientId,
     redirect_uri: oauthCallback,
     code_challenge: challenge,
     code_challenge_method: "S256",
-    scope: "portfolio:read",
+    scope,
     state,
     resource: `${origin}/mcp`,
   })}`;
@@ -924,6 +929,128 @@ test("connects an AI assistant with OAuth consent and disconnects it from settin
     .click();
   await expect(page.getByText("No connected apps")).toBeVisible();
   expect((await callSummary()).status()).toBe(401);
+});
+
+test("lets an assistant record a transaction only after the user allows changes", async ({
+  page,
+  browser,
+}) => {
+  const other = await browser.newContext();
+  try {
+    const foreign = await signUpInContext(other, "go-oauth-write-other");
+    const foreignAccount = await createAccount(
+      foreign.page,
+      foreign.session,
+      "Other savings",
+    );
+
+    const session = await signUp(page, "go-oauth-write-owner");
+    const accountId = await createAccount(page, session, "Writable savings");
+    const clientId = await registerAssistant(page, "Write Assistant");
+    const { verifier, challenge } = pkcePair();
+    const callbacks = await captureCallback(page);
+    await page.goto(
+      authorizePath(
+        clientId,
+        challenge,
+        "write-state",
+        "portfolio:read portfolio:write",
+      ),
+    );
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Connect Write Assistant?" }),
+    ).toBeVisible();
+    const changes = page.getByRole("switch", { name: "Allow changes" });
+    await expect(changes).not.toBeChecked();
+    await changes.click();
+    await expect(changes).toBeChecked();
+    await page.getByRole("button", { name: "Allow access" }).click();
+    await expect.poll(() => callbacks.length).toBe(1);
+
+    const exchanged = await page.request.post("/oauth/token", {
+      form: {
+        grant_type: "authorization_code",
+        code: new URL(callbacks[0]!).searchParams.get("code")!,
+        redirect_uri: oauthCallback,
+        code_verifier: verifier,
+        client_id: clientId,
+        resource: `${origin}/mcp`,
+      },
+    });
+    expect(exchanged.status()).toBe(200);
+    const tokens = (await exchanged.json()) as {
+      access_token: string;
+      scope: string;
+    };
+    expect(tokens.scope).toBe("portfolio:read portfolio:write");
+
+    const record = (account: string, idempotencyKey: string) =>
+      page.request.post("/mcp", {
+        data: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "record_transaction",
+            arguments: {
+              accountId: account,
+              type: "deposit",
+              amount: "1234.56",
+              date: "2026-02-01",
+              description: "Assistant deposit",
+              idempotencyKey,
+            },
+          },
+        },
+        headers: {
+          Authorization: `Bearer ${tokens.access_token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+      });
+    type ToolResponse = {
+      result: {
+        isError?: boolean;
+        structuredContent?: { account: { balance: Record<string, string> } };
+      };
+    };
+    const key = randomUUID();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const recorded = (await (await record(accountId, key)).json()) as ToolResponse;
+      expect(recorded.result.isError ?? false).toBe(false);
+      expect(recorded.result.structuredContent?.account.balance).toEqual({
+        minor: "123456",
+        decimal: "1234.56",
+        currency: "KES",
+      });
+    }
+    const account = await page.request.get(`/api/v1/accounts/${accountId}`);
+    expect(
+      ((await account.json()) as { currentValueMinor: string }).currentValueMinor,
+    ).toBe("123456");
+
+    const denied = (await (
+      await record(foreignAccount, randomUUID())
+    ).json()) as ToolResponse;
+    expect(denied.result.isError).toBe(true);
+    const foreignRead = await foreign.page.request.get(
+      `/api/v1/accounts/${foreignAccount}`,
+    );
+    expect(
+      ((await foreignRead.json()) as { currentValueMinor: string })
+        .currentValueMinor,
+    ).toBe("0");
+
+    await page.goto("/settings/connected-apps");
+    await expect(page.getByText("Write Assistant")).toBeVisible();
+    await expect(
+      page.getByText("Can make changes", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: /Recent activity/ }).click();
+    await expect(page.getByText("Recorded a transaction").first()).toBeVisible();
+  } finally {
+    await other.close();
+  }
 });
 
 test("asks a signed-out user to sign in before consent and returns a declined connection", async ({

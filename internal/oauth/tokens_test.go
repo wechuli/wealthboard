@@ -49,9 +49,29 @@ func TestLoopbackRedirectsMatchOnAnyPort(t *testing.T) {
 }
 
 func TestScopeAndPKCE(t *testing.T) {
-	for value, want := range map[string]bool{"": true, "portfolio:read": true, "portfolio:read offline_access": true, "portfolio:write": false, "openid": false} {
-		if _, got := normalizeScope(value); got != want {
-			t.Errorf("normalizeScope(%q) = %v, want %v", value, got, want)
+	for value, want := range map[string]string{
+		"": "portfolio:read", "portfolio:read": "portfolio:read", "portfolio:read offline_access": "portfolio:read",
+		"portfolio:write": "portfolio:read portfolio:write", "offline_access portfolio:write portfolio:read": "portfolio:read portfolio:write",
+		"openid": "", "portfolio:read portfolio:admin": "",
+	} {
+		if got, ok := normalizeScope(value); got != want || ok != (want != "") {
+			t.Errorf("normalizeScope(%q) = %q, %v, want %q", value, got, ok, want)
+		}
+	}
+	for _, test := range []struct {
+		requested, level string
+		allow            bool
+		want             string
+	}{
+		{"portfolio:read portfolio:write", DataLevelDetailed, true, "portfolio:read portfolio:write"},
+		{"portfolio:read portfolio:write", DataLevelDetailed, false, "portfolio:read"},
+		{"portfolio:read portfolio:write", DataLevelSummary, false, "portfolio:read"},
+		{"portfolio:read portfolio:write", DataLevelSummary, true, ""},
+		{"portfolio:read", DataLevelDetailed, true, ""},
+	} {
+		got, err := grantedScope(test.requested, test.level, test.allow)
+		if got != test.want || (err != nil) != (test.want == "") {
+			t.Errorf("grantedScope(%q, %s, %v) = %q, %v", test.requested, test.level, test.allow, got, err)
 		}
 	}
 	// RFC 7636 appendix B.

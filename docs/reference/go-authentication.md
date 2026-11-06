@@ -79,9 +79,9 @@ curl --fail-with-body \
 
 The API never accepts keys in URLs, cookies, or request bodies. If an Authorization header is present but invalid, the server does not fall back to a browser cookie. Revocation is immediate, expired keys are rejected, and disabled users cannot authenticate with their keys.
 
-A `portfolio:read` key also authorizes the read-only MCP endpoint at `/mcp`,
-which lets AI assistants such as Claude Code, VS Code, Cursor, and Codex read
-your data. Claude and ChatGPT connect with OAuth instead and appear under
+A `portfolio:read` key also authorizes the MCP endpoint at `/mcp`, which lets
+AI assistants such as Claude Code, VS Code, Cursor, and Codex read your data;
+with `portfolio:write` as well, they can record transactions and valuations. Claude and ChatGPT connect with OAuth instead and appear under
 **Settings → Connected apps**. See [Connect an AI assistant (MCP)](./mcp).
 
 PostgreSQL stores only a SHA-256 token hash and metadata, not the usable secret.

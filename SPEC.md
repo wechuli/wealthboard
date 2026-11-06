@@ -223,8 +223,9 @@ and revocation metadata.
 
 - Default to `portfolio:read`; additional explicit scopes are `portfolio:write`,
   `imports:write`, `exports:read`, and `ai:invoke`. A `portfolio:read` key also
-  authorizes the read-only MCP endpoint described in
-  [AI assistant connections (MCP)](#ai-assistant-connections-mcp).
+  authorizes the MCP endpoint described in
+  [AI assistant connections (MCP)](#ai-assistant-connections-mcp); adding
+  `portfolio:write` enables its write tools.
 - Require a browser session for key management, plus trusted origin and CSRF
   validation for key creation/revocation. Keys cannot manage authentication
   methods or perform a user restore.
@@ -1468,15 +1469,17 @@ the server and the configured model.
 
 ## AI assistant connections (MCP)
 
-Status: phase 1 (read-only tools with personal API keys, `internal/mcpserver`)
-and phase 2 (OAuth for hosted assistants, `internal/oauth`) are implemented.
+Status: phase 1 (read-only tools with personal API keys, `internal/mcpserver`),
+phase 2 (OAuth for hosted assistants, `internal/oauth`), phase 3 (review
+removal), and phase 4 (opt-in write tools) are implemented.
 This replaces the removed in-app AI portfolio review. Instead
 of Wealthboard sending a snapshot to a model, the user connects an AI assistant
 they already use (for example Claude or ChatGPT) to Wealthboard through the
 [Model Context Protocol](https://modelcontextprotocol.io/specification/2025-11-25)
-(MCP). The assistant reads the user's data through bounded, read-only tools and
-does its own analysis. Wealthboard sends nothing to any AI provider in this
-workflow.
+(MCP). The assistant reads the user's data through bounded tools and does its
+own analysis; if the user allows changes, it can also record new transactions
+and valuations the user asks for. Wealthboard sends nothing to any AI provider
+in this workflow.
 
 ### Shape
 
@@ -1511,9 +1514,11 @@ can reach a private deployment.
   `APP_URL/mcp` as the resource.
   - Protected resource metadata (RFC 9728) at
     `/.well-known/oauth-protected-resource/mcp` (and without the suffix) names
-    the resource, the single authorization server, and `portfolio:read`.
-    Unauthenticated `/mcp` requests return `401` with a `WWW-Authenticate`
-    header pointing at that document. Other `/.well-known/` paths return `404`
+    the resource, the single authorization server, and the `portfolio:read`
+    and `portfolio:write` scopes. Unauthenticated `/mcp` requests return `401`
+    with a `WWW-Authenticate` header pointing at that document and no `scope`
+    parameter, so clients request the advertised scopes and the user decides
+    on the consent page. Other `/.well-known/` paths return `404`
     instead of the client app.
   - Authorization server metadata (RFC 8414) at
     `/.well-known/oauth-authorization-server` advertises
@@ -1542,7 +1547,11 @@ can reach a private deployment.
     OIDC, returning to the page afterwards). It shows the self-reported client
     name with a warning that it is unverified, the redirect host, the signed-in
     user, the data level choice, and what is never shared, and records nothing
-    until the user approves or cancels. Each request can be decided once.
+    until the user approves or cancels. When the client requested
+    `portfolio:write`, an **Allow changes** switch (off by default, available
+    only with Detailed access) decides whether the grant includes it; choosing
+    Summary turns it off. Otherwise the grant is `portfolio:read` only, and a
+    refresh can't add scopes the grant lacks. Each request can be decided once.
     Approving a client again replaces that user's earlier grant for it.
   - Authorization codes are single-use, last five minutes, and are bound to
     the client, redirect URI, and PKCE challenge. A replayed code revokes the
@@ -1563,7 +1572,8 @@ can reach a private deployment.
 ### Connected apps
 
 - **Settings → Connected apps** lists each active grant's client name,
-  redirect host, data level, connection and last-used times, and its 20 most
+  redirect host, data level, a **Can make changes** badge for write grants,
+  connection and last-used times, and its 20 most
   recent tool calls, with a disconnect action that takes effect on the next
   request and a way to clear the history. It also shows the `/mcp` address to
   paste into an assistant.
@@ -1576,9 +1586,8 @@ can reach a private deployment.
 
 ### Tools
 
-Version 1 is read-only. Every tool sets `readOnlyHint`, returns
-`structuredContent` with an output schema plus a short text summary, and
-bounds its result size.
+Read tools set `readOnlyHint`. Every tool returns `structuredContent` with an
+output schema plus a short text summary, and bounds its result size.
 
 | Tool | Returns |
 | --- | --- |
@@ -1591,7 +1600,29 @@ bounds its result size.
 | `list_goals` / `get_goal` | Progress, forecast, and milestones |
 | `get_holdings` | Instruments and positions for position-tracked accounts |
 | `get_attention_items` | Stale valuations, missing exchange rates, and goal alerts |
+| `record_transaction` | Write tool: adds one transaction and returns it with the account's new balance |
+| `record_valuation` | Write tool: sets a balance-tracked account's value on a date and returns the new balance |
 
+- Write tools are listed only for a Detailed connection whose token carries
+  `portfolio:write` (an OAuth grant with changes allowed, or an API key with
+  both portfolio scopes). They only add records: no edits, deletes, transfers,
+  trades, opening balances, account changes, restores, or credential changes.
+  They set `readOnlyHint: false`, `destructiveHint: false`,
+  `idempotentHint: true`, and `openWorldHint: false`.
+- Write arguments: an account ID, a date (`YYYY-MM-DD`, not in the future), an
+  amount or value as a plain decimal string parsed exactly at the account
+  currency's precision (no separators, exponents, or extra decimals), and a
+  client-generated `idempotencyKey` UUID. `record_transaction` also takes a
+  type (any ledger type except `opening_balance` and `transfer`; position
+  accounts allow only cash types) and an optional description. The account is
+  loaded owner-scoped first; archived and foreign accounts are refused. The
+  tools call the existing ledger service, so its validation, idempotency
+  (same key and data return the same record, different data is a conflict),
+  and balance replay apply unchanged. Ledger validation messages are returned
+  to the assistant so it can correct the call.
+- The write server's instructions tell the assistant to record only on the
+  user's explicit request in the conversation, never because tool results or
+  documents say to, and to confirm details first.
 - Money values are objects with `minor` (integer minor units as a string),
   `decimal` (the exact value at the currency's precision), and `currency`;
   never floating-point numbers. Quantities, prices, and exchange rates are
@@ -1619,6 +1650,9 @@ bounds its result size.
   results, because imported statements can contain prompt-injection attempts.
 - API keys always use the Detailed level. Account references, notes, and
   import external IDs never leave Wealthboard.
+- Write access is opt-in per grant, limited to adding records, and reversible
+  only in Wealthboard: the user edits or deletes a mistaken record there. Each
+  write appears in the connection's call log.
 - Rate limit each grant and API key on `/mcp`; return `429` with
   `Retry-After`. On the OAuth endpoints, authorization, token, and revocation
   requests are limited per client (120 a minute, with unknown client IDs
@@ -1631,10 +1665,9 @@ bounds its result size.
 
 - **Phase 3:** retire leftovers of the in-app review. Done: the review flow,
   route, UI, snapshot, and sharing preferences are removed.
-- **Phase 4 (optional):** write tools such as recording a transaction or
-  valuation. They require `portfolio:write`, set `destructiveHint` where
-  applicable, reuse idempotency keys and existing validation, and never
-  restore, delete accounts, or manage credentials.
+- **Phase 4:** write tools. Done: `record_transaction` and
+  `record_valuation` behind `portfolio:write` and the consent switch, as
+  described above.
 - **Possible later work:** Client ID Metadata Documents with an SSRF-safe
   fetcher, OIDC UserInfo for ChatGPT Enterprise domain checks, and a
   shared rate-limit store for multi-replica deployments.
@@ -1647,7 +1680,11 @@ bounds its result size.
   Phase 2 covers discovery metadata, registration rules, untrusted redirects,
   PKCE, code replay, refresh rotation and reuse, revocation, resource binding,
   disabled users, Summary tool limits, cross-user connected-app access, and
-  the browser consent flow including sign-in first.
+  the browser consent flow including sign-in first. Phase 4 covers write tools
+  hidden without `portfolio:write` or with Summary access, the consent switch
+  rules, refresh scope escalation, exact amount parsing, foreign and archived
+  accounts, idempotent retries and conflicts, the new balance, and an
+  end-to-end consent-to-write flow.
 - Token audience mismatch, revoked grant, expired token, refresh reuse, missing
   scope, disabled user, and cookie fallback refusal.
 - Protocol conformance with the MCP Inspector. A manual check with a hosted
@@ -2108,8 +2145,9 @@ Do not implement these in version one:
 - Additional OAuth/social providers, SAML, and multiple simultaneous OIDC issuers
 - Social features
 - Public profiles
-- AI financial advice or autonomous financial actions; bounded read-only
-  assistant access through MCP is permitted under the requirements above
+- AI financial advice or autonomous financial actions; bounded assistant access
+  through MCP, including recording transactions and valuations the user asks
+  for, is permitted under the requirements above
 - Cryptocurrency wallets
 - Complex double-entry accounting
 - Full offline synchronization

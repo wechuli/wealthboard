@@ -1924,7 +1924,7 @@ export interface paths {
         put?: never;
         /**
          * Approve an assistant's connection and get the redirect carrying its authorization code
-         * @description Browser sessions only, with a trusted Origin and `X-CSRF-Token`. Approving the same application again replaces the user's earlier connection to it.
+         * @description Browser sessions only, with a trusted Origin and `X-CSRF-Token`. Approving the same application again replaces the user's earlier connection to it. `allowChanges` grants `portfolio:write` only when the application requested it and `dataLevel` is `detailed`; otherwise it returns 422.
          */
         post: operations["approveOAuthConsentRequest"];
         delete?: never;
@@ -7681,6 +7681,11 @@ export interface operations {
             content: {
                 "application/json": {
                     dataLevel: components["schemas"]["OAuthDataLevel"];
+                    /**
+                     * @description Let the application record new transactions and valuations. It can't edit or delete records.
+                     * @default false
+                     */
+                    allowChanges?: boolean;
                 };
             };
         };

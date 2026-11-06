@@ -334,7 +334,7 @@ export function createHttpDataSource(baseUrl = API_BASE): DataSource {
 
     oauth: {
       request: (id) => getJson(`/oauth/requests/${id}`),
-      approve: (id, dataLevel) => sendJson(`/oauth/requests/${id}/approve`, 'POST', { dataLevel }),
+      approve: (id, dataLevel, allowChanges) => sendJson(`/oauth/requests/${id}/approve`, 'POST', { dataLevel, allowChanges }),
       deny: (id) => sendJson(`/oauth/requests/${id}/deny`, 'POST'),
     },
 

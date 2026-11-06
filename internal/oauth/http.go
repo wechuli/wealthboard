@@ -68,7 +68,7 @@ func NewHandler(service *Service, options HandlerOptions) *Handler {
 	resource := auth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
 		Resource:               service.Resource(),
 		AuthorizationServers:   []string{service.Issuer()},
-		ScopesSupported:        []string{ScopePortfolioRead},
+		ScopesSupported:        []string{ScopePortfolioRead, ScopePortfolioWrite},
 		BearerMethodsSupported: []string{"header"},
 		ResourceName:           "Wealthboard",
 	})
@@ -198,7 +198,7 @@ func (handler *Handler) metadata(response http.ResponseWriter, request *http.Req
 	writeJSON(response, http.StatusOK, serverMetadata{
 		Issuer: issuer, AuthorizationEndpoint: issuer + "/oauth/authorize", TokenEndpoint: issuer + "/oauth/token",
 		RegistrationEndpoint: issuer + "/oauth/register", RevocationEndpoint: issuer + "/oauth/revoke",
-		ScopesSupported: []string{ScopePortfolioRead}, ResponseTypesSupported: []string{"code"}, ResponseModesSupported: []string{"query"},
+		ScopesSupported: []string{ScopePortfolioRead, ScopePortfolioWrite}, ResponseTypesSupported: []string{"code"}, ResponseModesSupported: []string{"query"},
 		GrantTypesSupported: []string{"authorization_code", "refresh_token"}, TokenEndpointAuthMethodsSupported: methods,
 		RevocationEndpointAuthMethodsSupported: methods, CodeChallengeMethodsSupported: []string{"S256"},
 		AuthorizationResponseIssParameterSupport: true, ClientIDMetadataDocumentSupported: false,

@@ -113,11 +113,20 @@ runs no JavaScript on the server.
 
 ## AI assistant (MCP) boundary
 
-`/mcp` is read-only and accepts only a personal API key or an OAuth access
-token with `portfolio:read` in a single `Authorization: Bearer` header; it
-never uses the session cookie, so a browser can't be tricked into calling it. Every tool reads with the
-`userId` from the verified key, and another user's IDs return the same
-"not found" result as unknown IDs. Tool results exclude account references,
+`/mcp` accepts only a personal API key or an OAuth access token with
+`portfolio:read` in a single `Authorization: Bearer` header; it never uses the
+session cookie, so a browser can't be tricked into calling it. Every tool reads
+and writes with the `userId` from the verified key or token, and another user's
+IDs return the same "not found" result as unknown IDs.
+
+Write tools (`record_transaction` and `record_valuation`) exist only for
+Detailed connections whose token carries `portfolio:write`: an OAuth grant
+where the user turned on **Allow changes**, or an API key with both portfolio
+scopes. They only add records through the existing ledger service, with its
+validation and idempotency, and can't edit, delete, transfer, restore, or touch
+credentials. Because a prompt injection in imported text could ask an assistant
+to record something, the server instructions limit writes to the user's
+explicit request, and each write appears in the connection's activity log. Tool results exclude account references,
 notes, and import external IDs, and mark transaction descriptions as
 untrusted text. Errors returned to the assistant never include internal
 details. Data an assistant reads is subject to that assistant's provider

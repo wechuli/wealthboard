@@ -25,6 +25,8 @@ const TOOL_LABELS: Record<string, string> = {
   get_goal: 'Goal details',
   get_holdings: 'Holdings',
   get_attention_items: 'Attention items',
+  record_transaction: 'Recorded a transaction',
+  record_valuation: 'Recorded a valuation',
 }
 
 function McpAddress() {
@@ -67,6 +69,7 @@ function AppCard({ app, online, onDisconnect }: { app: ConnectedApp; online: boo
           <p className="flex flex-wrap items-center gap-2 font-medium text-ink">
             <span className="truncate">{app.clientName}</span>
             <Badge tone={app.dataLevel === 'summary' ? 'neutral' : 'accent'}>{app.dataLevel === 'summary' ? 'Summary only' : 'Detailed'}</Badge>
+            {app.scopes.includes('portfolio:write') ? <Badge tone="warning">Can make changes</Badge> : null}
           </p>
           <p className="mt-0.5 truncate text-sm text-muted">Returns to {app.redirectHost}</p>
         </div>
@@ -124,12 +127,12 @@ function AppsPanel({ apps }: { apps: ConnectedApp[] }) {
   const [disconnecting, setDisconnecting] = useState<ConnectedApp | null>(null)
   const disconnect = useApiMutation<ConnectedApp, void>({
     mutationFn: (app) => api.connectedApps.revoke(app.id),
-    success: (_r, app) => `${app.clientName} disconnected. It can no longer read your data.`,
+    success: (_r, app) => `${app.clientName} disconnected. It can no longer access your data.`,
     toastError: false,
     onSuccess: () => setDisconnecting(null),
   })
   return (
-    <SettingsPanel title="Connected apps" description="AI assistants you've allowed to read your Wealthboard data over MCP. They can't change anything.">
+    <SettingsPanel title="Connected apps" description="AI assistants you've allowed to read your Wealthboard data over MCP. Only those marked Can make changes can add records.">
       <div className="flex flex-col gap-5">
         <McpAddress />
         {apps.length === 0 ? (
@@ -153,7 +156,7 @@ function AppsPanel({ apps }: { apps: ConnectedApp[] }) {
         )}
         <div className="flex items-start gap-3 text-xs text-muted">
           <ShieldCheck size={16} aria-hidden className="mt-0.5 shrink-0 text-accent" />
-          <p>Connections are read-only and never include account numbers, private notes, passwords, or API keys. Unused connections expire after 30 days.</p>
+          <p>Connections are read-only unless you allowed changes, which only add transactions and valuations. They never include account numbers, private notes, passwords, or API keys. Unused connections expire after 30 days.</p>
         </div>
       </div>
       <ConfirmDialog

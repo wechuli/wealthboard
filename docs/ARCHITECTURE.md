@@ -153,18 +153,24 @@ fixtures and archived migration history remain as non-executable evidence.
   source coverage. The in-app portfolio review was removed (migration 00006
   drops its sharing preferences); portfolio questions move to the MCP
   endpoint below.
-- **AI assistant connections (MCP):** `internal/mcpserver` serves a read-only,
+- **AI assistant connections (MCP):** `internal/mcpserver` serves a
   stateless Streamable HTTP endpoint at `/mcp` with the official Go MCP SDK.
   The SDK's bearer middleware verifies a personal API key through
-  `webauth.APIKeyService`, requires `portfolio:read`, and never reads cookies;
+  `webauth.APIKeyService` (or an OAuth token), a small middleware requires
+  `portfolio:read`, and cookies are never read;
   tool handlers take `userId` only from the verified token. Tools call
   `CoreReadService`, `GoalsReportsService`, and `InsightsService` and map their
   results to MCP-specific output types with string IDs and
   `{minor, decimal, currency}` money from `domain.FormatMinorUnits`, so
   account references, notes, and import external IDs never leave the server.
   A per-key or per-grant fixed-window limiter (`internal/ratelimit`) runs in
-  each process. Summary-level grants get a separate server instance that
-  registers only the aggregate tools.
+  each process. Each request is served by one of three server instances:
+  Summary (aggregate tools only), Detailed read-only, or Detailed with the
+  `record_transaction` and `record_valuation` write tools when the token
+  carries `portfolio:write`. Write tools parse decimal strings exactly with
+  `domain.ParseDecimalAmount` and call `LedgerService.CreateTransaction` and
+  `CreateValuation`, so ledger validation, idempotency, and balance replay are
+  shared with the REST API.
 - **MCP OAuth:** `internal/oauth` is the authorization server for `/mcp`, with
   `APP_URL` as issuer and `APP_URL/mcp` as the only resource. It serves RFC 9728
   and RFC 8414 metadata, Dynamic Client Registration, the authorization-code
@@ -561,9 +567,9 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 - `/api/v1/exports/*`, `/api/v1/accounts/[id]/history-import/{preview,commit}`, `/api/v1/restore/user`,
   `/api/v1/accounts/[id]/investment-import/{preview,commit}`,
   `/api/v1/estate/snapshots/[id]`, `/api/health/{live,ready}`
-- `/mcp` — read-only MCP endpoint for AI assistants, authenticated with
-  `portfolio:read` API keys or OAuth access tokens; removed when
-  `MCP_ENABLED=false`
+- `/mcp` — MCP endpoint for AI assistants, authenticated with `portfolio:read`
+  API keys or OAuth access tokens; write tools need `portfolio:write` too;
+  removed when `MCP_ENABLED=false`
 - `/.well-known/oauth-{protected-resource,authorization-server}` and
   `/oauth/{authorize,token,register,revoke}` — the MCP authorization server
 - `/oauth/consent` — the client-app page where a signed-in user approves an
