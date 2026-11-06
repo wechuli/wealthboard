@@ -1273,14 +1273,7 @@ func pow10(digits int) *big.Int {
 }
 
 func investmentCurrencyDigits(currency string) int {
-	switch domain.NormalizeCurrency(currency) {
-	case "BHD", "KWD", "OMR":
-		return 3
-	case "BIF", "JPY", "RWF", "UGX":
-		return 0
-	default:
-		return 2
-	}
+	return domain.CurrencyExponent(currency)
 }
 
 func investmentDateOnly(value time.Time) string {

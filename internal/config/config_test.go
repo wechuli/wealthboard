@@ -42,3 +42,32 @@ func TestLoadRejectsInvalidPort(t *testing.T) {
 		t.Fatal("expected invalid PORT to fail")
 	}
 }
+
+func TestLoadMCPSettings(t *testing.T) {
+	env := func(values map[string]string) func(string) string {
+		return func(key string) string {
+			if key == "DATABASE_URL" {
+				return "postgres://localhost/wealthboard"
+			}
+			return values[key]
+		}
+	}
+	cfg, err := load(env(nil))
+	if err != nil || !cfg.MCP.Enabled || cfg.MCP.RequestsPerMinute != 120 {
+		t.Fatalf("default MCP = %+v, error %v", cfg.MCP, err)
+	}
+	cfg, err = load(env(map[string]string{"MCP_ENABLED": "false", "MCP_REQUESTS_PER_MINUTE": "30"}))
+	if err != nil || cfg.MCP.Enabled || cfg.MCP.RequestsPerMinute != 30 {
+		t.Fatalf("configured MCP = %+v, error %v", cfg.MCP, err)
+	}
+	for name, values := range map[string]map[string]string{
+		"enabled spelling": {"MCP_ENABLED": "yes"},
+		"zero limit":       {"MCP_REQUESTS_PER_MINUTE": "0"},
+		"huge limit":       {"MCP_REQUESTS_PER_MINUTE": "10001"},
+		"text limit":       {"MCP_REQUESTS_PER_MINUTE": "many"},
+	} {
+		if _, err := load(env(values)); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}

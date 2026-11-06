@@ -35,6 +35,7 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Quick add (`N`), a ⌘K / Ctrl K command palette, and a `Shift H` privacy
   toggle
 - Optional bring-your-own-key AI conversion of statements into import files
+- Read-only MCP endpoint so an AI assistant you choose can query your data
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
 Money is stored as integer minor units in PostgreSQL `bigint` columns. Exchange
@@ -184,6 +185,8 @@ conflict handling make repeat runs safe for the same target.
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys           |
 | `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
 | `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                                     |
+| `MCP_ENABLED`                  | `false` removes the read-only `/mcp` endpoint; default `true`             |
+| `MCP_REQUESTS_PER_MINUTE`      | Per-API-key `/mcp` request limit in each replica; default `120`           |
 
 There is no initial-user password or environment-created identity.
 
@@ -339,6 +342,8 @@ revoke keys separately when needed.
 
 See [Go authentication and API keys](docs/reference/go-authentication.md) and
 the [OpenAPI contract](api/openapi.yaml) for endpoints and request formats.
+`portfolio:read` keys also authorize the read-only MCP endpoint at `/mcp`; see
+[Connect an AI assistant (MCP)](docs/reference/mcp.md).
 
 ## Database migrations
 
@@ -443,10 +448,11 @@ schema as an output format, and DeepSeek receives JSON mode plus the schema as
 instructions. Genkit validates every response against the schema before
 Wealthboard checks bounds and source coverage.
 
-The in-app AI portfolio review has been removed. Asking questions about your
-portfolio will instead happen in the AI assistant you already use, through a
-planned Wealthboard MCP server; see **AI assistant connections (MCP)** in
-`SPEC.md`.
+The in-app AI portfolio review has been removed. Ask the AI assistant you
+already use instead: Wealthboard's read-only MCP endpoint lets clients such as
+Claude Code, VS Code, Cursor, and Codex read your data with a `portfolio:read`
+API key. See [Connect an AI assistant (MCP)](docs/reference/mcp.md). OAuth for
+claude.ai and ChatGPT is planned.
 
 Import conversion uses a two-minute provider request timeout with
 automatic retries disabled. The monthly token limit accepts 10,000 to

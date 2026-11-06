@@ -18,6 +18,7 @@ import (
 	"github.com/wechuli/wealthboard/internal/config"
 	"github.com/wechuli/wealthboard/internal/database"
 	"github.com/wechuli/wealthboard/internal/database/generated"
+	"github.com/wechuli/wealthboard/internal/mcpserver"
 	"github.com/wechuli/wealthboard/internal/service"
 	staticfiles "github.com/wechuli/wealthboard/internal/static"
 )
@@ -122,11 +123,21 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	authService := webauth.NewService(generated.New(db), sessions)
 	registration := webauth.NewRegistrationService(db, os.Getenv("TZ"))
 	authHandler := api.NewAuthHandler(authService, registration, limiter, sessions, policy, trustedOrigin)
-	authHandler.EnableAPIKeys(webauth.NewAPIKeyService(generated.New(db)))
+	apiKeys := webauth.NewAPIKeyService(generated.New(db))
+	authHandler.EnableAPIKeys(apiKeys)
 	overviewHandler := api.NewOverviewHandler(authHandler, service.NewOverviewService(generated.New(db)))
-	coreReads := api.NewCoreReadHandler(authHandler, service.NewCoreReadService(service.NewSQLCoreReadRepository(db)))
-	goalsReports := api.NewGoalsReportsHandler(authHandler, service.NewGoalsReportsService(service.NewSQLGoalsReportsRepository(db)))
-	insights := api.NewInsightsHandler(authHandler, service.NewInsightsService(service.NewSQLGoalsReportsRepository(db)))
+	coreReadService := service.NewCoreReadService(service.NewSQLCoreReadRepository(db))
+	goalsReportsService := service.NewGoalsReportsService(service.NewSQLGoalsReportsRepository(db))
+	insightsService := service.NewInsightsService(service.NewSQLGoalsReportsRepository(db))
+	coreReads := api.NewCoreReadHandler(authHandler, coreReadService)
+	goalsReports := api.NewGoalsReportsHandler(authHandler, goalsReportsService)
+	insights := api.NewInsightsHandler(authHandler, insightsService)
+	var mcpHandler http.Handler
+	if cfg.MCP.Enabled {
+		mcpHandler = mcpserver.NewHandler(mcpserver.Readers{Core: coreReadService, Reports: goalsReportsService, Insights: insightsService}, apiKeys, mcpserver.Options{
+			RequestsPerMinute: cfg.MCP.RequestsPerMinute, Logger: logger,
+		})
+	}
 	featureReads := api.NewFeatureReadHandler(authHandler, service.NewFeatureReads(db))
 	var credentialCodec *aiworkflow.CredentialCodec
 	if os.Getenv("AI_CREDENTIAL_ENCRYPTION_KEY") != "" {
@@ -175,7 +186,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	server := &http.Server{
 		Addr: cfg.HTTP.Address,
 		Handler: api.NewRouterWithReads(logger, ready, authHandler, overviewHandler, api.ReadHandlers{
-			Core: coreReads, GoalsReports: goalsReports, Insights: insights, Features: featureReads, Static: spa, Mutations: mutations,
+			Core: coreReads, GoalsReports: goalsReports, Insights: insights, Features: featureReads, MCP: mcpHandler, Static: spa, Mutations: mutations,
 		}),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,
