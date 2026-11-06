@@ -118,6 +118,34 @@ func TestStaticFallbackDoesNotCaptureAPI(t *testing.T) {
 	}
 }
 
+func TestMCPEndpointIsMountedBeforeTheStaticFallback(t *testing.T) {
+	static := http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		_, _ = response.Write([]byte("spa"))
+	})
+	mcp := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.WriteHeader(http.StatusTeapot)
+		_, _ = response.Write([]byte(request.Method))
+	})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ready := func(context.Context) error { return nil }
+
+	enabled := NewRouterWithReads(logger, ready, nil, nil, ReadHandlers{Static: static, MCP: mcp})
+	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+		response := httptest.NewRecorder()
+		enabled.ServeHTTP(response, httptest.NewRequest(method, "/mcp", nil))
+		if response.Code != http.StatusTeapot || response.Body.String() != method {
+			t.Fatalf("%s /mcp = %d %q", method, response.Code, response.Body.String())
+		}
+	}
+
+	disabled := NewRouterWithReads(logger, ready, nil, nil, ReadHandlers{Static: static})
+	response := httptest.NewRecorder()
+	disabled.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/mcp", nil))
+	if response.Body.String() != "spa" {
+		t.Fatalf("disabled /mcp = %d %q", response.Code, response.Body.String())
+	}
+}
+
 func testRouter(check readinessCheck) http.Handler {
 	return NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), check)
 }

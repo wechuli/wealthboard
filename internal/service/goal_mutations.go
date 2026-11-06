@@ -577,14 +577,7 @@ func parseGoalMoneyMinor(value, currency string) (int64, error) {
 }
 
 func goalCurrencyDigits(currency string) int {
-	switch currency {
-	case "BHD", "KWD", "OMR":
-		return 3
-	case "BIF", "JPY", "RWF", "UGX":
-		return 0
-	default:
-		return 2
-	}
+	return domain.CurrencyExponent(currency)
 }
 
 func percentageToBPS(value string) (int, error) {

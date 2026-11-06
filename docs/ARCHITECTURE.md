@@ -151,8 +151,19 @@ fixtures and archived migration history remain as non-executable evidence.
   and requests typed structured output with `genkit.GenerateData`. Genkit
   validates responses against the output schema, then Go checks bounds and
   source coverage. The in-app portfolio review was removed (migration 00006
-  drops its sharing preferences); portfolio questions move to the planned MCP
-  server described in `SPEC.md`.
+  drops its sharing preferences); portfolio questions move to the MCP
+  endpoint below.
+- **AI assistant connections (MCP):** `internal/mcpserver` serves a read-only,
+  stateless Streamable HTTP endpoint at `/mcp` with the official Go MCP SDK.
+  The SDK's bearer middleware verifies a personal API key through
+  `webauth.APIKeyService`, requires `portfolio:read`, and never reads cookies;
+  tool handlers take `userId` only from the verified token. Tools call
+  `CoreReadService`, `GoalsReportsService`, and `InsightsService` and map their
+  results to MCP-specific output types with string IDs and
+  `{minor, decimal, currency}` money from `domain.FormatMinorUnits`, so
+  account references, notes, and import external IDs never leave the server.
+  A per-key fixed-window limiter runs in each process. OAuth for hosted
+  assistants is the planned second phase.
 - **AI credentials and retention:** Session-only keys stay in client component
   memory for one request. Remembered keys use AES-256-GCM with a dedicated
   deployment key and immutable `userId` associated data. Usage rows contain
@@ -535,6 +546,8 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
 - `/api/v1/exports/*`, `/api/v1/accounts/[id]/history-import/{preview,commit}`, `/api/v1/restore/user`,
   `/api/v1/accounts/[id]/investment-import/{preview,commit}`,
   `/api/v1/estate/snapshots/[id]`, `/api/health/{live,ready}`
+- `/mcp` — read-only MCP endpoint for AI assistants, authenticated with
+  `portfolio:read` API keys; removed when `MCP_ENABLED=false`
 - Earlier client paths such as `/login`, `/signup`, `/transactions`, `/reports`,
   `/categories`, `/institutions`, `/instruments`, `/accounts/archived`,
   `/accounts/[id]/edit`, `/goals/new`, and `/labs/*` redirect to their new

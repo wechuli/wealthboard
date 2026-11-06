@@ -20,8 +20,10 @@ type ReadHandlers struct {
 	GoalsReports *GoalsReportsHandler
 	Insights     *InsightsHandler
 	Features     *FeatureReadHandler
-	Static       http.Handler
-	Mutations    MutationHandlers
+	// MCP serves the read-only Model Context Protocol endpoint; nil disables it.
+	MCP       http.Handler
+	Static    http.Handler
+	Mutations MutationHandlers
 }
 
 type MutationHandlers struct {
@@ -143,6 +145,9 @@ func NewRouterWithReads(logger *slog.Logger, ready readinessCheck, auth *AuthHan
 		}
 		router.NotFound(problemNotFound)
 	})
+	if reads.MCP != nil {
+		router.Handle("/mcp", reads.MCP)
+	}
 	if reads.Static != nil {
 		router.Mount("/", reads.Static)
 	}

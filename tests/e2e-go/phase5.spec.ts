@@ -720,6 +720,89 @@ test("restores position management, base-currency value, and private account his
   }
 });
 
+test("serves read-only MCP tools to a personal API key and never to a cookie", async ({
+  page,
+}) => {
+  const session = await signUp(page, "go-mcp-owner");
+  const created = await mutation(page, session, "POST", "/accounts", {
+    idempotencyKey: randomUUID(),
+    name: "MCP savings",
+    categoryId: await firstCategoryId(page),
+    currency: "KES",
+    trackingMode: "balance",
+    openingValueMinor: "123450",
+    isIncludedInNetWorth: true,
+    openedAt: "2026-01-01",
+  });
+  expect(created.status()).toBe(201);
+  const key = await mutation(page, session, "POST", "/api-keys", {
+    name: "Assistant",
+    scopes: ["portfolio:read"],
+  });
+  expect(key.status()).toBe(201);
+  const token = ((await key.json()) as { token: string }).token;
+
+  const rpc = (body: unknown, headers: Record<string, string> = {}) =>
+    page.request.post("/mcp", {
+      data: body,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        ...headers,
+      },
+    });
+  const initialize = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "e2e", version: "1" },
+    },
+  };
+
+  // The browser context carries a valid session cookie; /mcp must still refuse it.
+  expect((await rpc(initialize)).status()).toBe(401);
+
+  const authorized = { Authorization: `Bearer ${token}` };
+  const initialized = await rpc(initialize, authorized);
+  expect(initialized.status()).toBe(200);
+  expect(await initialized.json()).toEqual(
+    expect.objectContaining({
+      result: expect.objectContaining({
+        serverInfo: expect.objectContaining({ name: "wealthboard" }),
+        instructions: expect.stringContaining("read-only"),
+      }),
+    }),
+  );
+
+  const summary = await rpc(
+    {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "get_portfolio_summary", arguments: {} },
+    },
+    authorized,
+  );
+  expect(summary.status()).toBe(200);
+  const result = (
+    (await summary.json()) as {
+      result: {
+        isError?: boolean;
+        structuredContent: { netWorth: Record<string, string> };
+      };
+    }
+  ).result;
+  expect(result.isError ?? false).toBe(false);
+  expect(result.structuredContent.netWorth).toEqual({
+    minor: "123450",
+    decimal: "1234.50",
+    currency: "KES",
+  });
+});
+
 test("rejects unsupported AI providers and server-side source extraction", async ({
   page,
 }) => {

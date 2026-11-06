@@ -2,8 +2,9 @@ package service
 
 import (
 	"fmt"
-	"math/big"
-	"strings"
+	"strconv"
+
+	"github.com/wechuli/wealthboard/internal/domain"
 )
 
 // derivedExternalIDs assigns deterministic identities to imported transactions that have no source ID.
@@ -29,18 +30,7 @@ func (counter derivedExternalIDs) next(date, transactionType string, amountMinor
 }
 
 func formatDerivedAmount(amountMinor int64, currency string) string {
-	digits := investmentCurrencyDigits(currency)
-	value := new(big.Int).SetInt64(amountMinor)
-	negative := value.Sign() < 0
-	text := value.Abs(value).String()
-	if digits > 0 {
-		if len(text) <= digits {
-			text = strings.Repeat("0", digits-len(text)+1) + text
-		}
-		text = text[:len(text)-digits] + "." + text[len(text)-digits:]
-	}
-	if negative {
-		return "-" + text
-	}
+	// A formatted int64 is always valid minor units.
+	text, _ := domain.FormatMinorUnits(strconv.FormatInt(amountMinor, 10), currency)
 	return text
 }

@@ -1468,7 +1468,9 @@ the server and the configured model.
 
 ## AI assistant connections (MCP)
 
-Status: planned. This replaces the removed in-app AI portfolio review. Instead
+Status: phase 1 (read-only tools with personal API keys) is implemented in
+`internal/mcpserver`; phase 2 (OAuth) is planned. This replaces the removed
+in-app AI portfolio review. Instead
 of Wealthboard sending a snapshot to a model, the user connects an AI assistant
 they already use (for example Claude or ChatGPT) to Wealthboard through the
 [Model Context Protocol](https://modelcontextprotocol.io/specification/2025-11-25)
@@ -1483,8 +1485,9 @@ workflow.
 - Tools call the existing owner-scoped Go services. The principal (API key or
   OAuth grant) is the only source of `userId`; tool arguments never carry an
   owner, and another user's resource IDs return not found.
-- Authoritative calculations stay in Go. Summary logic that currently exists
-  only in the browser must move to Go before a tool exposes it.
+- Authoritative calculations stay in Go. Tools project existing Go reads; the
+  portfolio summary comes from the same deterministic dashboard calculation as
+  the home page, and the MCP layer adds no financial arithmetic.
 
 ### Reachability and authentication
 
@@ -1494,7 +1497,14 @@ public HTTPS `APP_URL`. Local MCP clients (Claude Code, VS Code, Cursor, Codex)
 can reach a private deployment.
 
 - **Phase 1, API keys:** `/mcp` accepts existing personal API keys as bearer
-  tokens; tools require `portfolio:read`. Keys never travel in query strings.
+  tokens; tools require `portfolio:read`. Keys never travel in query strings,
+  exactly one `Authorization` header is accepted, and session cookies are never
+  consulted. A missing or invalid key returns `401`; a key without
+  `portfolio:read` returns `403` with the required scope in
+  `WWW-Authenticate`. The endpoint is stateless Streamable HTTP with JSON
+  responses and a 64 KiB request body limit. `MCP_ENABLED` (default `true`)
+  turns it off, and `MCP_REQUESTS_PER_MINUTE` (default 120, 1 to 10,000) sets
+  the per-key limit, counted per process.
 - **Phase 2, OAuth 2.1:** Wealthboard acts as its own authorization server for
   `/mcp`, following the MCP authorization specification:
   - Protected resource metadata (RFC 9728) at
@@ -1542,15 +1552,21 @@ bounds its result size.
 | `get_portfolio_summary` | Net worth by currency and category, allocation, liabilities, and data-quality warnings |
 | `list_accounts` | Accounts with balance, currency, category, tracking mode, and archive state |
 | `get_account` | One account with analytics and linked goals |
-| `list_transactions` | Filter by account, date range, and type; at most 200 per page with a cursor |
+| `list_transactions` | Filter by account, date range, and type; at most 100 per page, continued with `nextOffset` |
 | `get_cash_flow_report` | Flows and net-worth statistics for a period |
 | `get_income_report` | Income by type and period |
 | `list_goals` / `get_goal` | Progress, forecast, and milestones |
 | `get_holdings` | Instruments and positions for position-tracked accounts |
 | `get_attention_items` | Stale valuations, missing exchange rates, and goal alerts |
 
-- Money values are minor-unit strings with the currency and a formatted decimal
-  string; never floating-point numbers. Exchange rates are decimal strings.
+- Money values are objects with `minor` (integer minor units as a string),
+  `decimal` (the exact value at the currency's precision), and `currency`;
+  never floating-point numbers. Quantities, prices, and exchange rates are
+  decimal strings.
+- Output schemas give each field one JSON type. Optional values are omitted,
+  never sent as `null`, so clients with single-type schema dialects accept them.
+- Monthly series keep the most recent 120 months and goal projections the next
+  60 points, with a `…Truncated` flag when shortened.
 - Dates follow the user's timezone; timestamps are UTC.
 - The server's `instructions` and a `portfolio_review` prompt explain minor
   units, missing-rate and methodology caveats, and that output is explanatory,
@@ -1566,6 +1582,8 @@ bounds its result size.
   unless the user enables them for that grant.
 - Transaction descriptions and notes are marked as untrusted source text in tool
   results, because imported statements can contain prompt-injection attempts.
+- Phase 1 API keys always use the Detailed level without notes. Account
+  references, notes, and import external IDs never leave Wealthboard.
 - Rate limit each grant and API key; return `429` with retry guidance.
 
 ### Later phases
@@ -1580,6 +1598,8 @@ bounds its result size.
 ### Testing
 
 - At least two users: owner success and foreign-ID not found for every tool.
+  Phase 1 covers this, revoked and wrong-scope keys, cookie refusal, rate
+  limiting, safe error messages, and a strict MCP Inspector schema check.
 - Token audience mismatch, revoked grant, expired token, refresh reuse, missing
   scope, disabled user, and cookie fallback refusal.
 - Protocol conformance with the MCP Inspector, plus a documented manual check

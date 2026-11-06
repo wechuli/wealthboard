@@ -19,11 +19,20 @@ const (
 	defaultWriteTimeout      = 30 * time.Second
 	defaultIdleTimeout       = 60 * time.Second
 	defaultShutdownTimeout   = 10 * time.Second
+	defaultMCPRequestsPerMin = 120
+	maxMCPRequestsPerMin     = 10_000
 )
 
 type Config struct {
 	HTTP     HTTP
 	Database Database
+	MCP      MCP
+}
+
+// MCP configures the read-only Model Context Protocol endpoint for AI assistants.
+type MCP struct {
+	Enabled           bool
+	RequestsPerMinute int
 }
 
 type HTTP struct {
@@ -63,7 +72,24 @@ func load(getenv func(string) string) (Config, error) {
 		port = parsed
 	}
 
+	mcp := MCP{Enabled: true, RequestsPerMinute: defaultMCPRequestsPerMin}
+	switch getenv("MCP_ENABLED") {
+	case "", "true":
+	case "false":
+		mcp.Enabled = false
+	default:
+		return Config{}, errors.New("MCP_ENABLED must be true or false")
+	}
+	if value := getenv("MCP_REQUESTS_PER_MINUTE"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > maxMCPRequestsPerMin {
+			return Config{}, fmt.Errorf("MCP_REQUESTS_PER_MINUTE must be an integer between 1 and %d", maxMCPRequestsPerMin)
+		}
+		mcp.RequestsPerMinute = parsed
+	}
+
 	return Config{
+		MCP: mcp,
 		HTTP: HTTP{
 			Address:           fmt.Sprintf(":%d", port),
 			ReadHeaderTimeout: defaultReadHeaderTimeout,
