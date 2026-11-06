@@ -18,6 +18,7 @@ import { Notice } from '@/components/ui/Notice'
 import { Segmented } from '@/components/ui/Segmented'
 import { activityLabel, rateFixHref } from '@/features/accounts/model'
 import { ReviewTable } from '@/features/account-detail/workflow-kit'
+import { ManualPrompt } from '@/features/review/ManualPrompt'
 import { cn } from '@/lib/cn'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
 import { usePrefs } from '@/lib/prefs'
@@ -567,7 +568,7 @@ export function InvestmentImport({ account }: { account: Account }) {
   return (
     <>
       <Steps current={0} />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0 space-y-4">
           <label
             htmlFor={inputId}
@@ -613,6 +614,7 @@ export function InvestmentImport({ account }: { account: Account }) {
               {problem}
             </Notice>
           ) : null}
+          <ManualPrompt currency={account.currency} trackingMode="positions" />
         </div>
 
         <Card aria-labelledby="investment-format-heading" as="aside">
@@ -661,7 +663,7 @@ export function InvestmentImport({ account }: { account: Account }) {
               </ul>
             </div>
             <ul className="space-y-1.5 border-t border-line pt-3 text-xs text-muted">
-              <li>Every instrument, trade, and price needs a stable external ID. Matching IDs already imported are skipped.</li>
+              <li>Every instrument, trade, and price needs a stable external ID. Cash rows without one get an ID built from the date, type, and amount. Matching IDs already imported are skipped.</li>
               <li>Quantities, prices, and amounts are text such as "12.50", never JSON numbers. Dates are YYYY-MM-DD and not in the future.</li>
               <li>A cross-currency buy or sell needs the cash effect in {c} or the applied rate.</li>
               <li>Up to 5 MB and 10,000 records per file.</li>

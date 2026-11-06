@@ -56,6 +56,30 @@ func TestParseInvestmentHistoryTemplatesAndLimits(t *testing.T) {
 	}
 }
 
+func TestDerivedExternalIDsUseCurrencyPrecisionAndOccurrenceSuffixes(t *testing.T) {
+	derived := derivedExternalIDs{}
+	cases := []struct {
+		date, transactionType string
+		amount                int64
+		currency, want        string
+		legacy                string
+	}{
+		{"2026-09-01", "deposit", 1050, "KES", "derived-2026-09-01-deposit-10.50", "derived-2026-09-01-deposit-1050"},
+		{"2026-09-01", "deposit", 1050, "KES", "derived-2026-09-01-deposit-10.50-2", ""},
+		{"2026-09-01", "deposit", 1050, "KES", "derived-2026-09-01-deposit-10.50-3", ""},
+		{"2026-09-01", "fee", 5, "USD", "derived-2026-09-01-fee-0.05", "derived-2026-09-01-fee-5"},
+		{"2026-09-01", "deposit", 1500, "JPY", "derived-2026-09-01-deposit-1500", "derived-2026-09-01-deposit-1500"},
+		{"2026-09-01", "deposit", 1234, "KWD", "derived-2026-09-01-deposit-1.234", "derived-2026-09-01-deposit-1234"},
+		{"2026-09-01", "manual_adjustment", -250, "KES", "derived-2026-09-01-manual_adjustment--2.50", "derived-2026-09-01-manual_adjustment--250"},
+	}
+	for _, test := range cases {
+		got := derived.next(test.date, test.transactionType, test.amount, test.currency)
+		if got.id != test.want || got.legacy != test.legacy {
+			t.Errorf("next(%s, %s, %d, %s) = %#v, want id %q legacy %q", test.date, test.transactionType, test.amount, test.currency, got, test.want, test.legacy)
+		}
+	}
+}
+
 func TestVerifyImportHashRequiresExactContent(t *testing.T) {
 	content := []byte("same bytes")
 	if err := verifyImportHash(content, importHash(content)); err != nil {
@@ -92,6 +116,31 @@ func TestAIDraftFieldsMatchTheStrictImportEnvelopes(t *testing.T) {
 		slices.Sort(names)
 		if !slices.Equal(names, fields) {
 			t.Errorf("%s: AI draft fields %v, import accepts %v", collection, names, fields)
+		}
+	}
+}
+
+func TestAIDraftValuesMatchTheStrictImportRules(t *testing.T) {
+	keys := func(set map[string]bool) []string { return slices.Sorted(maps.Keys(set)) }
+	want := map[string]map[string][]string{
+		"transactions":      {"type": keys(accountHistoryTypes)},
+		"instruments":       {"identifier_type": keys(instrumentIdentifierTypes), "asset_type": keys(instrumentAssetTypes)},
+		"position_events":   {"type": keys(ordinaryPositionEventTypes)},
+		"cash_transactions": {"type": keys(positionCashTypes)},
+	}
+	got := aiworkflow.DraftFieldValues()
+	if len(got) != len(want) {
+		t.Fatalf("AI draft enumerates %v, want %v", slices.Sorted(maps.Keys(got)), slices.Sorted(maps.Keys(want)))
+	}
+	for collection, fields := range want {
+		if len(got[collection]) != len(fields) {
+			t.Errorf("%s: AI draft enumerates %v, import validates %v", collection, slices.Sorted(maps.Keys(got[collection])), slices.Sorted(maps.Keys(fields)))
+			continue
+		}
+		for field, values := range fields {
+			if allowed := slices.Sorted(slices.Values(got[collection][field])); !slices.Equal(allowed, values) {
+				t.Errorf("%s.%s: AI draft allows %v, import accepts %v", collection, field, allowed, values)
+			}
 		}
 	}
 }

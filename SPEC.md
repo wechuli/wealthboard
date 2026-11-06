@@ -31,8 +31,7 @@ can actually do. Known Go/Vite gaps include:
   requests, not one atomic replacement, and rate writes do not rebuild cached
   position balances.
 - Account conversion, reconciliation, and import previews expose less detail
-  than the full product contract, and the manual copyable-prompt workflow is
-  not mounted in the current import page.
+  than the full product contract.
 - AI import currently sends selected section location labels and does not
   guarantee cancellation of in-flight requests when the user cancels or leaves.
   OpenAI review/conversion requests use prompt-requested JSON with local Go
@@ -1215,22 +1214,28 @@ position-tracked account rejects Account History Import v1, and a
 balance-tracked account rejects Investment History Import v1, before parsing
 financial rows.
 
-The import page may provide a copyable, currency-aware prompt for use with an
-external AI service. It must offer CSV and JSON output modes, require the exact
-v1 schema, preserve one output row per source transaction, prohibit invented or
-ambiguous financial records, and explain deterministic external IDs and balance
-directions. In this manual prompt workflow, generation and copying are entirely
+The import page provides a copyable, currency-aware prompt for use with an
+external AI service on both the direct-import and AI-conversion tabs. It must
+offer CSV and JSON output modes, require the exact v1 schema, preserve one
+output row per source transaction, prohibit invented or ambiguous financial
+records, and explain deterministic external IDs and balance directions. In this
+manual prompt workflow, generation and copying are entirely
 client-side: Wealthboard must not send the prompt, account history, statement,
 or generated file to an AI provider. Users are responsible for choosing a
 provider they trust and must still preview the generated file before importing
 it. The separately consented AI conversion path below is optional.
 
-Each row requires a stable, trimmed, case-sensitive external ID of at most 200
-characters. Provider IDs should be used when available; otherwise users must
-construct deterministic IDs outside Wealthboard (changing row numbers are not
-stable IDs). Dates are non-future `YYYY-MM-DD` values and amounts are decimal
-strings with the target account currency's precision. Imports are limited to 5
-MB and 10,000 rows.
+Each row has a trimmed, case-sensitive external ID of at most 200 characters.
+Provider IDs should be used when available. When a row has no ID, the Go
+service derives `derived-<date>-<type>-<amount>`, writing the amount at the
+account currency's precision (for example `derived-2026-09-01-deposit-10.50`).
+Identical same-date rows in one file are numbered in file order (`-2`, `-3`),
+so overlapping re-imports still deduplicate; changing row numbers are never
+IDs. Rows imported before this rule kept the minor-unit form
+(`derived-2026-09-01-deposit-1050`) and still match their first occurrence.
+Investment cash rows use the same rule. Dates are non-future `YYYY-MM-DD`
+values and amounts are decimal strings with the target account currency's
+precision. Imports are limited to 5 MB and 10,000 rows.
 
 Balance directions for Account History Import v1 are:
 

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 var (
@@ -32,6 +33,24 @@ var (
 		"position_events":   {"external_id", "instrument_external_id", "type", "quantity", "unit_price", "trade_currency", "fee_amount", "fee_currency", "cash_effect", "applied_exchange_rate", "opening_cost_basis", "event_group_id", "trade_date", "settlement_date", "description", "notes"},
 		"cash_transactions": {"external_id", "type", "amount", "date", "event_group_id", "description", "notes"},
 		"prices":            {"external_id", "instrument_external_id", "price", "effective_date", "source", "provenance"},
+	}
+	// draftFieldValues lists the only values each enumerated draft field
+	// accepts. The imports match them exactly, so these must match their
+	// validation sets in internal/service.
+	draftFieldValues = map[string]map[string][]string{
+		"transactions": {
+			"type": {"deposit", "withdrawal", "interest", "dividend", "capital_gain", "capital_loss", "fee", "purchase", "sale", "manual_adjustment", "liability_payment", "liability_increase"},
+		},
+		"instruments": {
+			"identifier_type": {"isin", "ticker_exchange", "custom"},
+			"asset_type":      {"stock", "etf", "fund"},
+		},
+		"position_events": {
+			"type": {"opening_position", "buy", "sell", "quantity_adjustment"},
+		},
+		"cash_transactions": {
+			"type": {"deposit", "withdrawal", "interest", "dividend", "fee", "manual_adjustment"},
+		},
 	}
 	trackingModeCollections = map[string][]string{
 		"balance":   {"transactions"},
@@ -57,6 +76,31 @@ func DraftCollectionFields() map[string][]string {
 		fields[collection] = slices.Clone(names)
 	}
 	return fields
+}
+
+// DraftFieldValues returns the values each enumerated import field accepts.
+func DraftFieldValues() map[string]map[string][]string {
+	values := make(map[string]map[string][]string, len(draftFieldValues))
+	for collection, fields := range draftFieldValues {
+		values[collection] = make(map[string][]string, len(fields))
+		for field, allowed := range fields {
+			values[collection][field] = slices.Clone(allowed)
+		}
+	}
+	return values
+}
+
+// canonicalDraftValue maps a model's casing or word separators for an
+// enumerated value, such as "INTEREST" or "Capital gain", onto the exact value
+// the import accepts.
+func canonicalDraftValue(allowed []string, value string) (string, bool) {
+	canonical := strings.Join(strings.FieldsFunc(strings.ToLower(value), func(character rune) bool {
+		return unicode.IsSpace(character) || character == '-' || character == '_'
+	}), "_")
+	if slices.Contains(allowed, canonical) {
+		return canonical, true
+	}
+	return value, false
 }
 
 func validateReviewRequest(request ReviewRequest) error {
@@ -174,6 +218,7 @@ func buildDraft(extraction Extraction, source Source, trackingMode string) (Conv
 	covered := map[string]bool{}
 	references := []DraftReference{}
 	dropped := map[[2]string]int{}
+	unsupported := map[[3]string]int{}
 	for _, record := range extraction.Records {
 		if _, ok := collections[record.Collection]; !ok {
 			return ConversionDraft{}, fmt.Errorf("%w: conversion used the wrong account format", ErrInvalidInput)
@@ -195,6 +240,13 @@ func buildDraft(extraction Extraction, source Source, trackingMode string) (Conv
 				continue
 			}
 			value := field.Value
+			if allowed, ok := draftFieldValues[record.Collection][field.Name]; ok {
+				canonical, found := canonicalDraftValue(allowed, value)
+				if !found {
+					unsupported[[3]string{record.Collection, field.Name, value}]++
+				}
+				value = canonical
+			}
 			fields[field.Name] = &value
 		}
 		collections[record.Collection] = append(collections[record.Collection], fields)
@@ -217,6 +269,13 @@ func buildDraft(extraction Extraction, source Source, trackingMode string) (Conv
 	})
 	for _, key := range droppedKeys {
 		issues = append(issues, fmt.Sprintf("Removed field %q from %d %s record(s) because that import collection does not accept it. Check the source for any value it carried.", key[1], dropped[key], key[0]))
+	}
+	unsupportedKeys := slices.Collect(maps.Keys(unsupported))
+	slices.SortFunc(unsupportedKeys, func(a, b [3]string) int {
+		return strings.Compare(strings.Join(a[:], "\x00"), strings.Join(b[:], "\x00"))
+	})
+	for _, key := range unsupportedKeys {
+		issues = append(issues, fmt.Sprintf("Field %q has value %q in %d %s record(s), which the import does not accept. Change it to one of: %s.", key[1], key[2], unsupported[key], key[0], strings.Join(draftFieldValues[key[0]][key[1]], ", ")))
 	}
 	for _, unit := range source.Units {
 		if !covered[unit.ID] {
@@ -250,10 +309,16 @@ func reviewPrompt(snapshot string) string {
 func conversionPrompt(trackingMode, currency string, units []SourceUnit) string {
 	encoded, _ := json.Marshal(units)
 	fields := []string{}
+	values := []string{}
 	for _, collection := range trackingModeCollections[trackingMode] {
 		fields = append(fields, "- "+collection+": "+strings.Join(draftCollectionFields[collection], ", "))
+		for _, field := range draftCollectionFields[collection] {
+			if allowed, ok := draftFieldValues[collection][field]; ok {
+				values = append(values, "- "+collection+"."+field+": "+strings.Join(allowed, ", "))
+			}
+		}
 	}
-	return fmt.Sprintf("Convert only supplied source activity to a Wealthboard %s import draft in %s. Do not invent values. Account for every source ID with a record or an exclusion. Use only these collections, and only the listed fields for each:\n%s\n\nSource sections:\n\n%s", trackingMode, currency, strings.Join(fields, "\n"), encoded)
+	return fmt.Sprintf("Convert only supplied source activity to a Wealthboard %s import draft in %s. Do not invent values. Account for every source ID with a record or an exclusion. Use only these collections, and only the listed fields for each:\n%s\n\nThese fields accept only the listed values. Use the matching value exactly as written here, not the source wording; when none fits, leave the field empty and explain why in issues:\n%s\n\nSource sections:\n\n%s", trackingMode, currency, strings.Join(fields, "\n"), strings.Join(values, "\n"), encoded)
 }
 
 func strictDecode(data []byte, destination any) error {

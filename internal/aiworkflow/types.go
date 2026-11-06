@@ -169,7 +169,7 @@ type Source struct {
 
 type ExtractionField struct {
 	Name  string `json:"name" jsonschema:"enum=external_id,enum=type,enum=amount,enum=date,enum=description,enum=notes,enum=name,enum=symbol,enum=identifier_type,enum=identifier,enum=exchange_mic,enum=asset_type,enum=quote_currency,enum=instrument_external_id,enum=quantity,enum=unit_price,enum=trade_currency,enum=fee_amount,enum=fee_currency,enum=cash_effect,enum=applied_exchange_rate,enum=opening_cost_basis,enum=event_group_id,enum=trade_date,enum=settlement_date,enum=price,enum=effective_date,enum=source,enum=provenance"`
-	Value string `json:"value" jsonschema_description:"Value copied from the source, or an empty string when the source has none."`
+	Value string `json:"value" jsonschema_description:"Value from the source, or an empty string when the source has none. A field with listed allowed values takes one of those values exactly, not the source wording."`
 }
 
 type ExtractionRecord struct {

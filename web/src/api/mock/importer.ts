@@ -1,6 +1,7 @@
 /** CSV/JSON account-history import for the mock adapter. */
 import type { AccountHistoryImportResult, AccountHistoryImportRow, MutableTransactionType } from '../types'
 import type { ImportFile } from '../datasource'
+import { minorToDecimal } from '@/lib/money'
 import { majorToMinor, minorToMajor } from './decimal'
 
 const TYPES: MutableTransactionType[] = [
@@ -82,9 +83,11 @@ export function evaluateImport(
   opts: { currency: string; existingExternalIds: Set<string>; currentBalance: bigint; today: string },
 ): { rows: AccountHistoryImportRow[]; ready: ParsedRow[]; net: bigint; range: { from: string; to: string } | null } {
   const seen = new Set<string>()
+  const derivedCounts = new Map<string, number>()
   const ready: ParsedRow[] = []
   let net = 0n
-  const out: AccountHistoryImportRow[] = rows.map((r) => {
+  const out: AccountHistoryImportRow[] = rows.map((source) => {
+    const r = { ...source }
     const base = { row: r.row, externalId: r.externalId, transactionId: null, type: r.type, date: /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : undefined }
     if (!TYPES.includes(r.type as MutableTransactionType)) return { ...base, status: 'error', code: 'invalid_type', message: `"${r.type || 'blank'}" is not a supported transaction type.` }
     if (!/^-?\d+(\.\d+)?$/.test(r.amount)) return { ...base, status: 'error', code: 'invalid_amount', message: `"${r.amount || 'blank'}" is not a valid amount.` }
@@ -96,10 +99,17 @@ export function evaluateImport(
     } catch {
       return { ...base, status: 'error', code: 'invalid_amount', message: 'Amount could not be read.' }
     }
-    if (r.externalId && (opts.existingExternalIds.has(r.externalId) || seen.has(r.externalId))) {
+    if (!r.externalId) {
+      // Mirrors the server: date, type, and amount at currency precision, numbering same-day repeats.
+      const derived = `derived-${base.date}-${r.type}-${minorToDecimal(minor.toString(), opts.currency)}`
+      const occurrence = (derivedCounts.get(derived) ?? 0) + 1
+      derivedCounts.set(derived, occurrence)
+      r.externalId = base.externalId = occurrence > 1 ? `${derived}-${occurrence}` : derived
+    }
+    if (opts.existingExternalIds.has(r.externalId) || seen.has(r.externalId)) {
       return { ...base, amount: minorToMajor(minor, opts.currency), status: 'duplicate', code: 'duplicate_external_id', message: `Already imported as ${r.externalId}.` }
     }
-    if (r.externalId) seen.add(r.externalId)
+    seen.add(r.externalId)
     ready.push(r)
     const negative = ['withdrawal', 'fee', 'capital_loss', 'sale', 'liability_payment'].includes(r.type)
     net += negative ? -(minor < 0n ? -minor : minor) : minor

@@ -13,6 +13,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Notice } from '@/components/ui/Notice'
 import { Segmented } from '@/components/ui/Segmented'
 import { activityLabel } from '@/features/accounts/model'
+import { ManualPrompt } from '@/features/review/ManualPrompt'
 import { cn } from '@/lib/cn'
 import { decimalToMinor } from '@/lib/money'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
@@ -379,7 +380,7 @@ export function DirectImport({ account }: { account: Account }) {
   return (
     <>
       <Steps current={0} />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
           <label
             htmlFor={inputId}
@@ -423,6 +424,7 @@ export function DirectImport({ account }: { account: Account }) {
               {problem}
             </Notice>
           ) : null}
+          <ManualPrompt currency={account.currency} trackingMode="balance" />
         </div>
 
         <Card aria-labelledby="format-heading" as="aside">
@@ -450,8 +452,12 @@ export function DirectImport({ account }: { account: Account }) {
                 <dd className="text-muted">YYYY-MM-DD, not in the future.</dd>
               </div>
               <div>
-                <dt className="font-medium text-ink">description, external_id</dt>
-                <dd className="text-muted">Optional. A stable external_id lets you re-import the same file safely: matching rows are skipped as duplicates.</dd>
+                <dt className="font-medium text-ink">description</dt>
+                <dd className="text-muted">Optional.</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-ink">external_id</dt>
+                <dd className="text-muted">Optional. Use the bank’s transaction ID when there is one. Otherwise leave it blank and Wealthboard builds one from the date, type, and amount, numbering same-day repeats in file order. Re-importing a file skips rows already imported.</dd>
               </div>
             </dl>
             <p className="text-xs text-muted">

@@ -79,8 +79,9 @@ Conversion runs as a Genkit flow with structured output. OpenAI receives a
 strict JSON Schema response format with `store: false`, Anthropic models with
 native structured output receive the schema as an output format, and DeepSeek
 receives JSON mode with the schema as instructions. Genkit validates the
-response against the schema, and Go checks record bounds and source coverage
-before creating a draft. PDF, spreadsheet, or Word support is not required of the model:
+response against the schema, and Go checks record bounds, source coverage, and
+enumerated values such as transaction types before creating a draft. PDF,
+spreadsheet, or Word support is not required of the model:
 Wealthboard extracts text before submission. Access and compatibility errors
 for the chosen model surface when conversion runs. Wealthboard never
 silently substitutes a model or provider.
@@ -127,7 +128,11 @@ section IDs and the 1,000-section, 100-warning, and 64 KB limits.
    acknowledge excluded activity. A source reference is not proof of accuracy.
    The model is told which fields each import collection accepts; any other
    field it returns is removed from the draft and listed as an issue, because
-   the import preview rejects unknown fields.
+   the import preview rejects unknown fields. It is also told the exact values
+   that fields such as `type` accept. Wealthboard corrects only letter case and
+   word separators, so a statement label such as `INTEREST` becomes `interest`;
+   any other unsupported value stays in the draft and is listed as an issue to
+   correct before preview.
 5. Select **Download and open Direct import**, then choose the downloaded
    draft on the **Direct import** tab to preview it. Import only after
    reviewing the existing balance or investment preview.

@@ -89,7 +89,7 @@ export function ManualPrompt({ currency, trackingMode }: { currency: string; tra
             <TextareaField label="Conversion prompt" value={prompt} readOnly spellCheck={false} rows={12} className="[&_textarea]:font-mono [&_textarea]:text-xs [&_textarea]:leading-5" onFocus={(e) => e.currentTarget.select()} />
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="min-w-0 flex-1 basis-64 text-xs text-muted">
-                Paste your statement at the marker. AI-generated files can contain mistakes, so preview the result in Direct import before importing.
+                Paste your statement at the marker. AI-generated files can contain mistakes, so check every row in the import preview before importing.
               </p>
               <Button icon={copy === 'copied' ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />} onClick={() => void onCopy()}>
                 {copy === 'copied' ? 'Copied' : 'Copy prompt'}

@@ -15,11 +15,11 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["external_id", "type", "amount", "date"],
+        "required": ["type", "amount", "date"],
         "properties": {
           "external_id": {
-            "type": "string",
-            "minLength": 1,
+            "description": "Source transaction ID. Leave null or empty and Wealthboard derives derived-<date>-<type>-<amount>, numbering same-day repeats in file order.",
+            "type": ["string", "null"],
             "maxLength": 200
           },
           "type": {

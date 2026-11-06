@@ -30,9 +30,11 @@ draft must pass the normal import preview. See [AI-assisted import](./ai-import)
 
 Supply stable, case-sensitive external IDs no longer than 200 characters.
 Instruments, position events, and prices require them. A cash row with no ID
-receives a derived date/type/minor-amount ID; supply your own to distinguish
-otherwise identical source events. Instrument references use the instrument's
-external ID rather than a Wealthboard database ID.
+receives `derived-<date>-<type>-<amount>` with the amount at the account
+currency's precision; identical same-date cash rows are numbered in file order
+(`-2`, `-3`). Cash rows imported earlier with the minor-unit form still match.
+Instrument references use the instrument's external ID rather than a
+Wealthboard database ID.
 
 - An identical stored ID is skipped as a duplicate.
 - An existing ID with different authoritative fields is a conflict.
@@ -110,7 +112,7 @@ imported sequence must stay long-only at every date and explicit same-date order
 
 | Field                  | Required | Rule                                                                           |
 | ---------------------- | -------- | ------------------------------------------------------------------------------ |
-| `external_id`          | No       | Stable source reference; strongly recommended to avoid derived-ID collisions |
+| `external_id`          | No       | Stable source reference; derived from date, type, and amount when blank        |
 | `type`                 | Yes      | `deposit`, `withdrawal`, `interest`, `dividend`, `fee`, or `manual_adjustment` |
 | `amount`               | Yes      | Positive except a signed, non-zero manual adjustment                           |
 | `date`                 | Yes      | Financial date                                                                 |
