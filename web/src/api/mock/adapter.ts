@@ -831,10 +831,6 @@ export function createMockDataSource(): DataSource {
         throw unsupported('AI provider keys')
       },
       clearUsage: () => write(() => ({ deleted: 0 })),
-      review: async () => {
-        await delay()
-        throw unsupported('AI portfolio review')
-      },
       convertImport: async () => {
         await delay()
         throw unsupported('AI-assisted import')

@@ -11,11 +11,11 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { TextField } from '@/components/ui/Field'
 import { Notice } from '@/components/ui/Notice'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { ConvertDraft } from '@/features/review/ConvertDraft'
-import { configurationHash, endpointHost, formatTokens, providerLabel } from '@/features/review/ai-meta'
-import { ManualPrompt } from '@/features/review/ManualPrompt'
-import { AdviceNotice, AvailabilityNotice } from '@/features/review/parts'
-import { SourceUnits } from '@/features/review/SourceUnits'
+import { ConvertDraft } from '@/features/ai/ConvertDraft'
+import { configurationHash, endpointHost, formatTokens, providerLabel } from '@/features/ai/ai-meta'
+import { ManualPrompt } from '@/features/ai/ManualPrompt'
+import { AdviceNotice, AvailabilityNotice } from '@/features/ai/parts'
+import { SourceUnits } from '@/features/ai/SourceUnits'
 import { ProblemNotice } from '@/features/settings/settings-kit'
 import { cn } from '@/lib/cn'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
@@ -178,7 +178,7 @@ export function AiConvert({ account }: { account: Account }) {
   const needsKey = !!settings && !settings.hasStoredApiKey
   const keyLength = apiKey.trim().length
   const keyOk = needsKey ? keyLength >= 8 && keyLength <= 4096 : keyLength === 0 || (keyLength >= 8 && keyLength <= 4096)
-  const available = ai.data?.reviewAvailability.available ?? false
+  const available = ai.data?.availability.available ?? false
   const busy = convert.isPending && !cancelled
   const canSend = !!settings && !!source && consent && approvedUnits.length > 0 && emptySelected === 0 && keyOk && online && available && !busy
 
@@ -237,7 +237,7 @@ export function AiConvert({ account }: { account: Account }) {
           <ShieldCheck size={18} aria-hidden className="mt-0.5 shrink-0 text-subtle" />
           <p className="text-muted">Nothing is imported automatically. The draft goes through the same preview, duplicate check, and confirmation as any file. Wealthboard keeps none of it; your provider’s own retention terms apply.</p>
         </div>
-        <AdviceNotice compact />
+        <AdviceNotice />
       </CardBody>
     </Card>
   )
@@ -288,7 +288,7 @@ export function AiConvert({ account }: { account: Account }) {
   else
     destination = (
       <div className="flex flex-col gap-4">
-        <AvailabilityNotice availability={ai.data.reviewAvailability} what="AI requests" />
+        <AvailabilityNotice availability={ai.data.availability} what="AI requests" />
         <dl className="grid gap-px overflow-hidden rounded-md border border-line bg-line text-sm sm:grid-cols-2">
           {[
             ['Sent to', <>{providerLabel(settings.provider)} · <span className="font-mono text-xs">{settings.model}</span> · {endpointHost(settings.baseUrl)}</>],

@@ -5,12 +5,10 @@ import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api'
 import { setScenario } from '@/api/mock/scenario'
-import type { Account, AIRead, AIReviewRequest, AIReviewResult } from '@/api/types'
-import { PRIVACY_STORAGE_KEY } from '@/config'
+import type { Account, AIRead } from '@/api/types'
 import { AiConvert } from '@/features/imports/AiConvert'
 import AiSettings from '@/features/settings/AiSettings'
 import { renderWithApp } from '@/test/render'
-import ReviewPage from './ReviewPage'
 
 const { extractSource } = vi.hoisted(() => ({ extractSource: vi.fn() }))
 vi.mock('@/lib/source-extraction', async (importOriginal) => ({
@@ -25,16 +23,14 @@ const configured: AIRead = {
     model: 'gpt-5.5',
     hasStoredApiKey: true,
     apiKeyHint: '...1234',
-    includeExactAmounts: false,
-    includeAccountNames: false,
     monthlyTokenLimit: 100_000,
     maxOutputTokens: 1_200,
     createdAt: '2026-09-20T10:00:00Z',
     updatedAt: '2026-09-20T10:00:00.5Z',
   },
-  usage: { billingMonth: '2026-09', chargedTokens: 0, remainingTokens: 100_000, monthlyTokenLimit: 100_000, successfulReviews: 0, lastUsedAt: null },
+  usage: { billingMonth: '2026-09', chargedTokens: 0, remainingTokens: 100_000, monthlyTokenLimit: 100_000, successfulRequests: 0, lastUsedAt: null },
   events: [],
-  reviewAvailability: {
+  availability: {
     available: true,
     reason: 'available',
     providerConfigured: true,
@@ -109,8 +105,6 @@ describe('AI provider settings', () => {
     expect(save.mock.calls[0]?.[0]).toEqual({
       provider: 'anthropic',
       model: 'claude-sonnet-5',
-      includeExactAmounts: false,
-      includeAccountNames: false,
       monthlyTokenLimit: 20_000,
       maxOutputTokens: 2_000,
     })
@@ -123,14 +117,14 @@ describe('AI provider settings', () => {
     const user = userEvent.setup()
     vi.spyOn(api.ai, 'get').mockResolvedValue({
       ...configured,
-      usage: { ...configured.usage, chargedTokens: 4_200, remainingTokens: 95_800, successfulReviews: 2, lastUsedAt: '2026-09-21T08:00:00Z' },
+      usage: { ...configured.usage, chargedTokens: 4_200, remainingTokens: 95_800, successfulRequests: 2, lastUsedAt: '2026-09-21T08:00:00Z' },
       events: [
         {
           id: '00000000-0000-4000-8000-000000000010',
           provider: 'openai',
           endpointHost: 'api.openai.com',
           model: 'gpt-5.5',
-          requestType: 'portfolio_review',
+          requestType: 'import_conversion',
           status: 'success',
           billingMonth: '2026-09',
           chargedTokens: 4_200,
@@ -150,7 +144,8 @@ describe('AI provider settings', () => {
     expect(await screen.findByText('Connected')).toBeInTheDocument()
     expect(screen.getByText('1234')).toBeInTheDocument()
     expect(screen.queryByLabelText('API key', { selector: 'input' })).not.toBeInTheDocument()
-    expect(screen.getAllByText('Portfolio review').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Import conversion').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Include exact amounts')).not.toBeInTheDocument()
     expect(screen.getByText('95,800')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Disconnect' }))
@@ -158,114 +153,6 @@ describe('AI provider settings', () => {
     expect(disconnect).not.toHaveBeenCalled()
     await user.click(within(dialog).getByRole('button', { name: 'Disconnect' }))
     await waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1))
-  })
-})
-
-describe('portfolio review', () => {
-  it('explains how to connect a provider when none is configured', async () => {
-    const r = renderWithApp(<ReviewPage />, { route: '/review' })
-    await settle(r.client)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Portfolio review' })).toBeInTheDocument()
-    expect(screen.getByRole('note', { name: 'Not financial advice' })).toBeInTheDocument()
-    expect(screen.getByText('Connect an AI provider to request a review')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Set up AI provider' })).toHaveAttribute('href', '/settings/ai')
-    expect(screen.queryByRole('button', { name: 'Generate review' })).not.toBeInTheDocument()
-  })
-
-  it('blocks generation when the monthly budget is used up', async () => {
-    vi.spyOn(api.ai, 'get').mockResolvedValue({
-      ...configured,
-      usage: { ...configured.usage, chargedTokens: 100_000, remainingTokens: 0 },
-      reviewAvailability: { ...configured.reviewAvailability, available: false, reason: 'monthly_token_limit_reached', budgetRemainingTokens: 0 },
-    })
-    const r = renderWithApp(<ReviewPage />, { route: '/review' })
-    await settle(r.client)
-    expect(await screen.findByText('This month’s token budget is used up')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Generate review' })).toBeDisabled()
-  })
-
-  it('requires a session key when none is stored and renders the mock 501 as a notice', async () => {
-    const user = userEvent.setup()
-    vi.spyOn(api.ai, 'get').mockResolvedValue({
-      ...configured,
-      settings: { ...configured.settings!, hasStoredApiKey: false, apiKeyHint: null },
-      reviewAvailability: { ...configured.reviewAvailability, reason: 'session_credential_required', storedCredentialAvailable: false },
-    })
-    const review = vi.spyOn(api.ai, 'review')
-    const r = renderWithApp(<ReviewPage />, { route: '/review' })
-    await settle(r.client)
-
-    const generate = await screen.findByRole('button', { name: 'Generate review' })
-    expect(generate).toBeDisabled()
-    await user.type(screen.getByLabelText(/Session-only API key/), 'sk-fictional-0001')
-    expect(generate).toBeEnabled()
-    await user.click(generate)
-
-    expect(await screen.findByText('Not available in the mock')).toBeInTheDocument()
-    expect(review).toHaveBeenCalledTimes(1)
-    const body = review.mock.calls[0]![0]
-    expect(body).toMatchObject({ period: expect.any(String), focus: 'overall', includeExactAmounts: false, includeAccountNames: false, apiKey: 'sk-fictional-0001' })
-    // Private defaults: pseudonymous accounts and goals, and no amounts anywhere in the snapshot.
-    const snapshot = JSON.stringify(body.snapshot)
-    expect(snapshot).toContain('"alias":"Account 1"')
-    expect(snapshot).not.toMatch(/Minor"?:/)
-    expect(snapshot).not.toContain('Equity Bank')
-  })
-})
-
-function fakeReview(body: AIReviewRequest): AIReviewResult {
-  return {
-    review: {
-      schemaVersion: 1,
-      headline: 'Concentrated in fixed income, with one goal behind',
-      executiveSummary: 'Most of the portfolio sits in two categories.',
-      dataQuality: [],
-      strengths: [],
-      attentionItems: [
-        { id: 'a1', category: 'allocation', severity: 'attention', confidence: 'medium', title: 'Heavy weighting in one category', explanation: 'One category holds the largest share.', evidenceRefs: ['category-1', 'account-1'] },
-      ],
-      goalObservations: [{ id: 'g1', category: 'goals', severity: 'high', confidence: 'high', title: 'A goal is behind plan', explanation: 'Progress trails the plan.', evidenceRefs: ['goal-1'] }],
-      questions: ['Is the current mix intentional?'],
-      possibleNextChecks: ['Are all exchange rates current?'],
-      limitations: ['Based on a pseudonymous snapshot without amounts.'],
-    },
-    snapshot: body.snapshot,
-    provider: { name: 'openai', host: 'api.openai.com', model: 'gpt-5.5' },
-    usage: { inputTokens: 1800, outputTokens: 640 },
-    generatedAt: '2026-09-21T08:00:00Z',
-  } as AIReviewResult
-}
-
-describe('review document', () => {
-  it('renders the review as a document with severity, confidence, and evidence', async () => {
-    const user = userEvent.setup()
-    vi.spyOn(api.ai, 'get').mockResolvedValue(configured)
-    vi.spyOn(api.ai, 'review').mockImplementation(async (body) => fakeReview(body))
-    const r = renderWithApp(<ReviewPage />, { route: '/review' })
-    await settle(r.client)
-    await user.click(await screen.findByRole('button', { name: 'Generate review' }))
-
-    const doc = await screen.findByRole('article', { name: 'Concentrated in fixed income, with one goal behind' })
-    expect(within(doc).getByRole('heading', { name: /Needs your attention/ })).toBeInTheDocument()
-    expect(within(doc).getByText('Needs attention')).toBeInTheDocument()
-    expect(within(doc).getByText('Medium confidence')).toBeInTheDocument()
-    expect(within(doc).getByText('Account 1')).toBeInTheDocument()
-    expect(within(doc).getByText(/Goal 1 · .*% complete/)).toBeInTheDocument()
-    expect(within(doc).getByText('Is the current mix intentional?')).toBeInTheDocument()
-    expect(within(doc).getByText('Based on a pseudonymous snapshot without amounts.')).toBeInTheDocument()
-    expect(within(doc).getByText(/1,800 in · 640 out/)).toBeInTheDocument()
-  })
-
-  it('keeps the review out of view while values are hidden', async () => {
-    localStorage.setItem(PRIVACY_STORAGE_KEY, 'true')
-    const user = userEvent.setup()
-    vi.spyOn(api.ai, 'get').mockResolvedValue(configured)
-    vi.spyOn(api.ai, 'review').mockImplementation(async (body) => fakeReview(body))
-    const r = renderWithApp(<ReviewPage />, { route: '/review' })
-    await settle(r.client)
-    await user.click(await screen.findByRole('button', { name: 'Generate review' }))
-    expect(await screen.findByRole('heading', { name: 'Review hidden' })).toBeInTheDocument()
-    expect(screen.queryByText('Concentrated in fixed income, with one goal behind')).not.toBeInTheDocument()
   })
 })
 

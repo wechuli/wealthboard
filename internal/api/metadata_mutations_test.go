@@ -198,7 +198,7 @@ func TestAuthorizeScopedAndSessionOnlyMutations(t *testing.T) {
 		t.Fatalf("session-only authorization principal=%+v err=%v", principal, err)
 	}
 
-	apiKeyRequest := httptest.NewRequest(http.MethodPost, "/ai/review", nil)
+	apiKeyRequest := httptest.NewRequest(http.MethodPost, "/ai/import/convert", nil)
 	apiKeyRequest.Header.Set("Authorization", "Bearer test")
 	handler.EnableAPIKeys(&fakeAPIKeyService{principal: webauth.Principal{
 		UserID: ownerID, Method: "api_key", Scopes: []webauth.Scope{webauth.ScopeAIInvoke},

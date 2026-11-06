@@ -143,14 +143,16 @@ fixtures and archived migration history remain as non-executable evidence.
   cached, and mutations are never queued. The client exposes connection state,
   blocks marked financial forms while offline, and reports a waiting update.
   Offline portfolio reads are not a runtime guarantee.
-- **AI review:** Optional on-demand reviews use a versioned, owner-scoped,
-  read-only snapshot calculated by Wealthboard. The model never receives SQL or
-  mutation tools and cannot become authoritative for balances, conversions,
-  performance, or goals. `cmd/wealthboard` calls `genkit.Init` once with the
-  OpenAI, Anthropic, and DeepSeek plugins; `internal/aiworkflow` defines the
-  `portfolioReview` and `importConversion` flows and requests typed structured
-  output with `genkit.GenerateData`. Genkit validates responses against the
-  output schema, then Go checks bounds and supplied evidence IDs.
+- **AI import conversion:** Optional, on-request conversion of approved source
+  text into an import draft. The model never receives SQL or mutation tools and
+  cannot become authoritative for balances, conversions, performance, or goals.
+  `cmd/wealthboard` calls `genkit.Init` once with the OpenAI, Anthropic, and
+  DeepSeek plugins; `internal/aiworkflow` defines the `importConversion` flow
+  and requests typed structured output with `genkit.GenerateData`. Genkit
+  validates responses against the output schema, then Go checks bounds and
+  source coverage. The in-app portfolio review was removed (migration 00006
+  drops its sharing preferences); portfolio questions move to the planned MCP
+  server described in `SPEC.md`.
 - **AI credentials and retention:** Session-only keys stay in client component
   memory for one request. Remembered keys use AES-256-GCM with a dedicated
   deployment key and immutable `userId` associated data. Usage rows contain
@@ -342,8 +344,8 @@ the browser. OCR/image processing remains backlog AI3.
 3. After explicit per-request consent, `Service` in `internal/aiworkflow/service.go` resolves
    the current user's provider and credentials. Reuse encrypted-key
    handling, fixed provider endpoints, disabled redirects, cancellation, and
-   safe errors. Existing usage reservation/completion functions enforce shared
-   review/conversion rate and monthly token budgets. The settings form, Zod
+   safe errors. Existing usage reservation/completion functions enforce the
+   conversion rate and monthly token budgets. The settings form, Zod
    schema, and service enforce a 10,000 to 100,000,000 monthly token range.
    Genkit provider requests use a 120-second timeout with SDK retries disabled;
    browser extraction keeps its separate 15-second timeout. Existing saved
@@ -354,20 +356,19 @@ the browser. OCR/image processing remains backlog AI3.
    Record only owner-scoped status/model/token/latency metadata; no source names,
    financial values, prompts, output, or credentials. Reserve conservatively
    from prompt bytes plus the output ceiling; retain the reservation on failed
-   conversion when usage is unknown. Requests have bounded body reads. Review
-   and conversion share a limit of 10 reservations per rolling minute per user
-   plus the UTC calendar-month token budget. There is no Go preparation
+   conversion when usage is unknown. Requests have bounded body reads.
+   Conversion is limited to 10 reservations per rolling minute per user plus
+   the UTC calendar-month token budget. There is no Go preparation
    semaphore per user or process.
-4. The Go AI workflow exposes a separate conversion operation and validates its
-   bounded request and response models independently of the portfolio-review
-   snapshot builder. Both run as Genkit flows with structured output: a strict
+4. The Go AI workflow exposes a conversion operation and validates its bounded
+   request and response models. It runs as a Genkit flow with structured output: a strict
    JSON Schema for OpenAI, a native output format for Anthropic models that
    support it, and JSON mode with schema instructions for DeepSeek.
    The configured model ID is not discovered or probed during settings save;
-   incompatible requests fail without model/provider substitution. Both paths
-   validate locally and reject refusals, malformed JSON, and incomplete output.
-   Provider response bodies are bounded to 8 MiB, review JSON to 64 KiB, and
-   conversion output to 1,000 candidate records, 1,000 exclusions, and 100
+   incompatible requests fail without model/provider substitution. Conversion
+   validates locally and rejects refusals, malformed JSON, and incomplete
+   output. Provider response bodies are bounded to 8 MiB, and conversion output
+   to 1,000 candidate records, 1,000 exclusions, and 100
    issues. A generated import file still must satisfy the canonical 5 MiB
    import limit. No document or vision model capability is needed.
    The model receives only approved text, minimal account/schema context,
@@ -533,12 +534,11 @@ accounts, goals, or sample portfolio data. The same applies to OIDC JIT.
   `/estate/snapshots/[id]` — private estate planning and retained print views
 - `/api/v1/exports/*`, `/api/v1/accounts/[id]/history-import/{preview,commit}`, `/api/v1/restore/user`,
   `/api/v1/accounts/[id]/investment-import/{preview,commit}`,
-  `/api/v1/estate/snapshots/[id]`, `/api/v1/ai/review`, `/api/health/{live,ready}`
-- `/review` — on-demand, evidence-linked AI portfolio review
+  `/api/v1/estate/snapshots/[id]`, `/api/health/{live,ready}`
 - Earlier client paths such as `/login`, `/signup`, `/transactions`, `/reports`,
   `/categories`, `/institutions`, `/instruments`, `/accounts/archived`,
   `/accounts/[id]/edit`, `/goals/new`, and `/labs/*` redirect to their new
-  locations.
+  locations. The retired `/review` page redirects to the home page.
 - `/offline.html`, `/manifest.webmanifest`, `/sw.js`
 
 The protected layout owns the responsive sidebar, header, mobile bottom
@@ -585,8 +585,6 @@ own authorization decisions.
 - Appearance is a non-sensitive browser-local preference with System, Light,
   and Dark choices. A bootstrap before React renders resolves semantic CSS tokens;
   appearance is not user settings, financial data, or portable state.
-- AI review output remains explanatory, non-authoritative, and non-advisory. Reviews
-  are never persisted, cannot execute financial changes, and omit unreliable
-  annualized performance until deterministic cash-flow-aware metrics exist.
-  Import extraction produces untrusted drafts only; deterministic
+- AI output remains explanatory, non-authoritative, and non-advisory. Import
+  extraction produces untrusted drafts only; deterministic
   validation and explicit user confirmation remain the sole path to persistence.

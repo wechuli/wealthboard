@@ -28,7 +28,6 @@ type aiWorkflowService interface {
 	DeleteCredential(context.Context, uuid.UUID) error
 	Disconnect(context.Context, uuid.UUID) error
 	ClearUsage(context.Context, uuid.UUID) (int64, error)
-	Review(context.Context, uuid.UUID, aiworkflow.ReviewRequest) (map[string]any, error)
 	Convert(context.Context, uuid.UUID, aiworkflow.ConversionRequest) (aiworkflow.ConversionDraft, error)
 }
 
@@ -47,7 +46,6 @@ func RegisterAIWorkflowRoutes(router chi.Router, handler *AIWorkflowHandler) {
 	router.Delete("/ai/credential", handler.DeleteCredential)
 	router.Delete("/ai/settings", handler.Disconnect)
 	router.Post("/ai/usage/clear", handler.ClearUsage)
-	router.Post("/ai/review", handler.Review)
 	router.Post("/ai/import/convert", handler.Convert)
 }
 
@@ -107,24 +105,6 @@ func (handler *AIWorkflowHandler) ClearUsage(response http.ResponseWriter, reque
 		return
 	}
 	writeJSON(response, http.StatusOK, map[string]int64{"deleted": deleted})
-}
-
-func (handler *AIWorkflowHandler) Review(response http.ResponseWriter, request *http.Request) {
-	principal, ok := handler.authorizeInvoke(response, request)
-	if !ok {
-		return
-	}
-	var input aiworkflow.ReviewRequest
-	if !decodeAIJSON(response, request, &input, 40<<10) {
-		return
-	}
-	result, err := handler.service.Review(request.Context(), principal.UserID, input)
-	input.APIKey = ""
-	if err != nil {
-		writeAIWorkflowError(response, err)
-		return
-	}
-	writeJSON(response, http.StatusOK, result)
 }
 
 func (handler *AIWorkflowHandler) Convert(response http.ResponseWriter, request *http.Request) {

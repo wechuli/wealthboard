@@ -237,3 +237,114 @@ func TestPostgreSQLMigrationsRunOnceAcrossConcurrentReplicas(t *testing.T) {
 	}
 	assertCompleteSchema(t, ctx, databases[0])
 }
+
+func TestPostgreSQLPortfolioReviewRemovalUpgradesAndRollsBack(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	admin, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatalf("open admin database: %v", err)
+	}
+	defer admin.Close()
+	schema := fmt.Sprintf("wealthboard_review_removal_%d", time.Now().UnixNano())
+	if _, err := admin.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create test schema: %v", err)
+	}
+	defer func() {
+		if _, err := admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("drop test schema: %v", err)
+		}
+	}()
+	schemaURL, err := url.Parse(databaseURL)
+	if err != nil {
+		t.Fatalf("parse TEST_DATABASE_URL: %v", err)
+	}
+	query := schemaURL.Query()
+	query.Set("search_path", schema)
+	schemaURL.RawQuery = query.Encode()
+	db, err := Open(ctx, config.Database{URL: schemaURL.String(), MaxOpenConns: 2, MaxIdleConns: 1, ConnMaxLifetime: time.Minute, ConnMaxIdleTime: time.Minute, PingTimeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+	provider, err := newMigrationProvider(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 5); err != nil {
+		t.Fatalf("migrate to the previous version: %v", err)
+	}
+
+	const ownerID, foreignID = "00000000-0000-0000-0000-0000000000a1", "00000000-0000-0000-0000-0000000000b2"
+	for _, statement := range []string{
+		`INSERT INTO users (id, username, created_at, updated_at) VALUES ('` + ownerID + `', 'review-owner', now(), now()), ('` + foreignID + `', 'review-foreign', now(), now())`,
+		`INSERT INTO ai_provider_settings (id, user_id, provider, base_url, model, include_exact_amounts, include_account_names, monthly_token_limit, max_output_tokens, created_at, updated_at)
+		 VALUES (gen_random_uuid(), '` + ownerID + `', 'openai', 'https://api.openai.com/v1', 'gpt-5.5', true, true, 50000, 1200, now(), now()),
+		        (gen_random_uuid(), '` + foreignID + `', 'anthropic', 'https://api.anthropic.com', 'claude-sonnet-5', false, false, 70000, 900, now(), now())`,
+		`INSERT INTO ai_usage_events (id, user_id, provider, endpoint_host, model, status, billing_month, created_at, updated_at)
+		 VALUES (gen_random_uuid(), '` + ownerID + `', 'openai', 'api.openai.com', 'gpt-5.5', 'success', '2026-11', now(), now())`,
+	} {
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			t.Fatalf("seed version 5: %v", err)
+		}
+	}
+
+	if err := MigrateUp(ctx, db); err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+	if err := CheckReady(ctx, db); err != nil {
+		t.Fatalf("upgraded database is not ready: %v", err)
+	}
+	assertAISharingColumns(t, ctx, db, 0)
+	var limits string
+	if err := db.QueryRowContext(ctx, `SELECT string_agg(user_id::text || ':' || monthly_token_limit || ':' || max_output_tokens, ',' ORDER BY user_id) FROM ai_provider_settings`).Scan(&limits); err != nil {
+		t.Fatal(err)
+	}
+	if limits != ownerID+":50000:1200,"+foreignID+":70000:900" {
+		t.Fatalf("provider settings after upgrade = %s", limits)
+	}
+	var historical, defaulted string
+	if err := db.QueryRowContext(ctx, `SELECT request_type FROM ai_usage_events WHERE user_id = $1`, ownerID).Scan(&historical); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO ai_usage_events (id, user_id, provider, endpoint_host, model, status, billing_month, created_at, updated_at)
+		VALUES (gen_random_uuid(), $1, 'anthropic', 'api.anthropic.com', 'claude-sonnet-5', 'started', '2026-11', now(), now())`, foreignID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT request_type FROM ai_usage_events WHERE user_id = $1`, foreignID).Scan(&defaulted); err != nil {
+		t.Fatal(err)
+	}
+	if historical != "portfolio_review" || defaulted != "import_conversion" {
+		t.Fatalf("request types = %q (historical), %q (new default)", historical, defaulted)
+	}
+
+	if _, err := provider.DownTo(ctx, 5); err != nil {
+		t.Fatalf("roll back: %v", err)
+	}
+	assertAISharingColumns(t, ctx, db, 2)
+	var shared int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM ai_provider_settings WHERE include_exact_amounts OR include_account_names`).Scan(&shared); err != nil || shared != 0 {
+		t.Fatalf("rolled-back sharing preferences = %d, %v; want private defaults", shared, err)
+	}
+	if err := MigrateUp(ctx, db); err != nil {
+		t.Fatalf("re-apply after rollback: %v", err)
+	}
+	assertAISharingColumns(t, ctx, db, 0)
+}
+
+func assertAISharingColumns(t *testing.T, ctx context.Context, db *sql.DB, want int) {
+	t.Helper()
+	var got int
+	if err := db.QueryRowContext(ctx, `
+		SELECT count(*) FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'ai_provider_settings'
+		  AND column_name IN ('include_exact_amounts', 'include_account_names')`).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("AI sharing columns = %d, want %d", got, want)
+	}
+}

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, BarChart3, Home, Landmark, Settings, Target, Wallet, Sparkles, type LucideIcon } from 'lucide-react'
+import { ArrowLeftRight, BarChart3, Home, Landmark, Settings, Target, Wallet, type LucideIcon } from 'lucide-react'
 
 export interface NavItem {
   to: string
@@ -19,7 +19,6 @@ export const PRIMARY_NAV: NavItem[] = [
 
 export const PLANNING_NAV: NavItem[] = [
   { to: '/estate', label: 'Estate planning', icon: Landmark },
-  { to: '/review', label: 'Portfolio review', icon: Sparkles },
 ]
 
 export const SETTINGS_NAV: NavItem = { to: '/settings', label: 'Settings', icon: Settings, key: 's' }

@@ -584,24 +584,22 @@ WHERE user_id = $1 AND id = $2`, userID, snapshotID).Scan(
 }
 
 type AIRead struct {
-	Settings           *AIProviderSettings `json:"settings"`
-	Usage              AIUsageSummary      `json:"usage"`
-	Events             []AIUsageEvent      `json:"events"`
-	ReviewAvailability ReviewAvailability  `json:"reviewAvailability"`
+	Settings     *AIProviderSettings `json:"settings"`
+	Usage        AIUsageSummary      `json:"usage"`
+	Events       []AIUsageEvent      `json:"events"`
+	Availability AIAvailability      `json:"availability"`
 }
 
 type AIProviderSettings struct {
-	Provider            string    `json:"provider"`
-	BaseURL             string    `json:"baseUrl"`
-	Model               string    `json:"model"`
-	HasStoredAPIKey     bool      `json:"hasStoredApiKey"`
-	APIKeyHint          *string   `json:"apiKeyHint"`
-	IncludeExactAmounts bool      `json:"includeExactAmounts"`
-	IncludeAccountNames bool      `json:"includeAccountNames"`
-	MonthlyTokenLimit   int32     `json:"monthlyTokenLimit"`
-	MaxOutputTokens     int32     `json:"maxOutputTokens"`
-	CreatedAt           time.Time `json:"createdAt"`
-	UpdatedAt           time.Time `json:"updatedAt"`
+	Provider          string    `json:"provider"`
+	BaseURL           string    `json:"baseUrl"`
+	Model             string    `json:"model"`
+	HasStoredAPIKey   bool      `json:"hasStoredApiKey"`
+	APIKeyHint        *string   `json:"apiKeyHint"`
+	MonthlyTokenLimit int32     `json:"monthlyTokenLimit"`
+	MaxOutputTokens   int32     `json:"maxOutputTokens"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
 type AIUsageEvent struct {
@@ -622,15 +620,16 @@ type AIUsageEvent struct {
 }
 
 type AIUsageSummary struct {
-	BillingMonth      string     `json:"billingMonth"`
-	ChargedTokens     int64      `json:"chargedTokens"`
-	RemainingTokens   int64      `json:"remainingTokens"`
-	MonthlyTokenLimit int32      `json:"monthlyTokenLimit"`
-	SuccessfulReviews int        `json:"successfulReviews"`
-	LastUsedAt        *time.Time `json:"lastUsedAt"`
+	BillingMonth       string     `json:"billingMonth"`
+	ChargedTokens      int64      `json:"chargedTokens"`
+	RemainingTokens    int64      `json:"remainingTokens"`
+	MonthlyTokenLimit  int32      `json:"monthlyTokenLimit"`
+	SuccessfulRequests int        `json:"successfulRequests"`
+	LastUsedAt         *time.Time `json:"lastUsedAt"`
 }
 
-type ReviewAvailability struct {
+// AIAvailability reports whether the user can start an AI import conversion now.
+type AIAvailability struct {
 	Available                 bool       `json:"available"`
 	Reason                    string     `json:"reason"`
 	ProviderConfigured        bool       `json:"providerConfigured"`
@@ -647,13 +646,11 @@ func (service *FeatureReads) AI(ctx context.Context, userID uuid.UUID) (AIRead, 
 	var hint sql.NullString
 	err := service.db.QueryRowContext(ctx, `
 SELECT provider, base_url, model, encrypted_api_key IS NOT NULL, api_key_hint,
-       include_exact_amounts, include_account_names, monthly_token_limit,
-       max_output_tokens, created_at, updated_at
+       monthly_token_limit, max_output_tokens, created_at, updated_at
 FROM ai_provider_settings
 WHERE user_id = $1`, userID).Scan(
 		&settings.Provider, &settings.BaseURL, &settings.Model, &settings.HasStoredAPIKey,
-		&hint, &settings.IncludeExactAmounts, &settings.IncludeAccountNames,
-		&settings.MonthlyTokenLimit, &settings.MaxOutputTokens, &settings.CreatedAt, &settings.UpdatedAt,
+		&hint, &settings.MonthlyTokenLimit, &settings.MaxOutputTokens, &settings.CreatedAt, &settings.UpdatedAt,
 	)
 	if err != nil && err != sql.ErrNoRows {
 		return AIRead{}, fmt.Errorf("load AI settings: %w", err)
@@ -708,7 +705,7 @@ ORDER BY created_at DESC, id`, userID)
 		if event.BillingMonth == month {
 			result.Usage.ChargedTokens += int64(event.ChargedTokens)
 			if event.Status == "success" {
-				result.Usage.SuccessfulReviews++
+				result.Usage.SuccessfulRequests++
 				if latestSuccess == nil {
 					value := event.CreatedAt
 					latestSuccess = &value
@@ -724,30 +721,30 @@ ORDER BY created_at DESC, id`, userID)
 	if result.Usage.RemainingTokens < 0 {
 		result.Usage.RemainingTokens = 0
 	}
-	result.ReviewAvailability = ReviewAvailability{
+	result.Availability = AIAvailability{
 		ProviderConfigured: result.Settings != nil, SessionCredentialAccepted: true,
 		BudgetRemainingTokens: result.Usage.RemainingTokens,
 	}
 	if result.Settings != nil {
-		result.ReviewAvailability.StoredCredentialAvailable = result.Settings.HasStoredAPIKey
+		result.Availability.StoredCredentialAvailable = result.Settings.HasStoredAPIKey
 	}
 	switch {
 	case result.Settings == nil:
-		result.ReviewAvailability.Reason = "provider_not_configured"
+		result.Availability.Reason = "provider_not_configured"
 	case result.Usage.RemainingTokens == 0:
-		result.ReviewAvailability.Reason = "monthly_token_limit_reached"
+		result.Availability.Reason = "monthly_token_limit_reached"
 	case recentAttempts >= 10:
-		result.ReviewAvailability.Reason = "cooldown"
+		result.Availability.Reason = "cooldown"
 		if len(result.Events) > 0 {
 			until := result.Events[0].CreatedAt.Add(time.Minute)
-			result.ReviewAvailability.CooldownUntil = &until
+			result.Availability.CooldownUntil = &until
 		}
 	case !result.Settings.HasStoredAPIKey:
-		result.ReviewAvailability.Available = true
-		result.ReviewAvailability.Reason = "session_credential_required"
+		result.Availability.Available = true
+		result.Availability.Reason = "session_credential_required"
 	default:
-		result.ReviewAvailability.Available = true
-		result.ReviewAvailability.Reason = "available"
+		result.Availability.Available = true
+		result.Availability.Reason = "available"
 	}
 	return result, nil
 }

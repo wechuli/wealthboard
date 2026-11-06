@@ -1741,7 +1741,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Return AI provider metadata, usage, and review availability
+         * Return AI provider metadata, usage, and conversion availability
          * @description Authenticate with a browser session or a Bearer API key that grants `portfolio:read`. Stored API key secrets are never returned.
          */
         get: operations["getAIReadModel"];
@@ -1815,26 +1815,6 @@ export interface paths {
          * @description Requires a browser session, trusted Origin, and `X-CSRF-Token`; Bearer API keys are not accepted. Only owner-scoped usage events are deleted.
          */
         post: operations["clearAIUsage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/ai/review": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Generate a review from a supplied portfolio snapshot
-         * @description Bearer API keys require `ai:invoke`. Browser sessions require a trusted Origin and `X-CSRF-Token`. The JSON body is limited to 40 KiB and the embedded snapshot to 25,000 bytes. Exact amounts and account names are sent only when the explicit sharing flags permit them. A request API key is ephemeral and never returned, stored, or logged.
-         */
-        post: operations["createAIReview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3828,8 +3808,6 @@ export interface components {
             model: string;
             hasStoredApiKey: boolean;
             apiKeyHint: string | null;
-            includeExactAmounts: boolean;
-            includeAccountNames: boolean;
             /** Format: int32 */
             monthlyTokenLimit: number;
             /** Format: int32 */
@@ -3870,11 +3848,12 @@ export interface components {
             remainingTokens: number;
             /** Format: int32 */
             monthlyTokenLimit: number;
-            successfulReviews: number;
+            successfulRequests: number;
             /** Format: date-time */
             lastUsedAt: string | null;
         };
-        ReviewAvailability: {
+        /** @description Whether an AI import conversion can start now. */
+        AIAvailability: {
             available: boolean;
             reason: string;
             providerConfigured: boolean;
@@ -3889,7 +3868,7 @@ export interface components {
             settings: components["schemas"]["AIProviderSettings"] | null;
             usage: components["schemas"]["AIUsageSummary"];
             events: components["schemas"]["AIUsageEvent"][];
-            reviewAvailability: components["schemas"]["ReviewAvailability"];
+            availability: components["schemas"]["AIAvailability"];
         };
         /** @enum {string} */
         AIProvider: "openai" | "anthropic" | "deepseek";
@@ -3897,10 +3876,6 @@ export interface components {
             provider: components["schemas"]["AIProvider"];
             /** @description Provider model identifier: a suggested model or any other model the provider serves. */
             model: string;
-            /** @description Whether exact financial amounts may be shared with the configured provider. */
-            includeExactAmounts: boolean;
-            /** @description Whether private account names may be shared with the configured provider. */
-            includeAccountNames: boolean;
             monthlyTokenLimit: number;
             /** @description Must not exceed `monthlyTokenLimit`. */
             maxOutputTokens: number;
@@ -3913,8 +3888,6 @@ export interface components {
              */
             baseUrl: string;
             model: string;
-            includeExactAmounts: boolean;
-            includeAccountNames: boolean;
             monthlyTokenLimit: number;
             maxOutputTokens: number;
             hasStoredApiKey: boolean;
@@ -3929,86 +3902,6 @@ export interface components {
         AIClearUsageResult: {
             /** Format: int64 */
             deleted: number;
-        };
-        /** @enum {string} */
-        AIReviewPeriod: "1m" | "3m" | "6m" | "1y" | "all";
-        /** @enum {string} */
-        AIReviewFocus: "overall" | "allocation" | "goals" | "cash-flow" | "data-quality";
-        AIReviewSnapshot: {
-            /** @constant */
-            schemaVersion: 1;
-            asOf: string;
-            period: components["schemas"]["AIReviewPeriod"];
-            focus: components["schemas"]["AIReviewFocus"];
-            baseCurrency: components["schemas"]["CurrencyCode"];
-            sharing: {
-                [key: string]: unknown;
-            };
-            completeness: {
-                [key: string]: unknown;
-            };
-            portfolio: {
-                [key: string]: unknown;
-            };
-            allocations: Record<string, never> | unknown[];
-            topAccounts: unknown[];
-            cashFlow: {
-                [key: string]: unknown;
-            };
-            goals: unknown[];
-            dataQuality: Record<string, never> | unknown[];
-            methodology: {
-                [key: string]: unknown;
-            };
-        };
-        AIReviewRequest: {
-            period: components["schemas"]["AIReviewPeriod"];
-            focus: components["schemas"]["AIReviewFocus"];
-            includeExactAmounts: boolean;
-            includeAccountNames: boolean;
-            /** @description Ephemeral provider key; used only when no stored credential is selected. */
-            apiKey?: string;
-            snapshot: components["schemas"]["AIReviewSnapshot"];
-        };
-        AIReviewFinding: {
-            id: string;
-            /** @enum {string} */
-            category: "data-quality" | "allocation" | "liquidity" | "cash-flow" | "goals" | "general";
-            /** @enum {string} */
-            severity: "info" | "attention" | "high";
-            /** @enum {string} */
-            confidence: "low" | "medium" | "high";
-            title: string;
-            explanation: string;
-            evidenceRefs: string[];
-        };
-        AIReview: {
-            /** @constant */
-            schemaVersion: 1;
-            headline: string;
-            executiveSummary: string;
-            dataQuality: components["schemas"]["AIReviewFinding"][];
-            strengths: components["schemas"]["AIReviewFinding"][];
-            attentionItems: components["schemas"]["AIReviewFinding"][];
-            goalObservations: components["schemas"]["AIReviewFinding"][];
-            questions: string[];
-            possibleNextChecks: string[];
-            limitations: string[];
-        };
-        AIReviewResult: {
-            review: components["schemas"]["AIReview"];
-            snapshot: components["schemas"]["AIReviewSnapshot"];
-            provider: {
-                name: components["schemas"]["AIProvider"];
-                host: string;
-                model: string;
-            };
-            usage: {
-                inputTokens: number | null;
-                outputTokens: number | null;
-            };
-            /** Format: date-time */
-            generatedAt: string;
         };
         AISourceUnit: {
             id: string;
@@ -7450,41 +7343,6 @@ export interface operations {
                     "application/json": components["schemas"]["AIClearUsageResult"];
                 };
             };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            422: components["responses"]["Problem"];
-            429: components["responses"]["Problem"];
-            502: components["responses"]["Problem"];
-            503: components["responses"]["Problem"];
-            504: components["responses"]["Problem"];
-        };
-    };
-    createAIReview: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Required when authenticating with `sessionCookie`; ignored for Bearer API keys. */
-                "X-CSRF-Token"?: components["parameters"]["MutationCSRFToken"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AIReviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Grounded review, echoed snapshot, redacted provider metadata, and usage */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AIReviewResult"];
-                };
-            };
-            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];

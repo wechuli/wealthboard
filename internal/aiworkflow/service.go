@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -74,42 +73,6 @@ func (service *Service) Disconnect(ctx context.Context, userID uuid.UUID) error 
 
 func (service *Service) ClearUsage(ctx context.Context, userID uuid.UUID) (int64, error) {
 	return service.repository.ClearUsage(ctx, userID)
-}
-
-func (service *Service) Review(ctx context.Context, userID uuid.UUID, request ReviewRequest) (map[string]any, error) {
-	if err := validateReviewRequest(request); err != nil {
-		return nil, err
-	}
-	settings, apiKey, err := service.providerRequest(ctx, userID, request.APIKey)
-	if err != nil {
-		return nil, err
-	}
-	snapshot := strings.TrimSpace(string(request.Snapshot))
-	estimatedTokens := (len(snapshot)+3)/4 + settings.MaxOutputTokens
-	reservation, err := service.repository.ReserveUsage(ctx, userID, estimatedTokens, "portfolio_review", service.now().UTC())
-	if err != nil {
-		return nil, err
-	}
-	started := time.Now()
-	content, usage, callErr := service.flows.Review(ctx, apiKey, selectionFor(*settings), snapshot)
-	if callErr == nil {
-		callErr = validateReview(content, request.Snapshot)
-	}
-	completion := completionFor(usage, callErr, started, false)
-	if err := service.repository.CompleteUsage(ctx, userID, reservation.ID, completion, service.now().UTC()); err != nil {
-		return nil, err
-	}
-	if callErr != nil {
-		return nil, callErr
-	}
-	parsedURL, _ := url.Parse(settings.BaseURL)
-	return map[string]any{
-		"review":      Review{SchemaVersion: 1, ReviewContent: content},
-		"snapshot":    json.RawMessage(request.Snapshot),
-		"provider":    map[string]string{"name": string(settings.Provider), "host": parsedURL.Host, "model": settings.Model},
-		"usage":       map[string]*int{"inputTokens": usage.InputTokens, "outputTokens": usage.OutputTokens},
-		"generatedAt": service.now().UTC(),
-	}, nil
 }
 
 func (service *Service) Convert(ctx context.Context, userID uuid.UUID, request ConversionRequest) (ConversionDraft, error) {

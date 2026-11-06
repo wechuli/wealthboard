@@ -20,73 +20,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestReviewFlowReturnsStructuredOutputAndFinalizesUsage(t *testing.T) {
-	g := genkit.Init(t.Context())
-	defineFakeAnthropicModel(g, func(_ context.Context, request *ai.ModelRequest, config anthropicsdk.MessageNewParams) (*ai.ModelResponse, error) {
-		if config.MaxTokens != 256 {
-			t.Errorf("max tokens = %d, want 256", config.MaxTokens)
-		}
-		if request.Output == nil || request.Output.Schema == nil {
-			t.Error("review request carried no output schema")
-		}
-		return fakeResponse(validReviewJSON(), 20, 10), nil
-	})
-	repository := newMemoryRepository()
-	user := uuid.New()
-	repository.settings[user] = testSettings(100_000)
-	service := NewService(repository, nil, DefineFlows(g))
-	service.now = func() time.Time { return time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC) }
-
-	result, err := service.Review(t.Context(), user, validReviewRequest("session-secret"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	review := result["review"].(Review)
-	if review.SchemaVersion != 1 || review.Headline != "Review" || review.AttentionItems[0].EvidenceRefs[0] != "portfolio.totals" {
-		t.Fatalf("unexpected review: %#v", review)
-	}
-	provider := result["provider"].(map[string]string)
-	if provider["name"] != "anthropic" || provider["host"] != "api.anthropic.com" || provider["model"] != "test-model" {
-		t.Fatalf("unexpected provider metadata: %#v", provider)
-	}
-	if len(repository.events[user]) != 1 || repository.events[user][0].Status != "success" || repository.events[user][0].ChargedTokens != 30 {
-		t.Fatalf("usage not finalized: %+v", repository.events[user])
-	}
-
-	bad := validReviewRequest("session-secret")
-	bad.Snapshot = append(bad.Snapshot[:len(bad.Snapshot)-1], []byte(`,"unexpected":true}`)...)
-	if _, err := service.Review(t.Context(), user, bad); !errors.Is(err, ErrInvalidInput) {
-		t.Fatalf("unknown request field was accepted: %v", err)
-	}
-}
-
-func TestReviewFlowRejectsOutputOutsideTheSchemaAndStillChargesUsage(t *testing.T) {
-	for name, output := range map[string]string{
-		"unknown field":     strings.Replace(validReviewJSON(), `"headline":"Review"`, `"headline":"Review","secret":"leak"`, 1),
-		"invalid enum":      strings.Replace(validReviewJSON(), `"severity":"info"`, `"severity":"urgent"`, 1),
-		"unknown evidence":  strings.Replace(validReviewJSON(), `"portfolio.totals"`, `"invented.evidence"`, 1),
-		"missing narrative": strings.Replace(validReviewJSON(), `"executiveSummary":"Summary"`, `"executiveSummary":"  "`, 1),
-	} {
-		t.Run(name, func(t *testing.T) {
-			g := genkit.Init(t.Context())
-			defineFakeAnthropicModel(g, func(context.Context, *ai.ModelRequest, anthropicsdk.MessageNewParams) (*ai.ModelResponse, error) {
-				return fakeResponse(output, 20, 10), nil
-			})
-			repository := newMemoryRepository()
-			user := uuid.New()
-			repository.settings[user] = testSettings(100_000)
-			service := NewService(repository, nil, DefineFlows(g))
-			if _, err := service.Review(t.Context(), user, validReviewRequest("session-secret")); !errors.Is(err, ErrInvalidInput) {
-				t.Fatalf("invalid output error = %v", err)
-			}
-			event := repository.events[user][0]
-			if event.Status != "error" || event.ChargedTokens != 30 {
-				t.Fatalf("invalid output usage = %+v", event)
-			}
-		})
-	}
-}
-
 func TestConversionFlowReturnsDraftWithoutCommitSurface(t *testing.T) {
 	g := genkit.Init(t.Context())
 	defineFakeAnthropicModel(g, func(_ context.Context, request *ai.ModelRequest, _ anthropicsdk.MessageNewParams) (*ai.ModelResponse, error) {
@@ -116,7 +49,7 @@ func TestConversionFlowReturnsDraftWithoutCommitSurface(t *testing.T) {
 	}
 }
 
-func TestEachUserReviewRunsWithOnlyTheirOwnStoredCredential(t *testing.T) {
+func TestEachUserConversionRunsWithOnlyTheirOwnStoredCredential(t *testing.T) {
 	key := make([]byte, 32)
 	codec, err := NewCredentialCodec(base64.StdEncoding.EncodeToString(key))
 	if err != nil {
@@ -133,7 +66,7 @@ func TestEachUserReviewRunsWithOnlyTheirOwnStoredCredential(t *testing.T) {
 		mu.Lock()
 		seenKeys = append(seenKeys, apiKey)
 		mu.Unlock()
-		return fakeResponse(validReviewJSON(), 5, 5), nil
+		return fakeResponse(validExtractionJSON(), 5, 5), nil
 	})
 	repository := newMemoryRepository()
 	service := NewService(repository, codec, DefineFlows(g))
@@ -145,16 +78,16 @@ func TestEachUserReviewRunsWithOnlyTheirOwnStoredCredential(t *testing.T) {
 		}
 	}
 
-	if _, err := service.Review(t.Context(), alice, validReviewRequest("")); err != nil {
+	if _, err := service.Convert(t.Context(), alice, validConversionRequest(*repository.settings[alice], "", "Row 1")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Review(t.Context(), bob, validReviewRequest("")); err != nil {
+	if _, err := service.Convert(t.Context(), bob, validConversionRequest(*repository.settings[bob], "", "Row 1")); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(seenKeys, ",") != "alice-provider-key,bob-provider-key" {
 		t.Fatalf("provider keys = %v", seenKeys)
 	}
-	if _, err := service.Review(t.Context(), carol, validReviewRequest("")); !errors.Is(err, ErrNotConfigured) {
+	if _, err := service.Convert(t.Context(), carol, validConversionRequest(*testSettings(100_000), "", "Row 1")); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("unconfigured user error = %v", err)
 	}
 	if len(repository.events[carol]) != 0 || len(repository.events[alice]) != 1 || len(repository.events[bob]) != 1 {
@@ -220,7 +153,7 @@ func TestProviderPluginsSendEachUsersKeyAndRequestStructuredOutput(t *testing.T)
 			if request.path != "/deepseek/chat/completions" || format["type"] != "json_object" || request.body["max_tokens"] != float64(512) {
 				t.Fatalf("DeepSeek request = %s %v", request.path, request.body)
 			}
-			if !strings.Contains(fmt.Sprint(request.body["messages"]), "evidenceRefs") {
+			if !strings.Contains(fmt.Sprint(request.body["messages"]), "sourceIds") {
 				t.Fatal("DeepSeek prompt omitted the output schema")
 			}
 		}},
@@ -240,13 +173,13 @@ func TestProviderPluginsSendEachUsersKeyAndRequestStructuredOutput(t *testing.T)
 				go func() {
 					defer wg.Done()
 					apiKey := user + "-" + string(test.provider) + "-key"
-					review, usage, err := flows.Review(t.Context(), apiKey, ModelSelection{Provider: test.provider, Model: test.model, MaxOutputTokens: 512}, fmt.Sprintf(`{"owner":%q}`, user))
+					extraction, usage, err := flows.Convert(t.Context(), apiKey, ModelSelection{Provider: test.provider, Model: test.model, MaxOutputTokens: 512}, conversionOwnedBy(user))
 					if err != nil {
-						t.Errorf("%s review: %v", user, err)
+						t.Errorf("%s conversion: %v", user, err)
 						return
 					}
-					if review.Headline != "Review" || usage.InputTokens == nil || *usage.InputTokens != 12 || *usage.OutputTokens != 8 {
-						t.Errorf("%s review = %+v usage = %+v", user, review, usage)
+					if len(extraction.Records) != 1 || usage.InputTokens == nil || *usage.InputTokens != 12 || *usage.OutputTokens != 8 {
+						t.Errorf("%s conversion = %+v usage = %+v", user, extraction, usage)
 					}
 				}()
 			}
@@ -257,7 +190,7 @@ func TestProviderPluginsSendEachUsersKeyAndRequestStructuredOutput(t *testing.T)
 			}
 			for _, request := range requests {
 				owner := "alice"
-				if strings.Contains(request.raw, `\"owner\":\"bob\"`) {
+				if strings.Contains(request.raw, "owner-bob") {
 					owner = "bob"
 				}
 				if got, want := request.key(test.provider), owner+"-"+string(test.provider)+"-key"; got != want {
@@ -307,7 +240,7 @@ func TestProviderErrorsAreClassifiedWithoutLeakingResponseBodies(t *testing.T) {
 			server.status = status
 			flows := DefineFlows(NewGenkit(t.Context(), server.options()))
 			for _, provider := range []Provider{ProviderOpenAI, ProviderDeepSeek, ProviderAnthropic} {
-				_, _, err := flows.Review(t.Context(), "user-key", ModelSelection{Provider: provider, Model: "chosen-model", MaxOutputTokens: 256}, `{}`)
+				_, _, err := flows.Convert(t.Context(), "user-key", ModelSelection{Provider: provider, Model: "chosen-model", MaxOutputTokens: 256}, conversionOwnedBy("user"))
 				if !errors.Is(err, want) {
 					t.Fatalf("%s error = %v, want %v", provider, err, want)
 				}
@@ -325,7 +258,7 @@ func TestProviderTimeoutIsReportedAsDeadline(t *testing.T) {
 	flows := DefineFlows(NewGenkit(t.Context(), server.options()))
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
-	_, _, err := flows.Review(ctx, "user-key", ModelSelection{Provider: ProviderOpenAI, Model: "chosen-model", MaxOutputTokens: 256}, `{}`)
+	_, _, err := flows.Convert(ctx, "user-key", ModelSelection{Provider: ProviderOpenAI, Model: "chosen-model", MaxOutputTokens: 256}, conversionOwnedBy("user"))
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("timeout error = %v", err)
 	}
@@ -336,7 +269,7 @@ func TestDefaultProviderClientRejectsPrivateAddressesAndRedirects(t *testing.T) 
 	options := server.options()
 	options.HTTPClient = nil
 	flows := DefineFlows(NewGenkit(t.Context(), options))
-	if _, _, err := flows.Review(t.Context(), "user-key", ModelSelection{Provider: ProviderOpenAI, Model: "chosen-model", MaxOutputTokens: 256}, `{}`); !errors.Is(err, ErrProvider) {
+	if _, _, err := flows.Convert(t.Context(), "user-key", ModelSelection{Provider: ProviderOpenAI, Model: "chosen-model", MaxOutputTokens: 256}, conversionOwnedBy("user")); !errors.Is(err, ErrProvider) {
 		t.Fatalf("private address error = %v", err)
 	}
 	if requests := server.take(); len(requests) != 0 {
@@ -352,9 +285,13 @@ func TestDefaultProviderClientRejectsPrivateAddressesAndRedirects(t *testing.T) 
 	client := newProviderHTTPClient()
 	client.Transport = redirector.Client().Transport
 	redirected := DefineFlows(NewGenkit(t.Context(), GenkitOptions{HTTPClient: client, BaseURLs: map[Provider]string{ProviderOpenAI: redirector.URL}}))
-	if _, _, err := redirected.Review(t.Context(), "user-key", ModelSelection{Provider: ProviderOpenAI, Model: "chosen-model", MaxOutputTokens: 256}, `{}`); !errors.Is(err, ErrProvider) {
+	if _, _, err := redirected.Convert(t.Context(), "user-key", ModelSelection{Provider: ProviderOpenAI, Model: "chosen-model", MaxOutputTokens: 256}, conversionOwnedBy("user")); !errors.Is(err, ErrProvider) {
 		t.Fatalf("redirect error = %v", err)
 	}
+}
+
+func conversionOwnedBy(owner string) ConversionRequest {
+	return ConversionRequest{TrackingMode: "balance", Currency: "USD", Source: Source{Units: []SourceUnit{{ID: "source-1", Location: "owner-" + owner, Text: "txn-1,deposit,10.00,2026-09-01"}}}}
 }
 
 func defineFakeAnthropicModel(g *genkit.Genkit, respond func(context.Context, *ai.ModelRequest, anthropicsdk.MessageNewParams) (*ai.ModelResponse, error)) {
@@ -440,10 +377,10 @@ func (server *fakeProviderServer) handle(response http.ResponseWriter, request *
 		return
 	}
 	if request.URL.Path == "/v1/messages" {
-		fmt.Fprintf(response, `{"id":"msg_1","type":"message","role":"assistant","model":"chosen-model","content":[{"type":"text","text":%q}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":8}}`, validReviewJSON())
+		fmt.Fprintf(response, `{"id":"msg_1","type":"message","role":"assistant","model":"chosen-model","content":[{"type":"text","text":%q}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":8}}`, validExtractionJSON())
 		return
 	}
-	fmt.Fprintf(response, `{"id":"chat_1","object":"chat.completion","created":1,"model":"chosen-model","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":%q}}],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20}}`, validReviewJSON())
+	fmt.Fprintf(response, `{"id":"chat_1","object":"chat.completion","created":1,"model":"chosen-model","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":%q}}],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20}}`, validExtractionJSON())
 }
 
 func TestConversionDraftAlwaysHasArraysAndOnlyImportableFields(t *testing.T) {

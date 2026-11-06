@@ -316,7 +316,6 @@ export function createHttpDataSource(baseUrl = API_BASE): DataSource {
       saveCredential: (apiKey) => sendJson('/ai/credential', 'POST', { apiKey }),
       removeCredential: () => sendJson('/ai/credential', 'DELETE'),
       clearUsage: () => sendJson('/ai/usage/clear', 'POST'),
-      review: (body) => sendJson('/ai/review', 'POST', body),
       convertImport: (body) => sendJson('/ai/import/convert', 'POST', body),
     },
 

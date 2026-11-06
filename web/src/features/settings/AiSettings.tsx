@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, KeyRound, PlugZap, ShieldCheck, Trash2, Unplug } from 'lucide-react'
 import { useId, useState } from 'react'
-import { Controller, useForm, useWatch } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { Link } from 'react-router'
 import { z } from 'zod'
 import { api } from '@/api'
@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/Dialog'
 import { ErrorState } from '@/components/ui/ErrorState'
-import { ChoiceCards, SwitchField, TextField } from '@/components/ui/Field'
+import { ChoiceCards, TextField } from '@/components/ui/Field'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { aiProviderOption, aiProviders, isAIProvider } from '@/lib/ai-providers'
 import { cn } from '@/lib/cn'
@@ -19,7 +19,7 @@ import { formatMonthLong } from '@/lib/dates'
 import { OFFLINE_REASON, useOnline } from '@/lib/online'
 import { useAI, useApiMutation } from '@/lib/queries'
 import { usePageTitle } from '@/lib/usePageTitle'
-import { endpointHost, ERROR_CODE_LABELS, formatTokens, providerLabel, REQUEST_TYPE_LABELS, USAGE_STATUS } from '@/features/review/ai-meta'
+import { endpointHost, ERROR_CODE_LABELS, formatTokens, providerLabel, REQUEST_TYPE_LABELS, USAGE_STATUS } from '@/features/ai/ai-meta'
 import { PanelsSkeleton, ProblemNotice, ReadOnlyRow, SaveStatus, SettingsPanel, SettingsStack } from './settings-kit'
 
 // ---- validation (mirrors AISettingsInput; the server stays authoritative) ------------------------
@@ -45,8 +45,6 @@ const settingsSchema = z
       .min(1, 'Enter the model ID, for example gpt-5.5 or claude-sonnet-5')
       .max(200, 'Use 200 characters or fewer')
       .regex(MODEL_PATTERN, 'Use the provider’s model ID: letters, numbers, dots, dashes, underscores, or colons, starting with a letter or number'),
-    includeExactAmounts: z.boolean(),
-    includeAccountNames: z.boolean(),
     monthlyTokenLimit: z.string().refine((v) => {
       const n = wholeNumber(v)
       return n !== null && n >= MIN_MONTHLY && n <= MAX_MONTHLY
@@ -71,8 +69,6 @@ function defaults(ai: AIRead): SettingsValues {
   return {
     provider,
     model: s?.model ?? aiProviderOption(provider).suggestedModels[0] ?? '',
-    includeExactAmounts: s?.includeExactAmounts ?? false,
-    includeAccountNames: s?.includeAccountNames ?? false,
     monthlyTokenLimit: String(s?.monthlyTokenLimit ?? 100_000),
     maxOutputTokens: String(s?.maxOutputTokens ?? 1_200),
   }
@@ -82,8 +78,6 @@ function toInput(v: SettingsValues): AISettingsInput {
   return {
     provider: v.provider,
     model: v.model.trim(),
-    includeExactAmounts: v.includeExactAmounts,
-    includeAccountNames: v.includeAccountNames,
     monthlyTokenLimit: wholeNumber(v.monthlyTokenLimit) ?? 0,
     maxOutputTokens: wholeNumber(v.maxOutputTokens) ?? 0,
   }
@@ -123,7 +117,7 @@ function ProviderForm({ ai }: { ai: AIRead }) {
     <form onSubmit={onSubmit} noValidate>
       <SettingsPanel
         title="AI provider"
-        description="Use your own OpenAI, Anthropic, or DeepSeek account for portfolio reviews and statement conversion. Nothing is sent until you ask for a review or a conversion."
+        description="Use your own OpenAI, Anthropic, or DeepSeek account to convert statements into import files. Nothing is sent until you ask for a conversion."
         action={
           connected ? (
             <Badge tone="positive" icon={<Check size={12} aria-hidden />}>
@@ -191,43 +185,6 @@ function ProviderForm({ ai }: { ai: AIRead }) {
             </div>
             <ReadOnlyRow label="API endpoint" value={<span className="font-mono text-sm">{option.endpoint}</span>} hint="Fixed for each provider. Custom endpoints aren’t supported." />
           </div>
-
-          <fieldset className="rounded-lg border border-line px-4 py-3">
-            <legend className="px-1 text-sm font-medium text-ink">Default sharing for reviews</legend>
-            <div className="flex flex-col divide-y divide-line">
-              <Controller
-                control={control}
-                name="includeExactAmounts"
-                render={({ field }) => (
-                  <div className="py-2">
-                    <SwitchField
-                      label="Include exact amounts"
-                      description="Totals, account values, and allocation amounts. When off, only shares, counts, and progress are sent."
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </div>
-                )}
-              />
-              <Controller
-                control={control}
-                name="includeAccountNames"
-                render={({ field }) => (
-                  <div className="py-2">
-                    <SwitchField
-                      label="Include account and goal names"
-                      description="When off, accounts and goals are sent as “Account 1”, “Goal 1”, and so on."
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </div>
-                )}
-              />
-            </div>
-            <p className="mt-2 text-xs text-muted">
-              You can change both for each review. Notes, references, descriptions, and transaction rows are never shared. Statement conversion asks for its own consent every time.
-            </p>
-          </fieldset>
 
           <div className="grid gap-5 sm:grid-cols-2">
             <TextField
@@ -437,7 +394,7 @@ function UsagePanel({ ai }: { ai: AIRead }) {
             </div>
             <div>
               <dt className="text-xs text-muted">Successful requests</dt>
-              <dd className="num mt-0.5 text-md font-semibold text-ink">{formatTokens(usage.successfulReviews)}</dd>
+              <dd className="num mt-0.5 text-md font-semibold text-ink">{formatTokens(usage.successfulRequests)}</dd>
             </div>
             <div className="col-span-2 sm:col-span-1">
               <dt className="text-xs text-muted">Last used</dt>
@@ -604,8 +561,8 @@ export default function AiSettings() {
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-sm text-muted">
           <PlugZap size={15} aria-hidden className="text-subtle" />
           Ready when you are.
-          <Link to="/review" className="link">
-            Request a portfolio review
+          <Link to="/accounts?import=1" className="link">
+            Convert a statement
           </Link>
         </p>
       ) : null}

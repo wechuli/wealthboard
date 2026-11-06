@@ -14,11 +14,6 @@ import (
 )
 
 var (
-	periods         = map[string]bool{"1m": true, "3m": true, "6m": true, "1y": true, "all": true}
-	focuses         = map[string]bool{"overall": true, "allocation": true, "goals": true, "cash-flow": true, "data-quality": true}
-	categories      = map[string]bool{"data-quality": true, "allocation": true, "liquidity": true, "cash-flow": true, "goals": true, "general": true}
-	severities      = map[string]bool{"info": true, "attention": true, "high": true}
-	confidences     = map[string]bool{"low": true, "medium": true, "high": true}
 	sourceIDPattern = regexp.MustCompile(`^source-[0-9]+$`)
 	hashPattern     = regexp.MustCompile(`^[a-f0-9]{64}$`)
 	currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
@@ -101,65 +96,6 @@ func canonicalDraftValue(allowed []string, value string) (string, bool) {
 		return canonical, true
 	}
 	return value, false
-}
-
-func validateReviewRequest(request ReviewRequest) error {
-	if !periods[request.Period] || !focuses[request.Focus] || len(request.Snapshot) == 0 || len(request.Snapshot) > 25_000 {
-		return fmt.Errorf("%w: invalid portfolio review request", ErrInvalidInput)
-	}
-	var snapshot struct {
-		SchemaVersion int             `json:"schemaVersion"`
-		AsOf          string          `json:"asOf"`
-		Period        string          `json:"period"`
-		Focus         string          `json:"focus"`
-		BaseCurrency  string          `json:"baseCurrency"`
-		Sharing       json.RawMessage `json:"sharing"`
-		Completeness  json.RawMessage `json:"completeness"`
-		Portfolio     json.RawMessage `json:"portfolio"`
-		Allocations   json.RawMessage `json:"allocations"`
-		TopAccounts   json.RawMessage `json:"topAccounts"`
-		CashFlow      json.RawMessage `json:"cashFlow"`
-		Goals         json.RawMessage `json:"goals"`
-		DataQuality   json.RawMessage `json:"dataQuality"`
-		Methodology   json.RawMessage `json:"methodology"`
-	}
-	if strictDecode(request.Snapshot, &snapshot) != nil || snapshot.SchemaVersion != 1 || snapshot.AsOf == "" || snapshot.Period != request.Period || snapshot.Focus != request.Focus || !currencyPattern.MatchString(snapshot.BaseCurrency) {
-		return fmt.Errorf("%w: invalid portfolio review snapshot", ErrInvalidInput)
-	}
-	for _, required := range []json.RawMessage{snapshot.Sharing, snapshot.Completeness, snapshot.Portfolio, snapshot.Allocations, snapshot.TopAccounts, snapshot.CashFlow, snapshot.Goals, snapshot.DataQuality, snapshot.Methodology} {
-		if len(required) == 0 || string(required) == "null" {
-			return fmt.Errorf("%w: incomplete portfolio review snapshot", ErrInvalidInput)
-		}
-	}
-	return nil
-}
-
-func validateReview(review ReviewContent, snapshot json.RawMessage) error {
-	if !bounded(review.Headline, 1, 160) || !bounded(review.ExecutiveSummary, 1, 1400) || len(review.Limitations) < 1 || len(review.Limitations) > 8 {
-		return errorsInvalidReview()
-	}
-	allowed := reviewEvidenceIDs(snapshot)
-	groups := [][]ReviewFinding{review.DataQuality, review.Strengths, review.AttentionItems, review.GoalObservations}
-	limits := []int{6, 6, 8, 6}
-	for index, findings := range groups {
-		if len(findings) > limits[index] {
-			return errorsInvalidReview()
-		}
-		for _, finding := range findings {
-			if !bounded(finding.ID, 1, 80) || !categories[finding.Category] || !severities[finding.Severity] || !confidences[finding.Confidence] || !bounded(finding.Title, 1, 140) || !bounded(finding.Explanation, 1, 700) || len(finding.EvidenceRefs) < 1 || len(finding.EvidenceRefs) > 6 {
-				return errorsInvalidReview()
-			}
-			for _, reference := range finding.EvidenceRefs {
-				if !allowed[reference] {
-					return errorsInvalidReview()
-				}
-			}
-		}
-	}
-	if !stringList(review.Questions, 6, 300, false) || !stringList(review.PossibleNextChecks, 6, 300, false) || !stringList(review.Limitations, 8, 300, true) {
-		return errorsInvalidReview()
-	}
-	return nil
 }
 
 func validateConversionRequest(request ConversionRequest) error {
@@ -297,15 +233,6 @@ func buildDraft(extraction Extraction, source Source, trackingMode string) (Conv
 	return ConversionDraft{Content: string(content), References: references, Exclusions: exclusions, Issues: issues}, nil
 }
 
-func reviewPrompt(snapshot string) string {
-	return strings.Join([]string{
-		"Review the supplied Wealthboard portfolio snapshot. Use only supplied facts and cite exact evidence IDs from its evidenceId values.",
-		"Never invent balances, returns, causes, products, trades, taxes, or forecasts. Possible next checks must be questions, not financial instructions.",
-		"Snapshot:",
-		snapshot,
-	}, "\n\n")
-}
-
 func conversionPrompt(trackingMode, currency string, units []SourceUnit) string {
 	encoded, _ := json.Marshal(units)
 	fields := []string{}
@@ -333,30 +260,6 @@ func strictDecode(data []byte, destination any) error {
 	return nil
 }
 
-func reviewEvidenceIDs(snapshot json.RawMessage) map[string]bool {
-	var value any
-	_ = json.Unmarshal(snapshot, &value)
-	result := map[string]bool{}
-	var visit func(any)
-	visit = func(current any) {
-		switch typed := current.(type) {
-		case map[string]any:
-			if evidenceID, ok := typed["evidenceId"].(string); ok {
-				result[evidenceID] = true
-			}
-			for _, child := range typed {
-				visit(child)
-			}
-		case []any:
-			for _, child := range typed {
-				visit(child)
-			}
-		}
-	}
-	visit(value)
-	return result
-}
-
 func bounded(value string, minimum, maximum int) bool {
 	length := len(strings.TrimSpace(value))
 	return length >= minimum && length <= maximum
@@ -372,8 +275,4 @@ func stringList(values []string, maximum, itemMaximum int, requireOne bool) bool
 		}
 	}
 	return true
-}
-
-func errorsInvalidReview() error {
-	return fmt.Errorf("%w: provider returned an invalid portfolio review", ErrInvalidInput)
 }

@@ -34,7 +34,7 @@ can actually do. Known Go/Vite gaps include:
   than the full product contract.
 - AI import currently sends selected section location labels and does not
   guarantee cancellation of in-flight requests when the user cancels or leaves.
-  OpenAI review/conversion requests use prompt-requested JSON with local Go
+  OpenAI conversion requests use prompt-requested JSON with local Go
   validation, not the native JSON Schema response option described below.
 
 These are implementation limitations, not permission to weaken ownership,
@@ -222,7 +222,9 @@ its SHA-256 hash, display prefix, name, scopes, optional expiry, usage timestamp
 and revocation metadata.
 
 - Default to `portfolio:read`; additional explicit scopes are `portfolio:write`,
-  `imports:write`, `exports:read`, and `ai:invoke`.
+  `imports:write`, `exports:read`, and `ai:invoke`. A `portfolio:read` key also
+  authorizes the read-only MCP endpoint described in
+  [AI assistant connections (MCP)](#ai-assistant-connections-mcp).
 - Require a browser session for key management, plus trusted origin and CSRF
   validation for key creation/revocation. Keys cannot manage authentication
   methods or perform a user restore.
@@ -1341,6 +1343,29 @@ tools. Require every application replica and other writer to be stopped for a
 restore, retain the automatic pre-restore safety dump, and validate readiness
 before reopening traffic.
 
+### AI provider settings
+
+Users may configure OpenAI, Anthropic, or DeepSeek with their own API key for
+AI import conversion. All model calls go through one process-wide Genkit
+instance and its provider plugins.
+
+- Only the fixed OpenAI, Anthropic, and DeepSeek endpoints are allowed. Custom
+  endpoints are not supported, requests must not follow redirects, and a user's
+  key is attached per request and never sent to another provider.
+- Provider credentials remain server-side. Session-only keys are not persisted;
+  remembered keys require a dedicated encryption key and owner-bound
+  authenticated encryption. Never reuse the session secret.
+- Derive ownership only from the verified principal. Apply a per-user rate
+  limit, a configurable monthly token limit of 10,000 to 100,000,000, a
+  two-minute provider request timeout with automatic retries disabled,
+  cancellation, and bounded output size. Existing saved budgets and defaults
+  are unchanged.
+- Store only privacy-safe owner-scoped usage metadata. Users must be able to
+  delete this metadata, delete a stored credential, and disconnect the
+  provider. Per-user exports exclude all AI credentials and usage.
+- Clearly state that AI output is explanatory and not regulated financial
+  advice.
+
 ### LLM-assisted text-file import
 
 An optional source-file conversion step supports both balance- and
@@ -1389,7 +1414,7 @@ the server and the configured model.
   Allow selection and editing/redaction of extracted sections before sending.
   Never send original files, images, filenames, or section labels alongside the
   approved text. Saved
-  credentials and portfolio-review sharing preferences are not import consent;
+  credentials are not import consent;
   selecting a file alone must not trigger external processing. Editing source
   text or selection clears consent. Changes to the provider/model or target
   account context invalidate the consent-bound configuration fingerprint.
@@ -1435,49 +1460,130 @@ the server and the configured model.
   log source files, extracted text, prompts, drafts, or provider responses;
   clear transient content on cancel, completion, navigation, or logout. Parsing
   uses memory and terminable workers, with no temporary document files. Usage
-  history remains owner-scoped metadata only and shares review rate/token limits.
+  history remains owner-scoped metadata only and is subject to the per-user
+  rate and monthly token limits.
   Failed conversions retain the conservative reservation when token usage is
   unknown. Disclose that provider-side retention is governed by the provider and
   cannot be guaranteed by Wealthboard's local cleanup.
 
-## AI portfolio review
+## AI assistant connections (MCP)
 
-Support an optional, on-demand portfolio review through OpenAI, Anthropic, or
-DeepSeek using each user's own API key. All model calls go through one
-process-wide Genkit instance and its provider plugins.
+Status: planned. This replaces the removed in-app AI portfolio review. Instead
+of Wealthboard sending a snapshot to a model, the user connects an AI assistant
+they already use (for example Claude or ChatGPT) to Wealthboard through the
+[Model Context Protocol](https://modelcontextprotocol.io/specification/2025-11-25)
+(MCP). The assistant reads the user's data through bounded, read-only tools and
+does its own analysis. Wealthboard sends nothing to any AI provider in this
+workflow.
 
-- Wealthboard must first create a bounded, versioned snapshot from deterministic
-  calculations. Models must not independently calculate authoritative balances,
-  conversions, returns, or goal forecasts.
-- Raw position events, trade rows, prices, quantities, and instrument
-  identifiers are excluded from model input. Any later instrument-level derived
-  allocation follows the existing independent consent for exact values and
-  names.
-- Default snapshots use pseudonymous accounts and goals and omit exact amounts.
-  Exact aggregate amounts and names require separate, explicit per-request
-  consent. Never include notes, account references, raw transaction rows, or
-  transaction descriptions.
-- Omit cash-flow-naive annualized returns, unavailable freshness, and movement
-  attribution until deterministic implementations exist. Include explicit
-  missing-rate and methodology warnings.
-- Validate model output with a strict schema. Every finding must cite a valid
-  evidence ID from the snapshot. Do not expose arbitrary HTML, links, tool calls,
-  or mutation operations.
-- Derive ownership only from the verified session. Apply a per-user cooldown,
-  monthly token limit, request timeout, cancellation, and bounded output size.
-- Provider credentials remain server-side. Session-only keys are not persisted;
-  remembered keys require a dedicated encryption key and owner-bound authenticated
-  encryption. Never reuse the session secret.
-- Reviews and import conversion share a configurable monthly token limit of
-  10,000 to 100,000,000 and a two-minute provider request timeout with automatic
-  retries disabled. Existing saved budgets and defaults are unchanged.
-- Only the fixed OpenAI, Anthropic, and DeepSeek endpoints are allowed. Custom
-  endpoints are not supported, requests must not follow redirects, and a user's
-  key is attached per request and never sent to another provider.
-- Do not retain reviews. Store only privacy-safe owner-scoped usage metadata;
-  users must be able to delete this metadata, delete a stored credential, and
-  disconnect the provider. Per-user exports exclude all AI credentials and usage.
-- Clearly state that output is explanatory and not regulated financial advice.
+### Shape
+
+- Serve MCP over Streamable HTTP at `/mcp` from the existing Go binary, using
+  the official Go MCP SDK. There is no separate service or database.
+- Tools call the existing owner-scoped Go services. The principal (API key or
+  OAuth grant) is the only source of `userId`; tool arguments never carry an
+  owner, and another user's resource IDs return not found.
+- Authoritative calculations stay in Go. Summary logic that currently exists
+  only in the browser must move to Go before a tool exposes it.
+
+### Reachability and authentication
+
+Hosted assistants (claude.ai, Claude Desktop and mobile connectors, ChatGPT)
+connect from the vendor's cloud, not the user's device, so they require a
+public HTTPS `APP_URL`. Local MCP clients (Claude Code, VS Code, Cursor, Codex)
+can reach a private deployment.
+
+- **Phase 1, API keys:** `/mcp` accepts existing personal API keys as bearer
+  tokens; tools require `portfolio:read`. Keys never travel in query strings.
+- **Phase 2, OAuth 2.1:** Wealthboard acts as its own authorization server for
+  `/mcp`, following the MCP authorization specification:
+  - Protected resource metadata (RFC 9728) at
+    `/.well-known/oauth-protected-resource`, naming `APP_URL` as the resource
+    and the single authorization server. Unauthenticated `/mcp` requests
+    return `401` with a `WWW-Authenticate` header pointing at that document.
+  - Authorization server metadata (RFC 8414) advertising the authorization,
+    token, registration, and revocation endpoints, `S256` PKCE only,
+    `client_id_metadata_document_supported`, `none` among token endpoint
+    authentication methods, and RFC 9207 issuer identification.
+  - Client identification through Dynamic Client Registration (RFC 7591) and
+    Client ID Metadata Documents. Registration is rate limited, stores no
+    secrets for public clients, and prunes clients that never complete a grant.
+  - Authorization code flow with PKCE, exact redirect URI matching (loopback
+    redirects match on any port), and the `resource` parameter (RFC 8707)
+    binding every token to `/mcp`. No `client_credentials` grant.
+  - The consent page runs in the Vite app behind the normal login (local or
+    OIDC). It names the client, its redirect host, the requested scope, and the
+    data level, and records nothing until the user approves.
+  - Access tokens are opaque, short-lived, stored only as SHA-256 hashes, and
+    audience-bound. Refresh tokens rotate on use; reuse revokes the grant.
+  - Tokens are rejected for revoked grants, disabled users, wrong audience, or
+    missing scope. An invalid bearer token never falls back to a cookie.
+- OAuth grants cannot manage credentials, API keys, connections, or perform a
+  restore.
+
+### Connected apps
+
+- Settings gains **Connected apps** beside API keys, listing each grant's client
+  name, redirect host, scope, data level, created and last-used times, and a
+  revoke action. Revocation takes effect on the next request.
+- Each grant keeps an owner-scoped call log of tool name, time, and outcome
+  only; arguments and results are never logged. Users can clear it.
+- Grants and logs are excluded from per-user exports and included only in
+  protected deployment-wide PostgreSQL backups.
+
+### Tools
+
+Version 1 is read-only. Every tool sets `readOnlyHint`, returns
+`structuredContent` with an output schema plus a short text summary, and
+bounds its result size.
+
+| Tool | Returns |
+| --- | --- |
+| `get_portfolio_summary` | Net worth by currency and category, allocation, liabilities, and data-quality warnings |
+| `list_accounts` | Accounts with balance, currency, category, tracking mode, and archive state |
+| `get_account` | One account with analytics and linked goals |
+| `list_transactions` | Filter by account, date range, and type; at most 200 per page with a cursor |
+| `get_cash_flow_report` | Flows and net-worth statistics for a period |
+| `get_income_report` | Income by type and period |
+| `list_goals` / `get_goal` | Progress, forecast, and milestones |
+| `get_holdings` | Instruments and positions for position-tracked accounts |
+| `get_attention_items` | Stale valuations, missing exchange rates, and goal alerts |
+
+- Money values are minor-unit strings with the currency and a formatted decimal
+  string; never floating-point numbers. Exchange rates are decimal strings.
+- Dates follow the user's timezone; timestamps are UTC.
+- The server's `instructions` and a `portfolio_review` prompt explain minor
+  units, missing-rate and methodology caveats, and that output is explanatory,
+  not regulated financial advice.
+
+### Privacy and safety
+
+- The consent screen discloses that approved data leaves Wealthboard for the
+  assistant's provider, whose retention terms apply.
+- Each grant has a data level. **Detailed** (default) includes account, goal,
+  and institution names, transactions, and descriptions. **Summary** returns
+  aggregates and pseudonymous labels only. Notes are excluded at both levels
+  unless the user enables them for that grant.
+- Transaction descriptions and notes are marked as untrusted source text in tool
+  results, because imported statements can contain prompt-injection attempts.
+- Rate limit each grant and API key; return `429` with retry guidance.
+
+### Later phases
+
+- **Phase 3:** retire leftovers of the in-app review. Done: the review flow,
+  route, UI, snapshot, and sharing preferences are removed.
+- **Phase 4 (optional):** write tools such as recording a transaction or
+  valuation. They require `portfolio:write`, set `destructiveHint` where
+  applicable, reuse idempotency keys and existing validation, and never
+  restore, delete accounts, or manage credentials.
+
+### Testing
+
+- At least two users: owner success and foreign-ID not found for every tool.
+- Token audience mismatch, revoked grant, expired token, refresh reuse, missing
+  scope, disabled user, and cookie fallback refusal.
+- Protocol conformance with the MCP Inspector, plus a documented manual check
+  with one hosted assistant.
 
 ## User interface and styling
 
@@ -1934,8 +2040,8 @@ Do not implement these in version one:
 - Additional OAuth/social providers, SAML, and multiple simultaneous OIDC issuers
 - Social features
 - Public profiles
-- AI financial advice or autonomous financial actions; bounded explanatory
-  portfolio review is permitted under the requirements above
+- AI financial advice or autonomous financial actions; bounded read-only
+  assistant access through MCP is permitted under the requirements above
 - Cryptocurrency wallets
 - Complex double-entry accounting
 - Full offline synchronization

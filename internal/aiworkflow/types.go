@@ -2,7 +2,6 @@ package aiworkflow
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -53,12 +52,10 @@ func (provider Provider) BaseURL() string {
 }
 
 type SettingsInput struct {
-	Provider            Provider `json:"provider"`
-	Model               string   `json:"model"`
-	IncludeExactAmounts bool     `json:"includeExactAmounts"`
-	IncludeAccountNames bool     `json:"includeAccountNames"`
-	MonthlyTokenLimit   int      `json:"monthlyTokenLimit"`
-	MaxOutputTokens     int      `json:"maxOutputTokens"`
+	Provider          Provider `json:"provider"`
+	Model             string   `json:"model"`
+	MonthlyTokenLimit int      `json:"monthlyTokenLimit"`
+	MaxOutputTokens   int      `json:"maxOutputTokens"`
 }
 
 type Settings struct {
@@ -111,44 +108,6 @@ type Repository interface {
 	ClearUsage(context.Context, uuid.UUID) (int64, error)
 	ReserveUsage(context.Context, uuid.UUID, int, string, time.Time) (Reservation, error)
 	CompleteUsage(context.Context, uuid.UUID, uuid.UUID, CompleteUsage, time.Time) error
-}
-
-type ReviewRequest struct {
-	Period              string          `json:"period"`
-	Focus               string          `json:"focus"`
-	IncludeExactAmounts bool            `json:"includeExactAmounts"`
-	IncludeAccountNames bool            `json:"includeAccountNames"`
-	APIKey              string          `json:"apiKey,omitempty"`
-	Snapshot            json.RawMessage `json:"snapshot"`
-}
-
-type ReviewFinding struct {
-	ID           string   `json:"id" jsonschema_description:"Short stable identifier for the finding."`
-	Category     string   `json:"category" jsonschema:"enum=data-quality,enum=allocation,enum=liquidity,enum=cash-flow,enum=goals,enum=general"`
-	Severity     string   `json:"severity" jsonschema:"enum=info,enum=attention,enum=high"`
-	Confidence   string   `json:"confidence" jsonschema:"enum=low,enum=medium,enum=high"`
-	Title        string   `json:"title"`
-	Explanation  string   `json:"explanation"`
-	EvidenceRefs []string `json:"evidenceRefs" jsonschema_description:"One to six exact evidenceId values copied from the snapshot."`
-}
-
-// ReviewContent is the structured output the portfolio review flow asks the
-// model for.
-type ReviewContent struct {
-	Headline           string          `json:"headline"`
-	ExecutiveSummary   string          `json:"executiveSummary"`
-	DataQuality        []ReviewFinding `json:"dataQuality"`
-	Strengths          []ReviewFinding `json:"strengths"`
-	AttentionItems     []ReviewFinding `json:"attentionItems"`
-	GoalObservations   []ReviewFinding `json:"goalObservations"`
-	Questions          []string        `json:"questions"`
-	PossibleNextChecks []string        `json:"possibleNextChecks" jsonschema_description:"Questions to investigate, never financial instructions."`
-	Limitations        []string        `json:"limitations" jsonschema_description:"At least one limitation of this analysis."`
-}
-
-type Review struct {
-	SchemaVersion int `json:"schemaVersion"`
-	ReviewContent
 }
 
 type Usage struct {

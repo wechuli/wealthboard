@@ -126,14 +126,9 @@ basis, movement amounts, and derived values. Instrument names, symbols, dates,
 and source-event types remain visible so a hidden-value screen can still be
 reconciled.
 
-## AI portfolio review
+## Asking an AI assistant about your portfolio
 
-The optional **Portfolio review** workspace, under **Planning** in the
-sidebar, sends a bounded, deterministic portfolio snapshot to the provider
-configured under **Settings → AI provider**. The model explains
-supplied evidence; it does not calculate authoritative balances or execute
-financial changes.
-
-Before generating a review, inspect the “Data sent to the provider” panel and
-the exact-amount/account-name sharing choices. Provider retention and billing
-remain subject to that provider's terms.
+The in-app AI portfolio review has been removed. A planned Wealthboard MCP
+server will let an assistant you already use, such as Claude or ChatGPT, read
+your reports, accounts, and goals after you approve the connection. Until it
+ships, use the reports on this page directly.
