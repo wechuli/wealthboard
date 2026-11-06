@@ -862,6 +862,37 @@ export function createMockDataSource(): DataSource {
         }),
     },
 
+    connectedApps: {
+      list: () => read((_e, w) => sideFor(w).connectedApps),
+      revoke: (id) =>
+        write((w) => {
+          const side = sideFor(w)
+          if (!side.connectedApps.some((a) => a.id === id)) throw notFound('connected app')
+          side.connectedApps = side.connectedApps.filter((a) => a.id !== id)
+        }),
+      clearCalls: (id) =>
+        write((w) => {
+          const app = sideFor(w).connectedApps.find((a) => a.id === id)
+          if (!app) throw notFound('connected app')
+          app.recentCalls = []
+        }),
+    },
+
+    oauth: {
+      request: async () => {
+        await delay()
+        throw unsupported('Connecting an AI assistant')
+      },
+      approve: async () => {
+        await delay()
+        throw unsupported('Connecting an AI assistant')
+      },
+      deny: async () => {
+        await delay()
+        throw unsupported('Connecting an AI assistant')
+      },
+    },
+
     goals: {
       list: () => read((e, w) => [...w.goals].sort((a, b) => a.priority - b.priority).map((g) => e.toGoal(g))),
       get: (id) =>

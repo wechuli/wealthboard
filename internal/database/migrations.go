@@ -15,7 +15,7 @@ import (
 )
 
 const migrationsDirectory = "migrations"
-const CurrentSchemaVersion int64 = 6
+const CurrentSchemaVersion int64 = 7
 
 // migrationLockID is the PostgreSQL advisory lock key that serializes
 // migrations across replicas and operator commands sharing a database. It is

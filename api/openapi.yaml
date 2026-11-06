@@ -2748,6 +2748,131 @@ paths:
                     minimum: 0
         "401":
           $ref: "#/components/responses/Problem"
+  /oauth/requests/{id}:
+    get:
+      operationId: getOAuthConsentRequest
+      summary: Describe a pending request from an AI assistant to connect over MCP
+      description: Browser sessions only. Requests expire ten minutes after the assistant starts them.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The application, its redirect host, and the requested scopes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthConsentRequest" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /oauth/requests/{id}/approve:
+    post:
+      operationId: approveOAuthConsentRequest
+      summary: Approve an assistant's connection and get the redirect carrying its authorization code
+      description: Browser sessions only, with a trusted Origin and `X-CSRF-Token`. Approving the same application again replaces the user's earlier connection to it.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [dataLevel]
+              properties:
+                dataLevel: { $ref: "#/components/schemas/OAuthDataLevel" }
+      responses:
+        "200":
+          description: Where to send the browser next
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthRedirect" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /oauth/requests/{id}/deny:
+    post:
+      operationId: denyOAuthConsentRequest
+      summary: Decline an assistant's connection and get the redirect carrying access_denied
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "200":
+          description: Where to send the browser next
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OAuthRedirect" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /connected-apps:
+    get:
+      operationId: listConnectedApps
+      summary: List AI assistants connected over MCP with OAuth
+      description: Browser sessions only. Each connection includes its 20 most recent tool calls (name, outcome, and time only).
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Active connections, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [apps]
+                properties:
+                  apps:
+                    type: array
+                    items: { $ref: "#/components/schemas/ConnectedApp" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /connected-apps/{id}:
+    delete:
+      operationId: revokeConnectedApp
+      summary: Disconnect an assistant immediately
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204": { description: Disconnected }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /connected-apps/{id}/calls:
+    delete:
+      operationId: clearConnectedAppCalls
+      summary: Clear a connection's tool-call history
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204": { description: History cleared }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
   /auth/signup:
     post:
       operationId: signup
@@ -6570,6 +6695,51 @@ components:
         - imports:write
         - exports:read
         - ai:invoke
+    OAuthDataLevel:
+      type: string
+      enum: [detailed, summary]
+      description: "`detailed` shares accounts, goals, transactions, and holdings; `summary` shares aggregate totals and reports only."
+    OAuthConsentRequest:
+      type: object
+      additionalProperties: false
+      required: [id, clientName, redirectHost, scopes, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        clientName: { type: string, description: Name the application registered; not verified. }
+        clientUri: { type: string, format: uri }
+        redirectHost: { type: string, description: "Scheme and host the browser returns to, such as https://claude.ai." }
+        scopes: { type: array, items: { type: string } }
+        expiresAt: { type: string, format: date-time }
+    OAuthRedirect:
+      type: object
+      additionalProperties: false
+      required: [redirectTo]
+      properties:
+        redirectTo: { type: string }
+    ConnectedAppToolCall:
+      type: object
+      additionalProperties: false
+      required: [tool, outcome, at]
+      properties:
+        tool: { type: string }
+        outcome: { type: string, enum: [success, error] }
+        at: { type: string, format: date-time }
+    ConnectedApp:
+      type: object
+      additionalProperties: false
+      required: [id, clientName, redirectHost, scopes, dataLevel, createdAt, lastUsedAt, recentCalls]
+      properties:
+        id: { type: string, format: uuid }
+        clientName: { type: string }
+        clientUri: { type: string, format: uri }
+        redirectHost: { type: string }
+        scopes: { type: array, items: { type: string } }
+        dataLevel: { $ref: "#/components/schemas/OAuthDataLevel" }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, "null"], format: date-time }
+        recentCalls:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectedAppToolCall" }
     APIKeyMetadata:
       type: object
       additionalProperties: false

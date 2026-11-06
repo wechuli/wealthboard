@@ -13,7 +13,7 @@ import type { paths } from '../schema'
 import type { DataSource, ImportFile, PageQuery } from '../datasource'
 import { ApiProblem, isProblemShape } from '../problem'
 import type { ActivityQuery } from '../extensions'
-import type { APIKeyMetadata, SessionResponse } from '../types'
+import type { APIKeyMetadata, ConnectedApp, SessionResponse } from '../types'
 
 export const API_BASE = '/api/v1'
 
@@ -324,6 +324,18 @@ export function createHttpDataSource(baseUrl = API_BASE): DataSource {
       create: (body) => sendJson('/api-keys', 'POST', body),
       revoke: (id) => sendJson(`/api-keys/${id}`, 'DELETE'),
       revokeAll: () => sendJson('/api-keys/revoke-all', 'POST'),
+    },
+
+    connectedApps: {
+      list: async () => (await getJson<{ apps: ConnectedApp[] }>('/connected-apps')).apps,
+      revoke: (id) => sendJson(`/connected-apps/${id}`, 'DELETE'),
+      clearCalls: (id) => sendJson(`/connected-apps/${id}/calls`, 'DELETE'),
+    },
+
+    oauth: {
+      request: (id) => getJson(`/oauth/requests/${id}`),
+      approve: (id, dataLevel) => sendJson(`/oauth/requests/${id}/approve`, 'POST', { dataLevel }),
+      deny: (id) => sendJson(`/oauth/requests/${id}/deny`, 'POST'),
     },
 
     goals: {

@@ -290,24 +290,6 @@ func TestEndpointRateLimitsEachKey(t *testing.T) {
 	}
 }
 
-func TestRateLimiterWindowResets(t *testing.T) {
-	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
-	limiter := newRateLimiter(1, func() time.Time { return now })
-	if ok, _ := limiter.allow("a"); !ok {
-		t.Fatal("first request denied")
-	}
-	if ok, wait := limiter.allow("a"); ok || wait != time.Minute {
-		t.Fatalf("second request allowed=%v wait=%v", ok, wait)
-	}
-	if ok, _ := limiter.allow("b"); !ok {
-		t.Fatal("another key shared the limit")
-	}
-	now = now.Add(time.Minute)
-	if ok, _ := limiter.allow("a"); !ok {
-		t.Fatal("window did not reset")
-	}
-}
-
 func TestToolsAreReadOnlyAndUseTheTokenOwner(t *testing.T) {
 	readers := &fakeReaders{}
 	session := connect(t, newTestServer(t, readers, 1000).URL, ownerToken)

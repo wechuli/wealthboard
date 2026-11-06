@@ -130,6 +130,10 @@ export type AISource = S['AISource']
 // API keys and authentication methods
 export type APIKeyScope = S['APIKeyScope']
 export type APIKeyMetadata = S['APIKeyMetadata']
+export type OAuthDataLevel = S['OAuthDataLevel']
+export type OAuthConsentRequest = S['OAuthConsentRequest']
+export type ConnectedApp = S['ConnectedApp']
+export type ConnectedAppToolCall = S['ConnectedAppToolCall']
 export type CreateAPIKeyRequest = S['CreateAPIKeyRequest']
 export type CreatedAPIKey = APIKeyMetadata & { token: string }
 export type AuthMethodState = S['AuthMethodState']

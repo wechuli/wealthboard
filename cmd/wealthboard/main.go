@@ -19,6 +19,7 @@ import (
 	"github.com/wechuli/wealthboard/internal/database"
 	"github.com/wechuli/wealthboard/internal/database/generated"
 	"github.com/wechuli/wealthboard/internal/mcpserver"
+	"github.com/wechuli/wealthboard/internal/oauth"
 	"github.com/wechuli/wealthboard/internal/service"
 	staticfiles "github.com/wechuli/wealthboard/internal/static"
 )
@@ -132,10 +133,14 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	coreReads := api.NewCoreReadHandler(authHandler, coreReadService)
 	goalsReports := api.NewGoalsReportsHandler(authHandler, goalsReportsService)
 	insights := api.NewInsightsHandler(authHandler, insightsService)
-	var mcpHandler http.Handler
+	var mcpHandler, oauthHandler http.Handler
+	var connectedApps *api.ConnectedAppsHandler
 	if cfg.MCP.Enabled {
+		oauthService := oauth.NewService(db, oauth.Config{Issuer: trustedOrigin, Logger: logger})
+		oauthHandler = oauth.NewHandler(oauthService, oauth.HandlerOptions{})
+		connectedApps = api.NewConnectedAppsHandler(authHandler, oauthService)
 		mcpHandler = mcpserver.NewHandler(mcpserver.Readers{Core: coreReadService, Reports: goalsReportsService, Insights: insightsService}, apiKeys, mcpserver.Options{
-			RequestsPerMinute: cfg.MCP.RequestsPerMinute, Logger: logger,
+			RequestsPerMinute: cfg.MCP.RequestsPerMinute, Logger: logger, OAuth: oauthService,
 		})
 	}
 	featureReads := api.NewFeatureReadHandler(authHandler, service.NewFeatureReads(db))
@@ -186,7 +191,7 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 	server := &http.Server{
 		Addr: cfg.HTTP.Address,
 		Handler: api.NewRouterWithReads(logger, ready, authHandler, overviewHandler, api.ReadHandlers{
-			Core: coreReads, GoalsReports: goalsReports, Insights: insights, Features: featureReads, MCP: mcpHandler, Static: spa, Mutations: mutations,
+			Core: coreReads, GoalsReports: goalsReports, Insights: insights, Features: featureReads, MCP: mcpHandler, OAuth: oauthHandler, ConnectedApps: connectedApps, Static: spa, Mutations: mutations,
 		}),
 		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTP.ReadTimeout,

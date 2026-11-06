@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import {
   expect,
@@ -801,6 +801,159 @@ test("serves read-only MCP tools to a personal API key and never to a cookie", a
     decimal: "1234.50",
     currency: "KES",
   });
+});
+
+const oauthCallback = "https://assistant.example/callback";
+
+function pkcePair() {
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  return { verifier, challenge };
+}
+
+async function registerAssistant(page: Page, name: string) {
+  const registered = await page.request.post("/oauth/register", {
+    data: {
+      client_name: name,
+      redirect_uris: [oauthCallback],
+      token_endpoint_auth_method: "none",
+    },
+  });
+  expect(registered.status()).toBe(201);
+  return ((await registered.json()) as { client_id: string }).client_id;
+}
+
+function authorizePath(clientId: string, challenge: string, state: string) {
+  return `/oauth/authorize?${new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: oauthCallback,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    scope: "portfolio:read",
+    state,
+    resource: `${origin}/mcp`,
+  })}`;
+}
+
+// The assistant's callback is not a real site; capture where the browser is sent instead.
+async function captureCallback(page: Page) {
+  const seen: string[] = [];
+  await page.route("https://assistant.example/**", async (route) => {
+    seen.push(route.request().url());
+    await route.fulfill({ status: 200, body: "assistant callback" });
+  });
+  return seen;
+}
+
+test("connects an AI assistant with OAuth consent and disconnects it from settings", async ({
+  page,
+}) => {
+  const session = await signUp(page, "go-oauth-owner");
+  const created = await mutation(page, session, "POST", "/accounts", {
+    idempotencyKey: randomUUID(),
+    name: "OAuth savings",
+    categoryId: await firstCategoryId(page),
+    currency: "KES",
+    trackingMode: "balance",
+    openingValueMinor: "250000",
+    isIncludedInNetWorth: true,
+    openedAt: "2026-01-01",
+  });
+  expect(created.status()).toBe(201);
+
+  const clientId = await registerAssistant(page, "E2E Assistant");
+  const { verifier, challenge } = pkcePair();
+  const callbacks = await captureCallback(page);
+  await page.goto(authorizePath(clientId, challenge, "e2e-state"));
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Connect E2E Assistant?" }),
+  ).toBeVisible();
+  await expect(page.getByText("https://assistant.example").first()).toBeVisible();
+  await page.getByRole("button", { name: "Allow access" }).click();
+  await expect.poll(() => callbacks.length).toBe(1);
+  const returned = new URL(callbacks[0]!);
+  expect(returned.searchParams.get("state")).toBe("e2e-state");
+  expect(returned.searchParams.get("iss")).toBe(origin);
+
+  const exchanged = await page.request.post("/oauth/token", {
+    form: {
+      grant_type: "authorization_code",
+      code: returned.searchParams.get("code")!,
+      redirect_uri: oauthCallback,
+      code_verifier: verifier,
+      client_id: clientId,
+      resource: `${origin}/mcp`,
+    },
+  });
+  expect(exchanged.status()).toBe(200);
+  const accessToken = ((await exchanged.json()) as { access_token: string })
+    .access_token;
+  const callSummary = () =>
+    page.request.post("/mcp", {
+      data: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "get_portfolio_summary", arguments: {} },
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+    });
+  const summary = await callSummary();
+  expect(summary.status()).toBe(200);
+  expect(
+    (
+      (await summary.json()) as {
+        result: { structuredContent: { netWorth: { decimal: string } } };
+      }
+    ).result.structuredContent.netWorth.decimal,
+  ).toBe("2500.00");
+
+  await page.goto("/settings/connected-apps");
+  await expect(page.getByText("E2E Assistant")).toBeVisible();
+  await page.getByRole("button", { name: /Recent activity/ }).click();
+  await expect(page.getByText("Portfolio summary")).toBeVisible();
+  await page.getByRole("button", { name: "Disconnect E2E Assistant" }).click();
+  await page
+    .getByRole("dialog", { name: "Disconnect E2E Assistant?" })
+    .getByRole("button", { name: "Disconnect" })
+    .click();
+  await expect(page.getByText("No connected apps")).toBeVisible();
+  expect((await callSummary()).status()).toBe(401);
+});
+
+test("asks a signed-out user to sign in before consent and returns a declined connection", async ({
+  browser,
+  page,
+}) => {
+  await signUp(page, "go-oauth-signed-out");
+  const clientId = await registerAssistant(page, "Declined Assistant");
+  const { challenge } = pkcePair();
+  const context = await browser.newContext();
+  try {
+    const fresh = await context.newPage();
+    const callbacks = await captureCallback(fresh);
+    await fresh.goto(authorizePath(clientId, challenge, "declined"));
+    await expect(fresh).toHaveURL(/\/sign-in\?next=/);
+    await fresh.getByLabel("Username", { exact: true }).fill("go-oauth-signed-out");
+    await fresh.getByLabel("Password", { exact: true }).fill(password);
+    await fresh.getByRole("button", { name: "Sign in" }).click();
+    await expect(
+      fresh.getByRole("heading", { level: 1, name: "Connect Declined Assistant?" }),
+    ).toBeVisible();
+    await fresh.getByRole("button", { name: "Cancel" }).click();
+    await expect.poll(() => callbacks.length).toBe(1);
+    const returned = new URL(callbacks[0]!);
+    expect(returned.searchParams.get("error")).toBe("access_denied");
+    expect(returned.searchParams.get("state")).toBe("declined");
+    expect(returned.searchParams.has("code")).toBe(false);
+  } finally {
+    await context.close();
+  }
 });
 
 test("rejects unsupported AI providers and server-side source extraction", async ({

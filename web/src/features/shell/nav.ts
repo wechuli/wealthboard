@@ -33,6 +33,7 @@ export const SETTINGS_SECTIONS = [
   { to: '/settings/security', label: 'Security' },
   { to: '/settings/ai', label: 'AI provider' },
   { to: '/settings/api-keys', label: 'API keys' },
+  { to: '/settings/connected-apps', label: 'Connected apps' },
   { to: '/settings/data', label: 'Export and restore' },
 ] as const
 

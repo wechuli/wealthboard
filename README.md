@@ -35,7 +35,8 @@ annotated desktop and mobile walkthroughs built from fictional portfolio data.
 - Quick add (`N`), a ⌘K / Ctrl K command palette, and a `Shift H` privacy
   toggle
 - Optional bring-your-own-key AI conversion of statements into import files
-- Read-only MCP endpoint so an AI assistant you choose can query your data
+- Read-only MCP endpoint so an AI assistant you choose (Claude, ChatGPT, or a
+  developer tool) can query your data, with OAuth consent and Connected apps
 - Non-root Docker image, Docker Compose, and Kubernetes examples
 
 Money is stored as integer minor units in PostgreSQL `bigint` columns. Exchange
@@ -185,7 +186,7 @@ conflict handling make repeat runs safe for the same target.
 | `AI_CREDENTIAL_ENCRYPTION_KEY` | Optional base64 32-byte key for remembered AI provider API keys           |
 | `GENKIT_ENV`                   | Leave unset in production; `dev` starts Genkit's Developer UI             |
 | `WEB_DIST_PATH`                | Built Vite assets; default `web/dist`                                     |
-| `MCP_ENABLED`                  | `false` removes the read-only `/mcp` endpoint; default `true`             |
+| `MCP_ENABLED`                  | `false` removes `/mcp`, its OAuth sign-in, and Connected apps; default `true` |
 | `MCP_REQUESTS_PER_MINUTE`      | Per-API-key `/mcp` request limit in each replica; default `120`           |
 
 There is no initial-user password or environment-created identity.
@@ -449,10 +450,11 @@ instructions. Genkit validates every response against the schema before
 Wealthboard checks bounds and source coverage.
 
 The in-app AI portfolio review has been removed. Ask the AI assistant you
-already use instead: Wealthboard's read-only MCP endpoint lets clients such as
-Claude Code, VS Code, Cursor, and Codex read your data with a `portfolio:read`
-API key. See [Connect an AI assistant (MCP)](docs/reference/mcp.md). OAuth for
-claude.ai and ChatGPT is planned.
+already use instead: Wealthboard's read-only MCP endpoint lets Claude and
+ChatGPT connect after you approve them (OAuth, which needs a public HTTPS
+`APP_URL`), and developer tools such as Claude Code, VS Code, Cursor, and Codex
+connect with a `portfolio:read` API key. See
+[Connect an AI assistant (MCP)](docs/reference/mcp.md).
 
 Import conversion uses a two-minute provider request timeout with
 automatic retries disabled. The monthly token limit accepts 10,000 to

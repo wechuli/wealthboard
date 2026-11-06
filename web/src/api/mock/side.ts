@@ -2,7 +2,7 @@
  * Mock state for estate planning, AI settings, and API keys. Kept separate from the ledger engine:
  * these features don't change balances. Values come from the engine's current account values.
  */
-import type { AIRead, APIKeyMetadata, Beneficiary, CreatedAPIKey, EstateAllocation, EstateDirective, EstatePlan, EstateSnapshot, EstateWorkspace, ResiduaryAllocation } from '../types'
+import type { AIRead, APIKeyMetadata, ConnectedApp, Beneficiary, CreatedAPIKey, EstateAllocation, EstateDirective, EstatePlan, EstateSnapshot, EstateWorkspace, ResiduaryAllocation } from '../types'
 import { randomId, stableId } from './rng'
 
 export interface SideState {
@@ -14,6 +14,7 @@ export interface SideState {
   snapshots: EstateSnapshot[]
   ai: AIRead
   apiKeys: APIKeyMetadata[]
+  connectedApps: ConnectedApp[]
 }
 
 const stamp = (daysAgo: number) => new Date(Date.now() - daysAgo * 86_400_000).toISOString()
@@ -42,6 +43,7 @@ export function emptySideState(): SideState {
       },
     },
     apiKeys: [],
+    connectedApps: [],
   }
 }
 

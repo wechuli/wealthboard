@@ -81,7 +81,8 @@ The API never accepts keys in URLs, cookies, or request bodies. If an Authorizat
 
 A `portfolio:read` key also authorizes the read-only MCP endpoint at `/mcp`,
 which lets AI assistants such as Claude Code, VS Code, Cursor, and Codex read
-your data. See [Connect an AI assistant (MCP)](./mcp).
+your data. Claude and ChatGPT connect with OAuth instead and appear under
+**Settings → Connected apps**. See [Connect an AI assistant (MCP)](./mcp).
 
 PostgreSQL stores only a SHA-256 token hash and metadata, not the usable secret.
 API-key revocation is separate from password changes and browser session-version
