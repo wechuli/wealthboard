@@ -31,15 +31,19 @@ func (tools *toolset) registerWrites(server *mcp.Server) {
 		Name: "record_transaction",
 		Description: "Add one transaction to one of the user's accounts and return it with the account's new balance. " +
 			"Use only when the user explicitly asks to record it, and confirm the details first. It can't edit or delete records. " +
-			"Types: " + strings.Join(recordableTypes, ", ") + ". Investment (position-tracked) accounts accept only deposit, withdrawal, interest, dividend, fee, and manual_adjustment; trades are recorded in Wealthboard.",
+			"Types: " + strings.Join(recordableTypes, ", ") + ". Investment (position-tracked) accounts accept only deposit, withdrawal, interest, dividend, fee, and manual_adjustment; record trades with record_trade where available.",
 		Annotations: writeAnnotations("Record a transaction"),
-	}, handle(tools, tools.recordTransaction))
+	}, handleWrite(tools, "create", tools.recordTransaction, func(_ recordTransactionInput, out RecordTransactionResult) auditRef {
+		return auditRef{recordType: "transaction", ids: mustIDs(out.Transaction.ID), accountID: mustID(out.Account.ID)}
+	}))
 	addTool(server, &mcp.Tool{
 		Name: "record_valuation",
 		Description: "Set a balance-tracked account's value on a date, for example from a statement, and return the account's new balance. " +
 			"A valuation sets the balance; it is not a contribution. Use only when the user explicitly asks, and confirm the details first. It can't edit or delete records.",
 		Annotations: writeAnnotations("Record a valuation"),
-	}, handle(tools, tools.recordValuation))
+	}, handleWrite(tools, "create", tools.recordValuation, func(_ recordValuationInput, out RecordValuationResult) auditRef {
+		return auditRef{recordType: "valuation", ids: mustIDs(out.Valuation.ID), accountID: mustID(out.Account.ID)}
+	}))
 }
 
 const idempotencyKeyHelp = "A new random UUID for this record. Reuse it only to retry the same call; reusing it with different details fails."

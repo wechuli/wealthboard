@@ -139,7 +139,13 @@ func serve(ctx context.Context, logger *slog.Logger, cfg config.Config, db *sql.
 		oauthService := oauth.NewService(db, oauth.Config{Issuer: trustedOrigin, Logger: logger})
 		oauthHandler = oauth.NewHandler(oauthService, oauth.HandlerOptions{})
 		connectedApps = api.NewConnectedAppsHandler(authHandler, oauthService)
-		mcpHandler = mcpserver.NewHandler(mcpserver.Readers{Core: coreReadService, Reports: goalsReportsService, Insights: insightsService, Ledger: ledgerService}, apiKeys, mcpserver.Options{
+		manage := &mcpserver.Management{
+			Ledger: ledgerService, Catalog: coreReadService, Statements: service.NewStatementImportService(db),
+			Imports: service.NewImportBatchService(db), Investments: service.NewInvestmentMutations(db), Features: service.NewFeatureReads(db),
+			Rates: service.NewMetadataMutations(db), Goals: service.NewGoalMutationService(service.NewSQLGoalMutationRepository(db)),
+			Simulator: goalsReportsService, Performance: insightsService, Audit: service.NewAuditLog(db),
+		}
+		mcpHandler = mcpserver.NewHandler(mcpserver.Readers{Core: coreReadService, Reports: goalsReportsService, Insights: insightsService, Ledger: ledgerService, Manage: manage}, apiKeys, mcpserver.Options{
 			RequestsPerMinute: cfg.MCP.RequestsPerMinute, Logger: logger, OAuth: oauthService,
 		})
 	}
