@@ -1362,14 +1362,16 @@ other scope rather than leaving them with the default read scope.
 
 Status: phase 1 (read-only tools with personal API keys, `internal/mcpserver`),
 phase 2 (OAuth for hosted assistants, `internal/oauth`), phase 3 (review
-removal), and phase 4 (opt-in write tools) are implemented.
+removal), phase 4 (opt-in write tools), and phase 5 (management tools) are
+implemented.
 This replaces the removed in-app AI portfolio review. Instead
 of Wealthboard sending a snapshot to a model, the user connects an AI assistant
 they already use (for example Claude or ChatGPT) to Wealthboard through the
 [Model Context Protocol](https://modelcontextprotocol.io/specification/2025-11-25)
 (MCP). The assistant reads the user's data through bounded tools and does its
-own analysis; if the user allows changes, it can also record new transactions
-and valuations the user asks for. Wealthboard sends nothing to any AI provider
+own analysis; if the user allows changes, it can also manage the user's records
+when asked: edit and delete records, import statements, sync broker holdings
+and trades, and maintain goals, prices, and exchange rates. Wealthboard sends nothing to any AI provider
 in this workflow.
 
 ### Shape
@@ -1396,7 +1398,7 @@ can reach a private deployment.
   consulted. A missing or invalid key returns `401`; a key without
   `portfolio:read` returns `403` with the required scope in
   `WWW-Authenticate`. The endpoint is stateless Streamable HTTP with JSON
-  responses and a 64 KiB request body limit. `MCP_ENABLED` (default `true`)
+  responses and a 1 MiB request body limit, enough for 1,000-row imports. `MCP_ENABLED` (default `true`)
   turns it off, and `MCP_REQUESTS_PER_MINUTE` (default 120, 1 to 10,000) sets
   the per-key limit, counted per process.
 - **Phase 2, OAuth 2.1:** Wealthboard acts as its own authorization server for
@@ -1494,12 +1496,50 @@ output schema plus a short text summary, and bounds its result size.
 | `record_transaction` | Write tool: adds one transaction and returns it with the account's new balance |
 | `record_valuation` | Write tool: sets a balance-tracked account's value on a date and returns the new balance |
 
+Management tools (phase 5) cover accounts, valuations, transaction edits and
+deletes, atomic bulk changes, transfers, statement import, reconciliation and
+rollback, instruments, position and cash snapshots, trades, prices, goals,
+exchange rates, and performance, tax, portfolio-history, and audit reports.
+Their read tools join the Detailed tool set; their write tools join the write
+set. The [management tool reference](docs/reference/mcp-management.md) lists
+them with parameters and behavior.
+
 - Write tools are listed only for a Detailed connection whose token carries
   `portfolio:write` (an OAuth grant with changes allowed, or an API key with
-  both portfolio scopes). They only add records: no edits, deletes, transfers,
-  trades, opening balances, account changes, restores, or credential changes.
-  They set `readOnlyHint: false`, `destructiveHint: false`,
-  `idempotentHint: true`, and `openWorldHint: false`.
+  both portfolio scopes). They never change settings, credentials,
+  categories, connections, opening balances, or restores. Create and update
+  tools set `destructiveHint: false` and delete and rollback tools set
+  `destructiveHint: true`; all set `openWorldHint: false`.
+- Management tools call the existing owner-scoped services: ledger replay,
+  position replay and recalculation, exchange-rate conversion, and the goal
+  forecast. The MCP layer adds no financial arithmetic.
+- Bulk tools are atomic, accept up to 1,000 rows, and support `dryRun`.
+  Imports report created, skipped, duplicate, possible-duplicate, conflicting,
+  and rejected rows with Wealthboard's own resulting balance, and
+  `allowPartial` writes only the valid rows.
+- Statement rows match existing records by case-sensitive external ID, then by
+  the same derived `derived-<date>-<type>-<amount>[-n]` IDs as file imports, then
+  structurally by date, type, and amount, one record per row; structural matches
+  are reported for review, never silently merged. A statement closing balance is
+  compared and its difference reported; no balancing adjustment is created.
+- Each import is an `import_batches` row linked from the records it created.
+  Rollback deletes only those records and refuses when any was edited after the
+  import (`updated_at` differs from `created_at`) or when removing trades would
+  leave a later sale without holdings. A retried import with the same
+  idempotency key and request hash returns the stored summary.
+- Broker position and cash snapshots are stored as quantity and cash
+  adjustments marked with their absolute observed value (`snapshot_quantity`,
+  `cash_snapshot_minor`). Each replay recalculates their delta from earlier
+  activity, with snapshots ordered last on their date, so snapshots and imported
+  trades for the same period never double count, later activity still applies,
+  and an older snapshot doesn't change current holdings. Editing one in the web
+  app turns it into an ordinary adjustment.
+- Trades are idempotent by broker or derived external ID; a changed trade with a
+  known ID is a conflict. Instruments resolve by ID, broker ID, ISIN, or symbol
+  with exchange MIC; a bare symbol must be unique.
+- Successful MCP writes add an `audit_events` row with the tool, action,
+  affected record IDs, account, import batch, and connection; never amounts or
+  submitted text.
 - Write arguments: an account ID, a date (`YYYY-MM-DD`, not in the future), an
   amount or value as a plain decimal string parsed exactly at the account
   currency's precision (no separators, exponents, or extra decimals), and a
@@ -1539,11 +1579,11 @@ output schema plus a short text summary, and bounds its result size.
   are never shared at either level.
 - Transaction descriptions and notes are marked as untrusted source text in tool
   results, because imported statements can contain prompt-injection attempts.
-- API keys always use the Detailed level. Account references, notes, and
-  import external IDs never leave Wealthboard.
-- Write access is opt-in per grant, limited to adding records, and reversible
-  only in Wealthboard: the user edits or deletes a mistaken record there. Each
-  write appears in the connection's call log.
+- API keys always use the Detailed level. Account references and notes never
+  leave Wealthboard. Import external IDs are shown only to connections that can
+  make changes, where reconciliation needs them.
+- Write access is opt-in per grant. Each write appears in the connection's call
+  log and in the audit log; imports can be rolled back.
 - Rate limit each grant and API key on `/mcp`; return `429` with
   `Retry-After`. On the OAuth endpoints, authorization, token, and revocation
   requests are limited per client (120 a minute, with unknown client IDs
@@ -1558,6 +1598,9 @@ output schema plus a short text summary, and bounds its result size.
   route, UI, snapshot, and sharing preferences are removed.
 - **Phase 4:** write tools. Done: `record_transaction` and
   `record_valuation` behind `portfolio:write` and the consent switch, as
+  described above.
+- **Phase 5:** management tools. Done: editing, bulk import, reconciliation,
+  rollback, investment synchronization, goals, exchange rates, and reports, as
   described above.
 - **Possible later work:** Client ID Metadata Documents with an SSRF-safe
   fetcher, OIDC UserInfo for ChatGPT Enterprise domain checks, and a

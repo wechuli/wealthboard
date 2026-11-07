@@ -154,6 +154,30 @@ func (service *GoalMutationService) CreateMilestone(ctx context.Context, userID,
 	})
 }
 
+// ValidateGoalMilestone applies CreateMilestone's checks against a goal's currency, target
+// amount, and target date, so callers can validate before writing anything.
+func ValidateGoalMilestone(input GoalMilestoneInput, currency string, targetMinor int64, targetDate string) error {
+	name := strings.TrimSpace(input.Name)
+	if name == "" || len(name) > 100 {
+		return goalValidationError("milestone name must contain between 1 and 100 characters")
+	}
+	amount, err := parseGoalMoneyMinor(input.TargetAmount, currency)
+	if err != nil || amount <= 0 || amount > targetMinor {
+		return goalValidationError("milestone amount must be greater than zero and no more than the goal target")
+	}
+	if strings.TrimSpace(input.TargetDate) != "" {
+		date, err := parseDate(input.TargetDate)
+		if err != nil {
+			return err
+		}
+		goalDate, err := parseDate(targetDate)
+		if err == nil && date.After(goalDate) {
+			return goalValidationError("milestone date cannot be after the goal target date")
+		}
+	}
+	return nil
+}
+
 func (service *GoalMutationService) DeleteMilestone(ctx context.Context, userID, goalID, milestoneID uuid.UUID) error {
 	return service.repository.DeleteMilestone(ctx, userID, goalID, milestoneID)
 }

@@ -42,7 +42,8 @@ The database can contain:
 - estate allocation and document-location notes;
 - password hashes and OIDC identity mappings;
 - personal API-key hashes, scopes, and revocation metadata;
-- MCP connection grants, hashed OAuth tokens, and tool-call history.
+- MCP connection grants, hashed OAuth tokens, tool-call history, and the MCP
+  audit log of changed record IDs.
 
 Protect PostgreSQL, database backups, and user exports accordingly.
 
@@ -103,15 +104,18 @@ session cookie, so a browser can't be tricked into calling it. Every tool reads
 and writes with the `userId` from the verified key or token, and another user's
 IDs return the same "not found" result as unknown IDs.
 
-Write tools (`record_transaction` and `record_valuation`) exist only for
-Detailed connections whose token carries `portfolio:write`: an OAuth grant
-where the user turned on **Allow changes**, or an API key with both portfolio
-scopes. They only add records through the existing ledger service, with its
-validation and idempotency, and can't edit, delete, transfer, restore, or touch
-credentials. Because a prompt injection in imported text could ask an assistant
-to record something, the server instructions limit writes to the user's
-explicit request, and each write appears in the connection's activity log. Tool results exclude account references,
-notes, and import external IDs, and mark transaction descriptions as
+Write tools exist only for Detailed connections whose token carries
+`portfolio:write`: an OAuth grant where the user turned on **Allow changes**, or
+an API key with both portfolio scopes. They change records only through the
+existing services, with their validation, idempotency, and atomic bulk
+transactions, and can't change settings, credentials, categories, connections,
+or restores. Because a prompt injection in imported text could ask an assistant
+to change something, the server instructions limit writes to the user's
+explicit request and ask for confirmation before deletes and rollbacks. Each
+write appears in the connection's activity log and in an audit log of record
+IDs, and statement, trade, and position imports can be rolled back. Tool
+results exclude account references and notes, show import external IDs only to
+connections that can make changes, and mark transaction descriptions as
 untrusted text. Errors returned to the assistant never include internal
 details. Data an assistant reads is subject to that assistant's provider
 terms. Revoke the key or disconnect the app to cut access, or set

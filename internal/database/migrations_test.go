@@ -97,8 +97,8 @@ func assertCompleteSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	`).Scan(&tableCount); err != nil {
 		t.Fatalf("count complete schema: %v", err)
 	}
-	if tableCount != 33 {
-		t.Fatalf("application table count = %d, want 33", tableCount)
+	if tableCount != 35 {
+		t.Fatalf("application table count = %d, want 35", tableCount)
 	}
 
 	var amountType string
@@ -452,5 +452,98 @@ func assertAISharingColumns(t *testing.T, ctx context.Context, db *sql.DB, want 
 	}
 	if got != want {
 		t.Fatalf("AI sharing columns = %d, want %d", got, want)
+	}
+}
+
+func TestPostgreSQLImportBatchesUpgradeIsolateUsersAndRollBack(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	admin, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatalf("open admin database: %v", err)
+	}
+	defer admin.Close()
+	schema := fmt.Sprintf("wealthboard_import_batches_%d", time.Now().UnixNano())
+	if _, err := admin.ExecContext(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatalf("create test schema: %v", err)
+	}
+	defer func() {
+		if _, err := admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE"); err != nil {
+			t.Errorf("drop test schema: %v", err)
+		}
+	}()
+	schemaURL, err := url.Parse(databaseURL)
+	if err != nil {
+		t.Fatalf("parse TEST_DATABASE_URL: %v", err)
+	}
+	query := schemaURL.Query()
+	query.Set("search_path", schema)
+	schemaURL.RawQuery = query.Encode()
+	db, err := Open(ctx, config.Database{URL: schemaURL.String(), MaxOpenConns: 2, MaxIdleConns: 1, ConnMaxLifetime: time.Minute, ConnMaxIdleTime: time.Minute, PingTimeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+	provider, err := newMigrationProvider(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.UpTo(ctx, 8); err != nil {
+		t.Fatalf("migrate to the previous version: %v", err)
+	}
+
+	const ownerID, foreignID = "00000000-0000-0000-0000-0000000000a1", "00000000-0000-0000-0000-0000000000b2"
+	const ownerAccount, foreignAccount = "00000000-0000-0000-0000-0000000000c1", "00000000-0000-0000-0000-0000000000c2"
+	const transactionID = "00000000-0000-0000-0000-0000000000d1"
+	for _, statement := range []string{
+		`INSERT INTO users (id, username, created_at, updated_at) VALUES ('` + ownerID + `', 'batch-owner', now(), now()), ('` + foreignID + `', 'batch-foreign', now(), now())`,
+		`INSERT INTO categories (id, user_id, name, slug, created_at, updated_at) VALUES
+			('00000000-0000-0000-0000-0000000000e1', '` + ownerID + `', 'Cash', 'cash', now(), now()),
+			('00000000-0000-0000-0000-0000000000e2', '` + foreignID + `', 'Cash', 'cash', now(), now())`,
+		`INSERT INTO accounts (id, user_id, name, category_id, currency, created_at, updated_at) VALUES
+			('` + ownerAccount + `', '` + ownerID + `', 'Owner', '00000000-0000-0000-0000-0000000000e1', 'KES', now(), now()),
+			('` + foreignAccount + `', '` + foreignID + `', 'Foreign', '00000000-0000-0000-0000-0000000000e2', 'KES', now(), now())`,
+		`INSERT INTO transactions (id, user_id, account_id, type, amount_minor, currency, transaction_date, created_at, updated_at)
+			VALUES ('` + transactionID + `', '` + ownerID + `', '` + ownerAccount + `', 'deposit', 100, 'KES', '2026-01-01', now(), now())`,
+	} {
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			t.Fatalf("seed version 8: %v", err)
+		}
+	}
+
+	if err := MigrateUp(ctx, db); err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+	if err := CheckReady(ctx, db); err != nil {
+		t.Fatalf("upgraded database is not ready: %v", err)
+	}
+	var linked sql.NullString
+	if err := db.QueryRowContext(ctx, `SELECT import_batch_id::TEXT FROM transactions WHERE id = $1`, transactionID).Scan(&linked); err != nil || linked.Valid {
+		t.Fatalf("existing transaction batch = %v, %v", linked, err)
+	}
+	const foreignBatch = "00000000-0000-0000-0000-0000000000f2"
+	if _, err := db.ExecContext(ctx, `INSERT INTO import_batches (id, user_id, account_id, kind, request_hash, created_at)
+		VALUES ($1, $2, $3, 'transactions', 'hash', now())`, foreignBatch, foreignID, foreignAccount); err != nil {
+		t.Fatalf("insert foreign batch: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE transactions SET import_batch_id = $1 WHERE id = $2`, foreignBatch, transactionID); err == nil {
+		t.Fatal("a transaction was linked to another user's import batch")
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE transactions SET cash_snapshot_minor = 1 WHERE id = $1`, transactionID); err == nil {
+		t.Fatal("a deposit was accepted as a cash snapshot")
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO import_batches (id, user_id, account_id, kind, request_hash, created_at)
+		VALUES (gen_random_uuid(), $1, $2, 'transactions', 'hash', now())`, ownerID, foreignAccount); err == nil {
+		t.Fatal("an import batch was attached to another user's account")
+	}
+
+	if _, err := provider.DownTo(ctx, 8); err != nil {
+		t.Fatalf("roll back: %v", err)
+	}
+	if err := MigrateUp(ctx, db); err != nil {
+		t.Fatalf("re-apply after rollback: %v", err)
 	}
 }

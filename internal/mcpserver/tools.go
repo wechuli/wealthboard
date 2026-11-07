@@ -111,12 +111,18 @@ func (tools *toolset) register(server *mcp.Server) {
 		Description: "Data-quality and goal items that need attention, such as missing exchange rates, stale prices, and goals behind schedule.",
 		Annotations: readOnly("Attention items"),
 	}, handle(tools, tools.attention))
+	if tools.readers.Manage.complete() {
+		tools.registerManagementReads(server)
+	}
 	if tools.write {
 		tools.registerWrites(server)
+		if tools.readers.Manage.complete() {
+			tools.registerManagementWrites(server)
+		}
 	}
 }
 
-// addTool registers a tool with an output schema that lists one JSON type per field.
+// addTool registers a tool with input and output schemas that list one JSON type per field.
 // Optional fields are omitted rather than sent as null, so the inferred ["null", T]
 // unions are narrowed to T; some assistants reject multi-type schemas.
 func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
@@ -125,6 +131,14 @@ func addTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHa
 		panic(fmt.Sprintf("infer %s output schema: %v", tool.Name, err))
 	}
 	tool.OutputSchema = singleTypes(schema)
+	if tool.InputSchema == nil {
+		input, err := jsonschema.For[In](nil)
+		if err != nil {
+			panic(fmt.Sprintf("infer %s input schema: %v", tool.Name, err))
+		}
+		// Optional pointer fields are omitted rather than sent as null.
+		tool.InputSchema = singleTypes(input)
+	}
 	mcp.AddTool(server, tool, handler)
 }
 
@@ -176,6 +190,9 @@ func handle[In, Out any](tools *toolset, run func(context.Context, uuid.UUID, In
 		case errors.Is(err, service.ErrInsightsInvalidRange):
 			return nil, zero, invalid("range must be 1m, 3m, 6m, 1y, or all")
 		default:
+			if message, ok := safeServiceMessage(err); ok {
+				return nil, zero, toolError{message}
+			}
 			tools.logger.ErrorContext(ctx, "MCP tool failed", "tool", request.Params.Name, "error", err)
 			return nil, zero, toolError{internalErrorMessage}
 		}

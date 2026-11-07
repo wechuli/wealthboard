@@ -75,6 +75,8 @@ type PositionEventMutationInput struct {
 	IdempotencyKey      uuid.UUID  `json:"idempotencyKey"`
 	Description         string     `json:"description"`
 	Notes               string     `json:"notes"`
+	// ImportBatchID links an imported trade to its batch; it is never read from requests.
+	ImportBatchID uuid.UUID `json:"-"`
 }
 
 type SecurityPriceMutationInput struct {
@@ -254,7 +256,11 @@ func formatInvestmentOptionalDate(value sql.NullTime) string {
 }
 
 func (service *InvestmentMutations) CreateInstrument(ctx context.Context, userID uuid.UUID, input InstrumentMutationInput) (uuid.UUID, error) {
-	validated, err := service.validateInstrument(ctx, service.db, userID, input)
+	return service.createInstrumentTx(ctx, service.db, userID, input)
+}
+
+func (service *InvestmentMutations) createInstrumentTx(ctx context.Context, q sqlTx, userID uuid.UUID, input InstrumentMutationInput) (uuid.UUID, error) {
+	validated, err := service.validateInstrument(ctx, q, userID, input)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -265,7 +271,7 @@ func (service *InvestmentMutations) CreateInstrument(ctx context.Context, userID
 		externalID = &value
 	}
 	now := service.now().UTC()
-	_, err = service.db.ExecContext(ctx, `
+	_, err = q.ExecContext(ctx, `
 INSERT INTO investment_instruments (
     id, user_id, external_id, name, symbol, identifier_type, identifier,
     exchange_mic, asset_type, quote_currency, created_at, updated_at
@@ -398,6 +404,20 @@ func (service *InvestmentMutations) UpsertSecurityPrice(ctx context.Context, use
 	}
 	var id uuid.UUID
 	err = service.withTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		id, err = service.upsertSecurityPriceTx(ctx, tx, userID, input, price)
+		if err != nil {
+			return err
+		}
+		return service.recalculateInstrumentAccounts(ctx, tx, userID, input.InstrumentID)
+	})
+	return id, err
+}
+
+// upsertSecurityPriceTx stores a validated canonical price without recalculating accounts.
+func (service *InvestmentMutations) upsertSecurityPriceTx(ctx context.Context, tx *sql.Tx, userID uuid.UUID, input SecurityPriceMutationInput, price string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := func() error {
 		var currency string
 		if err := tx.QueryRowContext(ctx, `
 SELECT quote_currency FROM investment_instruments
@@ -427,8 +447,8 @@ RETURNING id`, id, userID, input.InstrumentID, optionalString(input.ExternalID),
 			investmentDateOnly(input.EffectiveDate), source, optionalString(input.Provenance), now).Scan(&id), "upsert security price"); err != nil {
 			return err
 		}
-		return service.recalculateInstrumentAccounts(ctx, tx, userID, input.InstrumentID)
-	})
+		return nil
+	}()
 	return id, err
 }
 
@@ -472,12 +492,24 @@ func (service *InvestmentMutations) savePositionEvent(ctx context.Context, userI
 			return uuid.Nil, err
 		}
 	}
+	var resultID uuid.UUID
+	err := service.withTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		resultID, err = service.savePositionEventTx(ctx, tx, userID, eventID, input)
+		return err
+	})
+	return resultID, err
+}
+
+// savePositionEventTx validates and stores one ordinary position event inside the caller's
+// transaction, then replays the account. Callers validate dates before opening tx.
+func (service *InvestmentMutations) savePositionEventTx(ctx context.Context, tx *sql.Tx, userID, eventID uuid.UUID, input PositionEventMutationInput) (uuid.UUID, error) {
 	quantity, err := canonicalDecimal(input.Quantity, input.Type == "quantity_adjustment", false, "quantity")
 	if err != nil {
 		return uuid.Nil, err
 	}
 	var resultID uuid.UUID
-	err = service.withTx(ctx, func(tx *sql.Tx) error {
+	err = func() error {
 		var accountCurrency, instrumentCurrency string
 		if err := tx.QueryRowContext(ctx, `
 SELECT currency FROM accounts
@@ -620,16 +652,16 @@ INSERT INTO position_events (
     trade_currency, gross_amount_minor, fee_amount_minor, fee_currency,
     cash_effect_minor, applied_exchange_rate, opening_cost_basis_minor,
     trade_date, event_sequence, settlement_date, external_id, idempotency_key,
-    description, notes, created_at, updated_at
+    description, notes, created_at, updated_at, import_batch_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6::NUMERIC, NULLIF($7, '')::NUMERIC,
     $8, $9, $10, $11, $12, NULLIF($13, '')::NUMERIC, $14,
-    $15, $16, $17, $18, $19, $20, $21, $22, $22
+    $15, $16, $17, $18, $19, $20, $21, $22, $22, $23
 )`, resultID, userID, input.AccountID, input.InstrumentID, input.Type, quantity, unitPrice,
 				tradeCurrency, grossMinor, feeMinor, optionalString(feeCurrency), cashEffectMinor, appliedRate,
 				openingCostBasis, investmentDateOnly(input.TradeDate), sequence, optionalDate(input.SettlementDate),
 				optionalString(input.ExternalID), optionalUUID(input.IdempotencyKey), optionalString(input.Description),
-				optionalString(input.Notes), now)
+				optionalString(input.Notes), now, optionalUUID(input.ImportBatchID))
 		} else {
 			resultID = eventID
 			_, err = tx.ExecContext(ctx, `
@@ -641,7 +673,9 @@ SET instrument_id = $3, type = $4, quantity = $5::NUMERIC,
     opening_cost_basis_minor = $13, trade_date = $14, event_sequence = $15,
     settlement_date = $16, external_id = $17, description = $18, notes = $19,
     related_instrument_id = NULL, action_ratio_numerator = NULL,
-    action_ratio_denominator = NULL, updated_at = $20
+    action_ratio_denominator = NULL, updated_at = $20,
+    snapshot_quantity = CASE WHEN instrument_id = $3 AND type = $4 AND quantity = $5::NUMERIC AND trade_date = $14
+        THEN snapshot_quantity END
 WHERE user_id = $1 AND id = $2`, userID, eventID, input.InstrumentID, input.Type, quantity, unitPrice,
 				tradeCurrency, grossMinor, feeMinor, optionalString(feeCurrency), cashEffectMinor, appliedRate,
 				openingCostBasis, investmentDateOnly(input.TradeDate), sequence, optionalDate(input.SettlementDate),
@@ -654,7 +688,7 @@ WHERE user_id = $1 AND id = $2`, userID, eventID, input.InstrumentID, input.Type
 			return err
 		}
 		return service.recalculatePositionAccount(ctx, tx, userID, input.AccountID)
-	})
+	}()
 	return resultID, err
 }
 
@@ -899,20 +933,9 @@ func replayPositionEvents(events []positionEventRow, validateCorporateActions bo
 		if !ok {
 			return nil, fmt.Errorf("parse stored position quantity")
 		}
-		next := cloneRat(current)
-		switch event.eventType {
-		case "sell", "transfer_out", "merger_out":
-			next.Sub(next, absRat(quantity))
-		case "quantity_adjustment":
-			next.Add(next, quantity)
-		case "split":
-			numerator, denominator, err := positiveRatio(event.actionRatioNumerator, event.actionRatioDenominator)
-			if err != nil {
-				return nil, err
-			}
-			next.Mul(next, numerator).Quo(next, denominator)
-		default:
-			next.Add(next, absRat(quantity))
+		next, err := applyPositionEvent(current, event, quantity)
+		if err != nil {
+			return nil, err
 		}
 		if next.Sign() < 0 {
 			return nil, investmentValidationError("a position cannot have a negative quantity")
@@ -942,7 +965,32 @@ func replayPositionEvents(events []positionEventRow, validateCorporateActions bo
 	return quantities, nil
 }
 
+// applyPositionEvent returns the holding after one event; it does not reject negatives.
+func applyPositionEvent(current *big.Rat, event positionEventRow, quantity *big.Rat) (*big.Rat, error) {
+	next := cloneRat(current)
+	switch event.eventType {
+	case "sell", "transfer_out", "merger_out":
+		next.Sub(next, absRat(quantity))
+	case "quantity_adjustment":
+		next.Add(next, quantity)
+	case "split":
+		numerator, denominator, err := positiveRatio(event.actionRatioNumerator, event.actionRatioDenominator)
+		if err != nil {
+			return nil, err
+		}
+		next.Mul(next, numerator).Quo(next, denominator)
+	default:
+		next.Add(next, absRat(quantity))
+	}
+	return next, nil
+}
+
+// validateAccountPositionReplay first re-anchors holding and cash snapshots, which are
+// absolute observations, and then checks that no position becomes negative.
 func validateAccountPositionReplay(ctx context.Context, tx *sql.Tx, userID, accountID uuid.UUID) error {
+	if err := rebasePositionSnapshots(ctx, tx, userID, accountID); err != nil {
+		return err
+	}
 	events, err := loadPositionEvents(ctx, tx, userID, &accountID)
 	if err != nil {
 		return err
@@ -991,6 +1039,9 @@ WHERE user_id = $1 AND id = $2 AND tracking_mode = 'positions'`, userID, account
 	}
 	if archivedAt.Valid {
 		return nil
+	}
+	if err := rebasePositionSnapshots(ctx, tx, userID, accountID); err != nil {
+		return err
 	}
 	events, err := loadPositionEvents(ctx, tx, userID, &accountID)
 	if err != nil {

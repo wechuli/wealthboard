@@ -77,6 +77,7 @@ export default defineConfig({
             link: "/reference/investment-import",
           },
           { text: "Connect an AI assistant (MCP)", link: "/reference/mcp" },
+          { text: "Assistant management tools", link: "/reference/mcp-management" },
           {
             text: "Go authentication and API keys",
             link: "/reference/go-authentication",

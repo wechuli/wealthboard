@@ -1,6 +1,6 @@
 ---
 title: Connect an AI assistant (MCP)
-description: Let an AI assistant you already use read your Wealthboard data, and optionally record transactions and valuations, through a Model Context Protocol endpoint.
+description: Let an AI assistant you already use read your Wealthboard data, and optionally manage your records, through a Model Context Protocol endpoint.
 ---
 
 # Connect an AI assistant (MCP)
@@ -9,8 +9,9 @@ Wealthboard serves a [Model Context Protocol](https://modelcontextprotocol.io/)
 (MCP) endpoint at `/mcp`. An assistant that supports MCP can use it to answer
 questions about your accounts, transactions, goals, and reports using
 Wealthboard's own figures. Connections are read-only unless you
-[allow changes](#allow-changes), which let the assistant record new
-transactions and valuations you ask for. Wealthboard has no built-in AI
+[allow changes](#allow-changes), which let the assistant manage your records
+when you ask: import statements, sync broker holdings, and edit or delete
+records. Wealthboard has no built-in AI
 provider and never sends your data to an AI service itself. The assistant you
 connect requests it, and that provider's terms then apply to what it receives.
 
@@ -55,11 +56,14 @@ verified. Allow access only when you've just started the connection yourself.
 
 When an assistant asks for permission to make changes, the consent page shows
 an **Allow changes** switch. It is off by default and needs **Detailed**
-access. With it on, the assistant can use `record_transaction` and
-`record_valuation` to add records when you ask, for example "record a 1,500 KES
-deposit to Savings today". It can't edit or delete anything, move money between
-accounts, record trades, or change accounts or settings. To fix a mistake,
-edit or delete the record in Wealthboard.
+access. With it on, the assistant can change your records when you ask, for
+example "record a 1,500 KES deposit to Savings today", "import this
+statement", or "sync my Interactive Brokers positions". It can create, edit,
+and delete accounts, transactions, valuations, goals, instruments, trades,
+prices, and exchange rates, import and roll back statements, and move money
+between accounts. It can't change settings, credentials, categories, or
+connections. Every change appears in the audit log (`get_audit_log`); see
+[Assistant management tools](./mcp-management.md).
 
 Leave the switch off for a read-only connection. To change your choice later,
 connect the assistant again.
@@ -81,8 +85,8 @@ Connections that aren't used for 30 days expire.
    `portfolio:read` scope. Keys with other scopes are refused by `/mcp` unless
    they also include `portfolio:read`, but a read-only key limits what a leaked
    key can do elsewhere in the API. Add `portfolio:write` only if the assistant
-   should record transactions and valuations; that key can also change data
-   through the rest of the API.
+   should change your records; that key can also change data through the rest
+   of the API.
 2. Copy the key; it's shown only once.
 3. Revoke the key from the same page to disconnect the assistant immediately.
 
@@ -167,8 +171,16 @@ Tools return only the signed-in user's data. Read tools:
 | `get_holdings`          | Positions, prices, and cash for investment accounts; `accountId` is optional                                                           |
 | `get_attention_items`   | Missing exchange rates, stale prices, and goals behind schedule                                                                        |
 
-Write tools, listed only for a Detailed connection with changes allowed or an
-API key with both `portfolio:read` and `portfolio:write`:
+Detailed connections also get the management read tools, such as
+`get_transaction`, `reconcile_transactions`, `get_performance_report`, and
+`get_audit_log`. See [Assistant management tools](./mcp-management.md) for the
+full list.
+
+Write tools are listed only for a Detailed connection with changes allowed or
+an API key with both `portfolio:read` and `portfolio:write`. The two original
+write tools are below; the others, for editing, bulk imports, reconciliation,
+investments, goals, and exchange rates, are described in
+[Assistant management tools](./mcp-management.md).
 
 | Tool                 | Does                                                                                                                                   |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -181,7 +193,8 @@ API key with both `portfolio:read` and `portfolio:write`:
   negative.
 - `type` is any transaction type except `opening_balance` and `transfer`.
   Investment accounts accept only `deposit`, `withdrawal`, `interest`,
-  `dividend`, `fee`, and `manual_adjustment`; record trades in Wealthboard.
+  `dividend`, `fee`, and `manual_adjustment`; record trades with
+  `record_trade` or `bulk_import_trades`.
 - Dates can't be in the future, and archived accounts can't be changed.
 - `idempotencyKey` is a new UUID for each record. Retrying with the same key and
   details returns the original record instead of adding another; the same key
@@ -208,8 +221,10 @@ The server also offers a `portfolio_review` prompt. Its optional `focus` is
 
 Assistants receive account, institution, category, and goal names, balances,
 transactions and their descriptions, holdings, and reports. They never receive
-account references, private notes, import external IDs, credentials, or other
-users' data. Transaction descriptions come from your imports, so tool results
+account references, private notes, credentials, or other
+users' data. Import source IDs (`externalId`) are shown only on connections
+that can make changes, where they are needed to reconcile statements.
+Transaction descriptions come from your imports, so tool results
 mark them as untrusted text the assistant must not follow as instructions.
 
 ## Limits and errors

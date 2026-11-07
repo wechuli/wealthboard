@@ -162,11 +162,15 @@ fixtures and archived migration history remain as non-executable evidence.
   A per-key or per-grant fixed-window limiter (`internal/ratelimit`) runs in
   each process. Each request is served by one of three server instances:
   Summary (aggregate tools only), Detailed read-only, or Detailed with the
-  `record_transaction` and `record_valuation` write tools when the token
-  carries `portfolio:write`. Write tools parse decimal strings exactly with
-  `domain.ParseDecimalAmount` and call `LedgerService.CreateTransaction` and
-  `CreateValuation`, so ledger validation, idempotency, and balance replay are
-  shared with the REST API.
+  write tools when the token carries `portfolio:write`. Write tools parse
+  decimal strings exactly with `domain.ParseDecimalAmount` and call the same
+  services as the REST API, so ledger validation, idempotency, and balance
+  replay are shared. Management tools (`internal/mcpserver/manage*.go`) use
+  `StatementImportService` and `ImportBatchService` for atomic statement
+  imports, reconciliation, history, and rollback; `InvestmentMutations` for
+  instruments, absolute position and cash snapshots, trade imports, and prices;
+  `MetadataMutations.UpsertExchangeRates`; the goal services; and
+  `AuditLog`, which records each successful MCP write's record IDs.
 - **MCP OAuth:** `internal/oauth` is the authorization server for `/mcp`, with
   `APP_URL` as issuer and `APP_URL/mcp` as the only resource. It serves RFC 9728
   and RFC 8414 metadata, Dynamic Client Registration, the authorization-code
@@ -487,4 +491,6 @@ own authorization decisions.
 - AI output remains explanatory, non-authoritative, and non-advisory. Files
   produced by an AI chat are untrusted input; deterministic validation and
   explicit user confirmation remain the sole path to persistence. MCP write
-  tools only add records through the same ledger validation.
+  tools change records only through the same service validation, record each
+  change in the audit log, and import whole statements atomically with
+  rollback.

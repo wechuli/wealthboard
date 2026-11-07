@@ -58,6 +58,20 @@ type ApiKey struct {
 	RevokedAt     sql.NullTime    `json:"revoked_at"`
 }
 
+type AuditEvent struct {
+	ID            uuid.UUID       `json:"id"`
+	UserID        uuid.UUID       `json:"user_id"`
+	Channel       string          `json:"channel"`
+	Client        sql.NullString  `json:"client"`
+	Tool          string          `json:"tool"`
+	Action        string          `json:"action"`
+	RecordType    string          `json:"record_type"`
+	RecordIds     json.RawMessage `json:"record_ids"`
+	AccountID     uuid.NullUUID   `json:"account_id"`
+	ImportBatchID uuid.NullUUID   `json:"import_batch_id"`
+	CreatedAt     time.Time       `json:"created_at"`
+}
+
 type Beneficiary struct {
 	ID             uuid.UUID      `json:"id"`
 	UserID         uuid.UUID      `json:"user_id"`
@@ -220,6 +234,22 @@ type IdempotencyKey struct {
 	CreatedAt time.Time     `json:"created_at"`
 }
 
+type ImportBatch struct {
+	ID                    uuid.UUID       `json:"id"`
+	UserID                uuid.UUID       `json:"user_id"`
+	AccountID             uuid.UUID       `json:"account_id"`
+	Kind                  string          `json:"kind"`
+	Source                sql.NullString  `json:"source"`
+	IdempotencyKey        uuid.NullUUID   `json:"idempotency_key"`
+	RequestHash           string          `json:"request_hash"`
+	Status                string          `json:"status"`
+	Summary               json.RawMessage `json:"summary"`
+	StatementDate         sql.NullTime    `json:"statement_date"`
+	StatementBalanceMinor sql.NullInt64   `json:"statement_balance_minor"`
+	CreatedAt             time.Time       `json:"created_at"`
+	RolledBackAt          sql.NullTime    `json:"rolled_back_at"`
+}
+
 type Institution struct {
 	ID             uuid.UUID      `json:"id"`
 	UserID         uuid.UUID      `json:"user_id"`
@@ -360,6 +390,8 @@ type PositionEvent struct {
 	Notes                  sql.NullString `json:"notes"`
 	CreatedAt              time.Time      `json:"created_at"`
 	UpdatedAt              time.Time      `json:"updated_at"`
+	ImportBatchID          uuid.NullUUID  `json:"import_batch_id"`
+	SnapshotQuantity       sql.NullString `json:"snapshot_quantity"`
 }
 
 type PositionReconciliation struct {
@@ -389,21 +421,23 @@ type SecurityPrice struct {
 }
 
 type Transaction struct {
-	ID              uuid.UUID      `json:"id"`
-	UserID          uuid.UUID      `json:"user_id"`
-	AccountID       uuid.UUID      `json:"account_id"`
-	Type            string         `json:"type"`
-	AmountMinor     int64          `json:"amount_minor"`
-	Currency        string         `json:"currency"`
-	TransactionDate time.Time      `json:"transaction_date"`
-	Description     sql.NullString `json:"description"`
-	Notes           sql.NullString `json:"notes"`
-	ExternalID      sql.NullString `json:"external_id"`
-	TransferGroupID uuid.NullUUID  `json:"transfer_group_id"`
-	EventGroupID    uuid.NullUUID  `json:"event_group_id"`
-	IdempotencyKey  sql.NullString `json:"idempotency_key"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
+	ID                uuid.UUID      `json:"id"`
+	UserID            uuid.UUID      `json:"user_id"`
+	AccountID         uuid.UUID      `json:"account_id"`
+	Type              string         `json:"type"`
+	AmountMinor       int64          `json:"amount_minor"`
+	Currency          string         `json:"currency"`
+	TransactionDate   time.Time      `json:"transaction_date"`
+	Description       sql.NullString `json:"description"`
+	Notes             sql.NullString `json:"notes"`
+	ExternalID        sql.NullString `json:"external_id"`
+	TransferGroupID   uuid.NullUUID  `json:"transfer_group_id"`
+	EventGroupID      uuid.NullUUID  `json:"event_group_id"`
+	IdempotencyKey    sql.NullString `json:"idempotency_key"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	ImportBatchID     uuid.NullUUID  `json:"import_batch_id"`
+	CashSnapshotMinor sql.NullInt64  `json:"cash_snapshot_minor"`
 }
 
 type User struct {

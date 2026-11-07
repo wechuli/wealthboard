@@ -448,35 +448,8 @@ func (service *LedgerService) UpdateTransaction(ctx context.Context, userID, tra
 		return fmt.Errorf("begin transaction update: %w", err)
 	}
 	defer tx.Rollback()
-	var accountID uuid.UUID
-	var existingType string
-	var eventGroupID uuid.NullUUID
-	err = tx.QueryRowContext(ctx, `SELECT account_id,type,event_group_id FROM transactions WHERE user_id=$1 AND id=$2 FOR UPDATE`, userID, transactionID).Scan(&accountID, &existingType, &eventGroupID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrLedgerNotFound
-	}
+	accountID, err := service.updateTransactionTx(ctx, tx, userID, transactionID, input, nil)
 	if err != nil {
-		return fmt.Errorf("load transaction: %w", err)
-	}
-	if existingType == "opening_balance" || existingType == "transfer" || eventGroupID.Valid {
-		return validation("opening balances, transfers, and grouped investment activity cannot be edited individually")
-	}
-	account, err := getLedgerAccount(ctx, tx, userID, accountID, false)
-	if err != nil {
-		return err
-	}
-	if err := validateTransactionForAccount(input.Type, account.TrackingMode); err != nil {
-		return err
-	}
-	result, err := tx.ExecContext(ctx, `
-		UPDATE transactions SET type=$3,amount_minor=$4,transaction_date=$5,
-			description=$6,notes=$7,external_id=$8,updated_at=$9
-		WHERE user_id=$1 AND id=$2
-	`, userID, transactionID, input.Type, input.AmountMinor, ledgerDateOnly(input.TransactionDate), nullable(input.Description), nullable(input.Notes), nullable(input.ExternalID), service.now().UTC())
-	if err != nil {
-		return fmt.Errorf("update transaction: %w", err)
-	}
-	if err := requireLedgerAffected(result); err != nil {
 		return err
 	}
 	if _, err := service.replayBalance(ctx, tx, userID, accountID); err != nil {
@@ -485,57 +458,64 @@ func (service *LedgerService) UpdateTransaction(ctx context.Context, userID, tra
 	return tx.Commit()
 }
 
+// updateTransactionTx changes one ordinary transaction without replaying its account,
+// so callers can change several records and replay each account once. A non-nil
+// expectedUpdatedAt rejects the change if the record was modified since it was read.
+func (service *LedgerService) updateTransactionTx(ctx context.Context, tx *sql.Tx, userID, transactionID uuid.UUID, input TransactionMutationInput, expectedUpdatedAt *time.Time) (uuid.UUID, error) {
+	var accountID uuid.UUID
+	var existingType string
+	var eventGroupID uuid.NullUUID
+	var updatedAt time.Time
+	err := tx.QueryRowContext(ctx, `SELECT account_id,type,event_group_id,updated_at FROM transactions WHERE user_id=$1 AND id=$2 FOR UPDATE`, userID, transactionID).Scan(&accountID, &existingType, &eventGroupID, &updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return uuid.Nil, ErrLedgerNotFound
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("load transaction: %w", err)
+	}
+	if expectedUpdatedAt != nil && !updatedAt.Equal(*expectedUpdatedAt) {
+		return uuid.Nil, conflict("the transaction changed after it was read; read it again before updating")
+	}
+	if existingType == "opening_balance" || existingType == "transfer" || eventGroupID.Valid {
+		return uuid.Nil, validation("opening balances, transfers, and grouped investment activity cannot be edited individually")
+	}
+	account, err := getLedgerAccount(ctx, tx, userID, accountID, false)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if err := validateTransactionForAccount(input.Type, account.TrackingMode); err != nil {
+		return uuid.Nil, err
+	}
+	// Changing a synced cash snapshot's type, amount, or date makes it an ordinary adjustment
+	// with the amount the user chose; text-only edits keep it a snapshot.
+	result, err := tx.ExecContext(ctx, `
+		UPDATE transactions SET type=$3,amount_minor=$4,transaction_date=$5,
+			description=$6,notes=$7,external_id=$8,updated_at=$9,
+			cash_snapshot_minor=CASE WHEN type=$3 AND amount_minor=$4 AND transaction_date=$5 THEN cash_snapshot_minor END
+		WHERE user_id=$1 AND id=$2
+	`, userID, transactionID, input.Type, input.AmountMinor, ledgerDateOnly(input.TransactionDate), nullable(input.Description), nullable(input.Notes), nullable(input.ExternalID), service.now().UTC())
+	if err != nil {
+		var postgresError *pgconn.PgError
+		if errors.As(err, &postgresError) && postgresError.Code == "23505" && postgresError.ConstraintName == "transactions_user_account_external_unique" {
+			return uuid.Nil, conflict("external ID already exists for this account")
+		}
+		return uuid.Nil, fmt.Errorf("update transaction: %w", err)
+	}
+	if err := requireLedgerAffected(result); err != nil {
+		return uuid.Nil, err
+	}
+	return accountID, nil
+}
+
 func (service *LedgerService) DeleteTransaction(ctx context.Context, userID, transactionID uuid.UUID) error {
 	tx, err := service.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction deletion: %w", err)
 	}
 	defer tx.Rollback()
-	var accountID uuid.UUID
-	var transactionType string
-	var transferGroupID, eventGroupID uuid.NullUUID
-	err = tx.QueryRowContext(ctx, `SELECT account_id,type,transfer_group_id,event_group_id FROM transactions WHERE user_id=$1 AND id=$2 FOR UPDATE`, userID, transactionID).Scan(&accountID, &transactionType, &transferGroupID, &eventGroupID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrLedgerNotFound
-	}
+	affected, err := service.deleteTransactionTx(ctx, tx, userID, transactionID)
 	if err != nil {
-		return fmt.Errorf("load transaction: %w", err)
-	}
-	if _, err := getLedgerAccount(ctx, tx, userID, accountID, false); err != nil {
 		return err
-	}
-	if transactionType == "opening_balance" {
-		return validation("the opening balance cannot be deleted")
-	}
-	if eventGroupID.Valid {
-		return validation("use the position workflow for grouped investment activity")
-	}
-	affected := []uuid.UUID{accountID}
-	if transferGroupID.Valid {
-		rows, queryErr := tx.QueryContext(ctx, `SELECT DISTINCT account_id FROM transactions WHERE user_id=$1 AND transfer_group_id=$2`, userID, transferGroupID.UUID)
-		if queryErr != nil {
-			return fmt.Errorf("load transfer accounts: %w", queryErr)
-		}
-		affected = nil
-		for rows.Next() {
-			var id uuid.UUID
-			if scanErr := rows.Scan(&id); scanErr != nil {
-				rows.Close()
-				return fmt.Errorf("scan transfer account: %w", scanErr)
-			}
-			affected = append(affected, id)
-		}
-		if rowsErr := rows.Err(); rowsErr != nil {
-			rows.Close()
-			return fmt.Errorf("iterate transfer accounts: %w", rowsErr)
-		}
-		rows.Close()
-		_, err = tx.ExecContext(ctx, `DELETE FROM transactions WHERE user_id=$1 AND transfer_group_id=$2`, userID, transferGroupID.UUID)
-	} else {
-		_, err = tx.ExecContext(ctx, `DELETE FROM transactions WHERE user_id=$1 AND id=$2`, userID, transactionID)
-	}
-	if err != nil {
-		return fmt.Errorf("delete transaction: %w", err)
 	}
 	for _, id := range affected {
 		if _, err := service.replayBalance(ctx, tx, userID, id); err != nil {
@@ -543,6 +523,58 @@ func (service *LedgerService) DeleteTransaction(ctx context.Context, userID, tra
 		}
 	}
 	return tx.Commit()
+}
+
+// deleteTransactionTx removes one transaction, or both sides of its transfer, and
+// returns the accounts the caller must replay.
+func (service *LedgerService) deleteTransactionTx(ctx context.Context, tx *sql.Tx, userID, transactionID uuid.UUID) ([]uuid.UUID, error) {
+	var accountID uuid.UUID
+	var transactionType string
+	var transferGroupID, eventGroupID uuid.NullUUID
+	err := tx.QueryRowContext(ctx, `SELECT account_id,type,transfer_group_id,event_group_id FROM transactions WHERE user_id=$1 AND id=$2 FOR UPDATE`, userID, transactionID).Scan(&accountID, &transactionType, &transferGroupID, &eventGroupID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrLedgerNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load transaction: %w", err)
+	}
+	if _, err := getLedgerAccount(ctx, tx, userID, accountID, false); err != nil {
+		return nil, err
+	}
+	if transactionType == "opening_balance" {
+		return nil, validation("the opening balance cannot be deleted")
+	}
+	if eventGroupID.Valid {
+		return nil, validation("use the position workflow for grouped investment activity")
+	}
+	affected := []uuid.UUID{accountID}
+	if transferGroupID.Valid {
+		rows, queryErr := tx.QueryContext(ctx, `SELECT DISTINCT account_id FROM transactions WHERE user_id=$1 AND transfer_group_id=$2`, userID, transferGroupID.UUID)
+		if queryErr != nil {
+			return nil, fmt.Errorf("load transfer accounts: %w", queryErr)
+		}
+		affected = nil
+		for rows.Next() {
+			var id uuid.UUID
+			if scanErr := rows.Scan(&id); scanErr != nil {
+				rows.Close()
+				return nil, fmt.Errorf("scan transfer account: %w", scanErr)
+			}
+			affected = append(affected, id)
+		}
+		if rowsErr := rows.Err(); rowsErr != nil {
+			rows.Close()
+			return nil, fmt.Errorf("iterate transfer accounts: %w", rowsErr)
+		}
+		rows.Close()
+		_, err = tx.ExecContext(ctx, `DELETE FROM transactions WHERE user_id=$1 AND transfer_group_id=$2`, userID, transferGroupID.UUID)
+	} else {
+		_, err = tx.ExecContext(ctx, `DELETE FROM transactions WHERE user_id=$1 AND id=$2`, userID, transactionID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("delete transaction: %w", err)
+	}
+	return affected, nil
 }
 
 func (service *LedgerService) CreateValuation(ctx context.Context, userID uuid.UUID, input ValuationMutationInput) (uuid.UUID, error) {

@@ -203,7 +203,7 @@ func (service *PortabilityService) ExportJSON(ctx context.Context, userID uuid.U
 }
 
 func (service *PortabilityService) exportTable(ctx context.Context, userID uuid.UUID, table portabilityTable) ([]map[string]any, error) {
-	query := fmt.Sprintf(`SELECT row_to_json(export_row) FROM (SELECT %s FROM %s WHERE user_id=$1 ORDER BY %s) export_row`, strings.Join(table.selects, ","), table.name, portabilityOrder(table))
+	query := fmt.Sprintf(`SELECT row_to_json(export_row) FROM (SELECT %s FROM %s WHERE user_id=$1%s ORDER BY %s) export_row`, strings.Join(table.selects, ","), table.name, portableExportFilters[table.name], portabilityOrder(table))
 	rows, err := service.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("export %s: %w", table.name, err)
@@ -223,6 +223,14 @@ func (service *PortabilityService) exportTable(ctx context.Context, userID uuid.
 		result = append(result, row)
 	}
 	return result, rows.Err()
+}
+
+// portableExportFilters leave out synced snapshots whose current delta is zero: they
+// change no balance or holding, and restored adjustments must be non-zero. Non-zero
+// snapshots are exported as ordinary adjustments with their current delta.
+var portableExportFilters = map[string]string{
+	"position_events": " AND NOT (snapshot_quantity IS NOT NULL AND quantity = 0)",
+	"transactions":    " AND NOT (cash_snapshot_minor IS NOT NULL AND amount_minor = 0)",
 }
 
 var portableTimestampDateKeys = map[string][]string{
