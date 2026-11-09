@@ -328,7 +328,7 @@ export class Engine {
     const v = this.valueAt(a.id, this.today)
     const bv = this.baseValueAt(a.id, this.today)
     const monthAgo = fmt(addMonths(parseDateOnly(this.today), -1))
-    const prev = a.openedAt <= monthAgo ? this.valueAt(a.id, monthAgo).value : null
+    const prev = a.openedAt <= monthAgo ? this.baseValueAt(a.id, monthAgo).value : null
     const inst = a.institutionId ? this.world.institutions.find((i) => i.id === a.institutionId) : undefined
     return {
       id: a.id,
@@ -340,7 +340,7 @@ export class Engine {
       trackingMode: a.trackingMode,
       currentValueMinor: s(v.value),
       convertedValueMinor: bv.value === null ? null : s(bv.value),
-      monthlyChangeMinor: prev === null || a.archivedAt ? null : s(v.value - prev),
+      monthlyChangeMinor: prev === null || bv.value === null || a.archivedAt ? null : s(bv.value - prev),
       costBasisMinor: a.costBasisMinor === undefined ? undefined : s(a.costBasisMinor),
       isLiability: this.isLiability(a),
       isIncludedInNetWorth: a.isIncludedInNetWorth,

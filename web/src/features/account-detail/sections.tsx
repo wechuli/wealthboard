@@ -88,7 +88,7 @@ export function ValueHero({ account, summary, label, extra }: { account: Account
             {account.convertedValueMinor !== null ? <span className="text-subtle">in {baseCurrency}</span> : null}
           </span>
         ) : null}
-        <Delta minor={account.monthlyChangeMinor} currency={account.currency} invert={owed} suffix="this month" />
+        <Delta minor={account.monthlyChangeMinor} currency={baseCurrency} invert={owed} suffix="this month" />
         <span className="text-xs">
           <AsOf summary={summary} />
         </span>

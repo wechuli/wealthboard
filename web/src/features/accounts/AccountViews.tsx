@@ -67,7 +67,7 @@ export function AccountCard({ item, baseCurrency }: { item: AccountItem; baseCur
         </div>
       </div>
       <p className="mt-2 text-sm">
-        <Delta minor={account.monthlyChangeMinor} currency={account.currency} invert={owed} suffix="this month" />
+        <Delta minor={account.monthlyChangeMinor} currency={baseCurrency} invert={owed} suffix="this month" />
       </p>
 
       <div className="min-h-4 flex-1" aria-hidden />
@@ -192,7 +192,7 @@ export function AccountTable({ groups, baseCurrency, groupIds }: { groups: Accou
                     {account.currency === baseCurrency && account.convertedValueMinor !== null ? <span className="text-subtle">Same</span> : <BaseValue account={account} summary={summary} baseCurrency={baseCurrency} showIncomplete className="justify-end" />}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                    <Delta minor={account.monthlyChangeMinor} currency={account.currency} invert={owed} showIcon={false} />
+                    <Delta minor={account.monthlyChangeMinor} currency={baseCurrency} invert={owed} showIcon={false} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs">
                     <AsOf summary={summary} compact />
@@ -244,7 +244,7 @@ export function AccountDenseList({ groups, baseCurrency, groupIds }: { groups: A
                         ) : account.currency !== baseCurrency ? (
                           <BaseValue account={account} summary={summary} baseCurrency={baseCurrency} interactive={false} className="text-muted" />
                         ) : (
-                          <Delta minor={account.monthlyChangeMinor} currency={account.currency} invert={owed} showIcon={false} />
+                          <Delta minor={account.monthlyChangeMinor} currency={baseCurrency} invert={owed} showIcon={false} />
                         )}
                       </p>
                     </div>

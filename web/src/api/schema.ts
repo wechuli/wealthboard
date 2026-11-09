@@ -2882,6 +2882,7 @@ export interface components {
             trackingMode: string;
             currentValueMinor: components["schemas"]["MinorUnits"];
             convertedValueMinor: components["schemas"]["MinorUnits"] | null;
+            /** @description Change over the last 30 days in the user's base currency, or null when either value cannot be converted. */
             monthlyChangeMinor: components["schemas"]["MinorUnits"] | null;
             costBasisMinor?: components["schemas"]["MinorUnits"];
             isLiability: boolean;

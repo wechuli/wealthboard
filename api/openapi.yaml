@@ -4652,6 +4652,7 @@ components:
             - { $ref: "#/components/schemas/MinorUnits" }
             - { type: "null" }
         monthlyChangeMinor:
+          description: Change over the last 30 days in the user's base currency, or null when either value cannot be converted.
           anyOf:
             - { $ref: "#/components/schemas/MinorUnits" }
             - { type: "null" }
